@@ -1,4 +1,9 @@
+import { DiscordSDK } from '/vendor/discord-sdk.js';
+
+const FALLBACK_CLIENT_ID = '1539704001535156254';
+
 const loadingEl = document.querySelector('#loading');
+const emptyEl = document.querySelector('#empty');
 const errorEl = document.querySelector('#error');
 const errorMessageEl = document.querySelector('#error-message');
 const documentEl = document.querySelector('#document');
@@ -201,26 +206,54 @@ function formatDate(value) {
   }).format(date);
 }
 
+function showEmptyState() {
+  loadingEl.hidden = true;
+  documentEl.hidden = true;
+  errorEl.hidden = true;
+  if (emptyEl) {
+    emptyEl.hidden = false;
+  }
+}
+
 function showError(message) {
   loadingEl.hidden = true;
   documentEl.hidden = true;
+  if (emptyEl) {
+    emptyEl.hidden = true;
+  }
   errorMessageEl.textContent = message;
   errorEl.hidden = false;
 }
 
-function getDocumentId() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('custom_id') || params.get('document') || params.get('id');
+function resolveClientId() {
+  const host = window.location.hostname || '';
+  const match = host.match(/^([a-zA-Z0-9_-]+)\.discordsays\.com$/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return FALLBACK_CLIENT_ID;
 }
 
-async function loadDocument() {
-  const documentId = getDocumentId();
+async function initDiscordSdk() {
+  const params = new URLSearchParams(window.location.search);
+  const isEmbedded = params.has('frame_id') && params.has('instance_id');
 
-  if (!documentId) {
-    showError('Abre el documento desde el botón “Mostrar más” de Bardo en Discord.');
-    return;
+  if (!isEmbedded) {
+    return null;
   }
 
+  try {
+    const clientId = resolveClientId();
+    const discordSdk = new DiscordSDK(clientId);
+    await discordSdk.ready();
+    return discordSdk;
+  } catch (error) {
+    console.warn('No se pudo inicializar DiscordSDK:', error);
+    return null;
+  }
+}
+
+async function fetchAndRenderDocument(documentId) {
   try {
     const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
       headers: { Accept: 'application/json' },
@@ -250,6 +283,7 @@ async function loadDocument() {
 
     loadingEl.hidden = true;
     errorEl.hidden = true;
+    if (emptyEl) emptyEl.hidden = true;
     documentEl.hidden = false;
   } catch (error) {
     console.error('Error cargando documento:', error);
@@ -257,4 +291,25 @@ async function loadDocument() {
   }
 }
 
-loadDocument();
+async function start() {
+  const discordSdk = await initDiscordSdk();
+
+  let documentId = null;
+  if (discordSdk && discordSdk.customId) {
+    documentId = discordSdk.customId;
+  }
+
+  if (!documentId) {
+    const params = new URLSearchParams(window.location.search);
+    documentId = params.get('custom_id') || params.get('document') || params.get('id');
+  }
+
+  if (!documentId) {
+    showEmptyState();
+    return;
+  }
+
+  await fetchAndRenderDocument(documentId);
+}
+
+start();
