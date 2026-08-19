@@ -1,0 +1,19 @@
+{
+  "name": "bardo-discord",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bot de Discord para publicar documentos largos como mensajes paginados con Components V2.",
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "dev": "node --watch --env-file=.env src/index.js",
+    "test": "node --test",
+    "check": "node --check src/index.js && node --check src/pagination.js && node --check src/storage.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "discord.js": "14.23.2"
+  }
+}
