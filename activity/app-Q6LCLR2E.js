@@ -9626,7 +9626,6 @@ function normalizeDocumentId(id) {
 
 // src/activity/app.js
 var FALLBACK_CLIENT_ID = "1539704001535156254";
-var BARDO_OPEN_PREFIX2 = "bardo:open:";
 var loadingEl = document.querySelector("#loading");
 var emptyEl = document.querySelector("#empty");
 var errorEl = document.querySelector("#error");
@@ -9636,24 +9635,10 @@ var titleEl = document.querySelector("#document-title");
 var metaEl = document.querySelector("#document-meta");
 var bodyEl = document.querySelector("#document-body");
 var copyButtonEl = document.querySelector("#copy-document");
-var downloadPdfButtonEl = document.querySelector("#download-pdf");
-var downloadMarkdownButtonEl = document.querySelector("#download-markdown");
-var downloadWordButtonEl = document.querySelector("#download-word");
+var downloadSelectEl = document.querySelector("#download-select");
 var actionStatusEl = document.querySelector("#action-status");
 var currentDocumentData = null;
 var actionStatusTimer = null;
-var views = {
-  loading: loadingEl,
-  empty: emptyEl,
-  error: errorEl,
-  document: documentEl
-};
-function setView(name) {
-  for (const [key, element] of Object.entries(views)) {
-    if (!element) continue;
-    element.hidden = key !== name;
-  }
-}
 function escapeHtml(value) {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
@@ -9805,17 +9790,29 @@ function formatDate(value) {
     timeStyle: "short"
   }).format(date);
 }
+function setView(view) {
+  if (loadingEl) loadingEl.hidden = view !== "loading";
+  if (emptyEl) emptyEl.hidden = view !== "empty";
+  if (errorEl) errorEl.hidden = view !== "error";
+  if (documentEl) documentEl.hidden = view !== "document";
+}
 function resolveClientId() {
   const host = window.location.hostname || "";
   const match = host.match(/^([a-zA-Z0-9_-]+)\.discordsays\.com$/i);
-  return match?.[1] || FALLBACK_CLIENT_ID;
+  if (match && match[1]) {
+    return match[1];
+  }
+  return FALLBACK_CLIENT_ID;
 }
 async function initDiscordSdk() {
   const params = new URLSearchParams(window.location.search);
-  const isEmbedded = window.location.hostname.endsWith(".discordsays.com") || params.has("frame_id") || params.has("instance_id");
-  if (!isEmbedded) return null;
+  const isEmbedded = params.has("frame_id") && params.has("instance_id");
+  if (!isEmbedded) {
+    return null;
+  }
   try {
-    const discordSdk = new DiscordSDK(resolveClientId());
+    const clientId = resolveClientId();
+    const discordSdk = new DiscordSDK(clientId);
     await discordSdk.ready();
     return discordSdk;
   } catch (error) {
@@ -9823,9 +9820,9 @@ async function initDiscordSdk() {
     return null;
   }
 }
-async function fetchActivityContextWithRetry(instanceId, maxAttempts = 4) {
+async function fetchActivityContextWithRetry(instanceId, maxRetries = 5) {
   if (!instanceId) return null;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
       const response = await fetch(`/api/activity-context/${encodeURIComponent(instanceId)}`, {
         headers: { Accept: "application/json" },
@@ -9833,35 +9830,48 @@ async function fetchActivityContextWithRetry(instanceId, maxAttempts = 4) {
       });
       if (response.ok) {
         const data = await response.json();
-        const documentId = normalizeDocumentId(data?.documentId);
-        if (documentId) return documentId;
+        if (data && data.documentId) {
+          return data.documentId;
+        }
       }
-    } catch (error) {
-      console.warn("No se pudo resolver el contexto de la Activity:", error);
+    } catch (err) {
+      console.warn(`Intento ${attempt + 1} de obtener contexto fall\xF3:`, err);
     }
-    if (attempt < maxAttempts - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 150 * 2 ** attempt));
+    if (attempt < maxRetries) {
+      const delay = Math.min(200 * Math.pow(2, attempt), 1500);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   return null;
 }
-function pushCandidate(candidates, value, source) {
-  const id = normalizeDocumentId(value);
-  if (!id || id === BARDO_OPEN_PREFIX2 || candidates.some((candidate) => candidate.id === id)) return;
-  candidates.push({ id, source });
-}
 async function resolveDocumentCandidates(discordSdk) {
   const candidates = [];
+  const addCandidate = (value, source) => {
+    const normalized = normalizeDocumentId(value);
+    if (normalized && !candidates.some((item) => item.id === normalized)) {
+      candidates.push({ id: normalized, source });
+    }
+  };
   const params = new URLSearchParams(window.location.search);
-  const instanceId = discordSdk?.instanceId || params.get("instance_id");
-  if (instanceId) {
-    const contextDocumentId = await fetchActivityContextWithRetry(instanceId);
-    pushCandidate(candidates, contextDocumentId, "activity-context");
+  if (discordSdk?.customId) {
+    addCandidate(discordSdk.customId, "discordSdk.customId");
   }
-  pushCandidate(candidates, discordSdk?.customId, "sdk-custom-id");
-  pushCandidate(candidates, params.get("custom_id"), "query-custom-id");
-  pushCandidate(candidates, params.get("document"), "query-document");
-  pushCandidate(candidates, params.get("id"), "query-id");
+  addCandidate(params.get("custom_id"), "query.custom_id");
+  addCandidate(params.get("document"), "query.document");
+  addCandidate(params.get("id"), "query.id");
+  if (discordSdk?.instanceId) {
+    const contextDocId = await fetchActivityContextWithRetry(discordSdk.instanceId);
+    if (contextDocId) {
+      addCandidate(contextDocId, "discordSdk.instanceId -> activity-context");
+    }
+  }
+  const queryInstanceId = params.get("instance_id");
+  if (queryInstanceId && queryInstanceId !== discordSdk?.instanceId) {
+    const contextDocId = await fetchActivityContextWithRetry(queryInstanceId);
+    if (contextDocId) {
+      addCandidate(contextDocId, "query.instance_id -> activity-context");
+    }
+  }
   return candidates;
 }
 async function fetchDocument(documentId) {
@@ -10017,7 +10027,7 @@ function downloadPdf() {
     document.documentElement.classList.add("print-export");
     document.title = nextTitle;
     document.body.offsetHeight;
-    showActionStatus("En el di\xE1logo elige \u201CGuardar como PDF\u201D");
+    showActionStatus("Elige \u201CGuardar como PDF\u201D");
     window.print();
   } catch (error) {
     console.error("No se pudo abrir el di\xE1logo de PDF:", error);
@@ -10034,7 +10044,6 @@ function renderDocument(data) {
   titleEl.textContent = data.title || "Documento";
   document.title = `${data.title || "Documento"} \xB7 Bardo`;
   const meta = [];
-  if (data.sourceName) meta.push(`<span>${escapeHtml(data.sourceName)}</span>`);
   const date = formatDate(data.createdAt);
   if (date) meta.push(`<span>${escapeHtml(date)}</span>`);
   metaEl.innerHTML = meta.join("");
@@ -10048,9 +10057,18 @@ function showError(message) {
   setView("error");
 }
 copyButtonEl?.addEventListener("click", copyDocument);
-downloadPdfButtonEl?.addEventListener("click", downloadPdf);
-downloadMarkdownButtonEl?.addEventListener("click", downloadMarkdown);
-downloadWordButtonEl?.addEventListener("click", downloadWord);
+downloadSelectEl?.addEventListener("change", (event) => {
+  const format = event.target.value;
+  if (!format) return;
+  if (format === "pdf") {
+    downloadPdf();
+  } else if (format === "markdown") {
+    downloadMarkdown();
+  } else if (format === "word") {
+    downloadWord();
+  }
+  event.target.value = "";
+});
 async function start() {
   currentDocumentData = null;
   setView("loading");
