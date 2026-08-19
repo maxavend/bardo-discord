@@ -1,4 +1,4 @@
-# Bardo Discord
+# Bardo Discord (Serverless en Cloudflare Workers)
 
 Bardo publica documentos Markdown largos en Discord como **un único mensaje navegable** usando Components V2.
 
@@ -6,113 +6,95 @@ En vez de partir una minuta en muchos mensajes, Bardo la divide internamente en 
 
 `← Anterior` · `2 / 5` · `Siguiente →`
 
-Al cambiar de página, **se actualiza el mismo mensaje**.
+Al cambiar de página, **se actualiza el mismo mensaje** consultando la persistencia en **Cloudflare D1**.
+
+## Arquitectura Serverless
+
+- **Cloudflare Workers**: Procesa las interacciones HTTP de Discord sin servidor permanente.
+- **Cloudflare D1**: Base de datos SQLite serverless de alta consistencia para almacenar páginas y metadatos del documento.
+- **Discord HTTP Interactions**: Validación criptográfica Ed25519 sin necesidad de conexión WebSocket Gateway abierta.
 
 ## Qué necesitas
 
 - Node.js 22.12 o superior.
-- Una aplicación/bot creada en Discord Developer Portal.
-- El bot instalado en tu servidor.
+- Una aplicación/bot en Discord Developer Portal.
+- Cuenta en Cloudflare y CLI Wrangler autenticado.
 
-## 1. Crear Bardo en Discord
+## 1. Configuración en Discord
 
-1. Abre Discord Developer Portal.
-2. Crea una nueva Application llamada `Bardo`.
-3. En **Bot**, crea/activa el bot y copia su token.
-4. No publiques ni subas ese token a GitHub.
-5. En **Installation** configura una instalación para servidor con los scopes `bot` y `applications.commands`.
-6. Dale al bot al menos permisos para ver el canal y enviar mensajes.
-7. Instala Bardo en tu servidor.
+1. En **Discord Developer Portal** → tu aplicación:
+   - En **General Information**, copia **Public Key**.
+   - En **Bot**, copia **Bot Token**.
+2. En **Installation**, configura los scopes `bot` y `applications.commands`.
+3. Instala Bardo en tu servidor de Discord.
 
-No necesitas activar `Message Content Intent`: Bardo funciona con slash commands e interacciones.
-
-## 2. Preparar el proyecto
+## 2. Preparar el proyecto localmente
 
 ```bash
 npm install
 cp .env.example .env
 ```
 
-Edita `.env`:
+Edita `.env` (solo necesario para ejecutar scripts locales como registrar comandos):
 
 ```env
 DISCORD_TOKEN=pega_aqui_el_token_del_bot
 DISCORD_GUILD_ID=pega_aqui_el_id_de_tu_servidor
 ```
 
-Para copiar el ID del servidor, activa Developer Mode en Discord y usa **Copy Server ID**.
+## 3. Despliegue en Cloudflare Workers
 
-`.env` está ignorado por Git y no se sube al repositorio.
+1. Autenticar Wrangler:
+   ```bash
+   npx wrangler login
+   ```
 
-## 3. Encender Bardo
+2. Aplicar migraciones D1:
+   ```bash
+   npx wrangler d1 migrations apply bardo-db --remote
+   ```
 
-```bash
-npm start
-```
+3. Configurar secretos en Cloudflare Workers:
+   ```bash
+   npx wrangler secret put DISCORD_PUBLIC_KEY
+   npx wrangler secret put DISCORD_TOKEN
+   ```
 
-Cuando esté listo verás algo parecido a:
+4. Desplegar el Worker:
+   ```bash
+   npm run deploy
+   ```
 
-```text
-Bardo está listo como Bardo#0000.
-Comando /documento registrado en Mi servidor.
-```
+5. Registrar los slash commands en Discord:
+   ```bash
+   npm run register
+   ```
 
-Mientras ese proceso esté corriendo, los botones del documento funcionan.
+## 4. Conectar Discord con Cloudflare
 
-## 4. Publicar un documento
+En **Discord Developer Portal** → tu aplicación → **General Information**:
 
-En el canal de Discord donde quieras publicarlo:
+1. En **Interactions Endpoint URL**, pega la URL pública de tu Worker (ej. `https://bardo-discord.bardo-discord.workers.dev`).
+2. Guarda los cambios. Discord validará inmediatamente enviando un PING criptográfico Ed25519 que el Worker responderá con PONG.
+
+## 5. Publicar un documento
+
+En cualquier canal del servidor:
 
 1. Escribe `/documento`.
 2. En `archivo`, adjunta un `.md`, `.markdown` o `.txt`.
-3. `titulo` es opcional.
+3. `titulo` es opcional (si se omite y el Markdown comienza con `# H1`, Bardo lo usa automáticamente).
 4. Envía el comando.
 
-Si no escribes título y el Markdown empieza con un `# H1`, Bardo usa ese H1 como título automáticamente.
-
-Ejemplo:
-
-```md
-# Minuta — Weekly UX
-
-**Fecha:** 19 de agosto de 2026
-
-## Resumen
-
-Aquí va una minuta muy larga...
-
-## Acuerdos
-
-- Primer acuerdo.
-- Segundo acuerdo.
-```
-
-Bardo divide el documento respetando párrafos, headings y bloques de código siempre que puede.
-
-## Límite de Discord
-
-Discord limita el texto visible acumulado de un mensaje Components V2. Bardo evita ese límite manteniendo cada página alrededor de 3.200 caracteres y mostrando una sola página a la vez.
-
-El mensaje sigue siendo uno solo; los botones reemplazan su contenido al navegar.
-
-## Persistencia
-
-Cuando Bardo publica un documento guarda sus páginas localmente en `data/` usando el ID del mensaje.
-
-Eso permite que los botones sigan funcionando después de reiniciar Bardo en el mismo computador.
-
-`data/` no se sube a GitHub.
-
-Si mueves Bardo a otro computador o servidor y quieres conservar botones de documentos antiguos, copia también la carpeta `data/`.
-
-## Desarrollo
+## Desarrollo y Tests
 
 ```bash
-npm run dev
 npm test
 npm run check
+npm run dev
 ```
 
 ## Seguridad
 
-Nunca pongas el token en el código, README, issues, commits o capturas públicas. Si un token se expone, regénéralo inmediatamente en Discord Developer Portal.
+- `.env`, tokens y claves privadas están fuera del repositorio (en `.gitignore`).
+- Las credenciales en producción residen exclusivamente en Cloudflare Secrets.
