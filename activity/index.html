@@ -3,38 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark light" />
     <title>Bardo · Documento</title>
-    <link rel="stylesheet" href="/styles-BXGC2FTL.css" />
+    <link rel="stylesheet" href="/styles-2A3QKH4K.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar" aria-label="Bardo">
-        <div class="brand-mark" aria-hidden="true">B</div>
-        <div>
+        <div class="brand-mark" aria-hidden="true">
+          <img src="/bardo-avatar-254980EB.png" alt="Bardo" class="brand-avatar" />
+        </div>
+        <div class="brand-copy">
           <strong>Bardo</strong>
-          <span>Documento</span>
+          <span>Lector de documentos</span>
         </div>
       </header>
 
-      <section id="loading" class="state-card">
+      <section id="loading" class="view-state" aria-live="polite">
         <div class="spinner" aria-hidden="true"></div>
-        <p>Cargando documento…</p>
+        <div>
+          <strong>Abriendo documento</strong>
+          <p>Un momento…</p>
+        </div>
       </section>
 
-      <section id="empty" class="state-card" hidden>
-        <h1>Bardo · Lector de Documentos</h1>
-        <p>Abre un documento desde el botón <strong>Mostrar más</strong> de Bardo en Discord.</p>
+      <section id="empty" class="view-state" hidden>
+        <div class="state-symbol" aria-hidden="true">B</div>
+        <div>
+          <h1>No hay un documento abierto</h1>
+          <p>Abre <strong>Mostrar más</strong> desde un mensaje publicado por Bardo.</p>
+        </div>
       </section>
 
-      <section id="error" class="state-card" hidden>
-        <h1>No pude abrir este documento</h1>
-        <p id="error-message">Intenta abrirlo nuevamente desde Discord.</p>
+      <section id="error" class="view-state" hidden>
+        <div class="state-symbol" aria-hidden="true">!</div>
+        <div>
+          <h1>No pudimos cargar el documento</h1>
+          <p id="error-message">Cierra esta vista y vuelve a abrir el documento desde el mensaje de Bardo.</p>
+        </div>
       </section>
 
       <article id="document" class="document" hidden>
         <header class="document-header">
-          <p class="eyebrow">Documento compartido con Bardo</p>
+          <p class="eyebrow">Documento</p>
           <h1 id="document-title"></h1>
           <div id="document-meta" class="meta"></div>
         </header>
@@ -42,6 +53,6 @@
       </article>
     </main>
 
-    <script type="module" src="/app-DTQCTPSP.js"></script>
+    <script type="module" src="/app-VTCHXUZ6.js"></script>
   </body>
 </html>

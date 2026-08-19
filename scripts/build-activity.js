@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, basename, join } from 'node:path';
 import { readdir, rm, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -56,13 +57,21 @@ async function bundle() {
     throw new Error(`No se generaron los bundles esperados. Salidas: ${outputs.join(', ')}`);
   }
 
-  console.log(`✨ Bundles generados: ${appFile}, ${styleFile}`);
+  // Copiar avatar con fingerprinting
+  const avatarPath = resolve(srcDir, 'bardo-avatar.png');
+  const avatarBuffer = await readFile(avatarPath);
+  const avatarHash = createHash('md5').update(avatarBuffer).digest('hex').slice(0, 8).toUpperCase();
+  const avatarFileName = `bardo-avatar-${avatarHash}.png`;
+  await writeFile(resolve(outDir, avatarFileName), avatarBuffer);
+
+  console.log(`✨ Bundles generados: ${appFile}, ${styleFile}, ${avatarFileName}`);
 
   const templatePath = resolve(srcDir, 'index.html');
   let html = await readFile(templatePath, 'utf8');
 
   html = html.replace('<!-- STYLES -->', `<link rel="stylesheet" href="/${styleFile}" />`);
   html = html.replace('<!-- SCRIPTS -->', `<script type="module" src="/${appFile}"></script>`);
+  html = html.replace('<!-- AVATAR_SRC -->', `/${avatarFileName}`);
 
   await writeFile(resolve(outDir, 'index.html'), html, 'utf8');
   console.log('✅ activity/index.html actualizado con assets fingerprinted');
