@@ -5,6 +5,7 @@ import {
   verifyKey,
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
+import { generateWordDocument, generatePrintDocument, sanitizeExportFileName } from './export-format.js';
 import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
 import { normalizeDocumentId } from './document-id.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
@@ -317,53 +318,6 @@ async function verifyActivityDocumentAccess(request, env, documentId) {
 }
 
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function sanitizeExportFileName(value) {
-  const normalized = String(value || "documento")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[. ]+$/g, "");
-
-  return (normalized || "documento").slice(0, 96);
-}
-
-function generateWordHtml(document) {
-  const title = document.title || "Documento";
-  const body = document.originalMarkdown || "";
-
-  return `<!doctype html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8">
-  <title>${escapeHtml(title)}</title>
-  <style>
-    @page { margin: 2.2cm 2cm; }
-    body { font-family: Aptos, Calibri, Arial, sans-serif; color: #202124; font-size: 11pt; line-height: 1.55; }
-    h1 { font-size: 24pt; line-height: 1.12; margin: 0 0 18pt; }
-    p { margin: 0 0 9pt; }
-    pre { font-family: Consolas, monospace; background: #f3f4f6; padding: 10pt; white-space: pre-wrap; }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(title)}</h1>
-  <pre>${escapeHtml(body)}</pre>
-</body>
-</html>`;
-}
-
 async function handleDocumentExportApi(url, documentId, env) {
   if (!env.DB) {
     return jsonResponse({ error: "Database unavailable" }, 503);
@@ -379,7 +333,7 @@ async function handleDocumentExportApi(url, documentId, env) {
 
   if (format === "word" || format === "doc") {
     const fileName = `${baseName}.doc`;
-    const wordHtml = generateWordHtml(document);
+    const wordHtml = generateWordDocument(document);
     return new Response("\ufeff" + wordHtml, {
       status: 200,
       headers: {
@@ -392,16 +346,15 @@ async function handleDocumentExportApi(url, documentId, env) {
   }
 
   if (format === "pdf") {
-    return new Response(
-      `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(document.title)}</title><style>body{font-family:system-ui,-apple-system,sans-serif;padding:32px;line-height:1.6;color:#111}pre{white-space:pre-wrap;font-family:inherit}</style><script>window.onload=function(){window.print();}</script></head><body><h1>${escapeHtml(document.title)}</h1><pre>${escapeHtml(document.originalMarkdown)}</pre></body></html>`,
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-          "Cache-Control": "private, no-store",
-        },
+    const printHtml = generatePrintDocument(document);
+    return new Response(printHtml, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
-    );
+    });
   }
 
   const fileName = `${baseName}.md`;

@@ -9878,7 +9878,7 @@ function renderInline(value) {
   let text = escapeHtml(value);
   const codeTokens = [];
   text = text.replace(/`([^`]+)`/g, (_, code) => {
-    const token = `%%BARDO_CODE_${codeTokens.length}%%`;
+    const token = `%%BARDOCODE${codeTokens.length}%%`;
     codeTokens.push(`<code>${code}</code>`);
     return token;
   });
@@ -9892,7 +9892,7 @@ function renderInline(value) {
   text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   text = text.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
   codeTokens.forEach((html, index) => {
-    text = text.replace(`%%BARDO_CODE_${index}%%`, html);
+    text = text.replace(`%%BARDOCODE${index}%%`, html);
   });
   return text;
 }
