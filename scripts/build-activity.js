@@ -26,7 +26,7 @@ async function bundle() {
 
   const result = await build({
     entryPoints: [
-      resolve(srcDir, 'app.js'),
+      resolve(srcDir, 'main.js'),
       resolve(srcDir, 'styles.css'),
     ],
     outdir: outDir,
@@ -50,7 +50,7 @@ async function bundle() {
 
   for (const output of outputs) {
     const fileName = basename(output);
-    if (fileName.startsWith('app-') && fileName.endsWith('.js')) {
+    if (fileName.startsWith('main-') && fileName.endsWith('.js')) {
       appFile = fileName;
     } else if (fileName.startsWith('styles-') && fileName.endsWith('.css')) {
       styleFile = fileName;
