@@ -4,6 +4,7 @@ import { normalizeDocumentId } from '../document-id.js';
 export { normalizeDocumentId };
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
+const BARDO_OPEN_PREFIX = 'bardo:open:';
 
 const loadingEl = document.querySelector('#loading');
 const emptyEl = document.querySelector('#empty');
@@ -13,6 +14,20 @@ const documentEl = document.querySelector('#document');
 const titleEl = document.querySelector('#document-title');
 const metaEl = document.querySelector('#document-meta');
 const bodyEl = document.querySelector('#document-body');
+
+const views = {
+  loading: loadingEl,
+  empty: emptyEl,
+  error: errorEl,
+  document: documentEl,
+};
+
+function setView(name) {
+  for (const [key, element] of Object.entries(views)) {
+    if (!element) continue;
+    element.hidden = key !== name;
+  }
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -209,45 +224,23 @@ function formatDate(value) {
   }).format(date);
 }
 
-function showEmptyState() {
-  loadingEl.hidden = true;
-  documentEl.hidden = true;
-  errorEl.hidden = true;
-  if (emptyEl) {
-    emptyEl.hidden = false;
-  }
-}
-
-function showError(message) {
-  loadingEl.hidden = true;
-  documentEl.hidden = true;
-  if (emptyEl) {
-    emptyEl.hidden = true;
-  }
-  errorMessageEl.textContent = message;
-  errorEl.hidden = false;
-}
-
 function resolveClientId() {
   const host = window.location.hostname || '';
   const match = host.match(/^([a-zA-Z0-9_-]+)\.discordsays\.com$/i);
-  if (match && match[1]) {
-    return match[1];
-  }
-  return FALLBACK_CLIENT_ID;
+  return match?.[1] || FALLBACK_CLIENT_ID;
 }
 
 async function initDiscordSdk() {
   const params = new URLSearchParams(window.location.search);
-  const isEmbedded = params.has('frame_id') && params.has('instance_id');
+  const isEmbedded =
+    window.location.hostname.endsWith('.discordsays.com') ||
+    params.has('frame_id') ||
+    params.has('instance_id');
 
-  if (!isEmbedded) {
-    return null;
-  }
+  if (!isEmbedded) return null;
 
   try {
-    const clientId = resolveClientId();
-    const discordSdk = new DiscordSDK(clientId);
+    const discordSdk = new DiscordSDK(resolveClientId());
     await discordSdk.ready();
     return discordSdk;
   } catch (error) {
@@ -256,110 +249,115 @@ async function initDiscordSdk() {
   }
 }
 
-async function fetchActivityContextWithRetry(instanceId, maxRetries = 5) {
+async function fetchActivityContextWithRetry(instanceId, maxAttempts = 4) {
   if (!instanceId) return null;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const response = await fetch(`/api/activity-context/${encodeURIComponent(instanceId)}`, {
         headers: { Accept: 'application/json' },
+        cache: 'no-store',
       });
+
       if (response.ok) {
         const data = await response.json();
-        if (data && data.documentId) {
-          return data.documentId;
-        }
+        const documentId = normalizeDocumentId(data?.documentId);
+        if (documentId) return documentId;
       }
-    } catch (err) {
-      console.warn(`Intento ${attempt + 1} de obtener contexto falló:`, err);
+    } catch (error) {
+      console.warn('No se pudo resolver el contexto de la Activity:', error);
     }
 
-    if (attempt < maxRetries) {
-      const delay = Math.min(200 * Math.pow(2, attempt), 1500);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 150 * (2 ** attempt)));
     }
   }
+
   return null;
 }
 
-async function fetchAndRenderDocument(documentId) {
-  try {
-    const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
-      headers: { Accept: 'application/json' },
-    });
+function pushCandidate(candidates, value, source) {
+  const id = normalizeDocumentId(value);
+  if (!id || id === BARDO_OPEN_PREFIX || candidates.some((candidate) => candidate.id === id)) return;
+  candidates.push({ id, source });
+}
 
-    if (response.status === 404) {
-      showError('Este documento ya no está disponible o el enlace no es válido.');
-      return;
-    }
+async function resolveDocumentCandidates(discordSdk) {
+  const candidates = [];
+  const params = new URLSearchParams(window.location.search);
+  const instanceId = discordSdk?.instanceId || params.get('instance_id');
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    titleEl.textContent = data.title || 'Documento';
-    document.title = `${data.title || 'Documento'} · Bardo`;
-
-    const meta = [];
-    if (data.sourceName) meta.push(`<span>Archivo · ${escapeHtml(data.sourceName)}</span>`);
-    const date = formatDate(data.createdAt);
-    if (date) meta.push(`<span>Publicado · ${escapeHtml(date)}</span>`);
-    metaEl.innerHTML = meta.join('');
-
-    const markdown = stripLeadingTitle(data.markdown || '', data.title || '');
-    bodyEl.innerHTML = renderMarkdown(markdown);
-
-    loadingEl.hidden = true;
-    errorEl.hidden = true;
-    if (emptyEl) emptyEl.hidden = true;
-    documentEl.hidden = false;
-  } catch (error) {
-    console.error('Error cargando documento:', error);
-    showError('No pude cargar el documento. Intenta abrirlo nuevamente desde Discord.');
+  if (instanceId) {
+    const contextDocumentId = await fetchActivityContextWithRetry(instanceId);
+    pushCandidate(candidates, contextDocumentId, 'activity-context');
   }
+
+  pushCandidate(candidates, discordSdk?.customId, 'sdk-custom-id');
+  pushCandidate(candidates, params.get('custom_id'), 'query-custom-id');
+  pushCandidate(candidates, params.get('document'), 'query-document');
+  pushCandidate(candidates, params.get('id'), 'query-id');
+
+  return candidates;
+}
+
+async function fetchDocument(documentId) {
+  const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function renderDocument(data) {
+  titleEl.textContent = data.title || 'Documento';
+  document.title = `${data.title || 'Documento'} · Bardo`;
+
+  const meta = [];
+  if (data.sourceName) meta.push(`<span>${escapeHtml(data.sourceName)}</span>`);
+  const date = formatDate(data.createdAt);
+  if (date) meta.push(`<span>${escapeHtml(date)}</span>`);
+  metaEl.innerHTML = meta.join('');
+
+  const markdown = stripLeadingTitle(data.markdown || '', data.title || '');
+  bodyEl.innerHTML = renderMarkdown(markdown);
+  setView('document');
+}
+
+function showError(message) {
+  errorMessageEl.textContent = message;
+  setView('error');
 }
 
 async function start() {
+  setView('loading');
+
   const discordSdk = await initDiscordSdk();
+  const candidates = await resolveDocumentCandidates(discordSdk);
 
-  let documentId = null;
-
-  // a. customId normalizado si representa un documentId válido
-  if (discordSdk && discordSdk.customId) {
-    documentId = normalizeDocumentId(discordSdk.customId);
-  }
-
-  // b. instanceId -> activity-context
-  if (!documentId && discordSdk && discordSdk.instanceId) {
-    const contextDocId = await fetchActivityContextWithRetry(discordSdk.instanceId);
-    documentId = normalizeDocumentId(contextDocId);
-  }
-
-  // c. query params de desarrollo
-  if (!documentId) {
-    const params = new URLSearchParams(window.location.search);
-    const customIdParam = params.get('custom_id');
-    const docParam = params.get('document') || params.get('id');
-    const instanceIdParam = params.get('instance_id');
-
-    documentId =
-      normalizeDocumentId(customIdParam) ||
-      normalizeDocumentId(docParam);
-
-    if (!documentId && instanceIdParam) {
-      const contextDocId = await fetchActivityContextWithRetry(instanceIdParam);
-      documentId = normalizeDocumentId(contextDocId);
-    }
-  }
-
-  // d. empty state
-  if (!documentId) {
-    showEmptyState();
+  if (candidates.length === 0) {
+    setView('empty');
     return;
   }
 
-  await fetchAndRenderDocument(documentId);
+  for (const candidate of candidates) {
+    try {
+      const data = await fetchDocument(candidate.id);
+      if (data) {
+        renderDocument(data);
+        return;
+      }
+      console.warn(`Documento no encontrado usando ${candidate.source}.`);
+    } catch (error) {
+      console.error(`Error cargando documento usando ${candidate.source}:`, error);
+      showError('No pudimos conectar con Bardo. Cierra esta vista y vuelve a intentarlo desde el mensaje.');
+      return;
+    }
+  }
+
+  showError('No encontramos este documento. Cierra esta vista y vuelve a abrir “Mostrar más” desde el mensaje de Bardo.');
 }
 
 start();
