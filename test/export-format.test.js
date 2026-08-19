@@ -2,15 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   escapeHtml,
+  escapeXml,
   sanitizeExportFileName,
-  renderMarkdown,
   stripLeadingTitle,
-  generateWordDocument,
-  generatePrintDocument,
+  generatePdfDocument,
+  generateDocxDocument,
 } from '../src/export-format.js';
 
 test('escapeHtml escapa caracteres especiales', () => {
   assert.equal(escapeHtml('<script>alert("xss")</script>'), '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;');
+});
+
+test('escapeXml escapa caracteres XML', () => {
+  assert.equal(escapeXml('<tag attr="val & \'test\'">'), '&lt;tag attr=&quot;val &amp; &apos;test&apos;&quot;&gt;');
 });
 
 test('sanitizeExportFileName genera nombres limpios para archivos', () => {
@@ -23,63 +27,51 @@ test('stripLeadingTitle retira el H1 si coincide con el título', () => {
   assert.equal(stripLeadingTitle(md, 'Mi Título'), 'Contenido del documento');
 });
 
-test('renderMarkdown convierte markdown completo a HTML estructurado', () => {
-  const md = `# Encabezado 1
-## Encabezado 2
+test('generatePdfDocument genera un buffer binario PDF válido', async () => {
+  const doc = {
+    title: 'Minuta de Trabajo',
+    originalMarkdown: `# Minuta de Trabajo
+**Fecha:** 19 de agosto de 2026
 
-Párrafo con **negrita** y _cursiva_ y \`código\`.
+## 1. Objetivo de la sesión
+Revisar el avance de los flujos.
 
 > Cita importante
 
 - Item 1
 - Item 2
 
-1. Primero
-2. Segundo
-
-| Col 1 | Col 2 |
-| --- | --- |
-| Val 1 | Val 2 |
-
 \`\`\`js
-const x = 1;
+console.log('hola');
 \`\`\`
-`;
-  const html = renderMarkdown(md);
-  assert.ok(html.includes('<h1>Encabezado 1</h1>'));
-  assert.ok(html.includes('<h2>Encabezado 2</h2>'));
-  assert.ok(html.includes('<strong>negrita</strong>'));
-  assert.ok(html.includes('<em>cursiva</em>'));
-  assert.ok(html.includes('<code>código</code>'));
-  assert.ok(html.includes('<blockquote>'));
-  assert.ok(html.includes('<ul>'));
-  assert.ok(html.includes('<ol>'));
-  assert.ok(html.includes('<table>'));
-  assert.ok(html.includes('<pre><code data-language="js">'));
+`,
+  };
+  const pdfBytes = await generatePdfDocument(doc);
+  assert.ok(pdfBytes instanceof Uint8Array);
+  assert.ok(pdfBytes.length > 500);
+  const header = new TextDecoder().decode(pdfBytes.slice(0, 5));
+  assert.equal(header, '%PDF-');
 });
 
-test('generateWordDocument genera documento Word con estilos', () => {
+test('generateDocxDocument genera un buffer binario DOCX válido (zip)', async () => {
   const doc = {
     title: 'Minuta de Trabajo',
-    originalMarkdown: '# Minuta de Trabajo\n\n**Fecha:** 19 de agosto\n\n## 1. Objetivo\n\nRevisar avances.',
-  };
-  const wordHtml = generateWordDocument(doc);
-  assert.ok(wordHtml.includes('xmlns:w="urn:schemas-microsoft-com:office:word"'));
-  assert.ok(wordHtml.includes('<h1>Minuta de Trabajo</h1>'));
-  assert.ok(wordHtml.includes('<strong>Fecha:</strong>'));
-  assert.ok(wordHtml.includes('<h2>1. Objetivo</h2>'));
-  assert.ok(!wordHtml.includes('## 1. Objetivo')); // No debe tener sintaxis markdown cruda
-});
+    originalMarkdown: `# Minuta de Trabajo
+**Fecha:** 19 de agosto de 2026
 
-test('generatePrintDocument genera documento HTML listo para impresión/PDF', () => {
-  const doc = {
-    title: 'Minuta de Trabajo',
-    originalMarkdown: '# Minuta de Trabajo\n\n**Fecha:** 19 de agosto\n\n## 1. Objetivo\n\nRevisar avances.',
+## 1. Objetivo de la sesión
+Revisar el avance de los flujos.
+
+> Cita importante
+
+- Item 1
+- Item 2
+`,
   };
-  const printHtml = generatePrintDocument(doc);
-  assert.ok(printHtml.includes('@page'));
-  assert.ok(printHtml.includes('window.print()'));
-  assert.ok(printHtml.includes('Minuta de Trabajo'));
-  assert.ok(printHtml.includes('<strong>Fecha:</strong>'));
-  assert.ok(!printHtml.includes('**Fecha:**')); // No debe tener sintaxis markdown cruda
+  const docxBytes = await generateDocxDocument(doc);
+  assert.ok(docxBytes instanceof Uint8Array);
+  assert.ok(docxBytes.length > 500);
+  // Un archivo zip/docx comienza con PK (0x50, 0x4B)
+  assert.equal(docxBytes[0], 0x50);
+  assert.equal(docxBytes[1], 0x4b);
 });

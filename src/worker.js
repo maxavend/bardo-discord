@@ -5,7 +5,7 @@ import {
   verifyKey,
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
-import { generateWordDocument, generatePrintDocument, sanitizeExportFileName } from './export-format.js';
+import { generateDocxDocument, generatePdfDocument, sanitizeExportFileName } from './export-format.js';
 import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
 import { normalizeDocumentId } from './document-id.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
@@ -331,13 +331,14 @@ async function handleDocumentExportApi(url, documentId, env) {
   const format = url.searchParams.get("format")?.toLowerCase() || "markdown";
   const baseName = sanitizeExportFileName(document.title || document.sourceName || "documento");
 
-  if (format === "word" || format === "doc") {
-    const fileName = `${baseName}.doc`;
-    const wordHtml = generateWordDocument(document);
-    return new Response("\ufeff" + wordHtml, {
+  if (format === "docx" || format === "word" || format === "doc") {
+    const fileName = `${baseName}.docx`;
+    const docxBytes = await generateDocxDocument(document);
+    return new Response(docxBytes, {
       status: 200,
       headers: {
-        "Content-Type": "application/msword; charset=utf-8",
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Length": String(docxBytes.byteLength),
         "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
@@ -346,11 +347,14 @@ async function handleDocumentExportApi(url, documentId, env) {
   }
 
   if (format === "pdf") {
-    const printHtml = generatePrintDocument(document);
-    return new Response(printHtml, {
+    const fileName = `${baseName}.pdf`;
+    const pdfBytes = await generatePdfDocument(document);
+    return new Response(pdfBytes, {
       status: 200,
       headers: {
-        "Content-Type": "text/html; charset=utf-8",
+        "Content-Type": "application/pdf",
+        "Content-Length": String(pdfBytes.byteLength),
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },

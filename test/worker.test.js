@@ -139,14 +139,28 @@ test('Worker exporta documento como markdown attachment', async () => {
   assert.equal(text, '# Documento Test\n\nContenido completo');
 });
 
-test('Worker exporta documento como word attachment', async () => {
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=word', { method: 'GET' });
+test('Worker exporta documento como docx attachment', async () => {
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=docx', { method: 'GET' });
   const env = { DB: createReadDb() };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get('content-type'), 'application/msword; charset=utf-8');
-  assert.match(res.headers.get('content-disposition'), /attachment; filename=/);
+  assert.equal(res.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  assert.match(res.headers.get('content-disposition'), /attachment; filename=.*\.docx/);
+  const buffer = await res.arrayBuffer();
+  assert.ok(buffer.byteLength > 500);
+});
+
+test('Worker exporta documento como pdf attachment', async () => {
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=pdf', { method: 'GET' });
+  const env = { DB: createReadDb() };
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/pdf');
+  assert.match(res.headers.get('content-disposition'), /attachment; filename=.*\.pdf/);
+  const buffer = await res.arrayBuffer();
+  assert.ok(buffer.byteLength > 500);
 });
 
 test('Worker responde 404 para documentos inexistentes', async () => {

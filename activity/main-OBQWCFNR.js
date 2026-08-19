@@ -10115,15 +10115,6 @@ async function fetchDocument(documentId) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
-function sanitizeFileName(value) {
-  const normalized = String(value || "documento").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").replace(/\s+/g, " ").trim().replace(/[. ]+$/g, "");
-  return (normalized || "documento").slice(0, 96);
-}
-function exportBaseName() {
-  const sourceName = currentDocumentData?.sourceName || "";
-  const sourceStem = sourceName.replace(/\.(?:md|markdown|txt|docx?|pdf)$/i, "").trim();
-  return sanitizeFileName(sourceStem || currentDocumentData?.title || "documento-bardo");
-}
 function showActionStatus(message, isError = false) {
   if (!actionStatusEl) return;
   window.clearTimeout(actionStatusTimer);
@@ -10133,78 +10124,6 @@ function showActionStatus(message, isError = false) {
     actionStatusEl.textContent = "";
     actionStatusEl.classList.remove("is-error");
   }, 2800);
-}
-function downloadBlobFallback(blob, fileName) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1e4);
-}
-async function saveFile({ blob, fileName, mimeType, extension, title = "Documento" }) {
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-  const ext = extension || (fileName.includes(".") ? "." + fileName.split(".").pop() : "");
-  if (!isMobile && typeof window !== "undefined" && typeof window.showSaveFilePicker === "function") {
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: fileName,
-        types: [
-          {
-            description: title,
-            accept: { [mimeType]: [ext] }
-          }
-        ]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      showActionStatus("Archivo guardado");
-      return;
-    } catch (pickerErr) {
-      if (pickerErr.name === "AbortError") {
-        return;
-      }
-      console.warn("showSaveFilePicker no disponible o fall\xF3:", pickerErr);
-    }
-  }
-  if (isMobile && typeof navigator !== "undefined" && typeof navigator.share === "function" && typeof File !== "undefined") {
-    try {
-      const file = new File([blob], fileName, { type: mimeType });
-      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title
-        });
-        showActionStatus("Archivo guardado / compartido");
-        return;
-      }
-    } catch (shareErr) {
-      if (shareErr.name === "AbortError") {
-        return;
-      }
-      console.warn("navigator.share no se pudo completar:", shareErr);
-    }
-  }
-  try {
-    downloadBlobFallback(blob, fileName);
-    showActionStatus("Descargado");
-  } catch (downloadErr) {
-    console.error("Error al descargar archivo:", downloadErr);
-    showActionStatus("No se pudo guardar el archivo", true);
-  }
-}
-function currentMarkdown() {
-  if (currentDocumentData?.markdown) return currentDocumentData.markdown;
-  const title = currentDocumentData?.title || titleEl?.textContent || "Documento";
-  return `# ${title}
-
-${bodyEl?.innerText || ""}`.trim();
 }
 function currentPlainText() {
   const title = currentDocumentData?.title || titleEl?.textContent || "Documento";
@@ -10216,42 +10135,6 @@ ${body}` : ""}`;
 function currentRichHtml() {
   const title = currentDocumentData?.title || titleEl?.textContent || "Documento";
   return `<h1>${escapeHtml(title)}</h1>${bodyEl?.innerHTML || ""}`;
-}
-function wordDocumentHtml() {
-  const title = currentDocumentData?.title || titleEl?.textContent || "Documento";
-  const body = bodyEl?.innerHTML || "";
-  return `<!doctype html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8">
-  <title>${escapeHtml(title)}</title>
-  <style>
-    @page { margin: 2.2cm 2cm; }
-    body { font-family: Aptos, Calibri, Arial, sans-serif; color: #202124; font-size: 11pt; line-height: 1.55; }
-    h1 { font-size: 24pt; line-height: 1.12; margin: 0 0 18pt; }
-    h2 { font-size: 17pt; margin: 22pt 0 8pt; }
-    h3 { font-size: 13pt; margin: 18pt 0 6pt; }
-    h4 { font-size: 11pt; margin: 14pt 0 5pt; }
-    p { margin: 0 0 9pt; }
-    ul, ol { margin: 6pt 0 10pt 20pt; }
-    li { margin: 2pt 0; }
-    blockquote { border-left: 3pt solid #777; margin: 12pt 0; padding: 7pt 10pt; color: #444; background: #f4f4f4; }
-    table { width: 100%; border-collapse: collapse; margin: 12pt 0 16pt; }
-    th, td { border: 1pt solid #d1d5db; padding: 6pt 7pt; text-align: left; vertical-align: top; }
-    th { background: #f2f3f5; font-weight: 700; }
-    code { font-family: Consolas, monospace; background: #f3f4f6; }
-    pre { font-family: Consolas, monospace; background: #f3f4f6; padding: 10pt; white-space: pre-wrap; }
-    a { color: #2457c5; }
-    .table-wrap { width: 100%; }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(title)}</h1>
-  ${body}
-</body>
-</html>`;
 }
 function legacyCopyPlainText(text) {
   const textarea = document.createElement("textarea");
@@ -10293,50 +10176,6 @@ async function copyDocument() {
     }
   }
 }
-async function downloadMarkdown() {
-  if (!currentDocumentData) return;
-  const fileName = `${exportBaseName()}.md`;
-  const blob = new Blob([currentMarkdown()], { type: "text/markdown;charset=utf-8" });
-  await saveFile({
-    blob,
-    fileName,
-    mimeType: "text/markdown",
-    extension: ".md",
-    title: currentDocumentData.title || "Documento"
-  });
-}
-async function downloadWord() {
-  if (!currentDocumentData) return;
-  const fileName = `${exportBaseName()}.doc`;
-  const blob = new Blob(["\uFEFF", wordDocumentHtml()], { type: "application/msword;charset=utf-8" });
-  await saveFile({
-    blob,
-    fileName,
-    mimeType: "application/msword",
-    extension: ".doc",
-    title: currentDocumentData.title || "Documento"
-  });
-}
-async function downloadPdf() {
-  if (!currentDocumentData) return;
-  const previousTitle = document.title;
-  const nextTitle = exportBaseName();
-  try {
-    document.documentElement.classList.add("print-export");
-    document.title = nextTitle;
-    document.body.offsetHeight;
-    showActionStatus("Elige \u201CGuardar como PDF\u201D");
-    window.print();
-  } catch (error) {
-    console.error("No se pudo abrir el di\xE1logo de PDF:", error);
-    showActionStatus("No pudimos abrir el PDF", true);
-  } finally {
-    window.setTimeout(() => {
-      document.documentElement.classList.remove("print-export");
-      document.title = previousTitle;
-    }, 500);
-  }
-}
 async function exportDocument(format) {
   if (!currentDocumentData) return;
   const documentId = currentDocumentData.id;
@@ -10344,23 +10183,22 @@ async function exportDocument(format) {
   if (activeDiscordSdk?.commands?.openExternalLink) {
     try {
       await activeDiscordSdk.commands.openExternalLink({ url: exportUrl });
-      showActionStatus("Descarga iniciada");
       return;
     } catch (sdkErr) {
       console.warn("discordSdk.openExternalLink no disponible o cancelado:", sdkErr);
     }
   }
-  if (format === "pdf") {
-    await downloadPdf();
-    return;
-  }
-  if (format === "markdown") {
-    await downloadMarkdown();
-    return;
-  }
-  if (format === "word") {
-    await downloadWord();
-    return;
+  try {
+    const link = document.createElement("a");
+    link.href = exportUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (err) {
+    console.error("Error al descargar archivo:", err);
   }
 }
 function renderDocument(data) {
@@ -10388,7 +10226,6 @@ downloadSelectEl?.addEventListener("change", async (event) => {
     await exportDocument(format);
   } catch (err) {
     console.error("Error al exportar documento:", err);
-    showActionStatus("No se pudo guardar", true);
   } finally {
     event.target.value = "";
   }

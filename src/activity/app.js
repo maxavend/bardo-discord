@@ -591,28 +591,24 @@ async function exportDocument(format) {
   if (activeDiscordSdk?.commands?.openExternalLink) {
     try {
       await activeDiscordSdk.commands.openExternalLink({ url: exportUrl });
-      showActionStatus('Descarga iniciada');
       return;
     } catch (sdkErr) {
       console.warn('discordSdk.openExternalLink no disponible o cancelado:', sdkErr);
     }
   }
 
-  // 2. Si es PDF en navegador estándar
-  if (format === 'pdf') {
-    await downloadPdf();
-    return;
-  }
-
-  // 3. Si es Markdown o Word en navegador estándar
-  if (format === 'markdown') {
-    await downloadMarkdown();
-    return;
-  }
-
-  if (format === 'word') {
-    await downloadWord();
-    return;
+  // 2. Fallback estándar para navegador externo: abrir endpoint de descarga
+  try {
+    const link = document.createElement('a');
+    link.href = exportUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (err) {
+    console.error('Error al descargar archivo:', err);
   }
 }
 
@@ -647,7 +643,6 @@ downloadSelectEl?.addEventListener('change', async (event) => {
     await exportDocument(format);
   } catch (err) {
     console.error('Error al exportar documento:', err);
-    showActionStatus('No se pudo guardar', true);
   } finally {
     event.target.value = '';
   }

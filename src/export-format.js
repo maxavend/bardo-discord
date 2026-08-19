@@ -1,3 +1,6 @@
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import JSZip from 'jszip';
+
 export function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -5,6 +8,15 @@ export function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+export function escapeXml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 export function sanitizeExportFileName(value) {
@@ -17,73 +29,6 @@ export function sanitizeExportFileName(value) {
     .replace(/[. ]+$/g, '');
 
   return (normalized || 'documento').slice(0, 96);
-}
-
-function renderInline(value) {
-  let text = escapeHtml(value);
-  const codeTokens = [];
-
-  text = text.replace(/`([^`]+)`/g, (_, code) => {
-    const token = `%%BARDOCODE${codeTokens.length}%%`;
-    codeTokens.push(`<code>${code}</code>`);
-    return token;
-  });
-
-  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g, (_, label, href) =>
-    `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`,
-  );
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
-  text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-  text = text.replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>');
-
-  codeTokens.forEach((html, index) => {
-    text = text.replace(`%%BARDOCODE${index}%%`, html);
-  });
-
-  return text;
-}
-
-function splitTableRow(line) {
-  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
-  return trimmed.split('|').map((cell) => cell.trim());
-}
-
-function isTableSeparator(line) {
-  const cells = splitTableRow(line);
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
-}
-
-function renderTable(lines) {
-  const headers = splitTableRow(lines[0]);
-  const rows = lines.slice(2).map(splitTableRow);
-  const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('');
-  const body = rows
-    .map((row) => {
-      const cells = headers.map((_, index) => `<td>${renderInline(row[index] ?? '')}</td>`).join('');
-      return `<tr>${cells}</tr>`;
-    })
-    .join('');
-
-  return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
-}
-
-function isSpecialLine(lines, index) {
-  const line = lines[index] ?? '';
-  const next = lines[index + 1] ?? '';
-  const trimmed = line.trim();
-
-  return (
-    !trimmed ||
-    /^```/.test(trimmed) ||
-    /^#{1,6}\s+/.test(trimmed) ||
-    /^>\s?/.test(trimmed) ||
-    /^[-*+]\s+/.test(trimmed) ||
-    /^\d+[.)]\s+/.test(trimmed) ||
-    /^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed) ||
-    (line.includes('|') && isTableSeparator(next))
-  );
 }
 
 export function stripLeadingTitle(markdown, title) {
@@ -99,9 +44,319 @@ export function stripLeadingTitle(markdown, title) {
   return lines.join('\n').trim();
 }
 
-export function renderMarkdown(markdown) {
-  const lines = String(markdown || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  const html = [];
+function cleanMarkdownInline(text) {
+  return String(text || '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2')
+    .replace(/(^|[^_])_([^_\n]+)_/g, '$1$2')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+}
+
+/**
+ * Genera un archivo binario PDF real a partir del documento y su markdown.
+ */
+export async function generatePdfDocument(document) {
+  const pdfDoc = await PDFDocument.create();
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const fontMono = await pdfDoc.embedFont(StandardFonts.Courier);
+
+  const pageWidth = 595.28; // A4
+  const pageHeight = 841.89;
+  const marginX = 50;
+  const marginTop = 50;
+  const marginBottom = 50;
+  const contentWidth = pageWidth - marginX * 2;
+
+  let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+  let currentY = pageHeight - marginTop;
+
+  function ensureSpace(heightNeeded) {
+    if (currentY - heightNeeded < marginBottom) {
+      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      currentY = pageHeight - marginTop;
+    }
+  }
+
+  function wrapText(text, font, size, maxWidth) {
+    const words = String(text || '').split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      let width = 0;
+      try {
+        width = font.widthOfTextAtSize(testLine, size);
+      } catch {
+        // En caso de caracteres especiales fuera de WinAnsi, limpiamos a ascii
+        const safe = testLine.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
+        width = font.widthOfTextAtSize(safe, size);
+      }
+
+      if (width <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines.length > 0 ? lines : [''];
+  }
+
+  function drawTextLine(text, font, size, color, xOffset = 0) {
+    ensureSpace(size * 1.35);
+    const safeText = String(text).replace(/[^\x20-\x7E\xA0-\xFF]/g, ' ');
+    try {
+      currentPage.drawText(safeText, {
+        x: marginX + xOffset,
+        y: currentY,
+        size,
+        font,
+        color,
+      });
+    } catch (err) {
+      console.warn('Error dibujando texto en PDF:', err);
+    }
+    currentY -= size * 1.35;
+  }
+
+  const title = document.title || 'Documento';
+  const rawMarkdown = document.originalMarkdown || '';
+  const bodyMarkdown = stripLeadingTitle(rawMarkdown, title);
+
+  // 1. Encabezado / Título del documento
+  ensureSpace(40);
+  const titleLines = wrapText(title, fontBold, 18, contentWidth);
+  for (const line of titleLines) {
+    drawTextLine(line, fontBold, 18, rgb(0.08, 0.09, 0.12));
+  }
+  currentY -= 6;
+
+  // Línea separadora sutil
+  currentPage.drawLine({
+    start: { x: marginX, y: currentY },
+    end: { x: pageWidth - marginX, y: currentY },
+    thickness: 1,
+    color: rgb(0.85, 0.87, 0.9),
+  });
+  currentY -= 16;
+
+  // 2. Renderizar contenido Markdown línea por línea
+  const rawLines = bodyMarkdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  let index = 0;
+
+  while (index < rawLines.length) {
+    const line = rawLines[index];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      currentY -= 6;
+      index += 1;
+      continue;
+    }
+
+    // Bloques de código ```
+    if (trimmed.startsWith('```')) {
+      index += 1;
+      const codeLines = [];
+      while (index < rawLines.length && !rawLines[index].trim().startsWith('```')) {
+        codeLines.push(rawLines[index]);
+        index += 1;
+      }
+      if (index < rawLines.length) index += 1;
+
+      currentY -= 4;
+      for (const cLine of codeLines) {
+        const wrapped = wrapText(cLine, fontMono, 9, contentWidth - 16);
+        for (const w of wrapped) {
+          drawTextLine(w, fontMono, 9, rgb(0.2, 0.22, 0.25), 10);
+        }
+      }
+      currentY -= 8;
+      continue;
+    }
+
+    // Encabezados (#, ##, ###)
+    const h1Match = trimmed.match(/^#\s+(.+)$/);
+    if (h1Match) {
+      currentY -= 10;
+      const hLines = wrapText(cleanMarkdownInline(h1Match[1]), fontBold, 15, contentWidth);
+      for (const h of hLines) drawTextLine(h, fontBold, 15, rgb(0.1, 0.12, 0.15));
+      currentY -= 4;
+      index += 1;
+      continue;
+    }
+
+    const h2Match = trimmed.match(/^##\s+(.+)$/);
+    if (h2Match) {
+      currentY -= 8;
+      const hLines = wrapText(cleanMarkdownInline(h2Match[1]), fontBold, 13, contentWidth);
+      for (const h of hLines) drawTextLine(h, fontBold, 13, rgb(0.12, 0.14, 0.18));
+      currentY -= 3;
+      index += 1;
+      continue;
+    }
+
+    const h3Match = trimmed.match(/^###+\s+(.+)$/);
+    if (h3Match) {
+      currentY -= 6;
+      const hLines = wrapText(cleanMarkdownInline(h3Match[1]), fontBold, 11, contentWidth);
+      for (const h of hLines) drawTextLine(h, fontBold, 11, rgb(0.15, 0.17, 0.2));
+      currentY -= 2;
+      index += 1;
+      continue;
+    }
+
+    // Separadores ---
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      currentY -= 6;
+      ensureSpace(8);
+      currentPage.drawLine({
+        start: { x: marginX, y: currentY },
+        end: { x: pageWidth - marginX, y: currentY },
+        thickness: 0.5,
+        color: rgb(0.88, 0.9, 0.92),
+      });
+      currentY -= 10;
+      index += 1;
+      continue;
+    }
+
+    // Citas >
+    if (trimmed.startsWith('>')) {
+      const quoteText = cleanMarkdownInline(trimmed.replace(/^>\s?/, ''));
+      const qLines = wrapText(quoteText, fontOblique, 10, contentWidth - 20);
+      for (const q of qLines) {
+        drawTextLine(q, fontOblique, 10, rgb(0.3, 0.33, 0.38), 12);
+      }
+      currentY -= 4;
+      index += 1;
+      continue;
+    }
+
+    // Listas con viñetas o numeradas
+    const listMatch = trimmed.match(/^([-*+]|\d+[.)])\s+(.+)$/);
+    if (listMatch) {
+      const isNumbered = /^\d/.test(listMatch[1]);
+      const bullet = isNumbered ? `${listMatch[1]} ` : '• ';
+      const itemText = cleanMarkdownInline(listMatch[2]);
+      const itemLines = wrapText(itemText, fontRegular, 10, contentWidth - 20);
+      
+      for (let i = 0; i < itemLines.length; i += 1) {
+        const prefix = i === 0 ? bullet : '  ';
+        drawTextLine(`${prefix}${itemLines[i]}`, fontRegular, 10, rgb(0.18, 0.2, 0.24), 8);
+      }
+      index += 1;
+      continue;
+    }
+
+    // Párrafos regulares
+    const cleanText = cleanMarkdownInline(trimmed);
+    const pLines = wrapText(cleanText, fontRegular, 10, contentWidth);
+    for (const p of pLines) {
+      drawTextLine(p, fontRegular, 10, rgb(0.18, 0.2, 0.24));
+    }
+    currentY -= 3;
+    index += 1;
+  }
+
+  return pdfDoc.save();
+}
+
+/**
+ * Genera un archivo binario DOCX (Word moderno) real a partir del documento.
+ */
+export async function generateDocxDocument(document) {
+  const zip = new JSZip();
+
+  const title = escapeXml(document.title || 'Documento');
+  const rawMarkdown = document.originalMarkdown || '';
+  const bodyMarkdown = stripLeadingTitle(rawMarkdown, document.title || '');
+
+  // 1. [Content_Types].xml
+  zip.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`,
+  );
+
+  // 2. _rels/.rels
+  zip.file(
+    '_rels/.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`,
+  );
+
+  // 3. word/_rels/document.xml.rels
+  zip.file(
+    'word/_rels/document.xml.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+  );
+
+  // 4. word/styles.xml
+  zip.file(
+    'word/styles.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Aptos"/>
+        <w:sz w:val="22"/>
+        <w:color w:val="1F2328"/>
+      </w:rPr>
+    </w:rPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:pPr><w:spacing w:before="360" w:after="160"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="36"/><w:color w:val="0F172A"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:pPr><w:spacing w:before="280" w:after="120"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="0F172A"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:pPr><w:spacing w:before="200" w:after="80"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="24"/><w:color w:val="0F172A"/></w:rPr>
+  </w:style>
+</w:styles>`,
+  );
+
+  // 5. word/document.xml
+  const xmlParagraphs = [];
+
+  // Título principal
+  xmlParagraphs.push(`
+    <w:p>
+      <w:pPr>
+        <w:spacing w:before="100" w:after="240"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr><w:b/><w:sz w:val="44"/><w:color w:val="0F172A"/></w:rPr>
+        <w:t>${title}</w:t>
+      </w:r>
+    </w:p>`);
+
+  const lines = bodyMarkdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   let index = 0;
 
   while (index < lines.length) {
@@ -114,306 +369,115 @@ export function renderMarkdown(markdown) {
     }
 
     if (trimmed.startsWith('```')) {
-      const language = trimmed.slice(3).trim();
-      const code = [];
       index += 1;
+      const code = [];
       while (index < lines.length && !lines[index].trim().startsWith('```')) {
         code.push(lines[index]);
         index += 1;
       }
       if (index < lines.length) index += 1;
-      const languageAttr = language ? ` data-language="${escapeHtml(language)}"` : '';
-      html.push(`<pre><code${languageAttr}>${escapeHtml(code.join('\n'))}</code></pre>`);
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr>
+          <w:r>
+            <w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="19"/><w:color w:val="334155"/></w:rPr>
+            <w:t xml:space="preserve">${escapeXml(code.join('\n'))}</w:t>
+          </w:r>
+        </w:p>`);
       continue;
     }
 
-    if (line.includes('|') && isTableSeparator(lines[index + 1] ?? '')) {
-      const tableLines = [line, lines[index + 1]];
-      index += 2;
-      while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
-        tableLines.push(lines[index]);
-        index += 1;
-      }
-      html.push(renderTable(tableLines));
-      continue;
-    }
-
-    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      const level = Math.min(heading[1].length, 4);
-      html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+    const h1 = trimmed.match(/^#\s+(.+)$/);
+    if (h1) {
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+          <w:r><w:t>${escapeXml(cleanMarkdownInline(h1[1]))}</w:t></w:r>
+        </w:p>`);
       index += 1;
       continue;
     }
 
-    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      html.push('<hr>');
+    const h2 = trimmed.match(/^##\s+(.+)$/);
+    if (h2) {
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
+          <w:r><w:t>${escapeXml(cleanMarkdownInline(h2[1]))}</w:t></w:r>
+        </w:p>`);
       index += 1;
       continue;
     }
 
-    if (/^>\s?/.test(trimmed)) {
-      const quoteLines = [];
-      while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
-        quoteLines.push(lines[index].trim().replace(/^>\s?/, ''));
-        index += 1;
-      }
-      html.push(`<blockquote><p>${quoteLines.map(renderInline).join('<br>')}</p></blockquote>`);
+    const h3 = trimmed.match(/^###+\s+(.+)$/);
+    if (h3) {
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:pStyle w:val="Heading3"/></w:pPr>
+          <w:r><w:t>${escapeXml(cleanMarkdownInline(h3[1]))}</w:t></w:r>
+        </w:p>`);
+      index += 1;
       continue;
     }
 
-    if (/^[-*+]\s+/.test(trimmed)) {
-      const items = [];
-      while (index < lines.length && /^[-*+]\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^[-*+]\s+/, ''));
-        index += 1;
-      }
-      html.push(`<ul>${items.map((item) => `<li>${renderInline(item)}</li>`).join('')}</ul>`);
+    const quote = trimmed.match(/^>\s?(.+)$/);
+    if (quote) {
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:ind w:left="400"/><w:spacing w:before="100" w:after="100"/></w:pPr>
+          <w:r><w:rPr><w:i/><w:color w:val="475569"/></w:rPr><w:t>${escapeXml(cleanMarkdownInline(quote[1]))}</w:t></w:r>
+        </w:p>`);
+      index += 1;
       continue;
     }
 
-    if (/^\d+[.)]\s+/.test(trimmed)) {
-      const items = [];
-      while (index < lines.length && /^\d+[.)]\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^\d+[.)]\s+/, ''));
-        index += 1;
-      }
-      html.push(`<ol>${items.map((item) => `<li>${renderInline(item)}</li>`).join('')}</ol>`);
+    const bullet = trimmed.match(/^[-*+]\s+(.+)$/);
+    if (bullet) {
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:ind w:left="400"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+          <w:r><w:t>• ${escapeXml(cleanMarkdownInline(bullet[1]))}</w:t></w:r>
+        </w:p>`);
+      index += 1;
       continue;
     }
 
-    const paragraph = [trimmed];
+    const numbered = trimmed.match(/^(\d+[.)])\s+(.+)$/);
+    if (numbered) {
+      xmlParagraphs.push(`
+        <w:p>
+          <w:pPr><w:ind w:left="400"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+          <w:r><w:t>${escapeXml(numbered[1])} ${escapeXml(cleanMarkdownInline(numbered[2]))}</w:t></w:r>
+        </w:p>`);
+      index += 1;
+      continue;
+    }
+
+    xmlParagraphs.push(`
+      <w:p>
+        <w:pPr><w:spacing w:before="60" w:after="120"/></w:pPr>
+        <w:r><w:t>${escapeXml(cleanMarkdownInline(trimmed))}</w:t></w:r>
+      </w:p>`);
     index += 1;
-    while (index < lines.length && !isSpecialLine(lines, index)) {
-      paragraph.push(lines[index].trim());
-      index += 1;
-    }
-    html.push(`<p>${paragraph.map(renderInline).join('<br>')}</p>`);
   }
 
-  return html.join('\n');
-}
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${xmlParagraphs.join('\n')}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`,
+  );
 
-export function generateWordDocument(document) {
-  const title = document.title || 'Documento';
-  const rawMarkdown = document.originalMarkdown || '';
-  const bodyMarkdown = stripLeadingTitle(rawMarkdown, title);
-  const bodyHtml = renderMarkdown(bodyMarkdown);
-
-  return `<!doctype html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8">
-  <title>${escapeHtml(title)}</title>
-  <!--[if gte mso 9]>
-  <xml>
-    <w:WordDocument>
-      <w:View>Print</w:View>
-      <w:Zoom>100</w:Zoom>
-      <w:DoNotOptimizeForBrowser/>
-    </w:WordDocument>
-  </xml>
-  <![endif]-->
-  <style>
-    @page { margin: 2.2cm 2cm; size: letter; }
-    body { font-family: Aptos, Calibri, "Segoe UI", Arial, sans-serif; color: #1f2328; font-size: 11pt; line-height: 1.6; }
-    h1 { font-size: 22pt; font-weight: 700; line-height: 1.15; margin: 0 0 16pt; color: #111418; }
-    h2 { font-size: 15pt; font-weight: 700; margin: 20pt 0 8pt; color: #111418; }
-    h3 { font-size: 12.5pt; font-weight: 700; margin: 16pt 0 6pt; color: #111418; }
-    h4 { font-size: 11pt; font-weight: 700; margin: 12pt 0 4pt; color: #111418; }
-    p { margin: 0 0 8pt; }
-    ul, ol { margin: 4pt 0 10pt 20pt; }
-    li { margin: 2pt 0; }
-    blockquote { border-left: 3pt solid #6b7280; margin: 10pt 0; padding: 6pt 10pt; color: #374151; background: #f3f4f6; }
-    table { width: 100%; border-collapse: collapse; margin: 12pt 0 16pt; }
-    th, td { border: 1pt solid #d1d5db; padding: 6pt 8pt; text-align: left; vertical-align: top; font-size: 10pt; }
-    th { background: #f3f4f6; font-weight: 700; }
-    code { font-family: Consolas, "Courier New", monospace; background: #f3f4f6; font-size: 10pt; }
-    pre { font-family: Consolas, "Courier New", monospace; background: #f3f4f6; padding: 8pt; font-size: 9.5pt; white-space: pre-wrap; }
-    a { color: #1a56db; text-decoration: underline; }
-    hr { border: 0; border-top: 1pt solid #e5e7eb; margin: 18pt 0; }
-  </style>
-</head>
-<body>
-  <h1>${escapeHtml(title)}</h1>
-  ${bodyHtml}
-</body>
-</html>`;
-}
-
-export function generatePrintDocument(document) {
-  const title = document.title || 'Documento';
-  const rawMarkdown = document.originalMarkdown || '';
-  const bodyMarkdown = stripLeadingTitle(rawMarkdown, title);
-  const bodyHtml = renderMarkdown(bodyMarkdown);
-
-  return `<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)} · Bardo</title>
-  <style>
-    @page {
-      margin: 18mm 18mm 20mm;
-      size: auto;
-    }
-    *, *::before, *::after { box-sizing: border-box; }
-    body {
-      margin: 0 auto;
-      max-width: 800px;
-      padding: 32px 24px 64px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #111418;
-      background: #ffffff;
-      line-height: 1.6;
-      font-size: 15px;
-      -webkit-font-smoothing: antialiased;
-    }
-    .print-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 16px;
-      margin-bottom: 32px;
-      background: #f4f5f7;
-      border-radius: 10px;
-      border: 1px solid #e1e4e8;
-    }
-    .print-btn {
-      background: #111418;
-      color: #ffffff;
-      border: 0;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .print-btn:hover { background: #333; }
-    .doc-header {
-      margin-bottom: 28px;
-      padding-bottom: 18px;
-      border-bottom: 2px solid #111418;
-    }
-    .doc-eyebrow {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin: 0 0 6px;
-    }
-    h1.doc-title {
-      font-size: 28px;
-      line-height: 1.2;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin: 0;
-      color: #0f172a;
-    }
-    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
-      color: #0f172a;
-      line-height: 1.25;
-      letter-spacing: -0.02em;
-      break-after: avoid;
-    }
-    .markdown-body h1 { font-size: 22px; margin: 28px 0 10px; }
-    .markdown-body h2 { font-size: 18px; margin: 24px 0 8px; }
-    .markdown-body h3 { font-size: 15px; margin: 18px 0 6px; }
-    .markdown-body h4 { font-size: 14px; margin: 14px 0 4px; }
-    .markdown-body p { margin: 10px 0; }
-    .markdown-body strong { color: #0f172a; }
-    .markdown-body a { color: #2563eb; }
-    .markdown-body ul, .markdown-body ol { margin: 8px 0 14px; padding-left: 24px; }
-    .markdown-body li { margin: 3px 0; }
-    .markdown-body blockquote {
-      margin: 16px 0;
-      padding: 10px 16px;
-      border-left: 3px solid #64748b;
-      border-radius: 0 8px 8px 0;
-      background: #f8fafc;
-      color: #334155;
-      break-inside: avoid;
-    }
-    .markdown-body blockquote p { margin: 0; }
-    .markdown-body hr {
-      border: 0;
-      height: 1px;
-      background: #e2e8f0;
-      margin: 24px 0;
-    }
-    .markdown-body code {
-      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-      font-size: 0.9em;
-      background: #f1f5f9;
-      padding: 2px 6px;
-      border-radius: 4px;
-      border: 1px solid #e2e8f0;
-    }
-    .markdown-body pre {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 14px 16px;
-      overflow-x: auto;
-      break-inside: avoid;
-    }
-    .markdown-body pre code {
-      background: transparent;
-      padding: 0;
-      border: 0;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .table-wrap {
-      width: 100%;
-      overflow-x: auto;
-      margin: 16px 0;
-      break-inside: avoid;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      border: 1px solid #cbd5e1;
-      padding: 8px 10px;
-      text-align: left;
-      vertical-align: top;
-    }
-    th {
-      background: #f1f5f9;
-      font-weight: 700;
-    }
-    @media print {
-      body { padding: 0; max-width: 100%; }
-      .print-bar { display: none !important; }
-    }
-  </style>
-</head>
-<body>
-  <div class="print-bar">
-    <span>Documento listo para imprimir o guardar como PDF</span>
-    <button class="print-btn" onclick="window.print()">🖨️ Guardar como PDF / Imprimir</button>
-  </div>
-  <header class="doc-header">
-    <p class="doc-eyebrow">Documento · Bardo</p>
-    <h1 class="doc-title">${escapeHtml(title)}</h1>
-  </header>
-  <article class="markdown-body">
-    ${bodyHtml}
-  </article>
-  <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        try { window.print(); } catch(e) {}
-      }, 250);
-    });
-  </script>
-</body>
-</html>`;
+  return zip.generateAsync({
+    type: 'uint8array',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    compression: 'DEFLATE',
+  });
 }
