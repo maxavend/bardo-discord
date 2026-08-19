@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Bardo · Documento</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar" aria-label="Bardo">
+        <div class="brand-mark" aria-hidden="true">B</div>
+        <div>
+          <strong>Bardo</strong>
+          <span>Documento</span>
+        </div>
+      </header>
+
+      <section id="loading" class="state-card">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Cargando documento…</p>
+      </section>
+
+      <section id="error" class="state-card" hidden>
+        <h1>No pude abrir este documento</h1>
+        <p id="error-message">Intenta abrirlo nuevamente desde Discord.</p>
+      </section>
+
+      <article id="document" class="document" hidden>
+        <header class="document-header">
+          <p class="eyebrow">Documento compartido con Bardo</p>
+          <h1 id="document-title"></h1>
+          <div id="document-meta" class="meta"></div>
+        </header>
+        <div id="document-body" class="markdown-body"></div>
+      </article>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
