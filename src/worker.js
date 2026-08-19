@@ -5,15 +5,19 @@ import {
   verifyKey,
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
-import { buildDocumentPayload, buildErrorPayload, BUTTON_PREFIX } from './components.js';
+import { buildDocumentPayload, buildErrorPayload } from './components.js';
 import { loadDocument, saveDocument } from './db.js';
 
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+const DOCUMENT_API_PREFIX = '/api/documents/';
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...extraHeaders,
+    },
   });
 }
 
@@ -54,7 +58,9 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     }
 
     const createdBy = interaction.member?.user?.id || interaction.user?.id || 'unknown';
+    const documentId = crypto.randomUUID();
     const document = {
+      id: documentId,
       title,
       originalMarkdown: markdown,
       pages,
@@ -63,7 +69,16 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       createdBy,
     };
 
-    const documentPayload = buildDocumentPayload(document, 0);
+    if (!env.DB) {
+      throw new Error('La base de datos de Bardo no está disponible.');
+    }
+
+    await saveDocument(env.DB, documentId, document);
+
+    const documentPayload = buildDocumentPayload(document, {
+      applicationId,
+      documentId,
+    });
 
     const editRes = await fetch(originalMessageUrl, {
       method: 'PATCH',
@@ -76,12 +91,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       throw new Error(`Error al actualizar el mensaje en Discord: ${editRes.status} ${errText}`);
     }
 
-    const messageData = await editRes.json();
-    const messageId = messageData.id;
-
-    if (messageId && env.DB) {
-      await saveDocument(env.DB, messageId, document);
-    }
+    console.log(`Documento publicado: ${title} (${documentId})`);
   } catch (error) {
     console.error('Error procesando documento en background:', error);
     const message = error instanceof Error ? error.message : 'Error desconocido.';
@@ -117,7 +127,6 @@ async function handleCommandInteraction(interaction, env, ctx) {
       });
     }
 
-    // Defer the response immediately (Type 5: DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE)
     ctx.waitUntil(processAndSaveDocument(env, interaction, resolvedAttachment, explicitTitle));
 
     return jsonResponse({
@@ -134,116 +143,105 @@ async function handleCommandInteraction(interaction, env, ctx) {
   });
 }
 
-async function handleMessageComponentInteraction(interaction, env) {
-  const customId = interaction.data?.custom_id || '';
+async function handleDocumentApi(url, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
 
-  if (customId.startsWith(BUTTON_PREFIX)) {
-    const targetPage = Number.parseInt(customId.slice(BUTTON_PREFIX.length), 10);
+  const encodedId = url.pathname.slice(DOCUMENT_API_PREFIX.length);
+  if (!encodedId) {
+    return jsonResponse({ error: 'Document id required' }, 400);
+  }
 
-    if (!Number.isInteger(targetPage)) {
-      return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'Ese botón no contiene una página válida.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      });
-    }
+  let documentId;
+  try {
+    documentId = decodeURIComponent(encodedId);
+  } catch {
+    return jsonResponse({ error: 'Invalid document id' }, 400);
+  }
 
-    const messageId = interaction.message?.id;
-    if (!messageId) {
-      return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'No se pudo identificar el mensaje asociado.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      });
-    }
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) {
+    return jsonResponse({ error: 'Document not found' }, 404);
+  }
 
-    const document = await loadDocument(env.DB, messageId);
-    if (!document) {
-      return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'No encuentro el documento en la base de datos.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      });
-    }
+  return jsonResponse(
+    {
+      id: document.id || documentId,
+      title: document.title,
+      markdown: document.originalMarkdown,
+      sourceName: document.sourceName,
+      createdAt: document.createdAt,
+    },
+    200,
+    {
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  );
+}
 
-    const payload = buildDocumentPayload(document, targetPage);
+async function handleDiscordInteraction(request, env, ctx) {
+  const signature = request.headers.get('x-signature-ed25519');
+  const timestamp = request.headers.get('x-signature-timestamp');
 
-    // Type 7: UPDATE_MESSAGE
-    return jsonResponse({
-      type: InteractionResponseType.UPDATE_MESSAGE,
-      data: payload,
-    });
+  if (!signature || !timestamp) {
+    return new Response('Invalid request signature headers', { status: 401 });
+  }
+
+  const rawBody = await request.text();
+  const publicKey = env.DISCORD_PUBLIC_KEY;
+
+  if (!publicKey) {
+    console.error('DISCORD_PUBLIC_KEY is not configured');
+    return new Response('Internal Server Error: Missing Public Key', { status: 500 });
+  }
+
+  const isValidRequest = await verifyKey(rawBody, signature, timestamp, publicKey);
+  if (!isValidRequest) {
+    return new Response('Invalid request signature', { status: 401 });
+  }
+
+  let interaction;
+  try {
+    interaction = JSON.parse(rawBody);
+  } catch {
+    return new Response('Invalid JSON payload', { status: 400 });
+  }
+
+  if (interaction.type === InteractionType.PING) {
+    return jsonResponse({ type: InteractionResponseType.PONG });
+  }
+
+  if (interaction.type === InteractionType.APPLICATION_COMMAND) {
+    return handleCommandInteraction(interaction, env, ctx);
   }
 
   return jsonResponse({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
-      content: 'Acción desconocida.',
+      content: 'Interacción no soportada.',
       flags: InteractionResponseFlags.EPHEMERAL,
     },
   });
 }
 
 export default {
-  async fetch(request, env, ctx) {
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 });
+  async fetch(request, env, ctx = { waitUntil: () => {} }) {
+    const url = new URL(request.url);
+
+    if (request.method === 'GET' && url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
+      return handleDocumentApi(url, env);
     }
 
-    const signature = request.headers.get('x-signature-ed25519');
-    const timestamp = request.headers.get('x-signature-timestamp');
-
-    if (!signature || !timestamp) {
-      return new Response('Invalid request signature headers', { status: 401 });
+    if (request.method === 'POST') {
+      return handleDiscordInteraction(request, env, ctx);
     }
 
-    const rawBody = await request.text();
-
-    const publicKey = env.DISCORD_PUBLIC_KEY;
-    if (!publicKey) {
-      console.error('DISCORD_PUBLIC_KEY is not configured');
-      return new Response('Internal Server Error: Missing Public Key', { status: 500 });
+    if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS) {
+      return env.ASSETS.fetch(request);
     }
 
-    const isValidRequest = await verifyKey(rawBody, signature, timestamp, publicKey);
-    if (!isValidRequest) {
-      return new Response('Invalid request signature', { status: 401 });
-    }
-
-    let interaction;
-    try {
-      interaction = JSON.parse(rawBody);
-    } catch {
-      return new Response('Invalid JSON payload', { status: 400 });
-    }
-
-    // Type 1: PING
-    if (interaction.type === InteractionType.PING) {
-      return jsonResponse({ type: InteractionResponseType.PONG });
-    }
-
-    // Type 2: APPLICATION_COMMAND
-    if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-      return handleCommandInteraction(interaction, env, ctx);
-    }
-
-    // Type 3: MESSAGE_COMPONENT
-    if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
-      return handleMessageComponentInteraction(interaction, env);
-    }
-
-    return jsonResponse({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'Interacción no soportada.',
-        flags: InteractionResponseFlags.EPHEMERAL,
-      },
-    });
+    return new Response('Method not allowed', { status: 405 });
   },
 };
