@@ -221,18 +221,6 @@ select {
   gap: 12px;
   margin-top: 22px;
 }
-.download-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.download-label {
-  color: #8f949d;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 .select-wrapper {
   position: relative;
   display: inline-flex;
@@ -242,17 +230,20 @@ select {
   appearance: none;
   -webkit-appearance: none;
   min-height: 34px;
-  padding: 6px 32px 6px 12px;
+  padding: 7px 34px 7px 14px;
   border: 1px solid #35383f;
   border-radius: 9px;
   background-color: #1b1d21;
   color: #dfe2e7;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   outline: none;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
 }
 .action-select:hover {
   border-color: #4a4e57;
@@ -264,7 +255,7 @@ select {
 }
 .select-arrow {
   position: absolute;
-  right: 10px;
+  right: 11px;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
@@ -522,18 +513,10 @@ select {
     gap: 10px;
     margin-top: 18px;
   }
-  .download-group {
-    flex: 1 1 auto;
-    min-width: 0;
-    gap: 6px;
-  }
   .action-select {
     font-size: 12px;
-    padding: 6px 26px 6px 10px;
+    padding: 6px 30px 6px 12px;
     min-height: 32px;
-  }
-  .download-label {
-    font-size: 12px;
   }
   .action-button {
     font-size: 12px;
@@ -577,9 +560,6 @@ select {
   .markdown-body h4,
   .markdown-body strong {
     color: #202126;
-  }
-  .download-label {
-    color: #5c6068;
   }
   .action-select {
     border-color: #d9dce2;
