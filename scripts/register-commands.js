@@ -9,18 +9,18 @@ if (!DISCORD_TOKEN || !DISCORD_GUILD_ID) {
 }
 
 const documentCommand = new SlashCommandBuilder()
-  .setName('documento')
-  .setDescription('Publica un Markdown largo como un único mensaje navegable.')
+  .setName('doc')
+  .setDescription('Publica y abre documentos en el lector de Bardo.')
   .addAttachmentOption((option) =>
     option
       .setName('archivo')
-      .setDescription('Archivo .md, .markdown o .txt')
+      .setDescription('Markdown, TXT, PDF o Word (.docx)')
       .setRequired(true),
   )
   .addStringOption((option) =>
     option
       .setName('titulo')
-      .setDescription('Título opcional. Si se omite, Bardo usa el H1 del Markdown.'),
+      .setDescription('Título opcional para el documento.'),
   );
 
 async function registerCommands() {
@@ -37,7 +37,7 @@ async function registerCommands() {
   const app = await appRes.json();
   const applicationId = app.id;
 
-  console.log(`Registrando comando /documento en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
+  console.log(`Registrando comando /doc en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
 
   const regRes = await fetch(
     `https://discord.com/api/v10/applications/${applicationId}/guilds/${DISCORD_GUILD_ID}/commands`,
@@ -57,7 +57,7 @@ async function registerCommands() {
   }
 
   const registered = await regRes.json();
-  console.log(`✅ Comando /documento registrado exitosamente (${registered.length} comandos activos en guild).`);
+  console.log(`✅ Comando /doc registrado exitosamente (${registered.length} comandos activos en guild).`);
 }
 
 registerCommands().catch((err) => {
