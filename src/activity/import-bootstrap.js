@@ -173,17 +173,26 @@ async function importDocx(arrayBuffer, title) {
   return ensureDocumentTitle(markdown, title);
 }
 
-async function fetchSource(documentId, instanceId) {
-  const response = await nativeFetch(`/api/documents/${encodeURIComponent(documentId)}/source`, {
-    headers: { 'x-bardo-instance-id': instanceId },
-    cache: 'no-store',
-  });
+async function fetchSource(documentId, instanceId, maxAttempts = 6) {
+  let lastStatus = null;
 
-  if (!response.ok) {
-    throw new Error(`No pudimos recuperar el archivo original (HTTP ${response.status}).`);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await nativeFetch(`/api/documents/${encodeURIComponent(documentId)}/source`, {
+      headers: { 'x-bardo-instance-id': instanceId },
+      cache: 'no-store',
+    });
+
+    if (response.ok) return response.arrayBuffer();
+
+    lastStatus = response.status;
+    const isLaunchRace = response.status === 401 || response.status === 403 || response.status === 404;
+    if (!isLaunchRace || attempt === maxAttempts - 1) break;
+
+    setImportStatus('Preparando documento', 'Sincronizando la sesión con Discord…');
+    await new Promise((resolve) => setTimeout(resolve, Math.min(150 * (2 ** attempt), 1200)));
   }
 
-  return response.arrayBuffer();
+  throw new Error(`No pudimos recuperar el archivo original (HTTP ${lastStatus ?? 'desconocido'}).`);
 }
 
 async function cacheNormalization(documentId, instanceId, markdown) {
