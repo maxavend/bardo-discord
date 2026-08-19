@@ -1,3 +1,17 @@
+function toArrayBuffer(value) {
+  if (value instanceof ArrayBuffer) return value;
+
+  if (ArrayBuffer.isView(value)) {
+    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+  }
+
+  if (Array.isArray(value)) {
+    return Uint8Array.from(value).buffer;
+  }
+
+  throw new TypeError('Bardo esperaba bytes binarios compatibles con ArrayBuffer.');
+}
+
 export async function saveDocument(db, messageId, document) {
   await db
     .prepare(
@@ -24,7 +38,7 @@ export async function saveDocument(db, messageId, document) {
 }
 
 export async function saveDocumentSource(db, documentId, source) {
-  const bytes = source.bytes instanceof Uint8Array ? source.bytes : new Uint8Array(source.bytes);
+  const buffer = toArrayBuffer(source.bytes);
 
   await db
     .prepare(
@@ -32,7 +46,7 @@ export async function saveDocumentSource(db, documentId, source) {
        SET source_blob = ?, source_mime = ?, source_type = ?, import_status = 'pending'
        WHERE id = ?`,
     )
-    .bind(bytes, source.mime || 'application/octet-stream', source.type, documentId)
+    .bind(buffer, source.mime || 'application/octet-stream', source.type, documentId)
     .run();
 }
 
@@ -76,7 +90,7 @@ export async function loadDocumentSource(db, documentId) {
   if (!row || !row.source_blob) return null;
 
   return {
-    bytes: Uint8Array.from(row.source_blob),
+    bytes: new Uint8Array(toArrayBuffer(row.source_blob)),
     mime: row.source_mime || 'application/octet-stream',
     type: row.source_type || null,
     importStatus: row.import_status || 'pending',
