@@ -7,9 +7,18 @@ import {
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
 import { normalizeDocumentId } from './document-id.js';
-import { loadDocument, saveDocument, loadActivityContext, saveActivityContext } from './db.js';
+import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
+import {
+  cacheNormalizedDocument,
+  loadActivityContext,
+  loadDocument,
+  loadDocumentSource,
+  saveActivityContext,
+  saveDocument,
+  saveDocumentSource,
+} from './db.js';
 
-const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+const MAX_STORED_DOCUMENT_BYTES = 1_800_000;
 const DOCUMENT_API_PREFIX = '/api/documents/';
 const ACTIVITY_CONTEXT_API_PREFIX = '/api/activity-context/';
 
@@ -23,26 +32,48 @@ function jsonResponse(data, status = 200, extraHeaders = {}) {
   });
 }
 
-function isSupportedTextAttachment(attachment) {
-  const name = attachment.filename?.toLowerCase() ?? attachment.name?.toLowerCase() ?? '';
-  return name.endsWith('.md') || name.endsWith('.markdown') || name.endsWith('.txt');
+function attachmentName(attachment) {
+  return attachment.filename || attachment.name || '';
 }
 
-async function downloadAttachmentText(attachment) {
-  if (!isSupportedTextAttachment(attachment)) {
-    throw new Error('Usa un archivo `.md`, `.markdown` o `.txt`.');
+function validateAttachment(attachment) {
+  const name = attachmentName(attachment);
+  const sourceType = getSourceType(name);
+
+  if (!sourceType) {
+    if (name.toLowerCase().endsWith('.doc')) {
+      throw new Error('El formato Word antiguo `.doc` todavía no es compatible. Guárdalo como `.docx` y vuelve a subirlo.');
+    }
+    throw new Error('Usa un archivo `.md`, `.markdown`, `.txt`, `.pdf` o `.docx`.');
   }
 
-  if (attachment.size > MAX_ATTACHMENT_BYTES) {
-    throw new Error('El archivo supera 2 MB. Para documentación de texto debería ser mucho más pequeño.');
+  if (attachment.size > MAX_STORED_DOCUMENT_BYTES) {
+    throw new Error('El archivo supera 1,8 MB. Por ahora Bardo limita PDF y Word a ese tamaño para mantener el almacenamiento gratuito.');
   }
 
+  return sourceType;
+}
+
+async function downloadAttachment(attachment, sourceType) {
   const response = await fetch(attachment.url);
   if (!response.ok) {
     throw new Error(`Discord devolvió HTTP ${response.status} al leer el archivo.`);
   }
 
-  return response.text();
+  if (isTextSourceType(sourceType)) {
+    return { text: await response.text() };
+  }
+
+  return { bytes: new Uint8Array(await response.arrayBuffer()) };
+}
+
+function firstPreviewPage(markdown) {
+  return paginateMarkdown(markdown).slice(0, 1);
+}
+
+function pendingImportPreview(sourceType) {
+  const label = sourceLabel(sourceType);
+  return `**${label} listo para leer.**\n\nBardo adaptará el contenido al mismo formato del lector cuando abras **Mostrar más** por primera vez.`;
 }
 
 async function processAndSaveDocument(env, interaction, attachment, explicitTitle) {
@@ -51,22 +82,37 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
   const originalMessageUrl = `https://discord.com/api/v10/webhooks/${applicationId}/${token}/messages/@original`;
 
   try {
-    const markdown = await downloadAttachmentText(attachment);
-    const { title, body } = extractDocumentTitle(markdown, explicitTitle);
-    const pages = paginateMarkdown(body);
-
-    if (pages.length === 0) {
-      throw new Error('El archivo está vacío.');
-    }
-
+    const sourceType = validateAttachment(attachment);
+    const downloaded = await downloadAttachment(attachment, sourceType);
     const createdBy = interaction.member?.user?.id || interaction.user?.id || 'unknown';
     const documentId = crypto.randomUUID();
+    const sourceName = attachmentName(attachment) || null;
+
+    let title;
+    let originalMarkdown;
+    let pages;
+
+    if (isTextSourceType(sourceType)) {
+      originalMarkdown = downloaded.text;
+      const extracted = extractDocumentTitle(originalMarkdown, explicitTitle);
+      title = extracted.title;
+      pages = firstPreviewPage(extracted.body);
+
+      if (pages.length === 0) {
+        throw new Error('El archivo está vacío.');
+      }
+    } else {
+      title = (explicitTitle?.trim() || fileStem(sourceName)).slice(0, 200);
+      originalMarkdown = `# ${title}\n\n${pendingImportPreview(sourceType)}`;
+      pages = [pendingImportPreview(sourceType)];
+    }
+
     const document = {
       id: documentId,
       title,
-      originalMarkdown: markdown,
+      originalMarkdown,
       pages,
-      sourceName: attachment.filename || attachment.name || null,
+      sourceName,
       createdAt: new Date().toISOString(),
       createdBy,
     };
@@ -76,6 +122,16 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     }
 
     await saveDocument(env.DB, documentId, document);
+
+    if (!isTextSourceType(sourceType)) {
+      await saveDocumentSource(env.DB, documentId, {
+        bytes: downloaded.bytes,
+        mime: attachment.content_type || (sourceType === 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        type: sourceType,
+      });
+    }
 
     const documentPayload = buildDocumentPayload(document, {
       applicationId,
@@ -93,7 +149,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       throw new Error(`Error al actualizar el mensaje en Discord: ${editRes.status} ${errText}`);
     }
 
-    console.log(`Documento publicado: ${title} (${documentId})`);
+    console.log(`Documento publicado: ${title} (${documentId}, ${sourceType})`);
   } catch (error) {
     console.error('Error procesando documento en background:', error);
     const message = error instanceof Error ? error.message : 'Error desconocido.';
@@ -110,7 +166,9 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 async function handleCommandInteraction(interaction, env, ctx) {
   const commandName = interaction.data?.name;
 
-  if (commandName === 'documento') {
+  // `documento` se conserva temporalmente para mensajes/comandos cacheados mientras
+  // Discord propaga el nuevo trigger `/doc`.
+  if (commandName === 'doc' || commandName === 'documento') {
     const options = interaction.data?.options || [];
     const archivoOption = options.find((opt) => opt.name === 'archivo');
     const tituloOption = options.find((opt) => opt.name === 'titulo');
@@ -224,26 +282,43 @@ async function handleComponentInteraction(interaction, env) {
   }
 }
 
-async function handleDocumentApi(url, env) {
-  if (!env.DB) {
-    return jsonResponse({ error: 'Database unavailable' }, 503);
-  }
+function parseDocumentApiPath(pathname) {
+  if (!pathname.startsWith(DOCUMENT_API_PREFIX)) return null;
 
-  const encodedId = url.pathname.slice(DOCUMENT_API_PREFIX.length);
-  if (!encodedId) {
-    return jsonResponse({ error: 'Document id required' }, 400);
-  }
+  const rest = pathname.slice(DOCUMENT_API_PREFIX.length);
+  const [encodedId, action, extra] = rest.split('/');
+  if (!encodedId || extra) return null;
 
   let rawId;
   try {
     rawId = decodeURIComponent(encodedId);
   } catch {
-    return jsonResponse({ error: 'Invalid document id' }, 400);
+    return null;
   }
 
   const documentId = normalizeDocumentId(rawId);
-  if (!documentId) {
-    return jsonResponse({ error: 'Invalid document id' }, 400);
+  if (!documentId) return null;
+
+  return { documentId, action: action || null };
+}
+
+async function verifyActivityDocumentAccess(request, env, documentId) {
+  const instanceId = request.headers.get('x-bardo-instance-id')?.trim();
+  if (!instanceId) {
+    return jsonResponse({ error: 'Activity instance required' }, 401);
+  }
+
+  const context = await loadActivityContext(env.DB, instanceId);
+  if (!context || context.documentId !== documentId) {
+    return jsonResponse({ error: 'Activity instance does not match document' }, 403);
+  }
+
+  return null;
+}
+
+async function handleDocumentApi(documentId, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
   }
 
   const document = await loadDocument(env.DB, documentId);
@@ -257,6 +332,10 @@ async function handleDocumentApi(url, env) {
       title: document.title,
       markdown: document.originalMarkdown,
       sourceName: document.sourceName,
+      sourceType: document.sourceType,
+      sourceMime: document.sourceMime,
+      importStatus: document.importStatus,
+      hasSource: document.hasSource,
       createdAt: document.createdAt,
     },
     200,
@@ -265,6 +344,74 @@ async function handleDocumentApi(url, env) {
       'X-Content-Type-Options': 'nosniff',
     },
   );
+}
+
+async function handleDocumentSourceApi(request, documentId, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
+
+  const accessError = await verifyActivityDocumentAccess(request, env, documentId);
+  if (accessError) return accessError;
+
+  const source = await loadDocumentSource(env.DB, documentId);
+  if (!source) {
+    return jsonResponse({ error: 'Document source not found' }, 404);
+  }
+
+  return new Response(source.bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': source.mime,
+      'Content-Length': String(source.bytes.byteLength),
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+async function handleDocumentNormalizeApi(request, documentId, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
+
+  const accessError = await verifyActivityDocumentAccess(request, env, documentId);
+  if (accessError) return accessError;
+
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) {
+    return jsonResponse({ error: 'Document not found' }, 404);
+  }
+
+  if (document.importStatus === 'ready') {
+    return jsonResponse({ ok: true, alreadyNormalized: true });
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const markdown = typeof payload?.markdown === 'string' ? payload.markdown.trim() : '';
+  if (!markdown) {
+    return jsonResponse({ error: 'Normalized markdown required' }, 400);
+  }
+
+  const byteLength = new TextEncoder().encode(markdown).byteLength;
+  if (byteLength > MAX_STORED_DOCUMENT_BYTES) {
+    return jsonResponse({ error: 'Normalized document is too large' }, 413);
+  }
+
+  const { body } = extractDocumentTitle(markdown, document.title);
+  const pages = firstPreviewPage(body);
+  if (pages.length === 0) {
+    return jsonResponse({ error: 'Normalized document is empty' }, 400);
+  }
+
+  await cacheNormalizedDocument(env.DB, documentId, markdown, pages);
+  return jsonResponse({ ok: true });
 }
 
 async function handleActivityContextApi(url, env) {
@@ -356,8 +503,23 @@ export default {
   async fetch(request, env, ctx = { waitUntil: () => {} }) {
     const url = new URL(request.url);
 
-    if (request.method === 'GET' && url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
-      return handleDocumentApi(url, env);
+    if (url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
+      const route = parseDocumentApiPath(url.pathname);
+      if (!route) return jsonResponse({ error: 'Invalid document route' }, 400);
+
+      if (request.method === 'GET' && route.action === null) {
+        return handleDocumentApi(route.documentId, env);
+      }
+
+      if (request.method === 'GET' && route.action === 'source') {
+        return handleDocumentSourceApi(request, route.documentId, env);
+      }
+
+      if (request.method === 'POST' && route.action === 'normalize') {
+        return handleDocumentNormalizeApi(request, route.documentId, env);
+      }
+
+      return new Response('Method not allowed', { status: 405 });
     }
 
     if (request.method === 'GET' && url.pathname.startsWith(ACTIVITY_CONTEXT_API_PREFIX)) {
