@@ -31,8 +31,12 @@ async function bundle() {
     ],
     outdir: outDir,
     entryNames: '[name]-[hash]',
+    chunkNames: 'chunks/[name]-[hash]',
+    assetNames: 'assets/[name]-[hash]',
     bundle: true,
+    splitting: true,
     format: 'esm',
+    platform: 'browser',
     target: ['es2022'],
     minify: false,
     sourcemap: false,
@@ -57,14 +61,14 @@ async function bundle() {
     throw new Error(`No se generaron los bundles esperados. Salidas: ${outputs.join(', ')}`);
   }
 
-  // Copiar avatar con fingerprinting
   const avatarPath = resolve(srcDir, 'bardo-avatar.png');
   const avatarBuffer = await readFile(avatarPath);
   const avatarHash = createHash('md5').update(avatarBuffer).digest('hex').slice(0, 8).toUpperCase();
   const avatarFileName = `bardo-avatar-${avatarHash}.png`;
   await writeFile(resolve(outDir, avatarFileName), avatarBuffer);
 
-  console.log(`✨ Bundles generados: ${appFile}, ${styleFile}, ${avatarFileName}`);
+  console.log(`✨ Entry bundles: ${appFile}, ${styleFile}, ${avatarFileName}`);
+  console.log(`🧩 Chunks lazy generados: ${outputs.filter((output) => output.includes('/chunks/')).length}`);
 
   const templatePath = resolve(srcDir, 'index.html');
   let html = await readFile(templatePath, 'utf8');
