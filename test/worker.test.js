@@ -127,6 +127,28 @@ test('Worker normaliza bardo:open: también en la API de documentos', async () =
   assert.equal(json.id, 'doc-123');
 });
 
+test('Worker exporta documento como markdown attachment', async () => {
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=markdown', { method: 'GET' });
+  const env = { DB: createReadDb() };
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'text/markdown; charset=utf-8');
+  assert.match(res.headers.get('content-disposition'), /attachment; filename=/);
+  const text = await res.text();
+  assert.equal(text, '# Documento Test\n\nContenido completo');
+});
+
+test('Worker exporta documento como word attachment', async () => {
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=word', { method: 'GET' });
+  const env = { DB: createReadDb() };
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/msword; charset=utf-8');
+  assert.match(res.headers.get('content-disposition'), /attachment; filename=/);
+});
+
 test('Worker responde 404 para documentos inexistentes', async () => {
   const req = new Request('http://localhost/api/documents/no-existe', { method: 'GET' });
   const env = { DB: createReadDb() };

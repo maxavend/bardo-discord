@@ -19,6 +19,7 @@ const actionStatusEl = document.querySelector('#action-status');
 
 let currentDocumentData = null;
 let actionStatusTimer = null;
+let activeDiscordSdk = null;
 
 function escapeHtml(value) {
   return String(value)
@@ -579,6 +580,42 @@ async function downloadPdf() {
   }
 }
 
+
+async function exportDocument(format) {
+  if (!currentDocumentData) return;
+
+  const documentId = currentDocumentData.id;
+  const exportUrl = `${window.location.origin}/api/documents/${encodeURIComponent(documentId)}/export?format=${format}`;
+
+  // 1. Si estamos dentro de Discord (DiscordSDK activo), usar openExternalLink para descargar en el navegador nativo del sistema
+  if (activeDiscordSdk?.commands?.openExternalLink) {
+    try {
+      await activeDiscordSdk.commands.openExternalLink({ url: exportUrl });
+      showActionStatus('Descarga iniciada');
+      return;
+    } catch (sdkErr) {
+      console.warn('discordSdk.openExternalLink no disponible o cancelado:', sdkErr);
+    }
+  }
+
+  // 2. Si es PDF en navegador estándar
+  if (format === 'pdf') {
+    await downloadPdf();
+    return;
+  }
+
+  // 3. Si es Markdown o Word en navegador estándar
+  if (format === 'markdown') {
+    await downloadMarkdown();
+    return;
+  }
+
+  if (format === 'word') {
+    await downloadWord();
+    return;
+  }
+}
+
 function renderDocument(data) {
   currentDocumentData = data;
   titleEl.textContent = data.title || 'Documento';
@@ -606,23 +643,22 @@ downloadSelectEl?.addEventListener('change', async (event) => {
   const format = event.target.value;
   if (!format) return;
 
-  if (format === 'pdf') {
-    await downloadPdf();
-  } else if (format === 'markdown') {
-    await downloadMarkdown();
-  } else if (format === 'word') {
-    await downloadWord();
+  try {
+    await exportDocument(format);
+  } catch (err) {
+    console.error('Error al exportar documento:', err);
+    showActionStatus('No se pudo guardar', true);
+  } finally {
+    event.target.value = '';
   }
-
-  event.target.value = '';
 });
 
 async function start() {
   currentDocumentData = null;
   setView('loading');
 
-  const discordSdk = await initDiscordSdk();
-  const candidates = await resolveDocumentCandidates(discordSdk);
+  activeDiscordSdk = await initDiscordSdk();
+  const candidates = await resolveDocumentCandidates(activeDiscordSdk);
 
   if (candidates.length === 0) {
     setView('empty');
