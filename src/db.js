@@ -23,9 +23,27 @@ export async function saveDocument(db, messageId, document) {
     .run();
 }
 
+export async function saveDocumentSource(db, documentId, source) {
+  const bytes = source.bytes instanceof Uint8Array ? source.bytes : new Uint8Array(source.bytes);
+
+  await db
+    .prepare(
+      `UPDATE documents
+       SET source_blob = ?, source_mime = ?, source_type = ?, import_status = 'pending'
+       WHERE id = ?`,
+    )
+    .bind(bytes, source.mime || 'application/octet-stream', source.type, documentId)
+    .run();
+}
+
 export async function loadDocument(db, messageId) {
   const row = await db
-    .prepare('SELECT id, title, original_markdown, pages, source_name, created_at, created_by FROM documents WHERE id = ?')
+    .prepare(
+      `SELECT id, title, original_markdown, pages, source_name, created_at, created_by,
+              source_mime, source_type, import_status,
+              CASE WHEN source_blob IS NULL THEN 0 ELSE 1 END AS has_source
+       FROM documents WHERE id = ?`,
+    )
     .bind(messageId)
     .first();
 
@@ -39,7 +57,41 @@ export async function loadDocument(db, messageId) {
     sourceName: row.source_name,
     createdAt: row.created_at,
     createdBy: row.created_by,
+    sourceMime: row.source_mime || null,
+    sourceType: row.source_type || 'markdown',
+    importStatus: row.import_status || 'ready',
+    hasSource: Boolean(row.has_source),
   };
+}
+
+export async function loadDocumentSource(db, documentId) {
+  const row = await db
+    .prepare(
+      `SELECT source_blob, source_mime, source_type, import_status
+       FROM documents WHERE id = ?`,
+    )
+    .bind(documentId)
+    .first();
+
+  if (!row || !row.source_blob) return null;
+
+  return {
+    bytes: Uint8Array.from(row.source_blob),
+    mime: row.source_mime || 'application/octet-stream',
+    type: row.source_type || null,
+    importStatus: row.import_status || 'pending',
+  };
+}
+
+export async function cacheNormalizedDocument(db, documentId, markdown, pages) {
+  await db
+    .prepare(
+      `UPDATE documents
+       SET original_markdown = ?, pages = ?, import_status = 'ready', source_blob = NULL
+       WHERE id = ?`,
+    )
+    .bind(markdown, JSON.stringify(pages), documentId)
+    .run();
 }
 
 export async function saveActivityContext(db, instanceId, documentId) {
