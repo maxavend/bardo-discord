@@ -1,8 +1,6 @@
-var __defProp = Object.defineProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
+import {
+  __export
+} from "./chunks/chunk-ZUJXIEIZ.js";
 
 // node_modules/@discord/embedded-app-sdk/output/_virtual/_commonjsHelpers.mjs
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
@@ -9611,6 +9609,239 @@ var lodash_transformExports = requireLodash_transform();
 // node_modules/@discord/embedded-app-sdk/output/index.mjs
 var { Commands: Commands2 } = common_exports;
 
+// src/activity/import-bootstrap.js
+var FALLBACK_CLIENT_ID = "1539704001535156254";
+var MAX_PDF_PAGES = 80;
+var nativeFetch = window.fetch.bind(window);
+function setImportStatus(title, message) {
+  const loading = document.querySelector("#loading");
+  const titleEl2 = loading?.querySelector("strong");
+  const messageEl = loading?.querySelector("p");
+  if (titleEl2) titleEl2.textContent = title;
+  if (messageEl) messageEl.textContent = message;
+}
+function resolveClientId() {
+  const host = window.location.hostname || "";
+  return host.match(/^([a-zA-Z0-9_-]+)\.discordsays\.com$/i)?.[1] || FALLBACK_CLIENT_ID;
+}
+async function resolveActivityInstanceId() {
+  const params = new URLSearchParams(window.location.search);
+  const queryInstanceId = params.get("instance_id");
+  if (queryInstanceId) return queryInstanceId;
+  if (!window.location.hostname.endsWith(".discordsays.com")) return null;
+  try {
+    const sdk = new DiscordSDK(resolveClientId());
+    await sdk.ready();
+    return sdk.instanceId || null;
+  } catch (error) {
+    console.warn("Bardo no pudo resolver el instanceId para importar el archivo:", error);
+    return null;
+  }
+}
+function ensureDocumentTitle(markdown, title) {
+  const normalized = String(markdown || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!normalized) return `# ${title}`;
+  const firstLine = normalized.split("\n").find((line) => line.trim()) || "";
+  return /^#\s+/.test(firstLine.trim()) ? normalized : `# ${title}
+
+${normalized}`;
+}
+function pdfTextToMarkdown(text, title) {
+  const normalized = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (normalized.replace(/\s/g, "").length < 30) {
+    return `# ${title}
+
+> Bardo no encontr\xF3 suficiente texto seleccionable en este PDF. Los documentos escaneados todav\xEDa necesitan OCR para poder convertirse.`;
+  }
+  const output = [`# ${title}`];
+  const paragraph = [];
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    output.push(paragraph.join(" ").replace(/\s+/g, " ").trim());
+    paragraph.length = 0;
+  };
+  for (const rawLine of normalized.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+    const numberedHeading = /^\d+(?:\.\d+)*[.)]?\s+[A-ZÁÉÍÓÚÜÑ]/.test(line) && line.length <= 120;
+    const uppercaseHeading = line.length >= 3 && line.length <= 80 && /[A-ZÁÉÍÓÚÜÑ]/.test(line) && line === line.toLocaleUpperCase("es");
+    if (numberedHeading || uppercaseHeading) {
+      flushParagraph();
+      output.push(`## ${line}`);
+      continue;
+    }
+    const bullet = line.match(/^[•●▪◦-]\s*(.+)$/);
+    if (bullet) {
+      flushParagraph();
+      output.push(`- ${bullet[1]}`);
+      continue;
+    }
+    if (paragraph.length && paragraph.at(-1).endsWith("-") && /^[a-záéíóúüñ]/.test(line)) {
+      paragraph[paragraph.length - 1] = `${paragraph.at(-1).slice(0, -1)}${line}`;
+    } else {
+      paragraph.push(line);
+    }
+  }
+  flushParagraph();
+  return output.filter(Boolean).join("\n\n").trim();
+}
+async function importPdf(arrayBuffer, title) {
+  setImportStatus("Adaptando PDF", "Reconstruyendo el contenido para el lector de Bardo\u2026");
+  if (typeof Promise.try !== "function") {
+    Object.defineProperty(Promise, "try", {
+      configurable: true,
+      value(callback, ...args) {
+        return new Promise((resolve) => resolve(callback(...args)));
+      }
+    });
+  }
+  const { extractText, getDocumentProxy } = await import("./chunks/dist-ZWWVU5NN.js");
+  const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer), {
+    maxImageSize: 16777216
+  });
+  try {
+    if (pdf.numPages > MAX_PDF_PAGES) {
+      return `# ${title}
+
+> Este PDF tiene ${pdf.numPages} p\xE1ginas. Por ahora Bardo convierte hasta ${MAX_PDF_PAGES} p\xE1ginas por documento.`;
+    }
+    const { text } = await extractText(pdf, { mergePages: true });
+    return pdfTextToMarkdown(text, title);
+  } finally {
+    await pdf.destroy?.();
+  }
+}
+async function importDocx(arrayBuffer, title) {
+  setImportStatus("Adaptando Word", "Convirtiendo t\xEDtulos, listas y tablas al formato de Bardo\u2026");
+  const [mammothModule, turndownModule, gfmModule] = await Promise.all([
+    import("./chunks/lib-ACLPCYZ4.js"),
+    import("./chunks/turndown.browser.es-GTXT4OBN.js"),
+    import("./chunks/turndown-plugin-gfm.es-NRPX52H6.js")
+  ]);
+  const mammoth = mammothModule.default || mammothModule;
+  const TurndownService = turndownModule.default || turndownModule;
+  const gfm = gfmModule.gfm || gfmModule.default?.gfm;
+  const result = await mammoth.convertToHtml(
+    { arrayBuffer },
+    {
+      includeEmbeddedStyleMap: false,
+      externalFileAccess: false
+    }
+  );
+  const template = document.createElement("template");
+  template.innerHTML = result.value || "";
+  template.content.querySelectorAll("img").forEach((image) => {
+    const note = document.createElement("em");
+    note.textContent = image.alt ? `Imagen: ${image.alt}` : "Imagen omitida por Bardo";
+    image.replaceWith(note);
+  });
+  const turndown = new TurndownService({
+    headingStyle: "atx",
+    bulletListMarker: "-",
+    codeBlockStyle: "fenced",
+    emDelimiter: "*",
+    strongDelimiter: "**"
+  });
+  if (gfm) turndown.use(gfm);
+  const markdown = turndown.turndown(template.innerHTML).replace(/\n{3,}/g, "\n\n").trim();
+  if (!markdown) {
+    return `# ${title}
+
+> Bardo no encontr\xF3 contenido de texto que pudiera convertir en este documento Word.`;
+  }
+  return ensureDocumentTitle(markdown, title);
+}
+async function fetchSource(documentId, instanceId, maxAttempts = 6) {
+  let lastStatus = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const response = await nativeFetch(`/api/documents/${encodeURIComponent(documentId)}/source`, {
+      headers: { "x-bardo-instance-id": instanceId },
+      cache: "no-store"
+    });
+    if (response.ok) return response.arrayBuffer();
+    lastStatus = response.status;
+    const isLaunchRace = response.status === 401 || response.status === 403 || response.status === 404;
+    if (!isLaunchRace || attempt === maxAttempts - 1) break;
+    setImportStatus("Preparando documento", "Sincronizando la sesi\xF3n con Discord\u2026");
+    await new Promise((resolve) => setTimeout(resolve, Math.min(150 * 2 ** attempt, 1200)));
+  }
+  throw new Error(`No pudimos recuperar el archivo original (HTTP ${lastStatus ?? "desconocido"}).`);
+}
+async function cacheNormalization(documentId, instanceId, markdown) {
+  setImportStatus("Guardando documento", "Dejando esta conversi\xF3n lista para las pr\xF3ximas aperturas\u2026");
+  const response = await nativeFetch(`/api/documents/${encodeURIComponent(documentId)}/normalize`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-bardo-instance-id": instanceId
+    },
+    body: JSON.stringify({ markdown })
+  });
+  if (!response.ok) {
+    console.warn("Bardo pudo convertir el documento, pero no logr\xF3 guardar el resultado:", response.status);
+  }
+}
+async function normalizePendingDocument(data, documentId) {
+  if (data.importStatus !== "pending" || !data.hasSource) return data;
+  const instanceId = await resolveActivityInstanceId();
+  if (!instanceId) return data;
+  const source = await fetchSource(documentId, instanceId);
+  let markdown;
+  if (data.sourceType === "pdf") {
+    markdown = await importPdf(source, data.title || "Documento");
+  } else if (data.sourceType === "docx") {
+    markdown = await importDocx(source, data.title || "Documento");
+  } else {
+    return data;
+  }
+  await cacheNormalization(documentId, instanceId, markdown);
+  return {
+    ...data,
+    markdown,
+    importStatus: "ready",
+    hasSource: false
+  };
+}
+function parseDocumentMetadataRequest(input, init) {
+  const method = String(init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+  if (method !== "GET") return null;
+  const rawUrl = typeof input === "string" || input instanceof URL ? String(input) : input?.url;
+  if (!rawUrl) return null;
+  const url = new URL(rawUrl, window.location.origin);
+  const match = url.pathname.match(/^\/api\/documents\/([^/]+)$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+window.fetch = async function bardoFetch(input, init) {
+  const documentId = parseDocumentMetadataRequest(input, init);
+  const response = await nativeFetch(input, init);
+  if (!documentId || !response.ok) return response;
+  try {
+    const data = await response.clone().json();
+    if (data?.importStatus !== "pending" || !data?.hasSource) return response;
+    const normalized = await normalizePendingDocument(data, documentId);
+    if (normalized === data) return response;
+    const headers = new Headers(response.headers);
+    headers.set("Content-Type", "application/json; charset=utf-8");
+    headers.set("Cache-Control", "private, no-store");
+    return new Response(JSON.stringify(normalized), {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    });
+  } catch (error) {
+    console.error("No se pudo normalizar el documento importado:", error);
+    return response;
+  }
+};
+
 // src/document-id.js
 var BARDO_OPEN_PREFIX = "bardo:open:";
 function normalizeDocumentId(id) {
@@ -9625,7 +9856,7 @@ function normalizeDocumentId(id) {
 }
 
 // src/activity/app.js
-var FALLBACK_CLIENT_ID = "1539704001535156254";
+var FALLBACK_CLIENT_ID2 = "1539704001535156254";
 var loadingEl = document.querySelector("#loading");
 var emptyEl = document.querySelector("#empty");
 var errorEl = document.querySelector("#error");
@@ -9796,13 +10027,13 @@ function setView(view) {
   if (errorEl) errorEl.hidden = view !== "error";
   if (documentEl) documentEl.hidden = view !== "document";
 }
-function resolveClientId() {
+function resolveClientId2() {
   const host = window.location.hostname || "";
   const match = host.match(/^([a-zA-Z0-9_-]+)\.discordsays\.com$/i);
   if (match && match[1]) {
     return match[1];
   }
-  return FALLBACK_CLIENT_ID;
+  return FALLBACK_CLIENT_ID2;
 }
 async function initDiscordSdk() {
   const params = new URLSearchParams(window.location.search);
@@ -9811,7 +10042,7 @@ async function initDiscordSdk() {
     return null;
   }
   try {
-    const clientId = resolveClientId();
+    const clientId = resolveClientId2();
     const discordSdk = new DiscordSDK(clientId);
     await discordSdk.ready();
     return discordSdk;
@@ -9915,8 +10146,33 @@ function downloadBlobFallback(blob, fileName) {
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1e4);
 }
-async function saveFile({ blob, fileName, mimeType, title = "Documento" }) {
-  if (typeof navigator !== "undefined" && typeof navigator.share === "function" && typeof File !== "undefined") {
+async function saveFile({ blob, fileName, mimeType, extension, title = "Documento" }) {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  const ext = extension || (fileName.includes(".") ? "." + fileName.split(".").pop() : "");
+  if (!isMobile && typeof window !== "undefined" && typeof window.showSaveFilePicker === "function") {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: title,
+            accept: { [mimeType]: [ext] }
+          }
+        ]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      showActionStatus("Archivo guardado");
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === "AbortError") {
+        return;
+      }
+      console.warn("showSaveFilePicker no disponible o fall\xF3:", pickerErr);
+    }
+  }
+  if (isMobile && typeof navigator !== "undefined" && typeof navigator.share === "function" && typeof File !== "undefined") {
     try {
       const file = new File([blob], fileName, { type: mimeType });
       if (!navigator.canShare || navigator.canShare({ files: [file] })) {
@@ -9924,45 +10180,21 @@ async function saveFile({ blob, fileName, mimeType, title = "Documento" }) {
           files: [file],
           title
         });
-        showActionStatus("Guardado en el dispositivo");
+        showActionStatus("Archivo guardado / compartido");
         return;
       }
     } catch (shareErr) {
       if (shareErr.name === "AbortError") {
         return;
       }
-      console.warn("navigator.share no completado, probando m\xE9todo alternativo:", shareErr);
-    }
-  }
-  if (typeof window !== "undefined" && typeof window.showSaveFilePicker === "function") {
-    try {
-      const extension = fileName.includes(".") ? `.${fileName.split(".").pop()}` : "";
-      const handle = await window.showSaveFilePicker({
-        suggestedName: fileName,
-        types: [
-          {
-            description: "Documento",
-            accept: { [mimeType]: [extension] }
-          }
-        ]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      showActionStatus("Guardado en el dispositivo");
-      return;
-    } catch (pickerErr) {
-      if (pickerErr.name === "AbortError") {
-        return;
-      }
-      console.warn("showSaveFilePicker cancelado o no disponible:", pickerErr);
+      console.warn("navigator.share no se pudo completar:", shareErr);
     }
   }
   try {
     downloadBlobFallback(blob, fileName);
     showActionStatus("Descargado");
   } catch (downloadErr) {
-    console.error("Error al guardar archivo:", downloadErr);
+    console.error("Error al descargar archivo:", downloadErr);
     showActionStatus("No se pudo guardar el archivo", true);
   }
 }
@@ -10068,6 +10300,7 @@ async function downloadMarkdown() {
     blob,
     fileName,
     mimeType: "text/markdown",
+    extension: ".md",
     title: currentDocumentData.title || "Documento"
   });
 }
@@ -10079,6 +10312,7 @@ async function downloadWord() {
     blob,
     fileName,
     mimeType: "application/msword",
+    extension: ".doc",
     title: currentDocumentData.title || "Documento"
   });
 }
@@ -10158,6 +10392,3 @@ async function start() {
   showError("No encontramos este documento. Cierra esta vista y vuelve a abrir \u201CMostrar m\xE1s\u201D desde el mensaje de Bardo.");
 }
 start();
-export {
-  normalizeDocumentId
-};

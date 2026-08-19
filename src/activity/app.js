@@ -370,9 +370,38 @@ function downloadBlobFallback(blob, fileName) {
   window.setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-async function saveFile({ blob, fileName, mimeType, title = 'Documento' }) {
-  // 1. Web Share API con soporte para archivos (especialmente diseñado para iOS Safari / Discord Mobile / Android)
-  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof File !== 'undefined') {
+async function saveFile({ blob, fileName, mimeType, extension, title = "Documento" }) {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  const ext = extension || (fileName.includes(".") ? ("." + fileName.split(".").pop()) : "");
+
+  // 1. En Desktop (Mac / Windows / Linux), usar showSaveFilePicker PRIMERO para abrir la ventana del Finder / Explorador de archivos
+  if (!isMobile && typeof window !== "undefined" && typeof window.showSaveFilePicker === "function") {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: title,
+            accept: { [mimeType]: [ext] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      showActionStatus("Archivo guardado");
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === "AbortError") {
+        // El usuario canceló la ventana de guardar
+        return;
+      }
+      console.warn("showSaveFilePicker no disponible o falló:", pickerErr);
+    }
+  }
+
+  // 2. En Móviles (iOS / Android), usar Web Share API para abrir el menú de "Guardar en Archivos" / Compartir
+  if (isMobile && typeof navigator !== "undefined" && typeof navigator.share === "function" && typeof File !== "undefined") {
     try {
       const file = new File([blob], fileName, { type: mimeType });
       if (!navigator.canShare || navigator.canShare({ files: [file] })) {
@@ -380,50 +409,24 @@ async function saveFile({ blob, fileName, mimeType, title = 'Documento' }) {
           files: [file],
           title: title,
         });
-        showActionStatus('Guardado en el dispositivo');
+        showActionStatus("Archivo guardado / compartido");
         return;
       }
     } catch (shareErr) {
-      if (shareErr.name === 'AbortError') {
+      if (shareErr.name === "AbortError") {
         return;
       }
-      console.warn('navigator.share no completado, probando método alternativo:', shareErr);
+      console.warn("navigator.share no se pudo completar:", shareErr);
     }
   }
 
-  // 2. File System Access API (Desktop Chrome / Edge / Opera)
-  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
-    try {
-      const extension = fileName.includes('.') ? `.${fileName.split('.').pop()}` : '';
-      const handle = await window.showSaveFilePicker({
-        suggestedName: fileName,
-        types: [
-          {
-            description: 'Documento',
-            accept: { [mimeType]: [extension] },
-          },
-        ],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      showActionStatus('Guardado en el dispositivo');
-      return;
-    } catch (pickerErr) {
-      if (pickerErr.name === 'AbortError') {
-        return;
-      }
-      console.warn('showSaveFilePicker cancelado o no disponible:', pickerErr);
-    }
-  }
-
-  // 3. Descarga HTML5 mediante <a download>
+  // 3. Fallback de descarga mediante enlace HTML5 con blob
   try {
     downloadBlobFallback(blob, fileName);
-    showActionStatus('Descargado');
+    showActionStatus("Descargado");
   } catch (downloadErr) {
-    console.error('Error al guardar archivo:', downloadErr);
-    showActionStatus('No se pudo guardar el archivo', true);
+    console.error("Error al descargar archivo:", downloadErr);
+    showActionStatus("No se pudo guardar el archivo", true);
   }
 }
 
@@ -535,6 +538,7 @@ async function downloadMarkdown() {
     blob,
     fileName,
     mimeType: 'text/markdown',
+    extension: '.md',
     title: currentDocumentData.title || 'Documento',
   });
 }
@@ -547,6 +551,7 @@ async function downloadWord() {
     blob,
     fileName,
     mimeType: 'application/msword',
+    extension: '.doc',
     title: currentDocumentData.title || 'Documento',
   });
 }
