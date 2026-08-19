@@ -14,6 +14,14 @@ const documentEl = document.querySelector('#document');
 const titleEl = document.querySelector('#document-title');
 const metaEl = document.querySelector('#document-meta');
 const bodyEl = document.querySelector('#document-body');
+const copyButtonEl = document.querySelector('#copy-document');
+const downloadPdfButtonEl = document.querySelector('#download-pdf');
+const downloadMarkdownButtonEl = document.querySelector('#download-markdown');
+const downloadWordButtonEl = document.querySelector('#download-word');
+const actionStatusEl = document.querySelector('#action-status');
+
+let currentDocumentData = null;
+let actionStatusTimer = null;
 
 const views = {
   loading: loadingEl,
@@ -311,7 +319,188 @@ async function fetchDocument(documentId) {
   return response.json();
 }
 
+function sanitizeFileName(value) {
+  const normalized = String(value || 'documento')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/g, '');
+
+  return (normalized || 'documento').slice(0, 96);
+}
+
+function exportBaseName() {
+  const sourceName = currentDocumentData?.sourceName || '';
+  const sourceStem = sourceName.replace(/\.(?:md|markdown|txt|docx?|pdf)$/i, '').trim();
+  return sanitizeFileName(sourceStem || currentDocumentData?.title || 'documento-bardo');
+}
+
+function showActionStatus(message, isError = false) {
+  if (!actionStatusEl) return;
+
+  window.clearTimeout(actionStatusTimer);
+  actionStatusEl.textContent = message;
+  actionStatusEl.classList.toggle('is-error', isError);
+
+  actionStatusTimer = window.setTimeout(() => {
+    actionStatusEl.textContent = '';
+    actionStatusEl.classList.remove('is-error');
+  }, 2600);
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function currentMarkdown() {
+  if (currentDocumentData?.markdown) return currentDocumentData.markdown;
+  const title = currentDocumentData?.title || titleEl?.textContent || 'Documento';
+  return `# ${title}\n\n${bodyEl?.innerText || ''}`.trim();
+}
+
+function currentPlainText() {
+  const title = currentDocumentData?.title || titleEl?.textContent || 'Documento';
+  const body = bodyEl?.innerText?.trim() || '';
+  return `${title}${body ? `\n\n${body}` : ''}`;
+}
+
+function currentRichHtml() {
+  const title = currentDocumentData?.title || titleEl?.textContent || 'Documento';
+  return `<h1>${escapeHtml(title)}</h1>${bodyEl?.innerHTML || ''}`;
+}
+
+function wordDocumentHtml() {
+  const title = currentDocumentData?.title || titleEl?.textContent || 'Documento';
+  const body = bodyEl?.innerHTML || '';
+
+  return `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    @page { margin: 2.2cm 2cm; }
+    body { font-family: Aptos, Calibri, Arial, sans-serif; color: #202124; font-size: 11pt; line-height: 1.55; }
+    h1 { font-size: 24pt; line-height: 1.12; margin: 0 0 18pt; }
+    h2 { font-size: 17pt; margin: 22pt 0 8pt; }
+    h3 { font-size: 13pt; margin: 18pt 0 6pt; }
+    h4 { font-size: 11pt; margin: 14pt 0 5pt; }
+    p { margin: 0 0 9pt; }
+    ul, ol { margin: 6pt 0 10pt 20pt; }
+    li { margin: 2pt 0; }
+    blockquote { border-left: 3pt solid #777; margin: 12pt 0; padding: 7pt 10pt; color: #444; background: #f4f4f4; }
+    table { width: 100%; border-collapse: collapse; margin: 12pt 0 16pt; }
+    th, td { border: 1pt solid #d1d5db; padding: 6pt 7pt; text-align: left; vertical-align: top; }
+    th { background: #f2f3f5; font-weight: 700; }
+    code { font-family: Consolas, monospace; background: #f3f4f6; }
+    pre { font-family: Consolas, monospace; background: #f3f4f6; padding: 10pt; white-space: pre-wrap; }
+    a { color: #2457c5; }
+    .table-wrap { width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  ${body}
+</body>
+</html>`;
+}
+
+function legacyCopyPlainText(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('No se pudo copiar');
+}
+
+async function copyDocument() {
+  if (!currentDocumentData) return;
+
+  const plainText = currentPlainText();
+  const richHtml = currentRichHtml();
+
+  try {
+    if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({
+        'text/plain': new Blob([plainText], { type: 'text/plain;charset=utf-8' }),
+        'text/html': new Blob([richHtml], { type: 'text/html;charset=utf-8' }),
+      });
+      await navigator.clipboard.write([item]);
+    } else if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(plainText);
+    } else {
+      legacyCopyPlainText(plainText);
+    }
+
+    showActionStatus('Copiado completo');
+  } catch (error) {
+    console.warn('No se pudo usar el portapapeles moderno:', error);
+    try {
+      legacyCopyPlainText(plainText);
+      showActionStatus('Copiado completo');
+    } catch (fallbackError) {
+      console.error('No se pudo copiar el documento:', fallbackError);
+      showActionStatus('No pudimos copiarlo', true);
+    }
+  }
+}
+
+function downloadMarkdown() {
+  if (!currentDocumentData) return;
+  const blob = new Blob([currentMarkdown()], { type: 'text/markdown;charset=utf-8' });
+  downloadBlob(blob, `${exportBaseName()}.md`);
+  showActionStatus('Markdown descargado');
+}
+
+function downloadWord() {
+  if (!currentDocumentData) return;
+  const blob = new Blob(['\ufeff', wordDocumentHtml()], { type: 'application/msword;charset=utf-8' });
+  downloadBlob(blob, `${exportBaseName()}.doc`);
+  showActionStatus('Word descargado');
+}
+
+function downloadPdf() {
+  if (!currentDocumentData) return;
+
+  const previousTitle = document.title;
+  const nextTitle = exportBaseName();
+
+  try {
+    document.documentElement.classList.add('print-export');
+    document.title = nextTitle;
+    document.body.offsetHeight;
+    showActionStatus('En el diálogo elige “Guardar como PDF”');
+    window.print();
+  } catch (error) {
+    console.error('No se pudo abrir el diálogo de PDF:', error);
+    showActionStatus('No pudimos abrir el PDF', true);
+  } finally {
+    window.setTimeout(() => {
+      document.documentElement.classList.remove('print-export');
+      document.title = previousTitle;
+    }, 500);
+  }
+}
+
 function renderDocument(data) {
+  currentDocumentData = data;
   titleEl.textContent = data.title || 'Documento';
   document.title = `${data.title || 'Documento'} · Bardo`;
 
@@ -327,11 +516,18 @@ function renderDocument(data) {
 }
 
 function showError(message) {
+  currentDocumentData = null;
   errorMessageEl.textContent = message;
   setView('error');
 }
 
+copyButtonEl?.addEventListener('click', copyDocument);
+downloadPdfButtonEl?.addEventListener('click', downloadPdf);
+downloadMarkdownButtonEl?.addEventListener('click', downloadMarkdown);
+downloadWordButtonEl?.addEventListener('click', downloadWord);
+
 async function start() {
+  currentDocumentData = null;
   setView('loading');
 
   const discordSdk = await initDiscordSdk();
