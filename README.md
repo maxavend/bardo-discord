@@ -1,100 +1,127 @@
-# Bardo Discord (Serverless en Cloudflare Workers)
+# Bardo Discord · Serverless + Activity
 
-Bardo publica documentos Markdown largos en Discord como **un único mensaje navegable** usando Components V2.
+Bardo convierte documentos Markdown en una experiencia de lectura nativa para Discord:
 
-En vez de partir una minuta en muchos mensajes, Bardo la divide internamente en páginas seguras para Discord y muestra botones:
+1. `/documento` recibe un `.md`, `.markdown` o `.txt`.
+2. Publica un **preview corto** mediante Components V2.
+3. El botón **📖 Mostrar más** abre el documento completo como una **Discord Activity** dentro de Discord.
+4. El documento completo se sirve desde Cloudflare Workers y se persiste en Cloudflare D1.
 
-`← Anterior` · `2 / 5` · `Siguiente →`
+No hay paginación manual ni proceso Node permanente: la Activity usa scroll continuo y renderiza títulos, listas, citas, código y tablas Markdown como HTML legible.
 
-Al cambiar de página, **se actualiza el mismo mensaje** consultando la persistencia en **Cloudflare D1**.
+## Arquitectura
 
-## Arquitectura Serverless
+- **Discord HTTP Interactions**: recibe `/documento` sin Gateway persistente.
+- **Components V2**: muestra la vista previa en el canal.
+- **Discord Activity**: lector embebido del documento completo.
+- **Cloudflare Workers Static Assets**: sirve el lector HTML/CSS/JS.
+- **Cloudflare D1**: almacena Markdown original y metadatos.
 
-- **Cloudflare Workers**: Procesa las interacciones HTTP de Discord sin servidor permanente.
-- **Cloudflare D1**: Base de datos SQLite serverless de alta consistencia para almacenar páginas y metadatos del documento.
-- **Discord HTTP Interactions**: Validación criptográfica Ed25519 sin necesidad de conexión WebSocket Gateway abierta.
-
-## Qué necesitas
+## Requisitos
 
 - Node.js 22.12 o superior.
-- Una aplicación/bot en Discord Developer Portal.
-- Cuenta en Cloudflare y CLI Wrangler autenticado.
+- Aplicación Bardo creada en Discord Developer Portal.
+- Cuenta Cloudflare con Wrangler autenticado.
 
-## 1. Configuración en Discord
-
-1. En **Discord Developer Portal** → tu aplicación:
-   - En **General Information**, copia **Public Key**.
-   - En **Bot**, copia **Bot Token**.
-2. En **Installation**, configura los scopes `bot` y `applications.commands`.
-3. Instala Bardo en tu servidor de Discord.
-
-## 2. Preparar el proyecto localmente
+## Configuración local
 
 ```bash
 npm install
 cp .env.example .env
 ```
 
-Edita `.env` (solo necesario para ejecutar scripts locales como registrar comandos):
+`.env` solo se usa para scripts locales como registrar comandos:
 
 ```env
 DISCORD_TOKEN=pega_aqui_el_token_del_bot
 DISCORD_GUILD_ID=pega_aqui_el_id_de_tu_servidor
 ```
 
-## 3. Despliegue en Cloudflare Workers
+## Cloudflare
 
-1. Autenticar Wrangler:
-   ```bash
-   npx wrangler login
-   ```
-
-2. Aplicar migraciones D1:
-   ```bash
-   npx wrangler d1 migrations apply bardo-db --remote
-   ```
-
-3. Configurar secretos en Cloudflare Workers:
-   ```bash
-   npx wrangler secret put DISCORD_PUBLIC_KEY
-   npx wrangler secret put DISCORD_TOKEN
-   ```
-
-4. Desplegar el Worker:
-   ```bash
-   npm run deploy
-   ```
-
-5. Registrar los slash commands en Discord:
-   ```bash
-   npm run register
-   ```
-
-## 4. Conectar Discord con Cloudflare
-
-En **Discord Developer Portal** → tu aplicación → **General Information**:
-
-1. En **Interactions Endpoint URL**, pega la URL pública de tu Worker (ej. `https://bardo-discord.bardo-discord.workers.dev`).
-2. Guarda los cambios. Discord validará inmediatamente enviando un PING criptográfico Ed25519 que el Worker responderá con PONG.
-
-## 5. Publicar un documento
-
-En cualquier canal del servidor:
-
-1. Escribe `/documento`.
-2. En `archivo`, adjunta un `.md`, `.markdown` o `.txt`.
-3. `titulo` es opcional (si se omite y el Markdown comienza con `# H1`, Bardo lo usa automáticamente).
-4. Envía el comando.
-
-## Desarrollo y Tests
+Aplicar migraciones y desplegar:
 
 ```bash
-npm test
+npx wrangler login
+npx wrangler d1 migrations apply bardo-db --remote
+npm run deploy
+```
+
+Los secretos de producción deben vivir en Wrangler Secrets:
+
+```bash
+npx wrangler secret put DISCORD_PUBLIC_KEY
+npx wrangler secret put DISCORD_TOKEN
+```
+
+El Worker actual se publica como:
+
+`https://bardo-discord.bardo-discord.workers.dev`
+
+## Discord · Interactions Endpoint
+
+En **Discord Developer Portal → Bardo → Información general**, configura:
+
+**URL del punto de conexión de las interacciones**
+
+```text
+https://bardo-discord.bardo-discord.workers.dev
+```
+
+Discord validará el endpoint con PING/PONG firmado.
+
+## Discord · Activar el lector embebido
+
+En **Discord Developer Portal → Bardo → Activities / Actividades → Settings / Configuración**:
+
+1. Activa **Enable Activities / Habilitar actividades**.
+2. En **URL Mappings / Asignaciones de URL**, crea el mapping:
+
+```text
+Prefix: /
+Target: bardo-discord.bardo-discord.workers.dev
+```
+
+El botón `📖 Mostrar más` usa un deep link de Activity con un `custom_id` opaco para abrir exactamente el documento correspondiente.
+
+## Publicar un documento
+
+En Discord:
+
+1. Escribe `/documento`.
+2. Adjunta un `.md`, `.markdown` o `.txt` en `archivo`.
+3. `titulo` es opcional. Si se omite y el Markdown empieza con `# H1`, Bardo lo usa como título.
+4. Envía.
+5. Bardo publica una vista previa y el botón **📖 Mostrar más**.
+6. Al abrirlo, el lector muestra el documento completo con scroll continuo.
+
+## Formato del lector
+
+El renderer embebido contempla:
+
+- H1–H6;
+- párrafos;
+- negrita y cursiva;
+- enlaces HTTP/HTTPS;
+- listas ordenadas y no ordenadas;
+- citas;
+- separadores;
+- bloques de código e inline code;
+- tablas Markdown con scroll horizontal cuando sea necesario.
+
+En el preview de Discord, una tabla se sustituye por un fallback corto para evitar mostrar pipes crudos. La tabla real aparece correctamente en el lector completo.
+
+## Desarrollo y tests
+
+```bash
 npm run check
+npm test
 npm run dev
 ```
 
 ## Seguridad
 
-- `.env`, tokens y claves privadas están fuera del repositorio (en `.gitignore`).
-- Las credenciales en producción residen exclusivamente en Cloudflare Secrets.
+- `.env` y credenciales están fuera del repositorio.
+- Los secretos de producción residen en Cloudflare Secrets.
+- Los documentos reciben identificadores UUID no predecibles antes de ser almacenados en D1.
+- El endpoint público del lector devuelve solo el contenido necesario para renderizar el documento.
