@@ -117,6 +117,16 @@ test('Worker expone el documento completo para el lector embebido', async () => 
   assert.equal(json.markdown, '# Documento Test\n\nContenido completo');
 });
 
+test('Worker normaliza bardo:open: también en la API de documentos', async () => {
+  const req = new Request('http://localhost/api/documents/bardo%3Aopen%3Adoc-123', { method: 'GET' });
+  const env = { DB: createReadDb() };
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.id, 'doc-123');
+});
+
 test('Worker responde 404 para documentos inexistentes', async () => {
   const req = new Request('http://localhost/api/documents/no-existe', { method: 'GET' });
   const env = { DB: createReadDb() };
@@ -146,23 +156,21 @@ test('Worker responde 404 para contextos de activity inexistentes', async () => 
   assert.equal(res.status, 404);
 });
 
-test('Worker maneja MESSAGE_COMPONENT con bardo:open: lanzando Activity y guardando contexto', async () => {
+test('Worker lanza Activity y guarda activity_instance_id del callback oficial', async () => {
   const { publicKey, privateKey } = getTestKeys();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const interactionPayload = {
-    type: 3, // MESSAGE_COMPONENT
+    type: 3,
     id: 'interaction-987',
     token: 'token-abc',
     data: {
-      custom_id: 'bardo:open:doc-456',
+      custom_id: 'bardo:open:doc-123',
     },
   };
   const body = JSON.stringify(interactionPayload);
   const signature = signBody(privateKey, timestamp, body);
-
   const db = createReadDb();
 
-  // Mock global fetch for Discord callback endpoint
   const originalFetch = globalThis.fetch;
   let calledCallbackUrl = null;
   let calledCallbackBody = null;
@@ -173,12 +181,12 @@ test('Worker maneja MESSAGE_COMPONENT con bardo:open: lanzando Activity y guarda
       calledCallbackBody = JSON.parse(options.body);
       return new Response(
         JSON.stringify({
-          interaction: { id: 'interaction-987' },
+          interaction: {
+            id: 'interaction-987',
+            activity_instance_id: 'instance-created-999',
+          },
           resource: {
             type: 12,
-            activity_instance: {
-              id: 'instance-created-999',
-            },
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -201,17 +209,44 @@ test('Worker maneja MESSAGE_COMPONENT con bardo:open: lanzando Activity y guarda
     const env = { DISCORD_PUBLIC_KEY: publicKey, DB: db };
     const res = await worker.fetch(req, env, { waitUntil: () => {} });
 
-    assert.equal(res.status, 204);
+    assert.equal(res.status, 202);
     assert.ok(calledCallbackUrl.includes('with_response=true'));
     assert.equal(calledCallbackBody.type, 12);
 
-    // Verify context was saved in DB
     const saved = db.activityContexts.get('instance-created-999');
     assert.ok(saved);
-    assert.equal(saved.document_id, 'doc-456');
+    assert.equal(saved.document_id, 'doc-123');
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('Worker no lanza Activity si el documento ya no existe', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const body = JSON.stringify({
+    type: 3,
+    id: 'interaction-404',
+    token: 'token-404',
+    data: { custom_id: 'bardo:open:no-existe' },
+  });
+  const signature = signBody(privateKey, timestamp, body);
+
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createReadDb() });
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 4);
+  assert.match(json.data.content, /ya no está disponible/i);
 });
 
 test('Worker delega assets GET cuando existe el binding ASSETS', async () => {
