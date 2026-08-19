@@ -1,9 +1,9 @@
 {
   "name": "bardo-discord",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "Bardo publica previews de Markdown en Discord y abre el documento completo como una Discord Activity serverless sobre Cloudflare Workers.",
+  "description": "Bardo importa Markdown, TXT, PDF y DOCX y los abre con un lector unificado dentro de Discord.",
   "scripts": {
     "build:activity": "node scripts/build-activity.js",
     "build": "npm run build:activity",
@@ -12,7 +12,7 @@
     "deploy": "npm run build:activity && wrangler deploy",
     "register": "node --env-file=.env scripts/register-commands.js",
     "test": "npm run build:activity && node --test",
-    "check": "node scripts/build-activity.js && node --check src/worker.js && node --check src/components.js && node --check src/document-id.js && node --check src/pagination.js && node --check src/db.js && node --check src/activity/app.js && node --check scripts/register-commands.js && node --check scripts/build-activity.js"
+    "check": "node scripts/build-activity.js && node --check src/worker.js && node --check src/components.js && node --check src/document-id.js && node --check src/import-format.js && node --check src/pagination.js && node --check src/db.js && node --check src/activity/app.js && node --check scripts/register-commands.js && node --check scripts/build-activity.js"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -20,7 +20,11 @@
   "dependencies": {
     "@discord/embedded-app-sdk": "^2.5.0",
     "discord-interactions": "^4.1.2",
-    "discord.js": "^14.18.0"
+    "discord.js": "^14.18.0",
+    "mammoth": "^1.12.1",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
