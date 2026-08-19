@@ -48,6 +48,19 @@
           <p class="eyebrow">Documento</p>
           <h1 id="document-title"></h1>
           <div id="document-meta" class="meta"></div>
+
+          <div class="document-actions" aria-label="Acciones del documento">
+            <button id="copy-document" class="action-button action-button-primary" type="button">
+              Copiar todo
+            </button>
+            <div class="download-actions" role="group" aria-label="Descargar documento">
+              <span class="download-label">Descargar</span>
+              <button id="download-pdf" class="action-button" type="button">PDF</button>
+              <button id="download-markdown" class="action-button" type="button">Markdown</button>
+              <button id="download-word" class="action-button" type="button">Word</button>
+            </div>
+            <span id="action-status" class="action-status" aria-live="polite"></span>
+          </div>
         </header>
         <div id="document-body" class="markdown-body"></div>
       </article>
