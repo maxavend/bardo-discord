@@ -5139,11 +5139,11 @@ function requireBigInteger() {
           var c = text[i2];
           if (c in alphabetValues) digits.push(parseValue(alphabetValues[c]));
           else if (c === "<") {
-            var start = i2;
+            var start2 = i2;
             do {
               i2++;
             } while (text[i2] !== ">" && i2 < text.length);
-            digits.push(parseValue(text.slice(start + 1, i2)));
+            digits.push(parseValue(text.slice(start2 + 1, i2)));
           } else throw new Error(c + " is not a valid character");
         }
         return parseBaseFromArray(digits, base, isNegative);
@@ -5365,10 +5365,10 @@ function checkBrowserSupportsBigInt() {
     return false;
   }
 }
-function fromHexReverseArray(hexValues, start, size) {
+function fromHexReverseArray(hexValues, start2, size) {
   let value = 0;
   for (let i = 0; i < size; i++) {
-    const byte = hexValues[start + i];
+    const byte = hexValues[start2 + i];
     if (byte === void 0) {
       break;
     }
@@ -6721,37 +6721,6 @@ var EventSchema = {
   }
 };
 
-// node_modules/@discord/embedded-app-sdk/output/schema/responses.mjs
-var responses_exports = {};
-__export(responses_exports, {
-  AuthenticateResponse: () => AuthenticateResponseSchema,
-  AuthorizeResponse: () => AuthorizeResponse,
-  CaptureShortcutResponse: () => CaptureShortcutResponse,
-  EmptyResponse: () => EmptyResponse,
-  EncourageHardwareAccelerationResponse: () => EncourageHardwareAccelerationResponse,
-  GetChannelPermissionsResponse: () => GetChannelPermissionsResponse,
-  GetChannelResponse: () => GetChannelResponse,
-  GetChannelsResponse: () => GetChannelsResponse,
-  GetEntitlementsResponse: () => GetEntitlementsResponse,
-  GetGuildResponse: () => GetGuildResponse,
-  GetGuildsResponse: () => GetGuildsResponse,
-  GetPlatformBehaviorsResponse: () => GetPlatformBehaviorsResponse,
-  GetSkusResponse: () => GetSkusResponse,
-  InitiateImageUploadResponse: () => InitiateImageUploadResponseSchema,
-  NullableChannelResponse: () => NullableChannelResponse,
-  OpenExternalLinkResponse: () => OpenExternalLinkResponse,
-  ResponseFrame: () => ResponseFrame,
-  SelectTextChannelResponse: () => SelectTextChannelResponse,
-  SelectVoiceChannelResponse: () => SelectVoiceChannelResponse,
-  SetActivityResponse: () => SetActivityResponse,
-  SetConfigResponse: () => SetConfigResponse,
-  StartPurchaseResponse: () => StartPurchaseResponse,
-  SubscribeResponse: () => SubscribeResponse,
-  UserSettingsGetLocaleResponse: () => UserSettingsGetLocaleResponse,
-  VoiceSettingsResponse: () => VoiceSettingsResponse,
-  parseResponsePayload: () => parseResponsePayload
-});
-
 // node_modules/@discord/embedded-app-sdk/output/utils/assertUnreachable.mjs
 function assertUnreachable(_x, runtimeError) {
   throw runtimeError;
@@ -7465,14 +7434,6 @@ var DiscordSDK = class {
   _getSearch() {
     return typeof window === "undefined" ? "" : window.location.search;
   }
-};
-
-// node_modules/@discord/embedded-app-sdk/output/utils/PermissionUtils.mjs
-function can(permission, permissions) {
-  return BigFlagUtils.has(BigFlagUtils.deserialize(permissions), permission);
-}
-var PermissionUtils = {
-  can
 };
 
 // node_modules/@discord/embedded-app-sdk/output/lib/decimal.js-light/decimal.mjs
@@ -8455,7 +8416,6 @@ function config(obj) {
 }
 var Decimal = clone(defaults);
 ONE = new Decimal(1);
-var Decimal$1 = Decimal;
 
 // node_modules/@discord/embedded-app-sdk/output/utils/PriceConstants.mjs
 var CurrencyCodes;
@@ -8826,25 +8786,6 @@ var CurrencyExponents = {
   [CurrencyCodes.ZAR]: 2,
   [CurrencyCodes.ZMW]: 2,
   [CurrencyCodes.ZWL]: 2
-};
-
-// node_modules/@discord/embedded-app-sdk/output/utils/PriceUtils.mjs
-function formatPrice(price, locale = "en-US") {
-  const { amount, currency } = price;
-  const formatter = Intl.NumberFormat(locale, { style: "currency", currency });
-  return formatter.format(convertToMajorCurrencyUnits(amount, currency));
-}
-function convertToMajorCurrencyUnits(minorUnitValue, currency) {
-  const exponent = CurrencyExponents[currency];
-  if (exponent == null) {
-    console.warn(`Unexpected currency ${currency}`);
-    return minorUnitValue;
-  }
-  const minorUnit = new Decimal$1(minorUnitValue);
-  return minorUnit.dividedBy(10 ** exponent).toNumber();
-}
-var PriceUtils = {
-  formatPrice
 };
 
 // node_modules/@discord/embedded-app-sdk/output/_virtual/index3.mjs
@@ -9666,368 +9607,290 @@ function requireLodash_transform() {
 
 // node_modules/@discord/embedded-app-sdk/output/_virtual/index2.mjs
 var lodash_transformExports = requireLodash_transform();
-var transform = /* @__PURE__ */ getDefaultExportFromCjs(lodash_transformExports);
-
-// node_modules/@discord/embedded-app-sdk/output/mock.mjs
-var DiscordSDKMock = class {
-  constructor(clientId, guildId, channelId, locationId) {
-    this.platform = Platform.DESKTOP;
-    this.instanceId = "123456789012345678";
-    this.configuration = getDefaultSdkConfiguration();
-    this.source = null;
-    this.sourceOrigin = "";
-    this.sdkVersion = "mock";
-    this.mobileAppVersion = "unknown";
-    this.frameId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-    this.eventBus = new EventEmitter();
-    this.clientId = clientId;
-    this.commands = this._updateCommandMocks({});
-    this.guildId = guildId;
-    this.channelId = channelId;
-    this.locationId = locationId;
-    this.customId = null;
-    this.referrerId = null;
-  }
-  _updateCommandMocks(newCommands) {
-    this.commands = transform(Object.assign({}, commandsMockDefault, newCommands), (mock, func, name) => {
-      mock[name] = async (...args) => {
-        console.info(`DiscordSDKMock: ${String(name)}(${JSON.stringify(args)})`);
-        return await func(...args);
-      };
-    });
-    return this.commands;
-  }
-  emitReady() {
-    this.emitEvent("READY", void 0);
-  }
-  close(...args) {
-    console.info(`DiscordSDKMock: close(${JSON.stringify(args)})`);
-  }
-  ready() {
-    return Promise.resolve();
-  }
-  async subscribe(event, listener, ..._subscribeArgs) {
-    return await this.eventBus.on(event, listener);
-  }
-  async unsubscribe(event, listener, ..._unsubscribeArgs) {
-    return await this.eventBus.off(event, listener);
-  }
-  emitEvent(event, data) {
-    this.eventBus.emit(event, data);
-  }
-};
-var commandsMockDefault = {
-  authorize: () => Promise.resolve({ code: "mock_code" }),
-  setActivity: () => Promise.resolve({
-    name: "mock_activity_name",
-    type: 0
-  }),
-  getChannel: () => Promise.resolve({
-    id: "mock_channel_id",
-    name: "mock_channel_name",
-    type: ChannelTypesObject.GUILD_TEXT,
-    voice_states: [],
-    messages: []
-  }),
-  getSkus: () => Promise.resolve({ skus: [] }),
-  getEntitlements: () => Promise.resolve({ entitlements: [] }),
-  startPurchase: () => Promise.resolve([]),
-  setConfig: () => Promise.resolve({ use_interactive_pip: false }),
-  userSettingsGetLocale: () => Promise.resolve({ locale: "" }),
-  openExternalLink: () => Promise.resolve({ opened: false }),
-  encourageHardwareAcceleration: () => Promise.resolve({ enabled: true }),
-  captureLog: () => Promise.resolve(null),
-  setOrientationLockState: () => Promise.resolve(null),
-  openInviteDialog: () => Promise.resolve(null),
-  getPlatformBehaviors: () => Promise.resolve({
-    iosKeyboardResizesView: true
-  }),
-  getChannelPermissions: () => Promise.resolve({ permissions: bigInt(1234567890) }),
-  getInstanceConnectedParticipants: () => Promise.resolve({ participants: [] }),
-  // START-GENERATED-SECTION
-  openShareMomentDialog: () => Promise.resolve(null),
-  authenticate: () => Promise.resolve({
-    access_token: "mock_token",
-    user: {
-      username: "mock_user_username",
-      discriminator: "mock_user_discriminator",
-      id: "mock_user_id",
-      avatar: null,
-      public_flags: 1
-    },
-    scopes: [],
-    expires: new Date(2121, 1, 1).toString(),
-    application: {
-      description: "mock_app_description",
-      icon: "mock_app_icon",
-      id: "mock_app_id",
-      name: "mock_app_name"
-    }
-  }),
-  shareLink: () => Promise.resolve({ success: false, didSendMessage: false, didCopyLink: false }),
-  initiateImageUpload: () => Promise.resolve({
-    image_url: "https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0b52aa9e99b832574a53_full_logo_blurple_RGB.png"
-  }),
-  getRelationships: () => Promise.resolve({
-    relationships: [
-      {
-        type: 1,
-        user: {
-          username: "mock_friend_username",
-          flags: 0,
-          bot: false,
-          discriminator: "mock_friend_discriminator",
-          id: "mock_friend_id_1",
-          avatar: null
-        }
-      },
-      {
-        type: 1,
-        user: {
-          username: "mock_friend_username_with_nickname",
-          flags: 0,
-          bot: false,
-          discriminator: "mock_friend_discriminator_with_nickname",
-          id: "mock_friend_id_2",
-          avatar: null
-        },
-        nickname: "mock_friend_nickname_for_user"
-      },
-      {
-        type: 1,
-        user: {
-          username: "mock_friend_username_with_since",
-          flags: 0,
-          bot: false,
-          discriminator: "mock_friend_discriminator_with_since",
-          id: "mock_friend_id_3",
-          avatar: null
-        },
-        since: "2021-06-29T00:32:37.180813+00:00"
-      }
-    ]
-  }),
-  inviteUserEmbedded: () => Promise.resolve(null),
-  getUser: () => {
-    return Promise.resolve({
-      username: "mock_friend_username",
-      flags: 0,
-      bot: false,
-      discriminator: "mock_friend_discriminator",
-      id: "mock_friend_id_1",
-      avatar: null
-    });
-  },
-  getQuestEnrollmentStatus: () => Promise.resolve({
-    quest_id: "mock_quest_id",
-    is_enrolled: false,
-    enrolled_at: null
-  }),
-  questStartTimer: () => Promise.resolve({ success: true }),
-  getActivityInstanceConnectedParticipants: () => Promise.resolve({ participants: [] }),
-  shareInteraction: () => Promise.resolve({ success: false }),
-  requestProxyTicketRefresh: () => Promise.resolve({ ticket: "mock_ticket" }),
-  getQuest: () => Promise.resolve({
-    quest_id: "mock_quest_id",
-    external_cta_url: "mock_external_cta_url",
-    enrolled_at: null,
-    completed_at: null
-  })
-  // END-GENERATED-SECTION
-};
-
-// node_modules/@discord/embedded-app-sdk/output/lib/tslib/tslib.es6.mjs
-function __rest(s, e) {
-  var t = {};
-  for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-    t[p] = s[p];
-  if (s != null && typeof Object.getOwnPropertySymbols === "function")
-    for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-      if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-        t[p[i]] = s[p[i]];
-    }
-  return t;
-}
-
-// node_modules/@discord/embedded-app-sdk/output/utils/url.mjs
-var SUBSTITUTION_REGEX = /\{([a-z]+)\}/g;
-function regexFromTarget(target) {
-  const regexString = target.replace(SUBSTITUTION_REGEX, (match, name) => `(?<${name}>[\\w-]+)`);
-  return new RegExp(`${regexString}(/|$)`);
-}
-function matchAndRewriteURL({ originalURL, prefix, prefixHost, target }) {
-  const targetURL = new URL(`https://${target}`);
-  const targetRegEx = regexFromTarget(targetURL.host.replace(/%7B/g, "{").replace(/%7D/g, "}"));
-  const match = originalURL.toString().match(targetRegEx);
-  if (match == null)
-    return originalURL;
-  const newURL = new URL(originalURL.toString());
-  newURL.host = prefixHost;
-  newURL.pathname = prefix.replace(SUBSTITUTION_REGEX, (_, matchName) => {
-    var _a;
-    const replaceValue = (_a = match.groups) === null || _a === void 0 ? void 0 : _a[matchName];
-    if (replaceValue == null)
-      throw new Error("Misconfigured route.");
-    return replaceValue;
-  });
-  const pathToAppend = originalURL.pathname.startsWith("/") ? originalURL.pathname.slice(1) : originalURL.pathname;
-  newURL.pathname += newURL.pathname.endsWith("/") ? pathToAppend : "/" + pathToAppend;
-  newURL.pathname = newURL.pathname.replace(targetURL.pathname, "");
-  if (originalURL.pathname.endsWith("/") && !newURL.pathname.endsWith("/")) {
-    newURL.pathname += "/";
-  }
-  return newURL;
-}
-function absoluteURL(url, protocol = window.location.protocol, host = window.location.host) {
-  return new URL(url, `${protocol}//${host}`);
-}
-
-// node_modules/@discord/embedded-app-sdk/output/utils/patchUrlMappings.mjs
-function patchUrlMappings(mappings, { patchFetch = true, patchWebSocket = true, patchXhr = true, patchSrcAttributes = false } = {}) {
-  if (typeof window === "undefined")
-    return;
-  if (patchFetch) {
-    const fetchImpl = window.fetch;
-    window.fetch = function(input, init) {
-      if (input instanceof Request) {
-        const newUrl = attemptRemap({ url: absoluteURL(input.url), mappings });
-        const _a = init !== null && init !== void 0 ? init : {}, newInit = __rest(_a, ["url"]);
-        Object.keys(Request.prototype).forEach((value) => {
-          if (value === "url")
-            return;
-          try {
-            newInit[value] = input[value];
-          } catch (ex) {
-            console.warn(`Remapping fetch request key "${value}" failed`, ex);
-          }
-        });
-        return new Promise((resolve, reject) => {
-          try {
-            input.blob().then((blob) => {
-              if (input.method.toUpperCase() !== "HEAD" && input.method.toUpperCase() !== "GET" && blob.size > 0) {
-                newInit.body = blob;
-              }
-              resolve(fetchImpl(new Request(newUrl, newInit)));
-            });
-          } catch (ex) {
-            reject(ex);
-          }
-        });
-      }
-      const remapped = attemptRemap({ url: input instanceof URL ? input : absoluteURL(input), mappings });
-      return fetchImpl(remapped, init);
-    };
-  }
-  if (patchWebSocket) {
-    class WebSocketProxy extends WebSocket {
-      constructor(url, protocols) {
-        const remapped = attemptRemap({ url: url instanceof URL ? url : absoluteURL(url), mappings });
-        super(remapped, protocols);
-      }
-    }
-    window.WebSocket = WebSocketProxy;
-  }
-  if (patchXhr) {
-    const openImpl = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, async, username, password) {
-      const remapped = attemptRemap({ url: absoluteURL(url), mappings });
-      openImpl.apply(this, [method, remapped, async, username, password]);
-    };
-  }
-  if (patchSrcAttributes) {
-    const callback = function(mutationsList) {
-      for (const mutation of mutationsList) {
-        if (mutation.type === "attributes" && mutation.attributeName === "src") {
-          attemptSetNodeSrc(mutation.target, mappings);
-        } else if (mutation.type === "childList") {
-          mutation.addedNodes.forEach((node) => {
-            attemptSetNodeSrc(node, mappings);
-            recursivelyRemapChildNodes(node, mappings);
-          });
-        }
-      }
-    };
-    const observer = new MutationObserver(callback);
-    const config2 = {
-      attributeFilter: ["src"],
-      childList: true,
-      subtree: true
-    };
-    observer.observe(window.document, config2);
-    window.document.querySelectorAll("[src]").forEach((node) => {
-      attemptSetNodeSrc(node, mappings);
-    });
-  }
-}
-function recursivelyRemapChildNodes(node, mappings) {
-  if (node.hasChildNodes()) {
-    node.childNodes.forEach((child) => {
-      attemptSetNodeSrc(child, mappings);
-      recursivelyRemapChildNodes(child, mappings);
-    });
-  }
-}
-function attemptSetNodeSrc(node, mappings) {
-  if (node instanceof HTMLElement && node.hasAttribute("src")) {
-    const rawSrc = node.getAttribute("src");
-    const url = absoluteURL(rawSrc !== null && rawSrc !== void 0 ? rawSrc : "");
-    if (url.host === window.location.host)
-      return;
-    if (node.tagName.toLowerCase() === "script") {
-      attemptRecreateScriptNode(node, { url, mappings });
-    } else {
-      const newSrc = attemptRemap({ url, mappings }).toString();
-      if (newSrc !== rawSrc) {
-        node.setAttribute("src", newSrc);
-      }
-    }
-  }
-}
-function attemptRecreateScriptNode(node, { url, mappings }) {
-  const newUrl = attemptRemap({ url, mappings });
-  if (url.toString() !== newUrl.toString()) {
-    const newNode = document.createElement(node.tagName);
-    newNode.innerHTML = node.innerHTML;
-    for (const attr of node.attributes) {
-      newNode.setAttribute(attr.name, attr.value);
-    }
-    newNode.setAttribute("src", attemptRemap({ url, mappings }).toString());
-    node.after(newNode);
-    node.remove();
-  }
-}
-function attemptRemap({ url, mappings }) {
-  const newURL = new URL(url.toString());
-  for (const mapping of mappings) {
-    const mapped = matchAndRewriteURL({
-      originalURL: newURL,
-      prefix: mapping.prefix,
-      target: mapping.target,
-      prefixHost: window.location.host
-    });
-    if (mapped != null && (mapped === null || mapped === void 0 ? void 0 : mapped.toString()) !== url.toString()) {
-      return mapped;
-    }
-  }
-  return newURL;
-}
 
 // node_modules/@discord/embedded-app-sdk/output/index.mjs
 var { Commands: Commands2 } = common_exports;
-export {
-  Commands2 as Commands,
-  common_exports as Common,
-  DiscordSDK,
-  DiscordSDKMock,
-  Events,
-  Orientation,
-  PermissionUtils,
-  Permissions,
-  Platform,
-  PriceUtils,
-  RPCCloseCodes,
-  RPCErrorCodes,
-  responses_exports as Responses,
-  attemptRemap,
-  patchUrlMappings
-};
+
+// src/activity/app.js
+var FALLBACK_CLIENT_ID = "1539704001535156254";
+var loadingEl = document.querySelector("#loading");
+var emptyEl = document.querySelector("#empty");
+var errorEl = document.querySelector("#error");
+var errorMessageEl = document.querySelector("#error-message");
+var documentEl = document.querySelector("#document");
+var titleEl = document.querySelector("#document-title");
+var metaEl = document.querySelector("#document-meta");
+var bodyEl = document.querySelector("#document-body");
+function escapeHtml(value) {
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+function renderInline(value) {
+  let text = escapeHtml(value);
+  const codeTokens = [];
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    const token = `%%BARDO_CODE_${codeTokens.length}%%`;
+    codeTokens.push(`<code>${code}</code>`);
+    return token;
+  });
+  text = text.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g,
+    (_, label, href) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
+  );
+  text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+  text = text.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+  text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  text = text.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
+  codeTokens.forEach((html, index) => {
+    text = text.replace(`%%BARDO_CODE_${index}%%`, html);
+  });
+  return text;
+}
+function splitTableRow(line) {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+function isTableSeparator(line) {
+  const cells = splitTableRow(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+function renderTable(lines) {
+  const headers = splitTableRow(lines[0]);
+  const rows = lines.slice(2).map(splitTableRow);
+  const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join("");
+  const body = rows.map((row) => {
+    const cells = headers.map((_, index) => `<td>${renderInline(row[index] ?? "")}</td>`).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+  return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function isSpecialLine(lines, index) {
+  const line = lines[index] ?? "";
+  const next = lines[index + 1] ?? "";
+  const trimmed = line.trim();
+  return !trimmed || /^```/.test(trimmed) || /^#{1,6}\s+/.test(trimmed) || /^>\s?/.test(trimmed) || /^[-*+]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed) || /^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed) || line.includes("|") && isTableSeparator(next);
+}
+function stripLeadingTitle(markdown, title) {
+  const lines = markdown.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const index = lines.findIndex((line) => line.trim());
+  if (index < 0) return markdown;
+  const match = lines[index].match(/^#\s+(.+?)\s*$/);
+  if (match && match[1].trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase()) {
+    lines.splice(index, 1);
+  }
+  return lines.join("\n").trim();
+}
+function renderMarkdown(markdown) {
+  const lines = markdown.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const html = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+    if (trimmed.startsWith("```")) {
+      const language = trimmed.slice(3).trim();
+      const code = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        code.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) index += 1;
+      const languageAttr = language ? ` data-language="${escapeHtml(language)}"` : "";
+      html.push(`<pre><code${languageAttr}>${escapeHtml(code.join("\n"))}</code></pre>`);
+      continue;
+    }
+    if (line.includes("|") && isTableSeparator(lines[index + 1] ?? "")) {
+      const tableLines = [line, lines[index + 1]];
+      index += 2;
+      while (index < lines.length && lines[index].trim() && lines[index].includes("|")) {
+        tableLines.push(lines[index]);
+        index += 1;
+      }
+      html.push(renderTable(tableLines));
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const level = Math.min(heading[1].length, 4);
+      html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+      index += 1;
+      continue;
+    }
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      html.push("<hr>");
+      index += 1;
+      continue;
+    }
+    if (/^>\s?/.test(trimmed)) {
+      const quoteLines = [];
+      while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
+        quoteLines.push(lines[index].trim().replace(/^>\s?/, ""));
+        index += 1;
+      }
+      html.push(`<blockquote><p>${quoteLines.map(renderInline).join("<br>")}</p></blockquote>`);
+      continue;
+    }
+    if (/^[-*+]\s+/.test(trimmed)) {
+      const items = [];
+      while (index < lines.length && /^[-*+]\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^[-*+]\s+/, ""));
+        index += 1;
+      }
+      html.push(`<ul>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
+      continue;
+    }
+    if (/^\d+[.)]\s+/.test(trimmed)) {
+      const items = [];
+      while (index < lines.length && /^\d+[.)]\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^\d+[.)]\s+/, ""));
+        index += 1;
+      }
+      html.push(`<ol>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`);
+      continue;
+    }
+    const paragraph = [trimmed];
+    index += 1;
+    while (index < lines.length && !isSpecialLine(lines, index)) {
+      paragraph.push(lines[index].trim());
+      index += 1;
+    }
+    html.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
+  }
+  return html.join("\n");
+}
+function formatDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("es", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+function showEmptyState() {
+  loadingEl.hidden = true;
+  documentEl.hidden = true;
+  errorEl.hidden = true;
+  if (emptyEl) {
+    emptyEl.hidden = false;
+  }
+}
+function showError(message) {
+  loadingEl.hidden = true;
+  documentEl.hidden = true;
+  if (emptyEl) {
+    emptyEl.hidden = true;
+  }
+  errorMessageEl.textContent = message;
+  errorEl.hidden = false;
+}
+function resolveClientId() {
+  const host = window.location.hostname || "";
+  const match = host.match(/^([a-zA-Z0-9_-]+)\.discordsays\.com$/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return FALLBACK_CLIENT_ID;
+}
+async function initDiscordSdk() {
+  const params = new URLSearchParams(window.location.search);
+  const isEmbedded = params.has("frame_id") && params.has("instance_id");
+  if (!isEmbedded) {
+    return null;
+  }
+  try {
+    const clientId = resolveClientId();
+    const discordSdk = new DiscordSDK(clientId);
+    await discordSdk.ready();
+    return discordSdk;
+  } catch (error) {
+    console.warn("No se pudo inicializar DiscordSDK:", error);
+    return null;
+  }
+}
+async function fetchActivityContextWithRetry(instanceId, maxRetries = 5) {
+  if (!instanceId) return null;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await fetch(`/api/activity-context/${encodeURIComponent(instanceId)}`, {
+        headers: { Accept: "application/json" }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.documentId) {
+          return data.documentId;
+        }
+      }
+    } catch (err) {
+      console.warn(`Intento ${attempt + 1} de obtener contexto fall\xF3:`, err);
+    }
+    if (attempt < maxRetries) {
+      const delay = Math.min(200 * Math.pow(2, attempt), 1500);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return null;
+}
+async function fetchAndRenderDocument(documentId) {
+  try {
+    const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
+      headers: { Accept: "application/json" }
+    });
+    if (response.status === 404) {
+      showError("Este documento ya no est\xE1 disponible o el enlace no es v\xE1lido.");
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    titleEl.textContent = data.title || "Documento";
+    document.title = `${data.title || "Documento"} \xB7 Bardo`;
+    const meta = [];
+    if (data.sourceName) meta.push(`<span>Archivo \xB7 ${escapeHtml(data.sourceName)}</span>`);
+    const date = formatDate(data.createdAt);
+    if (date) meta.push(`<span>Publicado \xB7 ${escapeHtml(date)}</span>`);
+    metaEl.innerHTML = meta.join("");
+    const markdown = stripLeadingTitle(data.markdown || "", data.title || "");
+    bodyEl.innerHTML = renderMarkdown(markdown);
+    loadingEl.hidden = true;
+    errorEl.hidden = true;
+    if (emptyEl) emptyEl.hidden = true;
+    documentEl.hidden = false;
+  } catch (error) {
+    console.error("Error cargando documento:", error);
+    showError("No pude cargar el documento. Intenta abrirlo nuevamente desde Discord.");
+  }
+}
+async function start() {
+  const discordSdk = await initDiscordSdk();
+  let documentId = null;
+  if (discordSdk) {
+    if (discordSdk.customId) {
+      documentId = discordSdk.customId;
+    } else if (discordSdk.instanceId) {
+      documentId = await fetchActivityContextWithRetry(discordSdk.instanceId);
+    }
+  }
+  if (!documentId) {
+    const params = new URLSearchParams(window.location.search);
+    const instanceIdParam = params.get("instance_id");
+    if (instanceIdParam && !discordSdk) {
+      documentId = await fetchActivityContextWithRetry(instanceIdParam);
+    }
+    if (!documentId) {
+      documentId = params.get("custom_id") || params.get("document") || params.get("id");
+    }
+  }
+  if (!documentId) {
+    showEmptyState();
+    return;
+  }
+  await fetchAndRenderDocument(documentId);
+}
+start();

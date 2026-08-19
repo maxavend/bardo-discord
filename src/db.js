@@ -41,3 +41,32 @@ export async function loadDocument(db, messageId) {
     createdBy: row.created_by,
   };
 }
+
+export async function saveActivityContext(db, instanceId, documentId) {
+  const createdAt = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO activity_contexts (instance_id, document_id, created_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(instance_id) DO UPDATE SET
+         document_id = excluded.document_id,
+         created_at = excluded.created_at`,
+    )
+    .bind(instanceId, documentId, createdAt)
+    .run();
+}
+
+export async function loadActivityContext(db, instanceId) {
+  const row = await db
+    .prepare('SELECT instance_id, document_id, created_at FROM activity_contexts WHERE instance_id = ?')
+    .bind(instanceId)
+    .first();
+
+  if (!row) return null;
+
+  return {
+    instanceId: row.instance_id,
+    documentId: row.document_id,
+    createdAt: row.created_at,
+  };
+}

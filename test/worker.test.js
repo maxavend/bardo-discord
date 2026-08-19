@@ -15,22 +15,47 @@ function signBody(privateKey, timestamp, body) {
 }
 
 function createReadDb(documentId = 'doc-123') {
+  const activityContexts = new Map([
+    ['inst-123', { instance_id: 'inst-123', document_id: 'doc-123', created_at: '2026-08-19T12:00:00.000Z' }],
+  ]);
+
   return {
-    prepare() {
+    activityContexts,
+    prepare(query) {
       return {
-        bind(id) {
+        bind(...params) {
           return {
             async first() {
-              if (id !== documentId) return null;
-              return {
-                id: documentId,
-                title: 'Documento Test',
-                original_markdown: '# Documento Test\n\nContenido completo',
-                pages: JSON.stringify(['Contenido completo']),
-                source_name: 'test.md',
-                created_at: '2026-08-19T12:00:00.000Z',
-                created_by: 'user-1',
-              };
+              if (query.includes('FROM documents')) {
+                const [id] = params;
+                if (id !== documentId) return null;
+                return {
+                  id: documentId,
+                  title: 'Documento Test',
+                  original_markdown: '# Documento Test\n\nContenido completo',
+                  pages: JSON.stringify(['Contenido completo']),
+                  source_name: 'test.md',
+                  created_at: '2026-08-19T12:00:00.000Z',
+                  created_by: 'user-1',
+                };
+              }
+              if (query.includes('FROM activity_contexts')) {
+                const [instanceId] = params;
+                return activityContexts.get(instanceId) || null;
+              }
+              return null;
+            },
+            async run() {
+              if (query.includes('INSERT INTO activity_contexts')) {
+                const [instance_id, document_id, created_at] = params;
+                activityContexts.set(instance_id, {
+                  instance_id,
+                  document_id,
+                  created_at,
+                });
+                return { success: true };
+              }
+              return { success: true };
             },
           };
         },
@@ -98,6 +123,95 @@ test('Worker responde 404 para documentos inexistentes', async () => {
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 404);
+});
+
+test('Worker expone el contexto de activity por instanceId', async () => {
+  const req = new Request('http://localhost/api/activity-context/inst-123', { method: 'GET' });
+  const env = { DB: createReadDb() };
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('cache-control'), 'private, no-store');
+
+  const json = await res.json();
+  assert.equal(json.instanceId, 'inst-123');
+  assert.equal(json.documentId, 'doc-123');
+});
+
+test('Worker responde 404 para contextos de activity inexistentes', async () => {
+  const req = new Request('http://localhost/api/activity-context/inst-no-existe', { method: 'GET' });
+  const env = { DB: createReadDb() };
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 404);
+});
+
+test('Worker maneja MESSAGE_COMPONENT con bardo:open: lanzando Activity y guardando contexto', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const interactionPayload = {
+    type: 3, // MESSAGE_COMPONENT
+    id: 'interaction-987',
+    token: 'token-abc',
+    data: {
+      custom_id: 'bardo:open:doc-456',
+    },
+  };
+  const body = JSON.stringify(interactionPayload);
+  const signature = signBody(privateKey, timestamp, body);
+
+  const db = createReadDb();
+
+  // Mock global fetch for Discord callback endpoint
+  const originalFetch = globalThis.fetch;
+  let calledCallbackUrl = null;
+  let calledCallbackBody = null;
+
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('/interactions/interaction-987/token-abc/callback')) {
+      calledCallbackUrl = String(url);
+      calledCallbackBody = JSON.parse(options.body);
+      return new Response(
+        JSON.stringify({
+          interaction: { id: 'interaction-987' },
+          resource: {
+            type: 12,
+            activity_instance: {
+              id: 'instance-created-999',
+            },
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    return originalFetch(url, options);
+  };
+
+  try {
+    const req = new Request('http://localhost/', {
+      method: 'POST',
+      headers: {
+        'x-signature-ed25519': signature,
+        'x-signature-timestamp': timestamp,
+        'content-type': 'application/json',
+      },
+      body,
+    });
+
+    const env = { DISCORD_PUBLIC_KEY: publicKey, DB: db };
+    const res = await worker.fetch(req, env, { waitUntil: () => {} });
+
+    assert.equal(res.status, 204);
+    assert.ok(calledCallbackUrl.includes('with_response=true'));
+    assert.equal(calledCallbackBody.type, 12);
+
+    // Verify context was saved in DB
+    const saved = db.activityContexts.get('instance-created-999');
+    assert.ok(saved);
+    assert.equal(saved.document_id, 'doc-456');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('Worker delega assets GET cuando existe el binding ASSETS', async () => {

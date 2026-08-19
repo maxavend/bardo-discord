@@ -9,6 +9,8 @@ import {
   TextDisplayBuilder,
 } from 'discord.js';
 
+export const BARDO_OPEN_PREFIX = 'bardo:open:';
+
 const PREVIEW_LIMIT = 1200;
 
 function isMarkdownTable(block) {
@@ -68,13 +70,12 @@ export function createDocumentPreview(markdown, limit = PREVIEW_LIMIT) {
 export function buildDocumentPayload(document, { applicationId, documentId }) {
   const previewSource = document.pages?.[0] || document.originalMarkdown || '';
   const preview = createDocumentPreview(previewSource);
-  const activityUrl = `https://discord.com/activities/${applicationId}?custom_id=${encodeURIComponent(documentId)}`;
 
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setLabel('📖 Mostrar más')
-      .setStyle(ButtonStyle.Link)
-      .setURL(activityUrl),
+      .setStyle(ButtonStyle.Primary)
+      .setCustomId(`${BARDO_OPEN_PREFIX}${documentId}`),
   );
 
   const container = new ContainerBuilder()

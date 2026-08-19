@@ -1,4 +1,4 @@
-import { DiscordSDK } from '/vendor/discord-sdk.js';
+import { DiscordSDK } from '@discord/embedded-app-sdk';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 
@@ -253,6 +253,32 @@ async function initDiscordSdk() {
   }
 }
 
+async function fetchActivityContextWithRetry(instanceId, maxRetries = 5) {
+  if (!instanceId) return null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await fetch(`/api/activity-context/${encodeURIComponent(instanceId)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.documentId) {
+          return data.documentId;
+        }
+      }
+    } catch (err) {
+      console.warn(`Intento ${attempt + 1} de obtener contexto falló:`, err);
+    }
+
+    if (attempt < maxRetries) {
+      const delay = Math.min(200 * Math.pow(2, attempt), 1500);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return null;
+}
+
 async function fetchAndRenderDocument(documentId) {
   try {
     const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
@@ -295,13 +321,24 @@ async function start() {
   const discordSdk = await initDiscordSdk();
 
   let documentId = null;
-  if (discordSdk && discordSdk.customId) {
-    documentId = discordSdk.customId;
+
+  if (discordSdk) {
+    if (discordSdk.customId) {
+      documentId = discordSdk.customId;
+    } else if (discordSdk.instanceId) {
+      documentId = await fetchActivityContextWithRetry(discordSdk.instanceId);
+    }
   }
 
   if (!documentId) {
     const params = new URLSearchParams(window.location.search);
-    documentId = params.get('custom_id') || params.get('document') || params.get('id');
+    const instanceIdParam = params.get('instance_id');
+    if (instanceIdParam && !discordSdk) {
+      documentId = await fetchActivityContextWithRetry(instanceIdParam);
+    }
+    if (!documentId) {
+      documentId = params.get('custom_id') || params.get('document') || params.get('id');
+    }
   }
 
   if (!documentId) {

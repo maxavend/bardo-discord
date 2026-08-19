@@ -11,8 +11,8 @@
     "dev": "npm run build:activity && wrangler dev",
     "deploy": "npm run build:activity && wrangler deploy",
     "register": "node --env-file=.env scripts/register-commands.js",
-    "test": "node --test",
-    "check": "node scripts/build-activity.js && node --check src/worker.js && node --check src/components.js && node --check src/pagination.js && node --check src/db.js && node --check activity/app.js && node --check activity/vendor/discord-sdk.js && node --check scripts/register-commands.js && node --check scripts/build-activity.js"
+    "test": "npm run build:activity && node --test",
+    "check": "node scripts/build-activity.js && node --check src/worker.js && node --check src/components.js && node --check src/pagination.js && node --check src/db.js && node --check src/activity/app.js && node --check scripts/register-commands.js && node --check scripts/build-activity.js"
   },
   "engines": {
     "node": ">=22.12.0"

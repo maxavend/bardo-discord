@@ -5,11 +5,12 @@ import {
   verifyKey,
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
-import { buildDocumentPayload, buildErrorPayload } from './components.js';
-import { loadDocument, saveDocument } from './db.js';
+import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
+import { loadDocument, saveDocument, loadActivityContext, saveActivityContext } from './db.js';
 
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 const DOCUMENT_API_PREFIX = '/api/documents/';
+const ACTIVITY_CONTEXT_API_PREFIX = '/api/activity-context/';
 
 function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -143,6 +144,56 @@ async function handleCommandInteraction(interaction, env, ctx) {
   });
 }
 
+async function handleComponentInteraction(interaction, env, ctx) {
+  const customId = interaction.data?.custom_id || '';
+
+  if (customId.startsWith(BARDO_OPEN_PREFIX)) {
+    const documentId = customId.slice(BARDO_OPEN_PREFIX.length);
+
+    const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
+
+    try {
+      const callbackRes = await fetch(callbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 12, // LAUNCH_ACTIVITY
+        }),
+      });
+
+      if (callbackRes.ok) {
+        const data = await callbackRes.json().catch(() => null);
+        const instanceId =
+          data?.resource?.activity_instance?.id ||
+          data?.activity_instance?.id ||
+          data?.resource?.id ||
+          data?.activity_instance_id ||
+          data?.instance_id;
+
+        if (instanceId && env.DB) {
+          await saveActivityContext(env.DB, instanceId, documentId);
+        }
+
+        return new Response(null, { status: 204 });
+      }
+
+      console.error('Discord callback error:', callbackRes.status, await callbackRes.text().catch(() => ''));
+      return jsonResponse({ type: 12 });
+    } catch (error) {
+      console.error('Error handling component interaction:', error);
+      return jsonResponse({ type: 12 });
+    }
+  }
+
+  return jsonResponse({
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content: 'Acción no reconocida.',
+      flags: InteractionResponseFlags.EPHEMERAL,
+    },
+  });
+}
+
 async function handleDocumentApi(url, env) {
   if (!env.DB) {
     return jsonResponse({ error: 'Database unavailable' }, 503);
@@ -172,6 +223,42 @@ async function handleDocumentApi(url, env) {
       markdown: document.originalMarkdown,
       sourceName: document.sourceName,
       createdAt: document.createdAt,
+    },
+    200,
+    {
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  );
+}
+
+async function handleActivityContextApi(url, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
+
+  const encodedId = url.pathname.slice(ACTIVITY_CONTEXT_API_PREFIX.length);
+  if (!encodedId) {
+    return jsonResponse({ error: 'Instance id required' }, 400);
+  }
+
+  let instanceId;
+  try {
+    instanceId = decodeURIComponent(encodedId);
+  } catch {
+    return jsonResponse({ error: 'Invalid instance id' }, 400);
+  }
+
+  const context = await loadActivityContext(env.DB, instanceId);
+  if (!context) {
+    return jsonResponse({ error: 'Activity context not found' }, 404);
+  }
+
+  return jsonResponse(
+    {
+      instanceId: context.instanceId,
+      documentId: context.documentId,
+      createdAt: context.createdAt,
     },
     200,
     {
@@ -217,6 +304,10 @@ async function handleDiscordInteraction(request, env, ctx) {
     return handleCommandInteraction(interaction, env, ctx);
   }
 
+  if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
+    return handleComponentInteraction(interaction, env, ctx);
+  }
+
   return jsonResponse({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
@@ -232,6 +323,10 @@ export default {
 
     if (request.method === 'GET' && url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
       return handleDocumentApi(url, env);
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith(ACTIVITY_CONTEXT_API_PREFIX)) {
+      return handleActivityContextApi(url, env);
     }
 
     if (request.method === 'POST') {

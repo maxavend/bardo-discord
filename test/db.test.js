@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { saveDocument, loadDocument } from '../src/db.js';
+import {
+  saveDocument,
+  loadDocument,
+  saveActivityContext,
+  loadActivityContext,
+} from '../src/db.js';
 
 class MockD1PreparedStatement {
   constructor(db, query, params = []) {
@@ -27,13 +32,26 @@ class MockD1PreparedStatement {
       });
       return { success: true };
     }
+    if (this.query.includes('INSERT INTO activity_contexts')) {
+      const [instance_id, document_id, created_at] = this.params;
+      this.db.activityContexts.set(instance_id, {
+        instance_id,
+        document_id,
+        created_at,
+      });
+      return { success: true };
+    }
     return { success: true };
   }
 
   async first() {
-    if (this.query.includes('SELECT')) {
+    if (this.query.includes('FROM documents')) {
       const [id] = this.params;
       return this.db.storage.get(id) || null;
+    }
+    if (this.query.includes('FROM activity_contexts')) {
+      const [instanceId] = this.params;
+      return this.db.activityContexts.get(instanceId) || null;
     }
     return null;
   }
@@ -42,6 +60,7 @@ class MockD1PreparedStatement {
 class MockD1Database {
   constructor() {
     this.storage = new Map();
+    this.activityContexts = new Map();
   }
 
   prepare(query) {
@@ -75,5 +94,22 @@ test('saveDocument y loadDocument persisten y recuperan el documento correctamen
 test('loadDocument devuelve null si el documento no existe', async () => {
   const db = new MockD1Database();
   const loaded = await loadDocument(db, 'inexistente');
+  assert.equal(loaded, null);
+});
+
+test('saveActivityContext y loadActivityContext persisten y recuperan el contexto correctamente', async () => {
+  const db = new MockD1Database();
+  await saveActivityContext(db, 'inst-123', 'doc-abc');
+
+  const loaded = await loadActivityContext(db, 'inst-123');
+  assert.ok(loaded);
+  assert.equal(loaded.instanceId, 'inst-123');
+  assert.equal(loaded.documentId, 'doc-abc');
+  assert.ok(loaded.createdAt);
+});
+
+test('loadActivityContext devuelve null si el contexto no existe', async () => {
+  const db = new MockD1Database();
+  const loaded = await loadActivityContext(db, 'inst-inexistente');
   assert.equal(loaded, null);
 });

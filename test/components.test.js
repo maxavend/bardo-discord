@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDocumentPayload, buildErrorPayload, createDocumentPreview } from '../src/components.js';
+import {
+  BARDO_OPEN_PREFIX,
+  buildDocumentPayload,
+  buildErrorPayload,
+  createDocumentPreview,
+} from '../src/components.js';
+
+test('BARDO_OPEN_PREFIX está definido como bardo:open:', () => {
+  assert.equal(BARDO_OPEN_PREFIX, 'bardo:open:');
+});
 
 test('createDocumentPreview limita el contenido y agrega llamada a abrir completo', () => {
   const markdown = `${'# Sección\n\n'}${'Texto largo '.repeat(180)}`;
@@ -17,7 +26,7 @@ test('createDocumentPreview reemplaza tablas Markdown por un fallback limpio', (
   assert.equal(preview, '*Tabla disponible en el documento completo.*');
 });
 
-test('buildDocumentPayload produce preview Components V2 con botón Mostrar más', () => {
+test('buildDocumentPayload produce preview Components V2 con botón interactivo Mostrar más', () => {
   const document = {
     title: 'Minuta Test',
     originalMarkdown: '# Minuta Test\n\nContenido completo',
@@ -35,9 +44,10 @@ test('buildDocumentPayload produce preview Components V2 con botón Mostrar más
 
   const actionRow = payload.components[0].components.at(-1);
   const button = actionRow.components[0];
-  assert.equal(button.style, 5);
+  assert.equal(button.style, 1); // ButtonStyle.Primary
   assert.equal(button.label, '📖 Mostrar más');
-  assert.equal(button.url, 'https://discord.com/activities/123456789?custom_id=doc-abc');
+  assert.equal(button.custom_id, 'bardo:open:doc-abc');
+  assert.equal(button.url, undefined);
 });
 
 test('buildErrorPayload produce contenedor con mensaje de error', () => {
