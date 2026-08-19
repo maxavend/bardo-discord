@@ -6,6 +6,7 @@ import {
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
+import { normalizeDocumentId } from './document-id.js';
 import { loadDocument, saveDocument, loadActivityContext, saveActivityContext } from './db.js';
 
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
@@ -144,54 +145,83 @@ async function handleCommandInteraction(interaction, env, ctx) {
   });
 }
 
-async function handleComponentInteraction(interaction, env, ctx) {
+function extractActivityInstanceIds(callbackData) {
+  return [
+    callbackData?.interaction?.activity_instance_id,
+    callbackData?.resource?.activity_instance?.id,
+    callbackData?.activity_instance_id,
+    callbackData?.activity_instance?.id,
+    callbackData?.resource?.id,
+    callbackData?.instance_id,
+  ].filter((value, index, values) => typeof value === 'string' && value && values.indexOf(value) === index);
+}
+
+async function handleComponentInteraction(interaction, env) {
   const customId = interaction.data?.custom_id || '';
 
-  if (customId.startsWith(BARDO_OPEN_PREFIX)) {
-    const documentId = customId.slice(BARDO_OPEN_PREFIX.length);
-
-    const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
-
-    try {
-      const callbackRes = await fetch(callbackUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 12, // LAUNCH_ACTIVITY
-        }),
-      });
-
-      if (callbackRes.ok) {
-        const data = await callbackRes.json().catch(() => null);
-        const instanceId =
-          data?.resource?.activity_instance?.id ||
-          data?.activity_instance?.id ||
-          data?.resource?.id ||
-          data?.activity_instance_id ||
-          data?.instance_id;
-
-        if (instanceId && env.DB) {
-          await saveActivityContext(env.DB, instanceId, documentId);
-        }
-
-        return new Response(null, { status: 204 });
-      }
-
-      console.error('Discord callback error:', callbackRes.status, await callbackRes.text().catch(() => ''));
-      return jsonResponse({ type: 12 });
-    } catch (error) {
-      console.error('Error handling component interaction:', error);
-      return jsonResponse({ type: 12 });
-    }
+  if (!customId.startsWith(BARDO_OPEN_PREFIX)) {
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'Acción no reconocida.',
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
+    });
   }
 
-  return jsonResponse({
-    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: {
-      content: 'Acción no reconocida.',
-      flags: InteractionResponseFlags.EPHEMERAL,
-    },
-  });
+  const documentId = normalizeDocumentId(customId);
+  if (!documentId || !env.DB) {
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'No pude abrir este documento.',
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
+    });
+  }
+
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) {
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'Este documento ya no está disponible.',
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
+    });
+  }
+
+  const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
+
+  try {
+    const callbackRes = await fetch(callbackUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 12 }),
+    });
+
+    if (!callbackRes.ok) {
+      console.error('Discord callback error:', callbackRes.status, await callbackRes.text().catch(() => ''));
+      return new Response(null, { status: 202 });
+    }
+
+    const callbackData = await callbackRes.json().catch(() => null);
+    const instanceIds = extractActivityInstanceIds(callbackData);
+
+    if (instanceIds.length === 0) {
+      console.error('Discord launched the Activity without a readable instance id.', {
+        interaction: callbackData?.interaction,
+        resource: callbackData?.resource,
+      });
+    } else {
+      await Promise.all(instanceIds.map((instanceId) => saveActivityContext(env.DB, instanceId, documentId)));
+    }
+
+    return new Response(null, { status: 202 });
+  } catch (error) {
+    console.error('Error handling component interaction:', error);
+    return new Response(null, { status: 202 });
+  }
 }
 
 async function handleDocumentApi(url, env) {
@@ -204,10 +234,15 @@ async function handleDocumentApi(url, env) {
     return jsonResponse({ error: 'Document id required' }, 400);
   }
 
-  let documentId;
+  let rawId;
   try {
-    documentId = decodeURIComponent(encodedId);
+    rawId = decodeURIComponent(encodedId);
   } catch {
+    return jsonResponse({ error: 'Invalid document id' }, 400);
+  }
+
+  const documentId = normalizeDocumentId(rawId);
+  if (!documentId) {
     return jsonResponse({ error: 'Invalid document id' }, 400);
   }
 
@@ -305,7 +340,7 @@ async function handleDiscordInteraction(request, env, ctx) {
   }
 
   if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
-    return handleComponentInteraction(interaction, env, ctx);
+    return handleComponentInteraction(interaction, env);
   }
 
   return jsonResponse({
