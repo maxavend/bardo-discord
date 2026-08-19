@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BARDO_OPEN_PREFIX,
+  normalizeDocumentId,
   buildDocumentPayload,
   buildErrorPayload,
   createDocumentPreview,
@@ -9,6 +10,18 @@ import {
 
 test('BARDO_OPEN_PREFIX está definido como bardo:open:', () => {
   assert.equal(BARDO_OPEN_PREFIX, 'bardo:open:');
+});
+
+test('normalizeDocumentId normaliza prefijos y valores nulos/vacíos', () => {
+  assert.equal(normalizeDocumentId('bardo:open:abc-123'), 'abc-123');
+  assert.equal(normalizeDocumentId('abc-123'), 'abc-123');
+  assert.equal(normalizeDocumentId(null), null);
+  assert.equal(normalizeDocumentId(undefined), null);
+  assert.equal(normalizeDocumentId(''), null);
+  assert.equal(normalizeDocumentId('   '), null);
+  assert.equal(normalizeDocumentId('bardo:open:'), null);
+  assert.equal(normalizeDocumentId('bardo:open:   '), null);
+  assert.equal(normalizeDocumentId('bardo:open:doc-xyz-789'), 'doc-xyz-789');
 });
 
 test('createDocumentPreview limita el contenido y agrega llamada a abrir completo', () => {

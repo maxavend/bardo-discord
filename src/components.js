@@ -8,8 +8,9 @@ import {
   SeparatorSpacingSize,
   TextDisplayBuilder,
 } from 'discord.js';
+import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 
-export const BARDO_OPEN_PREFIX = 'bardo:open:';
+export { BARDO_OPEN_PREFIX, normalizeDocumentId };
 
 const PREVIEW_LIMIT = 1200;
 
@@ -70,12 +71,13 @@ export function createDocumentPreview(markdown, limit = PREVIEW_LIMIT) {
 export function buildDocumentPayload(document, { applicationId, documentId }) {
   const previewSource = document.pages?.[0] || document.originalMarkdown || '';
   const preview = createDocumentPreview(previewSource);
+  const cleanId = normalizeDocumentId(documentId) || documentId;
 
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setLabel('📖 Mostrar más')
       .setStyle(ButtonStyle.Primary)
-      .setCustomId(`${BARDO_OPEN_PREFIX}${documentId}`),
+      .setCustomId(`${BARDO_OPEN_PREFIX}${cleanId}`),
   );
 
   const container = new ContainerBuilder()

@@ -1,4 +1,7 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
+import { normalizeDocumentId } from '../document-id.js';
+
+export { normalizeDocumentId };
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 
@@ -322,25 +325,35 @@ async function start() {
 
   let documentId = null;
 
-  if (discordSdk) {
-    if (discordSdk.customId) {
-      documentId = discordSdk.customId;
-    } else if (discordSdk.instanceId) {
-      documentId = await fetchActivityContextWithRetry(discordSdk.instanceId);
-    }
+  // a. customId normalizado si representa un documentId válido
+  if (discordSdk && discordSdk.customId) {
+    documentId = normalizeDocumentId(discordSdk.customId);
   }
 
+  // b. instanceId -> activity-context
+  if (!documentId && discordSdk && discordSdk.instanceId) {
+    const contextDocId = await fetchActivityContextWithRetry(discordSdk.instanceId);
+    documentId = normalizeDocumentId(contextDocId);
+  }
+
+  // c. query params de desarrollo
   if (!documentId) {
     const params = new URLSearchParams(window.location.search);
+    const customIdParam = params.get('custom_id');
+    const docParam = params.get('document') || params.get('id');
     const instanceIdParam = params.get('instance_id');
-    if (instanceIdParam && !discordSdk) {
-      documentId = await fetchActivityContextWithRetry(instanceIdParam);
-    }
-    if (!documentId) {
-      documentId = params.get('custom_id') || params.get('document') || params.get('id');
+
+    documentId =
+      normalizeDocumentId(customIdParam) ||
+      normalizeDocumentId(docParam);
+
+    if (!documentId && instanceIdParam) {
+      const contextDocId = await fetchActivityContextWithRetry(instanceIdParam);
+      documentId = normalizeDocumentId(contextDocId);
     }
   }
 
+  // d. empty state
   if (!documentId) {
     showEmptyState();
     return;

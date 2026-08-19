@@ -9611,6 +9611,19 @@ var lodash_transformExports = requireLodash_transform();
 // node_modules/@discord/embedded-app-sdk/output/index.mjs
 var { Commands: Commands2 } = common_exports;
 
+// src/document-id.js
+var BARDO_OPEN_PREFIX = "bardo:open:";
+function normalizeDocumentId(id) {
+  if (!id || typeof id !== "string") return null;
+  const trimmed = id.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith(BARDO_OPEN_PREFIX)) {
+    const extracted = trimmed.slice(BARDO_OPEN_PREFIX.length).trim();
+    return extracted || null;
+  }
+  return trimmed;
+}
+
 // src/activity/app.js
 var FALLBACK_CLIENT_ID = "1539704001535156254";
 var loadingEl = document.querySelector("#loading");
@@ -9870,21 +9883,22 @@ async function fetchAndRenderDocument(documentId) {
 async function start() {
   const discordSdk = await initDiscordSdk();
   let documentId = null;
-  if (discordSdk) {
-    if (discordSdk.customId) {
-      documentId = discordSdk.customId;
-    } else if (discordSdk.instanceId) {
-      documentId = await fetchActivityContextWithRetry(discordSdk.instanceId);
-    }
+  if (discordSdk && discordSdk.customId) {
+    documentId = normalizeDocumentId(discordSdk.customId);
+  }
+  if (!documentId && discordSdk && discordSdk.instanceId) {
+    const contextDocId = await fetchActivityContextWithRetry(discordSdk.instanceId);
+    documentId = normalizeDocumentId(contextDocId);
   }
   if (!documentId) {
     const params = new URLSearchParams(window.location.search);
+    const customIdParam = params.get("custom_id");
+    const docParam = params.get("document") || params.get("id");
     const instanceIdParam = params.get("instance_id");
-    if (instanceIdParam && !discordSdk) {
-      documentId = await fetchActivityContextWithRetry(instanceIdParam);
-    }
-    if (!documentId) {
-      documentId = params.get("custom_id") || params.get("document") || params.get("id");
+    documentId = normalizeDocumentId(customIdParam) || normalizeDocumentId(docParam);
+    if (!documentId && instanceIdParam) {
+      const contextDocId = await fetchActivityContextWithRetry(instanceIdParam);
+      documentId = normalizeDocumentId(contextDocId);
     }
   }
   if (!documentId) {
@@ -9894,3 +9908,6 @@ async function start() {
   await fetchAndRenderDocument(documentId);
 }
 start();
+export {
+  normalizeDocumentId
+};
