@@ -353,19 +353,78 @@ function showActionStatus(message, isError = false) {
   actionStatusTimer = window.setTimeout(() => {
     actionStatusEl.textContent = '';
     actionStatusEl.classList.remove('is-error');
-  }, 2600);
+  }, 2800);
 }
 
-function downloadBlob(blob, fileName) {
+function downloadBlobFallback(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function saveFile({ blob, fileName, mimeType, title = 'Documento' }) {
+  // 1. Web Share API con soporte para archivos (especialmente diseñado para iOS Safari / Discord Mobile / Android)
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof File !== 'undefined') {
+    try {
+      const file = new File([blob], fileName, { type: mimeType });
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: title,
+        });
+        showActionStatus('Guardado en el dispositivo');
+        return;
+      }
+    } catch (shareErr) {
+      if (shareErr.name === 'AbortError') {
+        return;
+      }
+      console.warn('navigator.share no completado, probando método alternativo:', shareErr);
+    }
+  }
+
+  // 2. File System Access API (Desktop Chrome / Edge / Opera)
+  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
+    try {
+      const extension = fileName.includes('.') ? `.${fileName.split('.').pop()}` : '';
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: 'Documento',
+            accept: { [mimeType]: [extension] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      showActionStatus('Guardado en el dispositivo');
+      return;
+    } catch (pickerErr) {
+      if (pickerErr.name === 'AbortError') {
+        return;
+      }
+      console.warn('showSaveFilePicker cancelado o no disponible:', pickerErr);
+    }
+  }
+
+  // 3. Descarga HTML5 mediante <a download>
+  try {
+    downloadBlobFallback(blob, fileName);
+    showActionStatus('Descargado');
+  } catch (downloadErr) {
+    console.error('Error al guardar archivo:', downloadErr);
+    showActionStatus('No se pudo guardar el archivo', true);
+  }
 }
 
 function currentMarkdown() {
@@ -468,21 +527,31 @@ async function copyDocument() {
   }
 }
 
-function downloadMarkdown() {
+async function downloadMarkdown() {
   if (!currentDocumentData) return;
+  const fileName = `${exportBaseName()}.md`;
   const blob = new Blob([currentMarkdown()], { type: 'text/markdown;charset=utf-8' });
-  downloadBlob(blob, `${exportBaseName()}.md`);
-  showActionStatus('Markdown descargado');
+  await saveFile({
+    blob,
+    fileName,
+    mimeType: 'text/markdown',
+    title: currentDocumentData.title || 'Documento',
+  });
 }
 
-function downloadWord() {
+async function downloadWord() {
   if (!currentDocumentData) return;
+  const fileName = `${exportBaseName()}.doc`;
   const blob = new Blob(['\ufeff', wordDocumentHtml()], { type: 'application/msword;charset=utf-8' });
-  downloadBlob(blob, `${exportBaseName()}.doc`);
-  showActionStatus('Word descargado');
+  await saveFile({
+    blob,
+    fileName,
+    mimeType: 'application/msword',
+    title: currentDocumentData.title || 'Documento',
+  });
 }
 
-function downloadPdf() {
+async function downloadPdf() {
   if (!currentDocumentData) return;
 
   const previousTitle = document.title;
@@ -528,16 +597,16 @@ function showError(message) {
 
 copyButtonEl?.addEventListener('click', copyDocument);
 
-downloadSelectEl?.addEventListener('change', (event) => {
+downloadSelectEl?.addEventListener('change', async (event) => {
   const format = event.target.value;
   if (!format) return;
 
   if (format === 'pdf') {
-    downloadPdf();
+    await downloadPdf();
   } else if (format === 'markdown') {
-    downloadMarkdown();
+    await downloadMarkdown();
   } else if (format === 'word') {
-    downloadWord();
+    await downloadWord();
   }
 
   event.target.value = '';
