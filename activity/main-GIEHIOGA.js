@@ -11157,6 +11157,8 @@ function injectStyles() {
       --kb-radius-pill: 999px;
       --kb-shadow-card: none;
       --kb-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.45);
+      --kb-scrollbar-thumb: rgba(255, 255, 255, 0.16);
+      --kb-scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
     }
 
     @media (prefers-color-scheme: light) {
@@ -11174,15 +11176,31 @@ function injectStyles() {
         --kb-blurple-hover: #4752c4;
         --kb-shadow-card: none;
         --kb-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.18);
+        --kb-scrollbar-thumb: rgba(0, 0, 0, 0.16);
+        --kb-scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
       }
     }
 
-    /* Scrollbar moderna y delgada */
+    /* Scrollbar moderna, integrada y con fondo transparente */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #2b2d31; border-radius: 999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #3f4248; }
-    * { scrollbar-width: thin; scrollbar-color: #2b2d31 transparent; }
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-track-piece,
+    ::-webkit-scrollbar-corner {
+      background: transparent !important;
+      background-color: transparent !important;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--kb-scrollbar-thumb, rgba(255, 255, 255, 0.16));
+      border-radius: 999px;
+      border: none;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--kb-scrollbar-thumb-hover, rgba(255, 255, 255, 0.28));
+    }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--kb-scrollbar-thumb, rgba(255, 255, 255, 0.16)) transparent !important;
+    }
 
     .kanban-shell {
       min-height: 100vh;
@@ -11553,7 +11571,7 @@ function injectStyles() {
       scroll-padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
       padding-bottom: 24px;
       scrollbar-width: thin;
-      scrollbar-color: #2b2d31 transparent;
+      scrollbar-color: var(--kb-scrollbar-thumb, rgba(255, 255, 255, 0.16)) transparent !important;
       flex: 1;
     }
 
