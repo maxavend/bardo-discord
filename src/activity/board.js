@@ -393,12 +393,35 @@ function injectStyles() {
       letter-spacing: .08em;
       text-transform: uppercase;
     }
+    .kanban-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     .kanban-title {
       margin: 0;
       font-size: clamp(22px, 2.6vw, 32px);
       font-weight: 800;
       letter-spacing: -.03em;
       line-height: 1.1;
+    }
+    .btn-edit-board-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.12s ease;
+    }
+    .btn-edit-board-icon:hover {
+      background: var(--kb-surface-raised);
+      color: var(--kb-text-primary);
     }
     .kanban-description {
       max-width: 760px;
@@ -1181,6 +1204,54 @@ function injectStyles() {
       font-size: 10.5px;
       color: var(--kb-text-muted);
     }
+    .board-member-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px 3px 5px;
+      background: var(--kb-surface-raised);
+      border-radius: var(--kb-radius-pill);
+      font-size: 11.5px;
+      color: var(--kb-text-primary);
+      font-weight: 550;
+      animation: fadeIn 0.1s ease;
+    }
+    .board-member-pill .member-avatar-mini {
+      width: 18px;
+      height: 18px;
+      font-size: 8.5px;
+    }
+    .board-member-pill-remove {
+      background: none;
+      border: none;
+      color: var(--kb-text-dim);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+      display: flex;
+      line-height: 1;
+    }
+    .board-member-pill-remove:hover {
+      color: var(--kb-danger);
+    }
+    .board-member-suggestion-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px 3px 5px;
+      background: var(--kb-surface);
+      border: 1px dashed var(--kb-text-dim);
+      border-radius: var(--kb-radius-pill);
+      font-size: 11px;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .board-member-suggestion-btn:hover {
+      background: var(--kb-surface-hover);
+      color: var(--kb-text-primary);
+      border-style: solid;
+    }
 
     .modal-actions {
       display: flex;
@@ -1358,14 +1429,34 @@ function getAllBoardChips(allTasks = []) {
 function getKnownDiscordMembers(allTasks = []) {
   const map = new Map();
 
-  // 1. Participantes conectados en la Activity de Discord
+  // 1. Miembros configurados en el tablero
+  if (Array.isArray(currentBoardData?.members)) {
+    for (const m of currentBoardData.members) {
+      if (!m) continue;
+      const id = String(m.id || m.name || m.username);
+      const name = m.name || m.username || 'Usuario';
+      map.set(id, { id, name, username: m.username || '' });
+    }
+  }
+
+  // 2. Participantes conectados en la Activity de Discord
   for (const p of connectedParticipants) {
     if (!p.id) continue;
     const name = p.nickname || p.global_name || p.username || 'Usuario';
     map.set(String(p.id), { id: String(p.id), name, username: p.username || '' });
   }
 
-  // 2. Miembros asignados en tareas existentes
+  // 3. Usuario actual de Discord
+  if (currentDiscordUser?.id) {
+    const name = currentDiscordUser.global_name || currentDiscordUser.username || 'Yo';
+    map.set(String(currentDiscordUser.id), {
+      id: String(currentDiscordUser.id),
+      name,
+      username: currentDiscordUser.username || '',
+    });
+  }
+
+  // 4. Miembros asignados en tareas existentes
   for (const task of allTasks) {
     if (task.assigneeId && task.assigneeName) {
       const id = String(task.assigneeId);
@@ -1492,7 +1583,15 @@ function renderBoard(container, board) {
     <header class="kanban-header">
       <div class="kanban-header-info">
         <p class="kanban-eyebrow">Tablero de equipo</p>
-        <h1 class="kanban-title">${escapeHtml(board.name)}</h1>
+        <div class="kanban-title-wrap">
+          <h1 class="kanban-title">${escapeHtml(board.name)}</h1>
+          <button id="btn-edit-board" class="btn-edit-board-icon" title="Editar configuración y miembros del tablero" type="button" aria-label="Editar tablero">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+              <path d="m15 5 4 4"/>
+            </svg>
+          </button>
+        </div>
         ${board.description ? `<p class="kanban-description">${escapeHtml(board.description)}</p>` : ''}
       </div>
     </header>
@@ -1609,6 +1708,11 @@ function bindBoardEvents(container) {
   const boardColumns = Array.isArray(currentBoardData?.columns) && currentBoardData.columns.length > 0
     ? currentBoardData.columns
     : DEFAULT_KANBAN_COLUMNS;
+
+  // Editar configuración del tablero
+  container.querySelector('#btn-edit-board')?.addEventListener('click', () => {
+    openBoardSettingsModal(currentBoardData);
+  });
 
   // Filtros
   const searchInput = container.querySelector('#filter-search');
@@ -2408,6 +2512,292 @@ function openColumnModal(columnToEdit = null) {
   });
 }
 
+function openBoardSettingsModal(board) {
+  if (!board) return;
+
+  const currentMembers = Array.isArray(board.members) ? [...board.members] : [];
+  let modalMembers = [...currentMembers];
+
+  // Obtener sugerencias de Discord disponibles
+  const knownFromDiscord = [];
+  if (currentDiscordUser) {
+    knownFromDiscord.push({
+      id: String(currentDiscordUser.id),
+      name: currentDiscordUser.global_name || currentDiscordUser.username,
+      username: currentDiscordUser.username || '',
+    });
+  }
+  for (const p of connectedParticipants) {
+    if (!p.id) continue;
+    const name = p.nickname || p.global_name || p.username || 'Usuario';
+    if (!knownFromDiscord.some((m) => m.id === String(p.id))) {
+      knownFromDiscord.push({ id: String(p.id), name, username: p.username || '' });
+    }
+  }
+  for (const t of board.tasks || []) {
+    if (t.assigneeId && t.assigneeName && !knownFromDiscord.some((m) => m.id === String(t.assigneeId))) {
+      knownFromDiscord.push({ id: String(t.assigneeId), name: t.assigneeName, username: '' });
+    }
+  }
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'bardo-board-settings-modal-backdrop';
+  backdrop.className = 'kanban-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="kanban-modal" role="dialog" aria-modal="true" style="max-width: 520px;">
+      <header class="modal-header">
+        <h2 class="modal-title">Configuración del tablero</h2>
+        <button id="btn-board-modal-close" class="modal-close-btn" type="button" aria-label="Cerrar">✕</button>
+      </header>
+      <form id="board-settings-form" class="modal-form">
+        <div class="form-group">
+          <label for="board-name-input">Nombre del tablero *</label>
+          <input id="board-name-input" class="form-input" type="text" placeholder="Ej: Proyecto Alfa" value="${escapeHtml(board.name)}" required maxlength="80" autofocus />
+        </div>
+
+        <div class="form-group">
+          <label for="board-desc-input">Descripción</label>
+          <textarea id="board-desc-input" class="form-textarea" placeholder="Propósito, equipo o alcance de este tablero…" maxlength="500">${escapeHtml(board.description || '')}</textarea>
+        </div>
+
+        <!-- Miembros del equipo habilitados para asignación -->
+        <div class="form-group">
+          <label>Miembros del equipo</label>
+          <p style="margin: 0 0 8px; font-size: 12px; color: var(--kb-text-muted);">
+            Gestiona los miembros que podrán asignarse a las tareas de este tablero.
+          </p>
+
+          <!-- Input para agregar miembro manual o buscar -->
+          <div class="discord-member-container" id="board-member-add-box">
+            <div class="discord-member-input-wrap">
+              <span class="member-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+              <input
+                id="board-member-add-input"
+                class="form-input discord-member-input"
+                type="text"
+                placeholder="Nombre, @usuario o ID de Discord…"
+                autocomplete="off"
+                style="padding-right: 80px;"
+              />
+              <button type="button" id="btn-add-member-manual" class="btn-secondary" style="position: absolute; right: 4px; height: 26px; padding: 0 10px; font-size: 11.5px;">+ Añadir</button>
+            </div>
+            <div id="board-member-dropdown" class="discord-member-dropdown" style="display: none;"></div>
+          </div>
+
+          <!-- Sugerencias rápidas de Discord -->
+          <div id="board-member-suggestions" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+
+          <!-- Lista de miembros agregados -->
+          <div id="board-members-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px;"></div>
+        </div>
+
+        <footer class="modal-actions">
+          <div></div>
+          <div class="modal-actions-right">
+            <button id="btn-board-modal-cancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="btn-board-modal-submit" class="btn-primary" type="submit">Guardar cambios</button>
+          </div>
+        </footer>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  const membersListEl = backdrop.querySelector('#board-members-list');
+  const suggestionsEl = backdrop.querySelector('#board-member-suggestions');
+  const addInput = backdrop.querySelector('#board-member-add-input');
+  const addBtn = backdrop.querySelector('#btn-add-member-manual');
+  const dropdownEl = backdrop.querySelector('#board-member-dropdown');
+
+  function renderMembersList() {
+    if (!membersListEl) return;
+    if (modalMembers.length === 0) {
+      membersListEl.innerHTML = `<span style="font-size: 12px; color: var(--kb-text-dim);">No hay miembros configurados. Se sugerirán los participantes de la sesión.</span>`;
+      return;
+    }
+
+    membersListEl.innerHTML = modalMembers.map((m, idx) => `
+      <div class="board-member-pill">
+        <span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>
+        <span>${escapeHtml(m.name)}</span>
+        <button type="button" class="board-member-pill-remove" data-remove-member-idx="${idx}" title="Quitar miembro" aria-label="Quitar">✕</button>
+      </div>
+    `).join('');
+
+    membersListEl.querySelectorAll('[data-remove-member-idx]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.removeMemberIdx);
+        modalMembers.splice(idx, 1);
+        renderMembersList();
+        renderSuggestions();
+      });
+    });
+  }
+
+  function renderSuggestions() {
+    if (!suggestionsEl) return;
+    const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
+    const unadded = knownFromDiscord.filter((m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()));
+
+    if (unadded.length === 0) {
+      suggestionsEl.innerHTML = '';
+      return;
+    }
+
+    suggestionsEl.innerHTML = `
+      <span style="font-size: 11px; color: var(--kb-text-muted); width: 100%;">Sugerencias detectadas en Discord:</span>
+      ${unadded.map((m) => `
+        <button type="button" class="board-member-suggestion-btn" data-suggest-id="${escapeHtml(m.id)}" data-suggest-name="${escapeHtml(m.name)}" data-suggest-username="${escapeHtml(m.username || '')}">
+          <span>+</span>
+          <span>${escapeHtml(m.name)}</span>
+        </button>
+      `).join('')}
+    `;
+
+    suggestionsEl.querySelectorAll('[data-suggest-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.suggestId;
+        const name = btn.dataset.suggestName;
+        const username = btn.dataset.suggestUsername;
+        modalMembers.push({ id, name, username });
+        renderMembersList();
+        renderSuggestions();
+      });
+    });
+  }
+
+  function addManualMember(nameOrHandle) {
+    const raw = String(nameOrHandle || '').trim();
+    if (!raw) return;
+    const cleanName = raw.replace(/^@/, '');
+    const isId = /^\d{17,20}$/.test(cleanName);
+    const existing = modalMembers.find((m) => m.name.toLowerCase() === cleanName.toLowerCase() || (m.id && m.id === cleanName));
+    if (!existing) {
+      modalMembers.push({
+        id: isId ? cleanName : `m-${Date.now()}`,
+        name: cleanName,
+        username: isId ? '' : cleanName,
+      });
+      renderMembersList();
+      renderSuggestions();
+    }
+    if (addInput) addInput.value = '';
+    if (dropdownEl) dropdownEl.style.display = 'none';
+  }
+
+  addBtn?.addEventListener('click', () => {
+    addManualMember(addInput?.value);
+  });
+
+  addInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addManualMember(addInput.value);
+    }
+  });
+
+  addInput?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    if (!q || !dropdownEl) {
+      if (dropdownEl) dropdownEl.style.display = 'none';
+      return;
+    }
+
+    const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
+    const matches = knownFromDiscord.filter(
+      (m) => !addedIds.has(String(m.id).toLowerCase()) &&
+             !addedIds.has(m.name.toLowerCase()) &&
+             (m.name.toLowerCase().includes(q) || (m.username && m.username.toLowerCase().includes(q)))
+    );
+
+    if (matches.length === 0) {
+      dropdownEl.style.display = 'none';
+      return;
+    }
+
+    dropdownEl.innerHTML = matches.map((m) => `
+      <button type="button" class="member-menu-item" data-pick-id="${escapeHtml(m.id)}" data-pick-name="${escapeHtml(m.name)}" data-pick-username="${escapeHtml(m.username || '')}">
+        <span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>
+        <div class="member-info-col">
+          <span class="member-name-text">${escapeHtml(m.name)}</span>
+          ${m.username ? `<span class="member-handle-text">@${escapeHtml(m.username)}</span>` : ''}
+        </div>
+      </button>
+    `).join('');
+
+    dropdownEl.style.display = 'flex';
+
+    dropdownEl.querySelectorAll('[data-pick-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.pickId;
+        const name = btn.dataset.pickName;
+        const username = btn.dataset.pickUsername;
+        modalMembers.push({ id, name, username });
+        renderMembersList();
+        renderSuggestions();
+        if (addInput) addInput.value = '';
+        dropdownEl.style.display = 'none';
+      });
+    });
+  });
+
+  function closeBoardModal() {
+    backdrop.remove();
+  }
+
+  backdrop.querySelector('#btn-board-modal-close')?.addEventListener('click', closeBoardModal);
+  backdrop.querySelector('#btn-board-modal-cancel')?.addEventListener('click', closeBoardModal);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeBoardModal();
+  });
+
+  renderMembersList();
+  renderSuggestions();
+
+  // Guardar configuración del tablero
+  const form = backdrop.querySelector('#board-settings-form');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = backdrop.querySelector('#board-name-input')?.value.trim();
+    if (!name) return;
+    const description = backdrop.querySelector('#board-desc-input')?.value.trim() || '';
+
+    const submitBtn = backdrop.querySelector('#btn-board-modal-submit');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await saveBoardSettingsRequest({
+        name,
+        description,
+        members: modalMembers,
+      });
+
+      if (res.board) {
+        currentBoardData = {
+          ...currentBoardData,
+          name: res.board.name,
+          description: res.board.description,
+          members: res.board.members,
+        };
+      }
+
+      closeBoardModal();
+      showToast('Tablero actualizado', 'success');
+      renderBoard(document.querySelector('#kanban-content'), currentBoardData);
+    } catch (err) {
+      console.error('Error guardando configuración del tablero:', err);
+      showToast(err.message || 'No se pudo guardar la configuración', 'error');
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
 // API Requests
 async function fetchBoard() {
   const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
@@ -2415,6 +2805,23 @@ async function fetchBoard() {
     cache: 'no-store',
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+async function saveBoardSettingsRequest(payload) {
+  if (!currentInstanceId) throw new Error('Se requiere contexto de Activity');
+  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-bardo-instance-id': currentInstanceId,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || `Error al actualizar tablero (HTTP ${response.status})`);
+  }
   return response.json();
 }
 

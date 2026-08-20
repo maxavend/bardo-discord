@@ -9609,6 +9609,226 @@ var lodash_transformExports = requireLodash_transform();
 // node_modules/@discord/embedded-app-sdk/output/index.mjs
 var { Commands: Commands2 } = common_exports;
 
+// src/import-format.js
+var SOURCE_TYPES = Object.freeze({
+  MARKDOWN: "markdown",
+  TEXT: "text",
+  PDF: "pdf",
+  DOCX: "docx"
+});
+var DOCX_STYLE_MAP = [
+  "p[style-name='Heading 1'] => h1:fresh",
+  "p[style-name='Heading 2'] => h2:fresh",
+  "p[style-name='Heading 3'] => h3:fresh",
+  "p[style-name='Heading 4'] => h4:fresh",
+  "p[style-name='Heading 5'] => h5:fresh",
+  "p[style-name='Heading 6'] => h6:fresh",
+  "p[style-name='Title'] => h1:fresh",
+  "p[style-name='Subtitle'] => h2:fresh",
+  "p[style-name='T\xEDtulo'] => h1:fresh",
+  "p[style-name='Subt\xEDtulo'] => h2:fresh",
+  "p[style-name='T\xEDtulo 1'] => h1:fresh",
+  "p[style-name='T\xEDtulo 2'] => h2:fresh",
+  "p[style-name='T\xEDtulo 3'] => h3:fresh",
+  "p[style-name='T\xEDtulo 4'] => h4:fresh",
+  "p[style-name='Encabezado 1'] => h1:fresh",
+  "p[style-name='Encabezado 2'] => h2:fresh",
+  "p[style-name='Encabezado 3'] => h3:fresh",
+  "p[style-name='Quote'] => blockquote:fresh",
+  "p[style-name='Intense Quote'] => blockquote:fresh",
+  "p[style-name='Cita'] => blockquote:fresh",
+  "p[style-name='Cita destacada'] => blockquote:fresh",
+  "p[style-name='Code'] => pre > code:fresh",
+  "p[style-name='C\xF3digo'] => pre > code:fresh",
+  "r[style-name='Code'] => code",
+  "r[style-name='C\xF3digo'] => code",
+  "r[style-name='Strong'] => strong",
+  "r[style-name='Emphasis'] => em",
+  "r[style-name='Subtle Emphasis'] => em",
+  "r[style-name='Highlight'] => mark",
+  "p[style-name='List Bullet'] => ul > li:fresh",
+  "p[style-name='List Number'] => ol > li:fresh",
+  "p[style-name='List'] => ul > li:fresh",
+  "p[style-name='Lista con vi\xF1etas'] => ul > li:fresh",
+  "p[style-name='Lista con n\xFAmeros'] => ol > li:fresh"
+];
+function ensureDocumentTitle(markdown, title) {
+  const normalized = String(markdown || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!normalized) return `# ${title}`;
+  const firstLine = normalized.split("\n").find((line) => line.trim()) || "";
+  return /^#\s+/.test(firstLine.trim()) ? normalized : `# ${title}
+
+${normalized}`;
+}
+var PAGE_ARTIFACT_REGEX = /^(?:p[áa]gina\s+\d+(?:\s*(?:de|\/)\s*\d+)?|page\s+\d+(?:\s*(?:of|\/)\s*\d+)?|-+\s*\d+\s*-+|\[\s*\d+\s*\]|\d{1,4})$/i;
+var CALLOUT_REGEX = /^(nota|importante|atenci[oó]n|advertencia|aviso|consejo|tip|note|important|warning|caution):\s*(.+)$/i;
+var KEY_VALUE_REGEX = /^([A-ZÁÉÍÓÚÜÑ][\w\sáéíóúüñ/().-]{1,35}):\s+(.+)$/;
+function pdfTextToMarkdown(text, title) {
+  const normalized = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (normalized.replace(/\s/g, "").length < 30) {
+    return `# ${title}
+
+> Bardo no encontr\xF3 suficiente texto seleccionable en este PDF. Los documentos escaneados todav\xEDa necesitan OCR para poder convertirse.`;
+  }
+  const rawLines = normalized.split("\n");
+  const output = [];
+  if (title) {
+    output.push(`# ${title}`);
+  }
+  let currentParagraph = [];
+  let currentList = null;
+  let currentTable = null;
+  function flushParagraph() {
+    if (currentParagraph.length > 0) {
+      const textBlock = currentParagraph.join(" ").replace(/\s+/g, " ").trim();
+      if (textBlock) {
+        output.push(textBlock);
+      }
+      currentParagraph = [];
+    }
+  }
+  function flushList() {
+    if (currentList && currentList.items.length > 0) {
+      const formatted = currentList.items.map((item, i) => {
+        const marker = currentList.type === "number" ? `${i + 1}.` : "-";
+        return `${marker} ${item.trim()}`;
+      }).join("\n");
+      output.push(formatted);
+      currentList = null;
+    }
+  }
+  function flushTable() {
+    if (currentTable && currentTable.length > 0) {
+      const validRows = currentTable.filter((r) => r.length > 1);
+      if (validRows.length >= 1) {
+        const colCount = Math.max(...validRows.map((r) => r.length));
+        const normalizedRows = validRows.map((r) => {
+          const row = [...r];
+          while (row.length < colCount) row.push("");
+          return row;
+        });
+        const header = normalizedRows[0];
+        const body = normalizedRows.slice(1);
+        const headerLine = `| ${header.map((c) => c.trim() || "-").join(" | ")} |`;
+        const separatorLine = `| ${header.map(() => "---").join(" | ")} |`;
+        const bodyLines = body.map((r) => `| ${r.map((c) => c.trim()).join(" | ")} |`);
+        output.push([headerLine, separatorLine, ...bodyLines].join("\n"));
+      }
+      currentTable = null;
+    }
+  }
+  function flushAll() {
+    flushParagraph();
+    flushList();
+    flushTable();
+  }
+  for (let i = 0; i < rawLines.length; i += 1) {
+    const line = rawLines[i].trim();
+    if (!line) {
+      flushAll();
+      continue;
+    }
+    if (PAGE_ARTIFACT_REGEX.test(line)) {
+      continue;
+    }
+    if (/^(?:-{3,}|\*{3,}|_{3,}|={3,})$/.test(line)) {
+      flushAll();
+      output.push("---");
+      continue;
+    }
+    if (line.includes("|") && line.split("|").filter(Boolean).length >= 2) {
+      flushParagraph();
+      flushList();
+      const cells = line.split("|").map((c) => c.trim()).filter((c, idx, arr) => idx > 0 && idx < arr.length - 1 || c);
+      if (!currentTable) currentTable = [];
+      currentTable.push(cells);
+      continue;
+    } else if (currentTable) {
+      flushTable();
+    }
+    const subSubHeading = /^(\d+\.\d+\.\d+)\s+([A-ZÁÉÍÓÚÜÑ].+)$/i.exec(line);
+    if (subSubHeading && line.length <= 100) {
+      flushAll();
+      output.push(`### ${line}`);
+      continue;
+    }
+    const subHeading = /^(\d+\.\d+|[A-Z]\.\d+)\s+([A-ZÁÉÍÓÚÜÑ].+)$/i.exec(line);
+    if (subHeading && line.length <= 100) {
+      flushAll();
+      output.push(`### ${line}`);
+      continue;
+    }
+    const mainNumberedHeading = /^(\d+|[I|V|X]+)\.\s+([A-ZÁÉÍÓÚÜÑ].+)$/i.exec(line);
+    if (mainNumberedHeading && line.length <= 100) {
+      flushAll();
+      output.push(`## ${line}`);
+      continue;
+    }
+    const isChapter = /^(?:cap[íi]tulo|secci[óo]n|m[óo]dulo|anexo|ap[ée]ndice)\s+[\w\d]+[:.]?\s*.+$/i.test(line);
+    const isAllUpperHeading = line.length >= 4 && line.length <= 80 && /[A-ZÁÉÍÓÚÜÑ]/.test(line) && line === line.toLocaleUpperCase("es") && !line.endsWith(".") && !line.includes(":");
+    if ((isChapter || isAllUpperHeading) && !line.startsWith("-") && !line.startsWith("\u2022")) {
+      flushAll();
+      output.push(`## ${line}`);
+      continue;
+    }
+    const bulletMatch = /^[•●▪▫◦–—*+⁃➢➔✔✓-]\s+(.+)$/.exec(line);
+    if (bulletMatch) {
+      flushParagraph();
+      flushTable();
+      if (!currentList || currentList.type !== "bullet") {
+        flushList();
+        currentList = { type: "bullet", items: [] };
+      }
+      currentList.items.push(bulletMatch[1]);
+      continue;
+    }
+    const numberListMatch = /^(?:\d+|[a-zA-Z])[.)]\s+(.+)$/.exec(line);
+    if (numberListMatch && !mainNumberedHeading) {
+      flushParagraph();
+      flushTable();
+      if (!currentList || currentList.type !== "number") {
+        flushList();
+        currentList = { type: "number", items: [] };
+      }
+      currentList.items.push(numberListMatch[1]);
+      continue;
+    }
+    if (currentList && currentList.items.length > 0 && /^[a-záéíóúüñ0-9,;]/.test(line)) {
+      const lastIdx = currentList.items.length - 1;
+      currentList.items[lastIdx] = `${currentList.items[lastIdx]} ${line}`;
+      continue;
+    } else if (currentList) {
+      flushList();
+    }
+    const calloutMatch = CALLOUT_REGEX.exec(line);
+    if (calloutMatch) {
+      flushAll();
+      const prefix = calloutMatch[1].charAt(0).toUpperCase() + calloutMatch[1].slice(1).toLowerCase();
+      output.push(`> **${prefix}:** ${calloutMatch[2]}`);
+      continue;
+    }
+    const kvMatch = KEY_VALUE_REGEX.exec(line);
+    if (kvMatch && line.length <= 120 && !line.includes("http") && !line.endsWith(".")) {
+      flushAll();
+      output.push(`**${kvMatch[1]}:** ${kvMatch[2]}`);
+      continue;
+    }
+    if (currentParagraph.length > 0) {
+      const prev = currentParagraph[currentParagraph.length - 1];
+      if (prev.endsWith("-") && /^[a-záéíóúüñ]/.test(line)) {
+        currentParagraph[currentParagraph.length - 1] = `${prev.slice(0, -1)}${line}`;
+      } else {
+        currentParagraph.push(line);
+      }
+    } else {
+      currentParagraph.push(line);
+    }
+  }
+  flushAll();
+  const result = output.filter(Boolean).join("\n\n").trim();
+  return result;
+}
+
 // src/activity/import-bootstrap.js
 var FALLBACK_CLIENT_ID = "1539704001535156254";
 var MAX_PDF_PAGES = 80;
@@ -9638,58 +9858,8 @@ async function resolveActivityInstanceId() {
     return null;
   }
 }
-function ensureDocumentTitle(markdown, title) {
-  const normalized = String(markdown || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  if (!normalized) return `# ${title}`;
-  const firstLine = normalized.split("\n").find((line) => line.trim()) || "";
-  return /^#\s+/.test(firstLine.trim()) ? normalized : `# ${title}
-
-${normalized}`;
-}
-function pdfTextToMarkdown(text, title) {
-  const normalized = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  if (normalized.replace(/\s/g, "").length < 30) {
-    return `# ${title}
-
-> Bardo no encontr\xF3 suficiente texto seleccionable en este PDF. Los documentos escaneados todav\xEDa necesitan OCR para poder convertirse.`;
-  }
-  const output = [`# ${title}`];
-  const paragraph = [];
-  const flushParagraph = () => {
-    if (!paragraph.length) return;
-    output.push(paragraph.join(" ").replace(/\s+/g, " ").trim());
-    paragraph.length = 0;
-  };
-  for (const rawLine of normalized.split("\n")) {
-    const line = rawLine.trim();
-    if (!line) {
-      flushParagraph();
-      continue;
-    }
-    const numberedHeading = /^\d+(?:\.\d+)*[.)]?\s+[A-ZÁÉÍÓÚÜÑ]/.test(line) && line.length <= 120;
-    const uppercaseHeading = line.length >= 3 && line.length <= 80 && /[A-ZÁÉÍÓÚÜÑ]/.test(line) && line === line.toLocaleUpperCase("es");
-    if (numberedHeading || uppercaseHeading) {
-      flushParagraph();
-      output.push(`## ${line}`);
-      continue;
-    }
-    const bullet = line.match(/^[•●▪◦-]\s*(.+)$/);
-    if (bullet) {
-      flushParagraph();
-      output.push(`- ${bullet[1]}`);
-      continue;
-    }
-    if (paragraph.length && paragraph.at(-1).endsWith("-") && /^[a-záéíóúüñ]/.test(line)) {
-      paragraph[paragraph.length - 1] = `${paragraph.at(-1).slice(0, -1)}${line}`;
-    } else {
-      paragraph.push(line);
-    }
-  }
-  flushParagraph();
-  return output.filter(Boolean).join("\n\n").trim();
-}
 async function importPdf(arrayBuffer, title) {
-  setImportStatus("Adaptando PDF", "Reconstruyendo el contenido para el lector de Bardo\u2026");
+  setImportStatus("Adaptando PDF", "Reconstruyendo encabezados, listas y contenido para el lector de Bardo\u2026");
   if (typeof Promise.try !== "function") {
     Object.defineProperty(Promise, "try", {
       configurable: true,
@@ -9715,7 +9885,7 @@ async function importPdf(arrayBuffer, title) {
   }
 }
 async function importDocx(arrayBuffer, title) {
-  setImportStatus("Adaptando Word", "Convirtiendo t\xEDtulos, listas y tablas al formato de Bardo\u2026");
+  setImportStatus("Adaptando Word", "Convirtiendo t\xEDtulos, estilos, listas y tablas al formato de Bardo\u2026");
   const [mammothModule, turndownModule, gfmModule] = await Promise.all([
     import("./chunks/lib-ACLPCYZ4.js"),
     import("./chunks/turndown.browser.es-GTXT4OBN.js"),
@@ -9727,7 +9897,9 @@ async function importDocx(arrayBuffer, title) {
   const result = await mammoth.convertToHtml(
     { arrayBuffer },
     {
-      includeEmbeddedStyleMap: false,
+      styleMap: DOCX_STYLE_MAP,
+      includeDefaultStyleMap: true,
+      includeEmbeddedStyleMap: true,
       externalFileAccess: false
     }
   );
@@ -9746,7 +9918,7 @@ async function importDocx(arrayBuffer, title) {
     strongDelimiter: "**"
   });
   if (gfm) turndown.use(gfm);
-  const markdown = turndown.turndown(template.innerHTML).replace(/\n{3,}/g, "\n\n").trim();
+  const markdown = turndown.turndown(template.innerHTML).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (!markdown) {
     return `# ${title}
 
@@ -11165,12 +11337,35 @@ function injectStyles() {
       letter-spacing: .08em;
       text-transform: uppercase;
     }
+    .kanban-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     .kanban-title {
       margin: 0;
       font-size: clamp(22px, 2.6vw, 32px);
       font-weight: 800;
       letter-spacing: -.03em;
       line-height: 1.1;
+    }
+    .btn-edit-board-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.12s ease;
+    }
+    .btn-edit-board-icon:hover {
+      background: var(--kb-surface-raised);
+      color: var(--kb-text-primary);
     }
     .kanban-description {
       max-width: 760px;
@@ -11953,6 +12148,54 @@ function injectStyles() {
       font-size: 10.5px;
       color: var(--kb-text-muted);
     }
+    .board-member-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px 3px 5px;
+      background: var(--kb-surface-raised);
+      border-radius: var(--kb-radius-pill);
+      font-size: 11.5px;
+      color: var(--kb-text-primary);
+      font-weight: 550;
+      animation: fadeIn 0.1s ease;
+    }
+    .board-member-pill .member-avatar-mini {
+      width: 18px;
+      height: 18px;
+      font-size: 8.5px;
+    }
+    .board-member-pill-remove {
+      background: none;
+      border: none;
+      color: var(--kb-text-dim);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+      display: flex;
+      line-height: 1;
+    }
+    .board-member-pill-remove:hover {
+      color: var(--kb-danger);
+    }
+    .board-member-suggestion-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px 3px 5px;
+      background: var(--kb-surface);
+      border: 1px dashed var(--kb-text-dim);
+      border-radius: var(--kb-radius-pill);
+      font-size: 11px;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .board-member-suggestion-btn:hover {
+      background: var(--kb-surface-hover);
+      color: var(--kb-text-primary);
+      border-style: solid;
+    }
 
     .modal-actions {
       display: flex;
@@ -12121,10 +12364,26 @@ function getAllBoardChips(allTasks = []) {
 }
 function getKnownDiscordMembers(allTasks = []) {
   const map = /* @__PURE__ */ new Map();
+  if (Array.isArray(currentBoardData?.members)) {
+    for (const m of currentBoardData.members) {
+      if (!m) continue;
+      const id = String(m.id || m.name || m.username);
+      const name = m.name || m.username || "Usuario";
+      map.set(id, { id, name, username: m.username || "" });
+    }
+  }
   for (const p of connectedParticipants) {
     if (!p.id) continue;
     const name = p.nickname || p.global_name || p.username || "Usuario";
     map.set(String(p.id), { id: String(p.id), name, username: p.username || "" });
+  }
+  if (currentDiscordUser?.id) {
+    const name = currentDiscordUser.global_name || currentDiscordUser.username || "Yo";
+    map.set(String(currentDiscordUser.id), {
+      id: String(currentDiscordUser.id),
+      name,
+      username: currentDiscordUser.username || ""
+    });
   }
   for (const task of allTasks) {
     if (task.assigneeId && task.assigneeName) {
@@ -12225,7 +12484,15 @@ function renderBoard(container, board) {
     <header class="kanban-header">
       <div class="kanban-header-info">
         <p class="kanban-eyebrow">Tablero de equipo</p>
-        <h1 class="kanban-title">${escapeHtml2(board.name)}</h1>
+        <div class="kanban-title-wrap">
+          <h1 class="kanban-title">${escapeHtml2(board.name)}</h1>
+          <button id="btn-edit-board" class="btn-edit-board-icon" title="Editar configuraci\xF3n y miembros del tablero" type="button" aria-label="Editar tablero">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+              <path d="m15 5 4 4"/>
+            </svg>
+          </button>
+        </div>
         ${board.description ? `<p class="kanban-description">${escapeHtml2(board.description)}</p>` : ""}
       </div>
     </header>
@@ -12334,6 +12601,9 @@ function renderBoard(container, board) {
 }
 function bindBoardEvents(container) {
   const boardColumns = Array.isArray(currentBoardData?.columns) && currentBoardData.columns.length > 0 ? currentBoardData.columns : DEFAULT_KANBAN_COLUMNS;
+  container.querySelector("#btn-edit-board")?.addEventListener("click", () => {
+    openBoardSettingsModal(currentBoardData);
+  });
   const searchInput = container.querySelector("#filter-search");
   searchInput?.addEventListener("input", (e) => {
     filterState.search = e.target.value;
@@ -13022,12 +13292,280 @@ function openColumnModal(columnToEdit = null) {
     }
   });
 }
+function openBoardSettingsModal(board) {
+  if (!board) return;
+  const currentMembers = Array.isArray(board.members) ? [...board.members] : [];
+  let modalMembers = [...currentMembers];
+  const knownFromDiscord = [];
+  if (currentDiscordUser) {
+    knownFromDiscord.push({
+      id: String(currentDiscordUser.id),
+      name: currentDiscordUser.global_name || currentDiscordUser.username,
+      username: currentDiscordUser.username || ""
+    });
+  }
+  for (const p of connectedParticipants) {
+    if (!p.id) continue;
+    const name = p.nickname || p.global_name || p.username || "Usuario";
+    if (!knownFromDiscord.some((m) => m.id === String(p.id))) {
+      knownFromDiscord.push({ id: String(p.id), name, username: p.username || "" });
+    }
+  }
+  for (const t of board.tasks || []) {
+    if (t.assigneeId && t.assigneeName && !knownFromDiscord.some((m) => m.id === String(t.assigneeId))) {
+      knownFromDiscord.push({ id: String(t.assigneeId), name: t.assigneeName, username: "" });
+    }
+  }
+  const backdrop = document.createElement("div");
+  backdrop.id = "bardo-board-settings-modal-backdrop";
+  backdrop.className = "kanban-modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="kanban-modal" role="dialog" aria-modal="true" style="max-width: 520px;">
+      <header class="modal-header">
+        <h2 class="modal-title">Configuraci\xF3n del tablero</h2>
+        <button id="btn-board-modal-close" class="modal-close-btn" type="button" aria-label="Cerrar">\u2715</button>
+      </header>
+      <form id="board-settings-form" class="modal-form">
+        <div class="form-group">
+          <label for="board-name-input">Nombre del tablero *</label>
+          <input id="board-name-input" class="form-input" type="text" placeholder="Ej: Proyecto Alfa" value="${escapeHtml2(board.name)}" required maxlength="80" autofocus />
+        </div>
+
+        <div class="form-group">
+          <label for="board-desc-input">Descripci\xF3n</label>
+          <textarea id="board-desc-input" class="form-textarea" placeholder="Prop\xF3sito, equipo o alcance de este tablero\u2026" maxlength="500">${escapeHtml2(board.description || "")}</textarea>
+        </div>
+
+        <!-- Miembros del equipo habilitados para asignaci\xF3n -->
+        <div class="form-group">
+          <label>Miembros del equipo</label>
+          <p style="margin: 0 0 8px; font-size: 12px; color: var(--kb-text-muted);">
+            Gestiona los miembros que podr\xE1n asignarse a las tareas de este tablero.
+          </p>
+
+          <!-- Input para agregar miembro manual o buscar -->
+          <div class="discord-member-container" id="board-member-add-box">
+            <div class="discord-member-input-wrap">
+              <span class="member-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+              <input
+                id="board-member-add-input"
+                class="form-input discord-member-input"
+                type="text"
+                placeholder="Nombre, @usuario o ID de Discord\u2026"
+                autocomplete="off"
+                style="padding-right: 80px;"
+              />
+              <button type="button" id="btn-add-member-manual" class="btn-secondary" style="position: absolute; right: 4px; height: 26px; padding: 0 10px; font-size: 11.5px;">+ A\xF1adir</button>
+            </div>
+            <div id="board-member-dropdown" class="discord-member-dropdown" style="display: none;"></div>
+          </div>
+
+          <!-- Sugerencias r\xE1pidas de Discord -->
+          <div id="board-member-suggestions" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+
+          <!-- Lista de miembros agregados -->
+          <div id="board-members-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px;"></div>
+        </div>
+
+        <footer class="modal-actions">
+          <div></div>
+          <div class="modal-actions-right">
+            <button id="btn-board-modal-cancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="btn-board-modal-submit" class="btn-primary" type="submit">Guardar cambios</button>
+          </div>
+        </footer>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const membersListEl = backdrop.querySelector("#board-members-list");
+  const suggestionsEl = backdrop.querySelector("#board-member-suggestions");
+  const addInput = backdrop.querySelector("#board-member-add-input");
+  const addBtn = backdrop.querySelector("#btn-add-member-manual");
+  const dropdownEl = backdrop.querySelector("#board-member-dropdown");
+  function renderMembersList() {
+    if (!membersListEl) return;
+    if (modalMembers.length === 0) {
+      membersListEl.innerHTML = `<span style="font-size: 12px; color: var(--kb-text-dim);">No hay miembros configurados. Se sugerir\xE1n los participantes de la sesi\xF3n.</span>`;
+      return;
+    }
+    membersListEl.innerHTML = modalMembers.map((m, idx) => `
+      <div class="board-member-pill">
+        <span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>
+        <span>${escapeHtml2(m.name)}</span>
+        <button type="button" class="board-member-pill-remove" data-remove-member-idx="${idx}" title="Quitar miembro" aria-label="Quitar">\u2715</button>
+      </div>
+    `).join("");
+    membersListEl.querySelectorAll("[data-remove-member-idx]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.removeMemberIdx);
+        modalMembers.splice(idx, 1);
+        renderMembersList();
+        renderSuggestions();
+      });
+    });
+  }
+  function renderSuggestions() {
+    if (!suggestionsEl) return;
+    const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
+    const unadded = knownFromDiscord.filter((m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()));
+    if (unadded.length === 0) {
+      suggestionsEl.innerHTML = "";
+      return;
+    }
+    suggestionsEl.innerHTML = `
+      <span style="font-size: 11px; color: var(--kb-text-muted); width: 100%;">Sugerencias detectadas en Discord:</span>
+      ${unadded.map((m) => `
+        <button type="button" class="board-member-suggestion-btn" data-suggest-id="${escapeHtml2(m.id)}" data-suggest-name="${escapeHtml2(m.name)}" data-suggest-username="${escapeHtml2(m.username || "")}">
+          <span>+</span>
+          <span>${escapeHtml2(m.name)}</span>
+        </button>
+      `).join("")}
+    `;
+    suggestionsEl.querySelectorAll("[data-suggest-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.suggestId;
+        const name = btn.dataset.suggestName;
+        const username = btn.dataset.suggestUsername;
+        modalMembers.push({ id, name, username });
+        renderMembersList();
+        renderSuggestions();
+      });
+    });
+  }
+  function addManualMember(nameOrHandle) {
+    const raw = String(nameOrHandle || "").trim();
+    if (!raw) return;
+    const cleanName = raw.replace(/^@/, "");
+    const isId = /^\d{17,20}$/.test(cleanName);
+    const existing = modalMembers.find((m) => m.name.toLowerCase() === cleanName.toLowerCase() || m.id && m.id === cleanName);
+    if (!existing) {
+      modalMembers.push({
+        id: isId ? cleanName : `m-${Date.now()}`,
+        name: cleanName,
+        username: isId ? "" : cleanName
+      });
+      renderMembersList();
+      renderSuggestions();
+    }
+    if (addInput) addInput.value = "";
+    if (dropdownEl) dropdownEl.style.display = "none";
+  }
+  addBtn?.addEventListener("click", () => {
+    addManualMember(addInput?.value);
+  });
+  addInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addManualMember(addInput.value);
+    }
+  });
+  addInput?.addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    if (!q || !dropdownEl) {
+      if (dropdownEl) dropdownEl.style.display = "none";
+      return;
+    }
+    const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
+    const matches = knownFromDiscord.filter(
+      (m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()) && (m.name.toLowerCase().includes(q) || m.username && m.username.toLowerCase().includes(q))
+    );
+    if (matches.length === 0) {
+      dropdownEl.style.display = "none";
+      return;
+    }
+    dropdownEl.innerHTML = matches.map((m) => `
+      <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}">
+        <span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>
+        <div class="member-info-col">
+          <span class="member-name-text">${escapeHtml2(m.name)}</span>
+          ${m.username ? `<span class="member-handle-text">@${escapeHtml2(m.username)}</span>` : ""}
+        </div>
+      </button>
+    `).join("");
+    dropdownEl.style.display = "flex";
+    dropdownEl.querySelectorAll("[data-pick-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.pickId;
+        const name = btn.dataset.pickName;
+        const username = btn.dataset.pickUsername;
+        modalMembers.push({ id, name, username });
+        renderMembersList();
+        renderSuggestions();
+        if (addInput) addInput.value = "";
+        dropdownEl.style.display = "none";
+      });
+    });
+  });
+  function closeBoardModal() {
+    backdrop.remove();
+  }
+  backdrop.querySelector("#btn-board-modal-close")?.addEventListener("click", closeBoardModal);
+  backdrop.querySelector("#btn-board-modal-cancel")?.addEventListener("click", closeBoardModal);
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeBoardModal();
+  });
+  renderMembersList();
+  renderSuggestions();
+  const form = backdrop.querySelector("#board-settings-form");
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = backdrop.querySelector("#board-name-input")?.value.trim();
+    if (!name) return;
+    const description = backdrop.querySelector("#board-desc-input")?.value.trim() || "";
+    const submitBtn = backdrop.querySelector("#btn-board-modal-submit");
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await saveBoardSettingsRequest({
+        name,
+        description,
+        members: modalMembers
+      });
+      if (res.board) {
+        currentBoardData = {
+          ...currentBoardData,
+          name: res.board.name,
+          description: res.board.description,
+          members: res.board.members
+        };
+      }
+      closeBoardModal();
+      showToast("Tablero actualizado", "success");
+      renderBoard(document.querySelector("#kanban-content"), currentBoardData);
+    } catch (err) {
+      console.error("Error guardando configuraci\xF3n del tablero:", err);
+      showToast(err.message || "No se pudo guardar la configuraci\xF3n", "error");
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
 async function fetchBoard() {
   const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
     headers: { Accept: "application/json" },
     cache: "no-store"
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+async function saveBoardSettingsRequest(payload) {
+  if (!currentInstanceId) throw new Error("Se requiere contexto de Activity");
+  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "x-bardo-instance-id": currentInstanceId
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || `Error al actualizar tablero (HTTP ${response.status})`);
+  }
   return response.json();
 }
 async function saveBoardColumnsRequest(columns) {

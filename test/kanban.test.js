@@ -29,6 +29,7 @@ import {
   loadTask,
   moveTask,
   updateBoardColumns,
+  updateBoardSettings,
   updateTask,
 } from '../src/kanban-db.js';
 
@@ -154,8 +155,13 @@ function createMockKanbanDb() {
             },
             async run() {
               if (q.includes('INSERT INTO boards')) {
-                const [id, guild_id, name, description, columns, created_by, created_at, updated_at] = params;
-                boards.set(id, { id, guild_id, name, description, columns, created_by, created_at, updated_at });
+                if (params.length === 9) {
+                  const [id, guild_id, name, description, columns, members, created_by, created_at, updated_at] = params;
+                  boards.set(id, { id, guild_id, name, description, columns, members, created_by, created_at, updated_at });
+                } else {
+                  const [id, guild_id, name, description, columns, created_by, created_at, updated_at] = params;
+                  boards.set(id, { id, guild_id, name, description, columns, members: '[]', created_by, created_at, updated_at });
+                }
                 return { success: true };
               }
               if (q.includes('INSERT INTO tasks')) {
@@ -168,6 +174,17 @@ function createMockKanbanDb() {
                 const b = boards.get(id);
                 if (b) {
                   b.columns = columns;
+                  b.updated_at = updated_at;
+                }
+                return { success: true };
+              }
+              if (q.includes('UPDATE boards SET name = ?')) {
+                const [name, description, members, updated_at, id] = params;
+                const b = boards.get(id);
+                if (b) {
+                  b.name = name;
+                  b.description = description;
+                  b.members = members;
                   b.updated_at = updated_at;
                 }
                 return { success: true };
@@ -302,8 +319,24 @@ test('Operaciones CRUD completas de Kanban en BD (crear, editar, mover, eliminar
   assert.equal(updatedBoard.columns.length, 4);
   assert.equal(updatedBoard.columns[2].label, 'En revisión');
 
+  // Modificar configuración y miembros del tablero
+  const updatedSettings = await updateBoardSettings(db, 'board-1', {
+    name: 'Sprint 42 Refactor',
+    description: 'Tablero principal del sprint',
+    members: [
+      { id: 'u1', name: 'Max', username: 'maxavend' },
+      { id: 'u2', name: 'Paula', username: 'paula' },
+    ],
+  });
+  assert.equal(updatedSettings.name, 'Sprint 42 Refactor');
+  assert.equal(updatedSettings.description, 'Tablero principal del sprint');
+  assert.equal(updatedSettings.members.length, 2);
+  assert.equal(updatedSettings.members[0].name, 'Max');
+
   // Cargar tablero con tareas
   const boardWithTasks = await loadBoardWithTasks(db, 'board-1');
+  assert.equal(boardWithTasks.name, 'Sprint 42 Refactor');
+  assert.equal(boardWithTasks.members.length, 2);
   assert.equal(boardWithTasks.tasks.length, 1);
   assert.equal(boardWithTasks.tasks[0].title, 'Implementar Auth v2');
 

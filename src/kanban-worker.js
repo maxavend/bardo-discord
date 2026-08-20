@@ -17,6 +17,7 @@ import {
   loadTask,
   moveTask,
   updateBoardColumns,
+  updateBoardSettings,
   updateTask,
 } from './kanban-db.js';
 import {
@@ -370,6 +371,23 @@ async function handleBoardApi(request, url, env) {
     }
 
     return jsonResponse({ ok: true, task }, 201);
+  }
+
+  if (request.method === 'PATCH' && parts.length === 1) {
+    const board = await loadBoard(env.DB, boardId);
+    if (!board) return jsonResponse({ error: 'Board not found' }, 404);
+    const accessError = await verifyBoardActivityAccess(request, env, boardId);
+    if (accessError) return accessError;
+
+    let payload;
+    try { payload = await request.json(); } catch { return jsonResponse({ error: 'Invalid JSON payload' }, 400); }
+
+    const updated = await updateBoardSettings(env.DB, boardId, {
+      name: payload?.name,
+      description: payload?.description,
+      members: payload?.members,
+    });
+    return jsonResponse({ ok: true, board: updated });
   }
 
   if ((request.method === 'PATCH' || request.method === 'PUT') && parts.length === 2 && parts[1] === 'columns') {

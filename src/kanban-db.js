@@ -19,6 +19,7 @@ function mapBoard(row) {
   if (!row) return null;
   const rawCols = parseJsonArray(row.columns);
   const columns = validateBoardColumns(rawCols);
+  const rawMembers = parseJsonArray(row.members);
 
   return {
     id: row.id,
@@ -26,6 +27,7 @@ function mapBoard(row) {
     name: row.name,
     description: row.description || '',
     columns,
+    members: Array.isArray(rawMembers) ? rawMembers : [],
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -51,20 +53,47 @@ function mapTask(row) {
   };
 }
 
-export async function createBoard(db, { id, guildId, name, description, columns, createdBy }) {
+export async function createBoard(db, { id, guildId, name, description, columns, members, createdBy }) {
   const now = new Date().toISOString();
   const cleanName = String(name || '').trim().slice(0, 80);
   const cleanDescription = String(description || '').trim().slice(0, 500);
   if (!cleanName) throw new Error('El tablero necesita un nombre.');
 
   const validColumns = validateBoardColumns(columns);
+  const validMembers = Array.isArray(members) ? members : [];
 
   await db.prepare(
-    `INSERT INTO boards (id, guild_id, name, description, columns, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(id, guildId, cleanName, cleanDescription || null, JSON.stringify(validColumns), createdBy, now, now).run();
+    `INSERT INTO boards (id, guild_id, name, description, columns, members, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(id, guildId, cleanName, cleanDescription || null, JSON.stringify(validColumns), JSON.stringify(validMembers), createdBy, now, now).run();
 
-  return { id, guildId, name: cleanName, description: cleanDescription, columns: validColumns, createdBy, createdAt: now, updatedAt: now };
+  return { id, guildId, name: cleanName, description: cleanDescription, columns: validColumns, members: validMembers, createdBy, createdAt: now, updatedAt: now };
+}
+
+export async function updateBoardSettings(db, boardId, { name, description, members }) {
+  const board = await loadBoard(db, boardId);
+  if (!board) return null;
+
+  const now = new Date().toISOString();
+  const cleanName = name !== undefined ? String(name || '').trim().slice(0, 80) : board.name;
+  if (name !== undefined && !cleanName) throw new Error('El tablero necesita un nombre.');
+
+  const cleanDescription = description !== undefined ? (description ? String(description).trim().slice(0, 500) : '') : board.description;
+  const validMembers = members !== undefined && Array.isArray(members) ? members : board.members || [];
+
+  await db.prepare(
+    `UPDATE boards
+     SET name = ?, description = ?, members = ?, updated_at = ?
+     WHERE id = ?`,
+  ).bind(cleanName, cleanDescription || null, JSON.stringify(validMembers), now, boardId).run();
+
+  return {
+    ...board,
+    name: cleanName,
+    description: cleanDescription,
+    members: validMembers,
+    updatedAt: now,
+  };
 }
 
 export async function updateBoardColumns(db, boardId, inputColumns) {
