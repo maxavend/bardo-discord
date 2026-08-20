@@ -1,4 +1,5 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
+import { getMemberRoleBadge } from './member-role.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const originalFetch = window.fetch.bind(window);
@@ -96,15 +97,18 @@ const authPromise = authenticateActivity()
   });
 
 globalThis.__bardoActivityAuth = { state, ready: authPromise };
-
-// Compatibility fallback for the pre-existing Kanban task picker. The settings
-// dialog defines a richer local resolver; outside that scope an unresolved role
-// must degrade gracefully instead of throwing ReferenceError.
-globalThis.getMemberRoleBadge ||= (() => null);
+globalThis.__bardoGuildRoles = [];
+globalThis.getMemberRoleBadge = (member) => getMemberRoleBadge(member, globalThis.__bardoGuildRoles);
 
 async function performPrivateFetch(input, init, headers) {
   if (input instanceof Request) return originalFetch(new Request(input, { ...init, headers }));
   return originalFetch(input, { ...init, headers });
+}
+
+async function captureGuildRoles(url, response) {
+  if (!response.ok || !/\/guild-roles$/.test(url.pathname)) return;
+  const payload = await response.clone().json().catch(() => null);
+  globalThis.__bardoGuildRoles = Array.isArray(payload?.roles) ? payload.roles : [];
 }
 
 window.fetch = async (input, init = {}) => {
@@ -142,6 +146,8 @@ window.fetch = async (input, init = {}) => {
       }
     }
   }
+
+  await captureGuildRoles(url, response);
 
   if (/\/guild-(?:members|roles)/.test(url.pathname) && response.status >= 500) {
     showRetryNotice('No pudimos cargar las personas del servidor.');

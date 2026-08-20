@@ -86,14 +86,11 @@ export function verifySessionResource(session, {
   resourceId,
   guildId = null,
 } = {}) {
-  if (!session?.context || !contextTargetsResource(session.context, resourceType, resourceId)) {
-    return authJson(403);
-  }
+  if (!session?.context || !contextTargetsResource(session.context, resourceType, resourceId)) return authJson(403);
 
   const contextGuild = session.context.guildId || null;
   const tokenGuild = session.token.guild || null;
   const targetGuild = guildId ? String(guildId) : null;
-
   if (contextGuild && targetGuild && contextGuild !== targetGuild) return authJson(403);
   if (tokenGuild && targetGuild && tokenGuild !== targetGuild) return authJson(403);
   if (contextGuild && tokenGuild && contextGuild !== tokenGuild) return authJson(403);
@@ -110,43 +107,33 @@ export async function verifyActivityAccess(request, env, {
 
   const instanceId = readActivityInstanceId(request);
   if (!instanceId) return { ok: false, response: authJson(401) };
-
   const context = await loadActivityContext(env.DB, instanceId);
   if (!context) return { ok: false, response: authJson(401) };
 
   if (context.expiresAt) {
     const expiresAt = Date.parse(context.expiresAt);
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-      return { ok: false, response: authJson(401) };
-    }
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return { ok: false, response: authJson(401) };
   }
-
-  if (!contextHasPermission(context, action)) {
-    return { ok: false, response: authJson(403) };
-  }
+  if (!contextHasPermission(context, action)) return { ok: false, response: authJson(403) };
 
   if (env.BARDO_TEST_AUTH_BYPASS === '1') {
     const testToken = { sub: 'test-user', instance: instanceId, guild: guildId ? String(guildId) : context.guildId || null };
     const session = { context, token: testToken, instanceId, userId: testToken.sub };
-    const resourceError = resourceId
-      ? verifySessionResource(session, { resourceType, resourceId, guildId })
-      : null;
+    const resourceError = resourceId ? verifySessionResource(session, { resourceType, resourceId, guildId }) : null;
     return resourceError ? { ok: false, response: resourceError } : { ok: true, ...session };
   }
 
   const bearer = readBearerToken(request);
-  if (!bearer || !env.DISCORD_CLIENT_SECRET) return { ok: false, response: authJson(401) };
+  const signingSecret = env.BARDO_SESSION_SECRET || env.DISCORD_CLIENT_SECRET;
+  if (!bearer || !signingSecret) return { ok: false, response: authJson(401) };
   const token = await verifyActivitySessionToken(bearer, {
-    secret: env.DISCORD_CLIENT_SECRET,
+    secret: signingSecret,
     expectedInstanceId: instanceId,
   });
   if (!token) return { ok: false, response: authJson(401) };
 
   const session = { context, token, instanceId, userId: token.sub };
-  const resourceError = resourceId
-    ? verifySessionResource(session, { resourceType, resourceId, guildId })
-    : null;
+  const resourceError = resourceId ? verifySessionResource(session, { resourceType, resourceId, guildId }) : null;
   if (resourceError) return { ok: false, response: resourceError };
-
   return { ok: true, ...session };
 }

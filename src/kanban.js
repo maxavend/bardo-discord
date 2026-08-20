@@ -22,15 +22,13 @@ export const KANBAN_PRIORITIES = Object.freeze([
 
 const STATUS_IDS = new Set(DEFAULT_KANBAN_COLUMNS.map((status) => status.id));
 const PRIORITY_IDS = new Set(KANBAN_PRIORITIES.map((priority) => priority.id));
+const COLUMN_ALIASES = Object.freeze({ in_progress: 'doing', 'in-progress': 'doing' });
 
 export function validateBoardColumns(columns) {
-  if (!Array.isArray(columns) || columns.length === 0) {
-    return [...DEFAULT_KANBAN_COLUMNS];
-  }
+  if (!Array.isArray(columns) || columns.length === 0) return [...DEFAULT_KANBAN_COLUMNS];
 
   const valid = [];
   const seenIds = new Set();
-
   for (const col of columns) {
     if (!col) continue;
     const label = String(col.label || col.name || '').trim().slice(0, 30);
@@ -43,18 +41,15 @@ export function validateBoardColumns(columns) {
       counter += 1;
     }
     seenIds.add(id);
-
-    const color = String(col.color || getDeterministicColor(label)).trim();
-    valid.push({ id, label, color });
-
+    valid.push({ id, label, color: String(col.color || getDeterministicColor(label)).trim() });
     if (valid.length >= MAX_BOARD_COLUMNS) break;
   }
-
   return valid.length > 0 ? valid : [...DEFAULT_KANBAN_COLUMNS];
 }
 
 export function normalizeKanbanStatus(value, fallback = 'backlog', allowedStatuses = null) {
-  const normalized = String(value || '').trim().toLowerCase();
+  const raw = String(value || '').trim().toLowerCase();
+  const normalized = COLUMN_ALIASES[raw] || raw;
   if (Array.isArray(allowedStatuses) && allowedStatuses.length > 0) {
     const ids = new Set(allowedStatuses.map((s) => (typeof s === 'string' ? s : s.id)));
     if (ids.has(normalized)) return normalized;
@@ -66,7 +61,8 @@ export function normalizeKanbanStatus(value, fallback = 'backlog', allowedStatus
 export function requireKanbanColumn(columns, value, { fallback = null } = {}) {
   const validColumns = validateBoardColumns(columns);
   const requested = String(value ?? '').trim();
-  const candidate = requested || (fallback ? String(fallback) : '');
+  const rawCandidate = requested || (fallback ? String(fallback) : '');
+  const candidate = COLUMN_ALIASES[rawCandidate.toLowerCase()] || rawCandidate;
   const column = validColumns.find((item) => item.id === candidate);
   if (column) return column;
 
@@ -112,13 +108,11 @@ export function getDeterministicColor(text) {
     hash = (hash << 5) - hash + text.charCodeAt(i);
     hash |= 0;
   }
-  const index = Math.abs(hash) % CHIP_COLOR_PALETTE.length;
-  return CHIP_COLOR_PALETTE[index].color;
+  return CHIP_COLOR_PALETTE[Math.abs(hash) % CHIP_COLOR_PALETTE.length].color;
 }
 
 export function parseLabels(value) {
   if (!value) return [];
-
   if (Array.isArray(value)) {
     const seen = new Set();
     const result = [];
@@ -138,7 +132,6 @@ export function parseLabels(value) {
 
   const seen = new Set();
   const labels = [];
-
   for (const raw of String(value).split(',')) {
     const label = raw.trim().replace(/\s+/g, ' ').slice(0, 24);
     const key = label.toLocaleLowerCase('es');
@@ -147,7 +140,6 @@ export function parseLabels(value) {
     labels.push({ name: label, color: getDeterministicColor(label) });
     if (labels.length >= 8) break;
   }
-
   return labels;
 }
 
@@ -158,12 +150,8 @@ export function boardTarget(boardId) {
 export function parseBoardTarget(value) {
   const normalized = String(value || '').trim();
   if (!normalized) return null;
-  if (normalized.startsWith(BARDO_BOARD_PREFIX)) {
-    return normalized.slice(BARDO_BOARD_PREFIX.length) || null;
-  }
-  if (normalized.startsWith(BARDO_BOARD_TARGET_PREFIX)) {
-    return normalized.slice(BARDO_BOARD_TARGET_PREFIX.length) || null;
-  }
+  if (normalized.startsWith(BARDO_BOARD_PREFIX)) return normalized.slice(BARDO_BOARD_PREFIX.length) || null;
+  if (normalized.startsWith(BARDO_BOARD_TARGET_PREFIX)) return normalized.slice(BARDO_BOARD_TARGET_PREFIX.length) || null;
   return null;
 }
 

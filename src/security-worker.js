@@ -8,6 +8,11 @@ import {
   updateBoardSettings,
 } from './kanban-db.js';
 import { loadEvent } from './event-db.js';
+import {
+  replaceParticipantsAtomic,
+  reorderBlocksAtomic,
+  reorderItemsAtomic,
+} from './event-integrity.js';
 import { normalizeDocumentId } from './document-id.js';
 import { parseEventTarget } from './event.js';
 import { handleDiscordOAuthExchange } from './auth/discord-oauth.js';
@@ -136,7 +141,7 @@ async function authorizeEvents(request, env, url) {
       resourceId: contextEventId,
       guildId: event.guildId,
     });
-    return resourceError ? { response: resourceError } : { access, event };
+    return resourceError ? { response: resourceError } : { access, event, parts };
   }
 
   const eventId = parts[0];
@@ -153,7 +158,7 @@ async function authorizeEvents(request, env, url) {
     resourceId: eventId,
     guildId: event.guildId,
   });
-  return resourceError ? { response: resourceError } : { access, event };
+  return resourceError ? { response: resourceError } : { access, event, parts };
 }
 
 async function authorizeActivityContext(request, env, url) {
@@ -210,6 +215,53 @@ async function handleSecuredBoardMutation(request, env, result) {
   return null;
 }
 
+async function handleSecuredEventIntegrityMutation(request, env, result) {
+  const parts = result.parts || [];
+  if (!parts.length) return null;
+  const eventId = parts[0];
+  const action = parts[1] || null;
+
+  if (action === 'participants' && request.method === 'PUT') {
+    const payload = await readJson(request);
+    if (!payload || !Array.isArray(payload.participants)) return jsonResponse({ error: 'participants debe ser un array' }, 400);
+    try {
+      const participants = await replaceParticipantsAtomic(env.DB, eventId, payload.participants);
+      return jsonResponse({ ok: true, participants });
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : 'Participant update failed' }, 400);
+    }
+  }
+
+  if (action === 'reorder-blocks' && request.method === 'POST') {
+    const payload = await readJson(request);
+    try {
+      const blocks = await reorderBlocksAtomic(env.DB, eventId, payload?.ids);
+      return jsonResponse({ ok: true, blocks });
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : 'Block reorder failed' }, 400);
+    }
+  }
+
+  if (action === 'reorder-items' && request.method === 'POST') {
+    const payload = await readJson(request);
+    try {
+      const items = await reorderItemsAtomic(env.DB, eventId, payload?.blockId, payload?.ids);
+      return jsonResponse({ ok: true, items });
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : 'Item reorder failed' }, 400);
+    }
+  }
+
+  if (!action && request.method === 'PATCH') {
+    const preview = await request.clone().json().catch(() => null);
+    if (Array.isArray(preview?.participants)) {
+      return jsonResponse({ error: 'Actualiza participantes mediante /participants para conservar atomicidad.' }, 400);
+    }
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx = { waitUntil: () => {} }) {
     const url = new URL(request.url);
@@ -252,6 +304,8 @@ export default {
     if (url.pathname === '/api/events' || url.pathname.startsWith('/api/events/')) {
       const result = await authorizeEvents(request, env, url);
       if (result.response) return result.response;
+      const integrityMutation = await handleSecuredEventIntegrityMutation(request, env, result);
+      if (integrityMutation) return integrityMutation;
       return eventWorker.fetch(request, env, ctx);
     }
 

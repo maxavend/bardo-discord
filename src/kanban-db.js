@@ -27,16 +27,13 @@ async function runBatch(db, statements) {
 function mapBoard(row) {
   if (!row) return null;
   const rawCols = parseJsonArray(row.columns);
-  const columns = validateBoardColumns(rawCols);
-  const rawMembers = parseJsonArray(row.members);
-
   return {
     id: row.id,
     guildId: row.guild_id,
     name: row.name,
     description: row.description || '',
-    columns,
-    members: Array.isArray(rawMembers) ? rawMembers : [],
+    columns: validateBoardColumns(rawCols),
+    members: parseJsonArray(row.members),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -96,20 +93,27 @@ async function resolveColumnTransition(db, board, nextColumns, moveTasksTo = nul
     });
   }
 
-  const destination = requireKanbanColumn(nextColumns, moveTasksTo);
-  return { affectedTasks, destination };
+  return { affectedTasks, destination: requireKanbanColumn(nextColumns, moveTasksTo) };
 }
 
-function taskMoveStatements(db, boardId, affectedTasks, destination, now) {
+async function buildTaskMoveStatements(db, boardId, affectedTasks, destination, now) {
   if (!affectedTasks.length || !destination) return [];
+  const maxRow = await db.prepare(
+    `SELECT COALESCE(MAX(position), -1) + 1 AS next_position
+     FROM tasks WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
+  ).bind(boardId, destination.id).first();
+  const start = Number(maxRow?.next_position || 0);
   const legacyStatus = legacyStatusForColumn(destination.id);
-  const unaffectedDestinationPositions = affectedTasks.length
-    ? []
-    : null;
-  void unaffectedDestinationPositions;
-  return affectedTasks.map((task, index) => db
-    .prepare('UPDATE tasks SET status = ?, column_id = ?, position = ?, updated_at = ? WHERE id = ? AND board_id = ?')
-    .bind(legacyStatus, destination.id, task.position + index, now, task.id, boardId));
+  const statements = [];
+  affectedTasks.forEach((task, index) => {
+    statements.push(db
+      .prepare('UPDATE tasks SET status = ?, position = ?, updated_at = ? WHERE id = ?')
+      .bind(legacyStatus, start + index, now, task.id));
+    statements.push(db
+      .prepare('UPDATE tasks SET column_id = ? WHERE id = ?')
+      .bind(destination.id, task.id));
+  });
+  return statements;
 }
 
 export async function createBoard(db, { id, guildId, name, description, columns, members, createdBy }) {
@@ -120,7 +124,6 @@ export async function createBoard(db, { id, guildId, name, description, columns,
 
   const validColumns = validateBoardColumns(columns);
   const validMembers = Array.isArray(members) ? members : [];
-
   await db.prepare(
     `INSERT INTO boards (id, guild_id, name, description, columns, members, created_by, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -136,38 +139,32 @@ export async function updateBoardSettings(db, boardId, { name, description, memb
   const now = new Date().toISOString();
   const cleanName = name !== undefined ? String(name || '').trim().slice(0, 80) : board.name;
   if (name !== undefined && !cleanName) throw new Error('El tablero necesita un nombre.');
-
   const cleanDescription = description !== undefined ? (description ? String(description).trim().slice(0, 500) : '') : board.description;
   const validMembers = members !== undefined && Array.isArray(members) ? members : board.members || [];
-  const validColumns = columns !== undefined && Array.isArray(columns) ? validateBoardColumns(columns) : board.columns || [];
+  const validColumns = columns !== undefined && Array.isArray(columns) ? validateBoardColumns(columns) : board.columns || DEFAULT_KANBAN_COLUMNS;
   const transition = columns !== undefined
     ? await resolveColumnTransition(db, board, validColumns, moveTasksTo)
     : { affectedTasks: [], destination: null };
 
   const statements = [db.prepare(
-    `UPDATE boards
-     SET name = ?, description = ?, members = ?, columns = ?, updated_at = ?
-     WHERE id = ?`,
+    `UPDATE boards SET name = ?, description = ?, members = ?, columns = ?, updated_at = ? WHERE id = ?`,
   ).bind(cleanName, cleanDescription || null, JSON.stringify(validMembers), JSON.stringify(validColumns), now, boardId)];
-  statements.push(...taskMoveStatements(db, boardId, transition.affectedTasks, transition.destination, now));
+  statements.push(...await buildTaskMoveStatements(db, boardId, transition.affectedTasks, transition.destination, now));
   await runBatch(db, statements);
-
   return loadBoard(db, boardId);
 }
 
 export async function updateBoardColumns(db, boardId, inputColumns, { moveTasksTo = null } = {}) {
   const board = await loadBoard(db, boardId);
   if (!board) return null;
-
   const validColumns = validateBoardColumns(inputColumns);
   const transition = await resolveColumnTransition(db, board, validColumns, moveTasksTo);
   const now = new Date().toISOString();
   const statements = [db
     .prepare('UPDATE boards SET columns = ?, updated_at = ? WHERE id = ?')
     .bind(JSON.stringify(validColumns), now, boardId)];
-  statements.push(...taskMoveStatements(db, boardId, transition.affectedTasks, transition.destination, now));
+  statements.push(...await buildTaskMoveStatements(db, boardId, transition.affectedTasks, transition.destination, now));
   await runBatch(db, statements);
-
   return loadBoard(db, boardId);
 }
 
@@ -178,14 +175,9 @@ export async function loadBoard(db, boardId) {
 export async function findBoard(db, guildId, value) {
   const key = String(value || '').trim();
   if (!key) return null;
-
-  const row = await db.prepare(
-    `SELECT * FROM boards
-     WHERE guild_id = ? AND (id = ? OR name = ? COLLATE NOCASE)
-     LIMIT 1`,
-  ).bind(guildId, key, key).first();
-
-  return mapBoard(row);
+  return mapBoard(await db.prepare(
+    `SELECT * FROM boards WHERE guild_id = ? AND (id = ? OR name = ? COLLATE NOCASE) LIMIT 1`,
+  ).bind(guildId, key, key).first());
 }
 
 export async function listBoards(db, guildId, limit = 20) {
@@ -207,52 +199,31 @@ export async function createTask(db, input) {
   const legacyStatus = legacyStatusForColumn(column.id);
   const priority = normalizeKanbanPriority(input.priority);
   const labels = Array.isArray(input.labels) ? input.labels : parseLabels(input.labels);
-
   const positionRow = await db.prepare(
-    `SELECT COALESCE(MAX(position), -1) + 1 AS next_position
-     FROM tasks WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
+    `SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM tasks
+     WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
   ).bind(input.boardId, column.id).first();
   const position = Number(positionRow?.next_position || 0);
 
+  // Keep the historical parameter order first so older adapters/mocks continue to
+  // understand the write; column_id is appended as the new authoritative field.
   const insert = db.prepare(
     `INSERT INTO tasks (
-       id, board_id, title, description, status, column_id, priority, assignee_id, assignee_name,
-       labels, position, created_by, created_at, updated_at
+       id, board_id, title, description, status, priority, assignee_id, assignee_name,
+       labels, position, created_by, created_at, updated_at, column_id
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
-    input.id,
-    input.boardId,
-    title,
-    description || null,
-    legacyStatus,
-    column.id,
-    priority,
-    input.assigneeId || null,
-    input.assigneeName || null,
-    JSON.stringify(labels),
-    position,
-    input.createdBy,
-    now,
-    now,
+    input.id, input.boardId, title, description || null, legacyStatus, priority,
+    input.assigneeId || null, input.assigneeName || null, JSON.stringify(labels), position,
+    input.createdBy, now, now, column.id,
   );
   const touch = db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').bind(now, input.boardId);
   await runBatch(db, [insert, touch]);
 
   return {
-    id: input.id,
-    boardId: input.boardId,
-    title,
-    description,
-    status: column.id,
-    legacyStatus,
-    priority,
-    assigneeId: input.assigneeId || null,
-    assigneeName: input.assigneeName || null,
-    labels,
-    position,
-    createdBy: input.createdBy,
-    createdAt: now,
-    updatedAt: now,
+    id: input.id, boardId: input.boardId, title, description, status: column.id,
+    legacyStatus, priority, assigneeId: input.assigneeId || null, assigneeName: input.assigneeName || null,
+    labels, position, createdBy: input.createdBy, createdAt: now, updatedAt: now,
   };
 }
 
@@ -262,8 +233,7 @@ export async function loadTask(db, taskId) {
 
 export async function listTasks(db, boardId) {
   const result = await db.prepare(
-    `SELECT * FROM tasks
-     WHERE board_id = ?
+    `SELECT * FROM tasks WHERE board_id = ?
      ORDER BY COALESCE(column_id, status) ASC, position ASC, created_at ASC`,
   ).bind(boardId).all();
   return (result.results || []).map(mapTask);
@@ -280,23 +250,22 @@ export async function moveTask(db, taskId, status) {
   if (!task) return null;
   const board = await loadBoard(db, task.boardId);
   if (!board) throw new Error('El tablero no existe.');
-
   const nextColumn = requireKanbanColumn(board.columns, status);
   if (nextColumn.id === task.status) return task;
 
   const positionRow = await db.prepare(
-    `SELECT COALESCE(MAX(position), -1) + 1 AS next_position
-     FROM tasks WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
+    `SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM tasks
+     WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
   ).bind(task.boardId, nextColumn.id).first();
   const nextPosition = Number(positionRow?.next_position || 0);
   const now = new Date().toISOString();
   const legacyStatus = legacyStatusForColumn(nextColumn.id);
-
-  const update = db.prepare(
-    'UPDATE tasks SET status = ?, column_id = ?, position = ?, updated_at = ? WHERE id = ?',
-  ).bind(legacyStatus, nextColumn.id, nextPosition, now, taskId);
+  const updateLegacy = db.prepare(
+    'UPDATE tasks SET status = ?, position = ?, updated_at = ? WHERE id = ?',
+  ).bind(legacyStatus, nextPosition, now, taskId);
+  const updateColumn = db.prepare('UPDATE tasks SET column_id = ? WHERE id = ?').bind(nextColumn.id, taskId);
   const touch = db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').bind(now, task.boardId);
-  await runBatch(db, [update, touch]);
+  await runBatch(db, [updateLegacy, updateColumn, touch]);
 
   return { ...task, status: nextColumn.id, legacyStatus, position: nextPosition, updatedAt: now };
 }
@@ -310,75 +279,53 @@ export async function updateTask(db, taskId, fields = {}) {
   const now = new Date().toISOString();
   const nextTitle = fields.title !== undefined ? String(fields.title || '').trim().slice(0, 120) : existing.title;
   if (!nextTitle) throw new Error('La tarea necesita un título.');
-
   const nextDescription = fields.description !== undefined ? String(fields.description || '').trim().slice(0, 1200) : existing.description;
   const nextColumn = fields.status !== undefined
     ? requireKanbanColumn(board.columns, fields.status)
     : requireKanbanColumn(board.columns, existing.status);
   const nextLegacyStatus = legacyStatusForColumn(nextColumn.id);
   const nextPriority = fields.priority !== undefined ? normalizeKanbanPriority(fields.priority, existing.priority) : existing.priority;
-
   let nextAssigneeId = existing.assigneeId;
   let nextAssigneeName = existing.assigneeName;
   if (fields.assigneeId !== undefined) nextAssigneeId = fields.assigneeId ? String(fields.assigneeId).trim() : null;
   if (fields.assigneeName !== undefined) nextAssigneeName = fields.assigneeName ? String(fields.assigneeName).trim().slice(0, 80) : null;
-
-  let nextLabels = existing.labels;
-  if (fields.labels !== undefined) nextLabels = Array.isArray(fields.labels) ? fields.labels : parseLabels(fields.labels);
+  const nextLabels = fields.labels !== undefined
+    ? (Array.isArray(fields.labels) ? fields.labels : parseLabels(fields.labels))
+    : existing.labels;
 
   let nextPosition = existing.position;
   if (nextColumn.id !== existing.status) {
     const positionRow = await db.prepare(
-      `SELECT COALESCE(MAX(position), -1) + 1 AS next_position
-       FROM tasks WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
+      `SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM tasks
+       WHERE board_id = ? AND COALESCE(column_id, status) = ?`,
     ).bind(existing.boardId, nextColumn.id).first();
     nextPosition = Number(positionRow?.next_position || 0);
   }
 
-  const update = db.prepare(
-    `UPDATE tasks SET
-       title = ?, description = ?, status = ?, column_id = ?, priority = ?, assignee_id = ?, assignee_name = ?,
-       labels = ?, position = ?, updated_at = ?
-     WHERE id = ?`,
+  const updateLegacy = db.prepare(
+    `UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, assignee_name = ?,
+       labels = ?, position = ?, updated_at = ? WHERE id = ?`,
   ).bind(
-    nextTitle,
-    nextDescription || null,
-    nextLegacyStatus,
-    nextColumn.id,
-    nextPriority,
-    nextAssigneeId,
-    nextAssigneeName,
-    JSON.stringify(nextLabels),
-    nextPosition,
-    now,
-    taskId,
+    nextTitle, nextDescription || null, nextLegacyStatus, nextPriority, nextAssigneeId, nextAssigneeName,
+    JSON.stringify(nextLabels), nextPosition, now, taskId,
   );
+  const updateColumn = db.prepare('UPDATE tasks SET column_id = ? WHERE id = ?').bind(nextColumn.id, taskId);
   const touch = db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').bind(now, existing.boardId);
-  await runBatch(db, [update, touch]);
+  await runBatch(db, [updateLegacy, updateColumn, touch]);
 
   return {
-    ...existing,
-    title: nextTitle,
-    description: nextDescription,
-    status: nextColumn.id,
-    legacyStatus: nextLegacyStatus,
-    priority: nextPriority,
-    assigneeId: nextAssigneeId,
-    assigneeName: nextAssigneeName,
-    labels: nextLabels,
-    position: nextPosition,
-    updatedAt: now,
+    ...existing, title: nextTitle, description: nextDescription, status: nextColumn.id,
+    legacyStatus: nextLegacyStatus, priority: nextPriority, assigneeId: nextAssigneeId,
+    assigneeName: nextAssigneeName, labels: nextLabels, position: nextPosition, updatedAt: now,
   };
 }
 
 export async function deleteTask(db, taskId) {
   const task = await loadTask(db, taskId);
   if (!task) return null;
-
   const now = new Date().toISOString();
   const remove = db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId);
   const touch = db.prepare('UPDATE boards SET updated_at = ? WHERE id = ?').bind(now, task.boardId);
   await runBatch(db, [remove, touch]);
-
   return { ok: true, id: taskId, boardId: task.boardId };
 }
