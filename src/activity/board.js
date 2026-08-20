@@ -507,10 +507,9 @@ function injectStyles() {
     .kanban-eyebrow {
       margin: 0 0 4px;
       color: var(--kb-text-dim);
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      letter-spacing: .02em;
     }
     .kanban-title-wrap {
       display: flex;
@@ -892,10 +891,9 @@ function injectStyles() {
       gap: 4px;
       padding: 2px 7px;
       border-radius: var(--kb-radius-pill);
-      font-size: 10px;
-      font-weight: 750;
-      letter-spacing: .02em;
-      text-transform: uppercase;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .01em;
     }
 
     .task-title {
@@ -1054,25 +1052,24 @@ function injectStyles() {
     .modal-form {
       display: flex;
       flex-direction: column;
-      gap: 13px;
+      gap: 14px;
     }
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
       position: relative;
     }
     .form-group label,
     .form-label {
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 11.5px;
+      font-weight: 650;
       color: var(--kb-text-muted);
-      text-transform: uppercase;
-      letter-spacing: .04em;
+      letter-spacing: .01em;
       margin: 0;
     }
     .form-supporting-text {
-      margin: 0 0 6px;
+      margin: -2px 0 4px;
       font-size: 12px;
       line-height: 1.4;
       color: var(--kb-text-muted);
@@ -1083,11 +1080,10 @@ function injectStyles() {
       color: var(--kb-text-dim);
     }
     .form-input,
-    .form-textarea,
-    .form-select {
+    .form-textarea {
       width: 100%;
       background: var(--kb-surface-raised);
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
       border-radius: 7px;
       color: var(--kb-text-primary);
       font: inherit;
@@ -1095,12 +1091,15 @@ function injectStyles() {
       padding: 8px 11px;
       box-sizing: border-box;
       outline: none;
-      transition: background 0.12s ease;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .form-input {
+      height: 36px;
     }
     .form-input:focus,
-    .form-textarea:focus,
-    .form-select:focus {
+    .form-textarea:focus {
       background: var(--kb-surface-hover);
+      border-color: var(--kb-border-active, rgba(255, 255, 255, 0.18));
     }
     .form-textarea {
       min-height: 72px;
@@ -1114,22 +1113,58 @@ function injectStyles() {
       gap: 12px;
     }
 
+    .form-group .custom-select-wrap {
+      display: flex;
+      width: 100%;
+      height: 36px;
+      position: relative;
+    }
+    .form-group .custom-select-wrap select,
+    .form-group .custom-select-wrap .form-select {
+      width: 100%;
+      height: 36px;
+      appearance: none;
+      -webkit-appearance: none;
+      background-color: var(--kb-surface-raised) !important;
+      background: var(--kb-surface-raised) !important;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
+      border-radius: 7px;
+      color: var(--kb-text-primary);
+      padding: 0 32px 0 11px;
+      font: inherit;
+      font-size: 13px;
+      box-sizing: border-box;
+      outline: none;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .form-group .custom-select-wrap select:focus,
+    .form-group .custom-select-wrap .form-select:focus {
+      background-color: var(--kb-surface-hover) !important;
+      background: var(--kb-surface-hover) !important;
+      border-color: var(--kb-border-active, rgba(255, 255, 255, 0.18));
+    }
+
     /* Segmented Controls for Priority */
     .segmented-control {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 3px;
+      height: 36px;
       background: var(--kb-surface-raised);
       padding: 3px;
       border-radius: 8px;
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
+      box-sizing: border-box;
     }
     .seg-btn {
+      height: 100%;
+      box-sizing: border-box;
       background: transparent;
       border: none;
       border-radius: 6px;
-      padding: 6px 3px;
-      font-size: 11px;
+      padding: 0 4px;
+      font-size: 11.5px;
       font-weight: 650;
       color: var(--kb-text-muted);
       cursor: pointer;
@@ -1158,10 +1193,10 @@ function injectStyles() {
       align-items: center;
       gap: 5px;
       background: var(--kb-surface-raised);
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
       border-radius: 7px;
-      padding: 5px 8px;
-      min-height: 38px;
+      padding: 4px 8px;
+      min-height: 36px;
       box-sizing: border-box;
       cursor: text;
       position: relative;
@@ -2217,7 +2252,7 @@ function openModal(modalConfig) {
 
         <div class="form-row">
           <div class="form-group">
-            <label>Columna / Estado</label>
+            <label>Columna / estado</label>
             <div class="custom-select-wrap">
               <select id="task-status-input" class="form-select">
                 ${boardColumns.map((s) => `<option value="${s.id}" ${s.id === currentStatus ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
@@ -2267,21 +2302,20 @@ function openModal(modalConfig) {
           </div>
         </div>
 
-        <!-- Chips estilo Notion / Linear (Integrado en Input) -->
+        <!-- Chips / etiquetas estilo Notion -->
         <div class="form-group">
-          <label>Chips / Etiquetas</label>
+          <label>Chips / etiquetas</label>
           <p class="form-supporting-text">Etiquetas visuales para categorizar y filtrar la tarea.</p>
-          <div class="notion-chips-container" id="notion-chips-box">
-            <div class="notion-chips-selected" id="notion-chips-selected"></div>
+          <div class="notion-chips-container" id="task-chips-box">
+            <div class="notion-chips-selected" id="task-chips-selected"></div>
             <input
-              id="notion-chips-input"
-              class="notion-chips-input"
+              id="task-chip-input"
+              class="notion-chip-inline-input"
               type="text"
-              placeholder="${modalSelectedChips.length ? 'Otro chip…' : 'Escribe o crea un chip…'}"
-              maxlength="24"
+              placeholder="Escribe o crea un chip…"
               autocomplete="off"
             />
-            <div id="notion-chips-dropdown" class="notion-chips-dropdown" style="display: none;"></div>
+            <div id="task-chip-dropdown" class="notion-chip-dropdown" style="display: none;"></div>
           </div>
         </div>
 
@@ -2474,13 +2508,18 @@ function openModal(modalConfig) {
   function updateMemberDropdown(query = '') {
     if (!memberDropdown) return;
     const cleanQuery = query.trim().replace(/^@/, '').toLowerCase();
+    const currentMembers = getKnownDiscordMembers(currentBoardData?.tasks || []);
 
-    let matches = knownMembers;
+    let matches = currentMembers;
     if (cleanQuery) {
-      matches = knownMembers.filter(
-        (m) => m.name.toLowerCase().includes(cleanQuery) || m.username.toLowerCase().includes(cleanQuery) || m.id.includes(cleanQuery)
+      matches = currentMembers.filter(
+        (m) => m.name.toLowerCase().includes(cleanQuery) ||
+               (m.username && m.username.toLowerCase().includes(cleanQuery)) ||
+               (m.id && m.id.includes(cleanQuery))
       );
     }
+
+    let html = '';
 
     if (matches.length > 0) {
       for (const m of matches) {
@@ -2917,7 +2956,7 @@ async function openBoardSettingsModal(board) {
           <!-- Añadir por Roles de Discord -->
           <div id="board-role-picker-wrap" style="margin-top: 8px; display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span style="font-size: 11px; color: var(--kb-text-muted); font-weight: 600;">Añadir por Rol de Discord:</span>
+              <span style="font-size: 11px; color: var(--kb-text-muted); font-weight: 600;">Añadir por rol de Discord:</span>
             </div>
             <div id="board-role-chips" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
           </div>

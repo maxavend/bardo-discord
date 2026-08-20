@@ -10070,8 +10070,8 @@ function renderInline(value) {
   text = text.replace(/~~([^~]+)~~/g, "<del>$1</del>");
   text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   text = text.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
-  codeTokens.forEach((html2, index) => {
-    text = text.replace(`%%BARDOCODE${index}%%`, html2);
+  codeTokens.forEach((html, index) => {
+    text = text.replace(`%%BARDOCODE${index}%%`, html);
   });
   return text;
 }
@@ -10112,7 +10112,7 @@ function stripLeadingTitle(markdown, title) {
 function renderMarkdown(markdown) {
   const cleaned = cleanEscapedMarkdown(markdown);
   const lines = cleaned.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-  const html2 = [];
+  const html = [];
   let index = 0;
   while (index < lines.length) {
     const line = lines[index];
@@ -10131,7 +10131,7 @@ function renderMarkdown(markdown) {
       }
       if (index < lines.length) index += 1;
       const languageAttr = language ? ` data-language="${escapeHtml(language)}"` : "";
-      html2.push(`<pre><code${languageAttr}>${escapeHtml(code.join("\n"))}</code></pre>`);
+      html.push(`<pre><code${languageAttr}>${escapeHtml(code.join("\n"))}</code></pre>`);
       continue;
     }
     if (line.includes("|") && isTableSeparator(lines[index + 1] ?? "")) {
@@ -10141,18 +10141,18 @@ function renderMarkdown(markdown) {
         tableLines.push(lines[index]);
         index += 1;
       }
-      html2.push(renderTable(tableLines));
+      html.push(renderTable(tableLines));
       continue;
     }
     const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const level = Math.min(heading[1].length, 4);
-      html2.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+      html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
       index += 1;
       continue;
     }
     if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      html2.push("<hr>");
+      html.push("<hr>");
       index += 1;
       continue;
     }
@@ -10162,7 +10162,7 @@ function renderMarkdown(markdown) {
         quoteLines.push(lines[index].trim().replace(/^>\s?/, ""));
         index += 1;
       }
-      html2.push(`<blockquote><p>${quoteLines.map(renderInline).join("<br>")}</p></blockquote>`);
+      html.push(`<blockquote><p>${quoteLines.map(renderInline).join("<br>")}</p></blockquote>`);
       continue;
     }
     if (/^[-*+]\s+/.test(trimmed)) {
@@ -10171,7 +10171,7 @@ function renderMarkdown(markdown) {
         items.push(lines[index].trim().replace(/^[-*+]\s+/, ""));
         index += 1;
       }
-      html2.push(`<ul>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
+      html.push(`<ul>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
       continue;
     }
     if (/^\d+[.)]\s+/.test(trimmed)) {
@@ -10180,7 +10180,7 @@ function renderMarkdown(markdown) {
         items.push(lines[index].trim().replace(/^\d+[.)]\s+/, ""));
         index += 1;
       }
-      html2.push(`<ol>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`);
+      html.push(`<ol>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`);
       continue;
     }
     const paragraph = [trimmed];
@@ -10189,9 +10189,9 @@ function renderMarkdown(markdown) {
       paragraph.push(lines[index].trim());
       index += 1;
     }
-    html2.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
+    html.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
   }
-  return html2.join("\n");
+  return html.join("\n");
 }
 function formatDate(value) {
   if (!value) return null;
@@ -10429,7 +10429,7 @@ function showError(message) {
   errorMessageEl.textContent = message;
   setView("error");
 }
-async function htmlToMarkdown(html2) {
+async function htmlToMarkdown(html) {
   const [turndownModule, gfmModule] = await Promise.all([
     import("./chunks/turndown.browser.es-GTXT4OBN.js"),
     import("./chunks/turndown-plugin-gfm.es-NRPX52H6.js")
@@ -10445,7 +10445,7 @@ async function htmlToMarkdown(html2) {
   });
   turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
-  const raw = turndown.turndown(html2);
+  const raw = turndown.turndown(html);
   return cleanEscapedMarkdown(raw).replace(/\n{3,}/g, "\n\n").trim();
 }
 var PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
@@ -11485,10 +11485,9 @@ function injectStyles() {
     .kanban-eyebrow {
       margin: 0 0 4px;
       color: var(--kb-text-dim);
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      letter-spacing: .02em;
     }
     .kanban-title-wrap {
       display: flex;
@@ -11870,10 +11869,9 @@ function injectStyles() {
       gap: 4px;
       padding: 2px 7px;
       border-radius: var(--kb-radius-pill);
-      font-size: 10px;
-      font-weight: 750;
-      letter-spacing: .02em;
-      text-transform: uppercase;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .01em;
     }
 
     .task-title {
@@ -12032,25 +12030,24 @@ function injectStyles() {
     .modal-form {
       display: flex;
       flex-direction: column;
-      gap: 13px;
+      gap: 14px;
     }
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
       position: relative;
     }
     .form-group label,
     .form-label {
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 11.5px;
+      font-weight: 650;
       color: var(--kb-text-muted);
-      text-transform: uppercase;
-      letter-spacing: .04em;
+      letter-spacing: .01em;
       margin: 0;
     }
     .form-supporting-text {
-      margin: 0 0 6px;
+      margin: -2px 0 4px;
       font-size: 12px;
       line-height: 1.4;
       color: var(--kb-text-muted);
@@ -12061,11 +12058,10 @@ function injectStyles() {
       color: var(--kb-text-dim);
     }
     .form-input,
-    .form-textarea,
-    .form-select {
+    .form-textarea {
       width: 100%;
       background: var(--kb-surface-raised);
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
       border-radius: 7px;
       color: var(--kb-text-primary);
       font: inherit;
@@ -12073,12 +12069,15 @@ function injectStyles() {
       padding: 8px 11px;
       box-sizing: border-box;
       outline: none;
-      transition: background 0.12s ease;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .form-input {
+      height: 36px;
     }
     .form-input:focus,
-    .form-textarea:focus,
-    .form-select:focus {
+    .form-textarea:focus {
       background: var(--kb-surface-hover);
+      border-color: var(--kb-border-active, rgba(255, 255, 255, 0.18));
     }
     .form-textarea {
       min-height: 72px;
@@ -12092,22 +12091,58 @@ function injectStyles() {
       gap: 12px;
     }
 
+    .form-group .custom-select-wrap {
+      display: flex;
+      width: 100%;
+      height: 36px;
+      position: relative;
+    }
+    .form-group .custom-select-wrap select,
+    .form-group .custom-select-wrap .form-select {
+      width: 100%;
+      height: 36px;
+      appearance: none;
+      -webkit-appearance: none;
+      background-color: var(--kb-surface-raised) !important;
+      background: var(--kb-surface-raised) !important;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
+      border-radius: 7px;
+      color: var(--kb-text-primary);
+      padding: 0 32px 0 11px;
+      font: inherit;
+      font-size: 13px;
+      box-sizing: border-box;
+      outline: none;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .form-group .custom-select-wrap select:focus,
+    .form-group .custom-select-wrap .form-select:focus {
+      background-color: var(--kb-surface-hover) !important;
+      background: var(--kb-surface-hover) !important;
+      border-color: var(--kb-border-active, rgba(255, 255, 255, 0.18));
+    }
+
     /* Segmented Controls for Priority */
     .segmented-control {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 3px;
+      height: 36px;
       background: var(--kb-surface-raised);
       padding: 3px;
       border-radius: 8px;
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
+      box-sizing: border-box;
     }
     .seg-btn {
+      height: 100%;
+      box-sizing: border-box;
       background: transparent;
       border: none;
       border-radius: 6px;
-      padding: 6px 3px;
-      font-size: 11px;
+      padding: 0 4px;
+      font-size: 11.5px;
       font-weight: 650;
       color: var(--kb-text-muted);
       cursor: pointer;
@@ -12136,10 +12171,10 @@ function injectStyles() {
       align-items: center;
       gap: 5px;
       background: var(--kb-surface-raised);
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
       border-radius: 7px;
-      padding: 5px 8px;
-      min-height: 38px;
+      padding: 4px 8px;
+      min-height: 36px;
       box-sizing: border-box;
       cursor: text;
       position: relative;
@@ -13111,7 +13146,7 @@ function openModal(modalConfig) {
 
         <div class="form-row">
           <div class="form-group">
-            <label>Columna / Estado</label>
+            <label>Columna / estado</label>
             <div class="custom-select-wrap">
               <select id="task-status-input" class="form-select">
                 ${boardColumns.map((s) => `<option value="${s.id}" ${s.id === currentStatus ? "selected" : ""}>${escapeHtml2(s.label)}</option>`).join("")}
@@ -13161,21 +13196,20 @@ function openModal(modalConfig) {
           </div>
         </div>
 
-        <!-- Chips estilo Notion / Linear (Integrado en Input) -->
+        <!-- Chips / etiquetas estilo Notion -->
         <div class="form-group">
-          <label>Chips / Etiquetas</label>
+          <label>Chips / etiquetas</label>
           <p class="form-supporting-text">Etiquetas visuales para categorizar y filtrar la tarea.</p>
-          <div class="notion-chips-container" id="notion-chips-box">
-            <div class="notion-chips-selected" id="notion-chips-selected"></div>
+          <div class="notion-chips-container" id="task-chips-box">
+            <div class="notion-chips-selected" id="task-chips-selected"></div>
             <input
-              id="notion-chips-input"
-              class="notion-chips-input"
+              id="task-chip-input"
+              class="notion-chip-inline-input"
               type="text"
-              placeholder="${modalSelectedChips.length ? "Otro chip\u2026" : "Escribe o crea un chip\u2026"}"
-              maxlength="24"
+              placeholder="Escribe o crea un chip\u2026"
               autocomplete="off"
             />
-            <div id="notion-chips-dropdown" class="notion-chips-dropdown" style="display: none;"></div>
+            <div id="task-chip-dropdown" class="notion-chip-dropdown" style="display: none;"></div>
           </div>
         </div>
 
@@ -13226,18 +13260,18 @@ function openModal(modalConfig) {
     const matches = allBoardChips.filter(
       (c) => !selectedNames.has(c.name.toLowerCase()) && (!cleanQuery || c.name.toLowerCase().includes(cleanQuery.toLowerCase()))
     );
-    let html2 = "";
+    let html = "";
     const exactMatch = allBoardChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase()) || modalSelectedChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase());
     if (cleanQuery && !exactMatch) {
       if (allBoardChips.length >= MAX_BOARD_CHIPS) {
-        html2 += `
+        html += `
           <div style="padding: 6px 10px; color: var(--kb-text-muted); font-size: 11.5px;">
             L\xEDmite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
           </div>
         `;
       } else {
         const autoColor = getDeterministicColor(cleanQuery);
-        html2 += `
+        html += `
           <button type="button" class="notion-menu-item notion-menu-create" data-create-chip="${escapeHtml2(cleanQuery)}" data-chip-color="${autoColor}">
             <span>+ Crear chip <strong>"${escapeHtml2(cleanQuery)}"</strong></span>
             <span style="width: 10px; height: 10px; border-radius: 50%; background: ${autoColor};"></span>
@@ -13247,7 +13281,7 @@ function openModal(modalConfig) {
     }
     for (const chip of matches) {
       const color = chip.color || getDeterministicColor(chip.name);
-      html2 += `
+      html += `
         <button type="button" class="notion-menu-item" data-pick-chip="${escapeHtml2(chip.name)}" data-chip-color="${escapeHtml2(color)}">
           <span class="notion-menu-item-tag">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>
@@ -13256,11 +13290,11 @@ function openModal(modalConfig) {
         </button>
       `;
     }
-    if (!html2) {
+    if (!html) {
       chipDropdown.style.display = "none";
       return;
     }
-    chipDropdown.innerHTML = html2;
+    chipDropdown.innerHTML = html;
     chipDropdown.style.display = "flex";
     chipDropdown.querySelectorAll("[data-create-chip]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -13335,12 +13369,14 @@ function openModal(modalConfig) {
   function updateMemberDropdown(query = "") {
     if (!memberDropdown) return;
     const cleanQuery = query.trim().replace(/^@/, "").toLowerCase();
-    let matches = knownMembers;
+    const currentMembers = getKnownDiscordMembers(currentBoardData?.tasks || []);
+    let matches = currentMembers;
     if (cleanQuery) {
-      matches = knownMembers.filter(
-        (m) => m.name.toLowerCase().includes(cleanQuery) || m.username.toLowerCase().includes(cleanQuery) || m.id.includes(cleanQuery)
+      matches = currentMembers.filter(
+        (m) => m.name.toLowerCase().includes(cleanQuery) || m.username && m.username.toLowerCase().includes(cleanQuery) || m.id && m.id.includes(cleanQuery)
       );
     }
+    let html = "";
     if (matches.length > 0) {
       for (const m of matches) {
         html += `
@@ -13723,7 +13759,7 @@ async function openBoardSettingsModal(board) {
           <!-- A\xF1adir por Roles de Discord -->
           <div id="board-role-picker-wrap" style="margin-top: 8px; display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span style="font-size: 11px; color: var(--kb-text-muted); font-weight: 600;">A\xF1adir por Rol de Discord:</span>
+              <span style="font-size: 11px; color: var(--kb-text-muted); font-weight: 600;">A\xF1adir por rol de Discord:</span>
             </div>
             <div id="board-role-chips" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
           </div>
@@ -14094,9 +14130,9 @@ async function openBoardSettingsModal(board) {
     const matches = serverGuildMembers.filter(
       (m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()) && (m.name.toLowerCase().includes(qLower) || m.username && m.username.toLowerCase().includes(qLower))
     );
-    let html2 = "";
+    let html = "";
     if (matches.length > 0) {
-      html2 += matches.map((m) => `
+      html += matches.map((m) => `
         <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}" data-pick-avatar="${escapeHtml2(m.avatarUrl || "")}">
           ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />` : `<span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>`}
           <div class="member-info-col">
@@ -14106,9 +14142,9 @@ async function openBoardSettingsModal(board) {
         </button>
       `).join("");
     } else if (q) {
-      html2 = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor que coincidan</div>`;
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor que coincidan</div>`;
     }
-    dropdownEl.innerHTML = html2;
+    dropdownEl.innerHTML = html;
     dropdownEl.style.display = "flex";
     dropdownEl.querySelectorAll("[data-pick-id]").forEach((btn) => {
       btn.addEventListener("click", () => {

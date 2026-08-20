@@ -188,10 +188,9 @@ select {
 .eyebrow {
   margin: 0 0 8px;
   color: #838894;
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .document-header h1 {
@@ -494,11 +493,10 @@ select {
 
 .slash-cmd-header {
   padding: 6px 10px 4px;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #80848e;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .slash-cmd-item {
