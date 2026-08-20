@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DOCX_STYLE_MAP,
   SOURCE_TYPES,
+  cleanEscapedMarkdown,
   ensureDocumentTitle,
   fileStem,
   getSourceType,
@@ -101,3 +102,10 @@ test('ensureDocumentTitle antepone el título si no existe', () => {
   assert.equal(ensureDocumentTitle('Contenido base', 'Mi Título'), '# Mi Título\n\nContenido base');
   assert.equal(ensureDocumentTitle('# Mi Título\n\nContenido base', 'Mi Título'), '# Mi Título\n\nContenido base');
 });
+
+test('cleanEscapedMarkdown limpia barras invertidas accidentales y escapes recursivos', () => {
+  const ugly = '11\\\\. Modelo de trabajo propuesto\n\\\\\\\\|Diseño de experiencia y flujo\n-> Desarrollo\\\\\\\\|';
+  const clean = cleanEscapedMarkdown(ugly);
+  assert.equal(clean, '11. Modelo de trabajo propuesto\n|Diseño de experiencia y flujo\n-> Desarrollo|');
+});
+

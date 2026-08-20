@@ -9652,8 +9652,11 @@ var DOCX_STYLE_MAP = [
   "p[style-name='Lista con vi\xF1etas'] => ul > li:fresh",
   "p[style-name='Lista con n\xFAmeros'] => ol > li:fresh"
 ];
+function cleanEscapedMarkdown(text) {
+  return String(text || "").replace(/\\+(\.)/g, "$1").replace(/\\+(\|)/g, "$1").replace(/\\+(\*)/g, "$1").replace(/\\+(_)/g, "$1").replace(/\\+(-)/g, "$1").replace(/\\+(#)/g, "$1").replace(/\\+(\[)/g, "$1").replace(/\\+(\])/g, "$1").replace(/\\+(\()/g, "$1").replace(/\\+(\))/g, "$1").replace(/\\+(~)/g, "$1").replace(/\\+(`)/g, "$1").replace(/\\+(>)/g, "$1").replace(/\\{2,}/g, "");
+}
 function ensureDocumentTitle(markdown, title) {
-  const normalized = String(markdown || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  const normalized = cleanEscapedMarkdown(String(markdown || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim());
   if (!normalized) return `# ${title}`;
   const firstLine = normalized.split("\n").find((line) => line.trim()) || "";
   return /^#\s+/.test(firstLine.trim()) ? normalized : `# ${title}
@@ -9917,6 +9920,7 @@ async function importDocx(arrayBuffer, title) {
     emDelimiter: "*",
     strongDelimiter: "**"
   });
+  turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
   const markdown = turndown.turndown(template.innerHTML).replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   if (!markdown) {
@@ -10106,7 +10110,8 @@ function stripLeadingTitle(markdown, title) {
   return lines.join("\n").trim();
 }
 function renderMarkdown(markdown) {
-  const lines = markdown.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const cleaned = cleanEscapedMarkdown(markdown);
+  const lines = cleaned.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const html = [];
   let index = 0;
   while (index < lines.length) {
@@ -10402,11 +10407,15 @@ async function htmlToMarkdown(html) {
   const gfm = gfmModule.gfm || gfmModule.default?.gfm;
   const turndown = new TurndownService({
     headingStyle: "atx",
+    bulletListMarker: "-",
     codeBlockStyle: "fenced",
-    emDelimiter: "*"
+    emDelimiter: "*",
+    strongDelimiter: "**"
   });
+  turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
-  return turndown.turndown(html).replace(/\n{3,}/g, "\n\n").trim();
+  const raw = turndown.turndown(html);
+  return cleanEscapedMarkdown(raw).replace(/\n{3,}/g, "\n\n").trim();
 }
 var PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
 var CHECK_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;

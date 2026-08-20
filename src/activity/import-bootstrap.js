@@ -102,6 +102,7 @@ async function importDocx(arrayBuffer, title) {
     emDelimiter: '*',
     strongDelimiter: '**',
   });
+  turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
 
   const markdown = turndown

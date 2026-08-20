@@ -77,8 +77,26 @@ export const DOCX_STYLE_MAP = [
   "p[style-name='Lista con números'] => ol > li:fresh",
 ];
 
+export function cleanEscapedMarkdown(text) {
+  return String(text || '')
+    .replace(/\\+(\.)/g, '$1')
+    .replace(/\\+(\|)/g, '$1')
+    .replace(/\\+(\*)/g, '$1')
+    .replace(/\\+(_)/g, '$1')
+    .replace(/\\+(-)/g, '$1')
+    .replace(/\\+(#)/g, '$1')
+    .replace(/\\+(\[)/g, '$1')
+    .replace(/\\+(\])/g, '$1')
+    .replace(/\\+(\()/g, '$1')
+    .replace(/\\+(\))/g, '$1')
+    .replace(/\\+(~)/g, '$1')
+    .replace(/\\+(`)/g, '$1')
+    .replace(/\\+(>)/g, '$1')
+    .replace(/\\{2,}/g, '');
+}
+
 export function ensureDocumentTitle(markdown, title) {
-  const normalized = String(markdown || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  const normalized = cleanEscapedMarkdown(String(markdown || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim());
   if (!normalized) return `# ${title}`;
   const firstLine = normalized.split('\n').find((line) => line.trim()) || '';
   return /^#\s+/.test(firstLine.trim()) ? normalized : `# ${title}\n\n${normalized}`;

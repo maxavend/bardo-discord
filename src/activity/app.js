@@ -1,5 +1,6 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { normalizeDocumentId } from '../document-id.js';
+import { cleanEscapedMarkdown } from '../import-format.js';
 
 export { normalizeDocumentId };
 
@@ -114,7 +115,8 @@ function stripLeadingTitle(markdown, title) {
 }
 
 function renderMarkdown(markdown) {
-  const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const cleaned = cleanEscapedMarkdown(markdown);
+  const lines = cleaned.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const html = [];
   let index = 0;
 
@@ -515,11 +517,15 @@ async function htmlToMarkdown(html) {
   const gfm = gfmModule.gfm || gfmModule.default?.gfm;
   const turndown = new TurndownService({
     headingStyle: 'atx',
+    bulletListMarker: '-',
     codeBlockStyle: 'fenced',
     emDelimiter: '*',
+    strongDelimiter: '**',
   });
+  turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
-  return turndown.turndown(html).replace(/\n{3,}/g, '\n\n').trim();
+  const raw = turndown.turndown(html);
+  return cleanEscapedMarkdown(raw).replace(/\n{3,}/g, '\n\n').trim();
 }
 
 const PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
