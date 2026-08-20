@@ -1,0 +1,196 @@
+.bardo-save-status {
+  min-width: 42px;
+  color: #8f949d;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: color 120ms ease;
+}
+
+.bardo-save-status[data-state="error"] { color: #f09a9a; }
+.bardo-save-status[data-state="saving"] { color: #b8bdc7; }
+
+.bardo-edit-button.is-editing {
+  border-color: #5d6370;
+  background: #2a2d33;
+  color: #f4f5f7;
+}
+
+.bardo-is-editing #document-title,
+.bardo-is-editing #document-body {
+  outline: none;
+  caret-color: #cbd3ff;
+}
+
+.bardo-is-editing #document-title {
+  border-radius: 8px;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.bardo-is-editing #document-title:focus {
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.025);
+}
+
+.bardo-is-editing #document-body {
+  min-height: 180px;
+  border-radius: 10px;
+}
+
+.bardo-is-editing #document-body > * {
+  border-radius: 5px;
+  transition: background 100ms ease;
+}
+
+.bardo-is-editing #document-body > *:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.bardo-editor-toolbar,
+.bardo-link-popover,
+.bardo-slash-menu {
+  position: fixed;
+  z-index: 1000;
+  border: 1px solid #343840;
+  background: rgba(28, 30, 35, 0.98);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+}
+
+.bardo-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 38px;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.bardo-editor-select,
+.bardo-editor-tool {
+  min-height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #e7e9ed;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bardo-editor-select {
+  max-width: 76px;
+  padding: 0 7px;
+}
+
+.bardo-editor-tool {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  padding: 0 8px;
+  font-weight: 700;
+}
+
+.bardo-editor-tool-wide { min-width: 42px; font-weight: 600; }
+.bardo-editor-tool:hover,
+.bardo-editor-tool.is-active,
+.bardo-editor-select:hover { background: #33363d; }
+.bardo-editor-tool[data-command="italic"] { font-style: italic; }
+.bardo-editor-tool[data-command="underline"] { text-decoration: underline; }
+.bardo-editor-tool[data-command="strikeThrough"] { text-decoration: line-through; }
+
+.bardo-link-popover {
+  display: flex;
+  gap: 6px;
+  width: min(320px, calc(100vw - 20px));
+  padding: 7px;
+  border-radius: 10px;
+}
+
+.bardo-link-popover input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #3b3f47;
+  border-radius: 7px;
+  outline: none;
+  background: #17191d;
+  color: #f2f3f5;
+  font: inherit;
+  font-size: 13px;
+}
+
+.bardo-link-popover input:focus { border-color: #7d8df2; }
+.bardo-link-popover button {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: #e7e9ed;
+  color: #18191c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bardo-slash-menu {
+  width: min(320px, calc(100vw - 20px));
+  max-height: min(390px, calc(100vh - 40px));
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.bardo-slash-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #e7e9ed;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bardo-slash-item:hover,
+.bardo-slash-item.is-active { background: #30333a; }
+.bardo-slash-item span { font-size: 13px; font-weight: 650; }
+.bardo-slash-item small { margin-top: 2px; color: #9297a1; font-size: 11px; }
+
+@media (prefers-color-scheme: light) {
+  .bardo-save-status { color: #6f7480; }
+  .bardo-save-status[data-state="saving"] { color: #5f6570; }
+  .bardo-edit-button.is-editing { border-color: #c9ccd3; background: #edeef1; color: #202124; }
+  .bardo-is-editing #document-title:focus,
+  .bardo-is-editing #document-body > *:hover { background: rgba(20, 22, 26, 0.035); }
+  .bardo-editor-toolbar,
+  .bardo-link-popover,
+  .bardo-slash-menu {
+    border-color: #d8dbe1;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 14px 36px rgba(20, 24, 32, 0.14);
+  }
+  .bardo-editor-select,
+  .bardo-editor-tool,
+  .bardo-slash-item { color: #202124; }
+  .bardo-editor-tool:hover,
+  .bardo-editor-tool.is-active,
+  .bardo-editor-select:hover,
+  .bardo-slash-item:hover,
+  .bardo-slash-item.is-active { background: #eff0f3; }
+  .bardo-link-popover input { border-color: #d6d9df; background: #fff; color: #202124; }
+  .bardo-link-popover button { background: #202124; color: #fff; }
+  .bardo-slash-item small { color: #727782; }
+}
+
+@media (max-width: 560px) {
+  .bardo-editor-toolbar {
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+  }
+  .bardo-save-status { display: none; }
+}
