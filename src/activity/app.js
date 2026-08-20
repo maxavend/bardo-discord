@@ -1080,7 +1080,7 @@ function toggleEditMode() {
     documentEl?.classList.add('is-editing');
     if (editorToolbarEl) editorToolbarEl.style.display = 'flex';
     if (editButtonEl) {
-      editButtonEl.innerHTML = `${CHECK_SVG}<span>Guardar</span>`;
+      editButtonEl.innerHTML = `<span>Guardar</span>`;
       editButtonEl.className = 'action-button action-button-editing';
     }
     if (titleEl) titleEl.contentEditable = 'true';

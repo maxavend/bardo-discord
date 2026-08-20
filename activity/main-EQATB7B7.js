@@ -10449,7 +10449,6 @@ async function htmlToMarkdown(html) {
   return cleanEscapedMarkdown(raw).replace(/\n{3,}/g, "\n\n").trim();
 }
 var PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
-var CHECK_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;
 var editorToolbarEl = document.querySelector("#editor-toolbar");
 var tbBlockTypeEl = document.querySelector("#tb-block-type");
 var slashMenuEl = document.querySelector("#slash-command-menu");
@@ -10901,7 +10900,7 @@ function toggleEditMode() {
     documentEl?.classList.add("is-editing");
     if (editorToolbarEl) editorToolbarEl.style.display = "flex";
     if (editButtonEl) {
-      editButtonEl.innerHTML = `${CHECK_SVG}<span>Guardar</span>`;
+      editButtonEl.innerHTML = `<span>Guardar</span>`;
       editButtonEl.className = "action-button action-button-editing";
     }
     if (titleEl) titleEl.contentEditable = "true";
