@@ -25,10 +25,7 @@ async function bundle() {
   await cleanOutDir();
 
   const result = await build({
-    entryPoints: [
-      resolve(srcDir, 'main.js'),
-      resolve(srcDir, 'styles.css'),
-    ],
+    entryPoints: [resolve(srcDir, 'main.js')],
     outdir: outDir,
     entryNames: '[name]-[hash]',
     chunkNames: 'chunks/[name]-[hash]',
@@ -52,7 +49,7 @@ async function bundle() {
     const fileName = basename(output);
     if (fileName.startsWith('main-') && fileName.endsWith('.js')) {
       appFile = fileName;
-    } else if (fileName.startsWith('styles-') && fileName.endsWith('.css')) {
+    } else if (fileName.startsWith('main-') && fileName.endsWith('.css')) {
       styleFile = fileName;
     }
   }
