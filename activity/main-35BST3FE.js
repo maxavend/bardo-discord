@@ -13228,10 +13228,10 @@ function openModal(modalConfig) {
     </div>
   `;
   document.body.appendChild(backdrop);
-  const chipsBox = backdrop.querySelector("#notion-chips-box");
-  const chipsSelected = backdrop.querySelector("#notion-chips-selected");
-  const chipInput = backdrop.querySelector("#notion-chips-input");
-  const chipDropdown = backdrop.querySelector("#notion-chips-dropdown");
+  const chipsBox = backdrop.querySelector("#task-chips-box");
+  const chipsSelected = backdrop.querySelector("#task-chips-selected");
+  const chipInput = backdrop.querySelector("#task-chip-input");
+  const chipDropdown = backdrop.querySelector("#task-chip-dropdown");
   function renderSelectedChipsPills() {
     if (!chipsSelected) return;
     chipsSelected.innerHTML = modalSelectedChips.map((chip, idx) => {
@@ -13273,7 +13273,7 @@ function openModal(modalConfig) {
         const autoColor = getDeterministicColor(cleanQuery);
         html += `
           <button type="button" class="notion-menu-item notion-menu-create" data-create-chip="${escapeHtml2(cleanQuery)}" data-chip-color="${autoColor}">
-            <span>+ Crear chip <strong>"${escapeHtml2(cleanQuery)}"</strong></span>
+            <span>+ Crear etiqueta <strong>"${escapeHtml2(cleanQuery)}"</strong></span>
             <span style="width: 10px; height: 10px; border-radius: 50%; background: ${autoColor};"></span>
           </button>
         `;
@@ -13283,7 +13283,7 @@ function openModal(modalConfig) {
       const color = chip.color || getDeterministicColor(chip.name);
       html += `
         <button type="button" class="notion-menu-item" data-pick-chip="${escapeHtml2(chip.name)}" data-chip-color="${escapeHtml2(color)}">
-          <span class="notion-menu-item-tag">
+          <span class="notion-menu-item-tag" style="display: flex; align-items: center; gap: 6px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>
             <span>${escapeHtml2(chip.name)}</span>
           </span>
@@ -13359,6 +13359,7 @@ function openModal(modalConfig) {
       modalSelectedChips.pop();
       renderSelectedChipsPills();
       chipInput.placeholder = modalSelectedChips.length ? "Otro chip\u2026" : "Escribe o crea un chip\u2026";
+      updateChipDropdown("");
     }
   });
   renderSelectedChipsPills();

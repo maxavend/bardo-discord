@@ -2337,12 +2337,13 @@ function openModal(modalConfig) {
   document.body.appendChild(backdrop);
 
   // ==========================================================
-  // LÓGICA DE CHIPS ESTILO NOTION (MÁX 8 CHIPS)
   // ==========================================================
-  const chipsBox = backdrop.querySelector('#notion-chips-box');
-  const chipsSelected = backdrop.querySelector('#notion-chips-selected');
-  const chipInput = backdrop.querySelector('#notion-chips-input');
-  const chipDropdown = backdrop.querySelector('#notion-chips-dropdown');
+  // LÓGICA DE CHIPS / ETIQUETAS (REUTILIZAR O CREAR)
+  // ==========================================================
+  const chipsBox = backdrop.querySelector('#task-chips-box');
+  const chipsSelected = backdrop.querySelector('#task-chips-selected');
+  const chipInput = backdrop.querySelector('#task-chip-input');
+  const chipDropdown = backdrop.querySelector('#task-chip-dropdown');
 
   function renderSelectedChipsPills() {
     if (!chipsSelected) return;
@@ -2372,14 +2373,14 @@ function openModal(modalConfig) {
     const cleanQuery = query.trim();
     const selectedNames = new Set(modalSelectedChips.map((c) => c.name.toLowerCase()));
 
-    // Filtrar chips existentes
+    // Filtrar chips existentes del tablero que no estén seleccionados
     const matches = allBoardChips.filter(
       (c) => !selectedNames.has(c.name.toLowerCase()) && (!cleanQuery || c.name.toLowerCase().includes(cleanQuery.toLowerCase()))
     );
 
     let html = '';
 
-    // Si hay texto y no coincide exactamente con un chip existente, ofrecer crear
+    // Si hay texto escrito y no coincide exactamente con un chip existente ya seleccionado ni del tablero, ofrecer crear
     const exactMatch = allBoardChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase()) ||
                        modalSelectedChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase());
 
@@ -2394,19 +2395,19 @@ function openModal(modalConfig) {
         const autoColor = getDeterministicColor(cleanQuery);
         html += `
           <button type="button" class="notion-menu-item notion-menu-create" data-create-chip="${escapeHtml(cleanQuery)}" data-chip-color="${autoColor}">
-            <span>+ Crear chip <strong>"${escapeHtml(cleanQuery)}"</strong></span>
+            <span>+ Crear etiqueta <strong>"${escapeHtml(cleanQuery)}"</strong></span>
             <span style="width: 10px; height: 10px; border-radius: 50%; background: ${autoColor};"></span>
           </button>
         `;
       }
     }
 
-    // Lista de sugerencias existentes
+    // Lista de sugerencias existentes para reutilizar
     for (const chip of matches) {
       const color = chip.color || getDeterministicColor(chip.name);
       html += `
         <button type="button" class="notion-menu-item" data-pick-chip="${escapeHtml(chip.name)}" data-chip-color="${escapeHtml(color)}">
-          <span class="notion-menu-item-tag">
+          <span class="notion-menu-item-tag" style="display: flex; align-items: center; gap: 6px;">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>
             <span>${escapeHtml(chip.name)}</span>
           </span>
@@ -2422,7 +2423,7 @@ function openModal(modalConfig) {
     chipDropdown.innerHTML = html;
     chipDropdown.style.display = 'flex';
 
-    // Bindings de selección
+    // Bindings de creación
     chipDropdown.querySelectorAll('[data-create-chip]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2439,6 +2440,7 @@ function openModal(modalConfig) {
       });
     });
 
+    // Bindings de reutilización de chip existente
     chipDropdown.querySelectorAll('[data-pick-chip]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2492,6 +2494,7 @@ function openModal(modalConfig) {
       modalSelectedChips.pop();
       renderSelectedChipsPills();
       chipInput.placeholder = modalSelectedChips.length ? 'Otro chip…' : 'Escribe o crea un chip…';
+      updateChipDropdown('');
     }
   });
 
