@@ -27,12 +27,22 @@ No production/staging database or bucket is contacted by this test.
 
 ## Promise ownership check
 
-`scripts/check-floating-promises.js` is intentionally conservative because the project is JavaScript and Phase 0 adds no new lint/type dependencies. It fails on definite discarded Promise expressions and direct one-line calls to locally-declared async functions that have no owner. It also surfaces selected swallowed-error patterns as warnings.
+`scripts/check-floating-promises.js` is intentionally conservative because the project is JavaScript and Phase 0 adds no new lint/type dependencies. It fails on definite discarded Promise expressions and direct one-line calls to locally-declared async functions that have no owner.
+
+Phase 0 also freezes an explicit quota for the pre-existing async ownership debt found by the first CI run: 9 unowned async call sites. Those exact calls emit warnings instead of failing so this characterization phase does not silently change product behavior. Any additional occurrence fails CI, and later phases must remove allowlist entries as they establish the correct `await`, `void`, retry or error-handling semantics.
+
+Owned Promises with empty `.catch(() => {})` handlers are separately surfaced as warnings because the Promise is not floating, but the lost error is still an observability/reliability concern. The Phase 0 baseline contains 10 such warnings.
 
 This is an initial regression guard, not a semantic replacement for TypeScript-aware `no-floating-promises`. If the project adopts a typed lint stack later, that stronger check should replace this script rather than coexist indefinitely.
+
+## Wrangler types
+
+`scripts/generate-worker-types.js` creates the ignored `.wrangler/` output directory and runs Wrangler type generation for configured bindings with runtime-library types disabled. This validates that the D1, R2 and Assets bindings can be represented from the checked-in `wrangler.jsonc` without committing generated files.
 
 ## CI
 
 GitHub Actions uses `npm ci` against the committed lockfile and executes each gate separately. Pushes to `main`, `feat/**` and `codex/**`, plus pull requests into `main` or `feat/bardo-unified-experience`, run verification.
 
 Phase 0 adds no deployment, command registration or remote migration job.
+
+The executable E2E and accessibility steps are intentionally TODO-only in Phase 0 and therefore must not be cited as real browser or axe coverage. Their presence establishes stable CI command names so later phases can replace the TODOs without redesigning the workflow.
