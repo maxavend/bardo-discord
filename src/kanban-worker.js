@@ -293,7 +293,19 @@ async function handleBoardComponent(interaction, env) {
     });
 
     if (!callbackRes.ok) {
-      console.error('Discord board Activity callback error:', callbackRes.status, await callbackRes.text().catch(() => ''));
+      const errText = await callbackRes.text().catch(() => '');
+      console.error('Discord board Activity callback error:', callbackRes.status, errText);
+      const appId = interaction.application_id || interaction.data?.application_id;
+      if (appId && interaction.token) {
+        await fetch(`https://discord.com/api/v10/webhooks/${appId}/${interaction.token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: '⚠️ No se pudo abrir el tablero en este canal/hilo. Verifica que el hilo no esté archivado y que el bot y los miembros tengan activo el permiso **"Usar actividades"** y **"Enviar mensajes en hilos"** en los ajustes del servidor de Discord.',
+            flags: 64,
+          }),
+        }).catch(() => {});
+      }
       return new Response(null, { status: 202 });
     }
 
