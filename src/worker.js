@@ -15,8 +15,10 @@ import {
   loadDocument,
   loadDocumentSource,
   saveActivityContext,
+  saveDiscordMessageReference,
   saveDocument,
   saveDocumentSource,
+  updateDocumentContent,
 } from './db.js';
 
 const MAX_STORED_DOCUMENT_BYTES = 1_800_000;
@@ -150,6 +152,14 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       throw new Error(`Error al actualizar el mensaje en Discord: ${editRes.status} ${errText}`);
     }
 
+    const discordMessage = await editRes.json().catch(() => null);
+    await saveDiscordMessageReference(
+      env.DB,
+      documentId,
+      discordMessage?.channel_id || interaction.channel_id || null,
+      discordMessage?.id || null,
+    );
+
     console.log(`Documento publicado: ${title} (${documentId}, ${sourceType})`);
   } catch (error) {
     console.error('Error procesando documento en background:', error);
@@ -167,8 +177,6 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 async function handleCommandInteraction(interaction, env, ctx) {
   const commandName = interaction.data?.name;
 
-  // `documento` se conserva temporalmente para mensajes/comandos cacheados mientras
-  // Discord propaga el nuevo trigger `/doc`.
   if (commandName === 'doc' || commandName === 'documento') {
     const options = interaction.data?.options || [];
     const archivoOption = options.find((opt) => opt.name === 'archivo');
@@ -266,6 +274,7 @@ async function handleComponentInteraction(interaction, env) {
 
     const callbackData = await callbackRes.json().catch(() => null);
     const instanceIds = extractActivityInstanceIds(callbackData);
+    const userId = interaction.member?.user?.id || interaction.user?.id || null;
 
     if (instanceIds.length === 0) {
       console.error('Discord launched the Activity without a readable instance id.', {
@@ -273,7 +282,7 @@ async function handleComponentInteraction(interaction, env) {
         resource: callbackData?.resource,
       });
     } else {
-      await Promise.all(instanceIds.map((instanceId) => saveActivityContext(env.DB, instanceId, documentId)));
+      await Promise.all(instanceIds.map((instanceId) => saveActivityContext(env.DB, instanceId, documentId, userId)));
     }
 
     return new Response(null, { status: 202 });
@@ -317,63 +326,53 @@ async function verifyActivityDocumentAccess(request, env, documentId) {
   return null;
 }
 
-
-async function handleDocumentExportApi(url, documentId, env) {
+async function resolveEditorAccess(request, env, documentId) {
   if (!env.DB) {
-    return jsonResponse({ error: "Database unavailable" }, 503);
+    return { response: jsonResponse({ error: 'Database unavailable' }, 503) };
   }
 
-  const document = await loadDocument(env.DB, documentId);
+  const instanceId = request.headers.get('x-bardo-instance-id')?.trim();
+  if (!instanceId) {
+    return { response: jsonResponse({ error: 'Activity instance required' }, 401) };
+  }
+
+  const [context, document] = await Promise.all([
+    loadActivityContext(env.DB, instanceId),
+    loadDocument(env.DB, documentId),
+  ]);
+
   if (!document) {
-    return jsonResponse({ error: "Document not found" }, 404);
+    return { response: jsonResponse({ error: 'Document not found' }, 404) };
   }
 
-  const format = url.searchParams.get("format")?.toLowerCase() || "markdown";
-  const baseName = sanitizeExportFileName(document.title || document.sourceName || "documento");
-
-  if (format === "docx" || format === "word" || format === "doc") {
-    const fileName = `${baseName}.docx`;
-    const docxBytes = await generateDocxDocument(document);
-    return new Response(docxBytes, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Length": String(docxBytes.byteLength),
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-        "Cache-Control": "private, no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+  if (!context || context.documentId !== documentId) {
+    return { response: jsonResponse({ error: 'Activity instance does not match document' }, 403) };
   }
 
-  if (format === "pdf") {
-    const fileName = `${baseName}.pdf`;
-    const pdfBytes = await generatePdfDocument(document);
-    return new Response(pdfBytes, {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Length": String(pdfBytes.byteLength),
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-        "Cache-Control": "private, no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+  if (!context.userId || !document.createdBy || document.createdBy === 'unknown' || context.userId !== document.createdBy) {
+    return { response: jsonResponse({ error: 'Only the document author can edit it' }, 403) };
   }
 
-  const fileName = `${baseName}.md`;
-  return new Response(document.originalMarkdown || "", {
-    status: 200,
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  return { context, document };
 }
 
-async function handleDocumentApi(documentId, env) {
+async function canEditDocument(request, env, document) {
+  if (!env.DB || !document) return false;
+  const instanceId = request.headers.get('x-bardo-instance-id')?.trim();
+  if (!instanceId) return false;
+  const context = await loadActivityContext(env.DB, instanceId);
+  return Boolean(
+    context
+    && context.documentId === document.id
+    && context.userId
+    && document.createdBy
+    && document.createdBy !== 'unknown'
+    && context.userId === document.createdBy
+    && document.importStatus === 'ready'
+  );
+}
+
+async function handleDocumentExportApi(url, documentId, env) {
   if (!env.DB) {
     return jsonResponse({ error: 'Database unavailable' }, 503);
   }
@@ -382,6 +381,63 @@ async function handleDocumentApi(documentId, env) {
   if (!document) {
     return jsonResponse({ error: 'Document not found' }, 404);
   }
+
+  const format = url.searchParams.get('format')?.toLowerCase() || 'markdown';
+  const baseName = sanitizeExportFileName(document.title || document.sourceName || 'documento');
+
+  if (format === 'docx' || format === 'word' || format === 'doc') {
+    const fileName = `${baseName}.docx`;
+    const docxBytes = await generateDocxDocument(document);
+    return new Response(docxBytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Length': String(docxBytes.byteLength),
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
+
+  if (format === 'pdf') {
+    const fileName = `${baseName}.pdf`;
+    const pdfBytes = await generatePdfDocument(document);
+    return new Response(pdfBytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Length': String(pdfBytes.byteLength),
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
+
+  const fileName = `${baseName}.md`;
+  return new Response(document.originalMarkdown || '', {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+async function handleDocumentApi(request, documentId, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
+
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) {
+    return jsonResponse({ error: 'Document not found' }, 404);
+  }
+
+  const canEdit = await canEditDocument(request, env, document);
 
   return jsonResponse(
     {
@@ -394,6 +450,8 @@ async function handleDocumentApi(documentId, env) {
       importStatus: document.importStatus,
       hasSource: document.hasSource,
       createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+      canEdit,
     },
     200,
     {
@@ -401,6 +459,77 @@ async function handleDocumentApi(documentId, env) {
       'X-Content-Type-Options': 'nosniff',
     },
   );
+}
+
+async function handleDocumentEditApi(request, documentId, env) {
+  const access = await resolveEditorAccess(request, env, documentId);
+  if (access.response) return access.response;
+  if (access.document.importStatus !== 'ready') {
+    return jsonResponse({ error: 'Document must finish importing before editing' }, 409);
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const title = typeof payload?.title === 'string' ? payload.title.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+  const markdown = typeof payload?.markdown === 'string' ? payload.markdown.trim() : '';
+  if (!title) return jsonResponse({ error: 'Document title required' }, 400);
+  if (!markdown) return jsonResponse({ error: 'Document markdown required' }, 400);
+
+  const byteLength = new TextEncoder().encode(markdown).byteLength;
+  if (byteLength > MAX_STORED_DOCUMENT_BYTES) {
+    return jsonResponse({ error: 'Document is too large' }, 413);
+  }
+
+  const { body } = extractDocumentTitle(markdown, title);
+  const pages = firstPreviewPage(body);
+  const updatedAt = new Date().toISOString();
+
+  await updateDocumentContent(env.DB, documentId, {
+    title,
+    markdown,
+    pages,
+    updatedAt,
+  });
+
+  return jsonResponse({ ok: true, updatedAt });
+}
+
+async function handleDocumentFinishApi(request, documentId, env) {
+  const access = await resolveEditorAccess(request, env, documentId);
+  if (access.response) return access.response;
+
+  const document = access.document;
+  if (!document.discordChannelId || !document.discordMessageId || !env.DISCORD_TOKEN) {
+    return jsonResponse({ ok: true, synced: false });
+  }
+
+  const payload = buildDocumentPayload(document, { documentId });
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${encodeURIComponent(document.discordChannelId)}/messages/${encodeURIComponent(document.discordMessageId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bot ${env.DISCORD_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        allowed_mentions: payload.allowed_mentions,
+        components: payload.components,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    console.error('No se pudo sincronizar el preview editado:', response.status, await response.text().catch(() => ''));
+    return jsonResponse({ ok: true, synced: false }, 200);
+  }
+
+  return jsonResponse({ ok: true, synced: true });
 }
 
 async function handleDocumentSourceApi(request, documentId, env) {
@@ -565,7 +694,15 @@ export default {
       if (!route) return jsonResponse({ error: 'Invalid document route' }, 400);
 
       if (request.method === 'GET' && route.action === null) {
-        return handleDocumentApi(route.documentId, env);
+        return handleDocumentApi(request, route.documentId, env);
+      }
+
+      if (request.method === 'PATCH' && route.action === null) {
+        return handleDocumentEditApi(request, route.documentId, env);
+      }
+
+      if (request.method === 'POST' && route.action === 'finish') {
+        return handleDocumentFinishApi(request, route.documentId, env);
       }
 
       if (request.method === 'GET' && (route.action === 'export' || route.action === 'download')) {
