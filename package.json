@@ -13,7 +13,7 @@
     "register": "node --env-file=.env scripts/register-commands.js",
     "check:syntax": "node scripts/check-syntax.js",
     "check:promises": "node scripts/check-floating-promises.js",
-    "types:generate": "wrangler types .wrangler/worker-configuration.d.ts --include-runtime=false",
+    "types:generate": "node scripts/generate-worker-types.js",
     "check": "npm run build && npm run check:syntax && npm run check:promises && npm run types:generate",
     "test": "npm run build && node --test",
     "test:unit": "node --test test/backup-r2.test.js test/components.test.js test/db.test.js test/event.test.js test/export-format.test.js test/import-db.test.js test/import-format.test.js test/pagination.test.js",
