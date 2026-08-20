@@ -72,6 +72,7 @@ let toastTimer = null;
 let filterState = {
   search: '',
   onlyMyTasks: false,
+  assignee: 'all',
   priority: 'all',
   label: 'all',
 };
@@ -1260,7 +1261,12 @@ function injectStyles() {
       padding: 0 4px;
       margin: 0;
     }
-    .notion-chips-dropdown {
+    .notion-chips-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .notion-chips-dropdown,
+    .notion-chip-dropdown {
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
@@ -1799,6 +1805,76 @@ function getBoardConfiguredMembers(board) {
   return Array.from(map.values());
 }
 
+function getAssignableMembers(board) {
+  const map = new Map();
+
+  // 1. Miembros configurados en el tablero
+  if (Array.isArray(board?.members)) {
+    for (const m of board.members) {
+      if (!m) continue;
+      const id = String(m.id || m.name || m.username);
+      map.set(id, {
+        id,
+        name: m.name || m.username || 'Usuario',
+        username: m.username || '',
+        avatarUrl: m.avatarUrl || null,
+        roles: Array.isArray(m.roles) ? m.roles : [],
+      });
+    }
+  }
+
+  // 2. Miembros del servidor de Discord
+  for (const m of serverGuildMembers) {
+    if (!m || !m.id) continue;
+    const id = String(m.id);
+    if (!map.has(id)) {
+      map.set(id, {
+        id,
+        name: m.name || m.username || 'Usuario',
+        username: m.username || '',
+        avatarUrl: m.avatarUrl || null,
+        roles: Array.isArray(m.roles) ? m.roles : [],
+      });
+    }
+  }
+
+  // 3. Participantes conectados en Activity
+  for (const p of connectedParticipants) {
+    if (!p || !p.id) continue;
+    const id = String(p.id);
+    const existing = map.get(id);
+    if (!existing) {
+      map.set(id, {
+        id,
+        name: p.global_name || p.username || 'Usuario',
+        username: p.username || '',
+        avatarUrl: p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png?size=64` : null,
+        roles: [],
+      });
+    }
+  }
+
+  // 4. Miembros asignados en tareas existentes
+  if (Array.isArray(board?.tasks)) {
+    for (const t of board.tasks) {
+      if (t.assigneeName) {
+        const id = t.assigneeId ? String(t.assigneeId) : t.assigneeName;
+        if (!map.has(id)) {
+          map.set(id, {
+            id,
+            name: t.assigneeName,
+            username: '',
+            avatarUrl: null,
+            roles: [],
+          });
+        }
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 function getKnownDiscordMembers(allTasks = []) {
   const map = new Map();
 
@@ -1867,6 +1943,47 @@ function getKnownDiscordMembers(allTasks = []) {
   return Array.from(map.values());
 }
 
+function getAllBoardAssignees(board) {
+  const map = new Map();
+  if (board) {
+    if (Array.isArray(board.members)) {
+      for (const m of board.members) {
+        if (!m) continue;
+        const id = String(m.id || m.name || m.username);
+        const name = m.name || m.username || 'Usuario';
+        map.set(id, { id, name, username: m.username || '' });
+      }
+    }
+    if (Array.isArray(board.tasks)) {
+      for (const t of board.tasks) {
+        if (t.assigneeName) {
+          const id = t.assigneeId ? String(t.assigneeId) : t.assigneeName;
+          if (!map.has(id)) {
+            map.set(id, { id, name: t.assigneeName, username: '' });
+          }
+        }
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+function getMyUserIdentities() {
+  const ids = new Set();
+  const names = new Set();
+
+  if (currentDiscordUser?.id) ids.add(String(currentDiscordUser.id));
+  const storedId = localStorage.getItem('bardo_my_user_id');
+  if (storedId) ids.add(String(storedId));
+
+  if (currentDiscordUser?.username) names.add(currentDiscordUser.username.toLowerCase().replace(/^@/, ''));
+  if (currentDiscordUser?.global_name) names.add(currentDiscordUser.global_name.toLowerCase());
+  const storedName = localStorage.getItem('bardo_my_user_name');
+  if (storedName) names.add(storedName.toLowerCase().replace(/^@/, ''));
+
+  return { ids: Array.from(ids), names: Array.from(names) };
+}
+
 function getFilteredTasks(tasks = []) {
   return tasks.filter((task) => {
     // Búsqueda
@@ -1880,15 +1997,39 @@ function getFilteredTasks(tasks = []) {
       if (!matchTitle && !matchDesc && !matchAssignee && !matchLabels) return false;
     }
 
-    // Mis tareas
-    if (filterState.onlyMyTasks && currentDiscordUser) {
-      const myId = currentDiscordUser.id;
-      const myName = (currentDiscordUser.username || '').toLowerCase();
-      const taskAssigneeId = task.assigneeId;
-      const taskAssigneeName = (task.assigneeName || '').toLowerCase();
-      if (taskAssigneeId !== myId && !taskAssigneeName.includes(myName)) {
-        return false;
+    // Filtro de Responsable / Miembro General
+    if (filterState.assignee !== 'all') {
+      if (filterState.assignee === 'unassigned') {
+        if (task.assigneeId || task.assigneeName) return false;
+      } else {
+        const target = filterState.assignee.toLowerCase();
+        const tId = String(task.assigneeId || '').toLowerCase();
+        const tName = String(task.assigneeName || '').toLowerCase().replace(/^@/, '');
+        if (tId !== target && tName !== target && !tName.includes(target) && !target.includes(tName)) {
+          return false;
+        }
       }
+    }
+
+    // Mis tareas
+    if (filterState.onlyMyTasks) {
+      const { ids, names } = getMyUserIdentities();
+      const taskAssigneeId = task.assigneeId ? String(task.assigneeId) : '';
+      const taskAssigneeName = (task.assigneeName || '').toLowerCase().replace(/^@/, '');
+
+      let isMine = false;
+      if (taskAssigneeId && ids.includes(taskAssigneeId)) {
+        isMine = true;
+      } else if (taskAssigneeName && names.length > 0) {
+        for (const n of names) {
+          if (taskAssigneeName === n || taskAssigneeName.includes(n) || n.includes(taskAssigneeName)) {
+            isMine = true;
+            break;
+          }
+        }
+      }
+
+      if (!isMine) return false;
     }
 
     // Prioridad
@@ -1949,6 +2090,7 @@ function renderBoard(container, board) {
   const allTasks = board.tasks || [];
   const filteredTasks = getFilteredTasks(allTasks);
   const allBoardChips = getAllBoardChips(allTasks);
+  const allBoardAssignees = getAllBoardAssignees(board);
 
   const fallbackStatus = boardColumns[0]?.id || 'backlog';
   const grouped = Object.fromEntries(boardColumns.map((status) => [status.id, []]));
@@ -1966,6 +2108,7 @@ function renderBoard(container, board) {
   const hasActiveFilters = Boolean(
     filterState.search ||
     filterState.onlyMyTasks ||
+    filterState.assignee !== 'all' ||
     filterState.priority !== 'all' ||
     filterState.label !== 'all'
   );
@@ -2007,6 +2150,17 @@ function renderBoard(container, board) {
           </svg>
           <span>Mis tareas</span>
         </button>
+
+        <div class="custom-select-wrap">
+          <select id="filter-assignee" aria-label="Filtrar por miembro">
+            <option value="all" ${filterState.assignee === 'all' ? 'selected' : ''}>Todos los miembros</option>
+            <option value="unassigned" ${filterState.assignee === 'unassigned' ? 'selected' : ''}>Sin asignar</option>
+            ${allBoardAssignees.map((m) => `<option value="${escapeHtml(m.id)}" ${filterState.assignee === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+          </select>
+          <span class="select-arrow" aria-hidden="true">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </div>
 
         <div class="custom-select-wrap">
           <select id="filter-priority" aria-label="Filtrar por prioridad">
@@ -2096,6 +2250,62 @@ function renderBoard(container, board) {
   bindBoardEvents(container);
 }
 
+function openIdentifyMeModal(boardMembers) {
+  const backdrop = document.createElement('div');
+  backdrop.id = 'bardo-identify-modal-backdrop';
+  backdrop.className = 'kanban-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="kanban-modal" role="dialog" aria-modal="true" style="max-width: 440px;">
+      <header class="modal-header">
+        <h2 class="modal-title">¿Quién eres tú?</h2>
+        <button id="btn-identify-close" class="modal-close-btn" type="button" aria-label="Cerrar">✕</button>
+      </header>
+      <div class="modal-form">
+        <p class="form-supporting-text" style="margin-top: 0;">Selecciona tu perfil en este tablero para que <strong>Mis tareas</strong> filtre siempre tus asignaciones correctamente.</p>
+        <div style="display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto;">
+          ${boardMembers.map((m) => `
+            <button type="button" class="member-menu-item btn-choose-me" data-member-id="${escapeHtml(m.id)}" data-member-name="${escapeHtml(m.name)}" data-member-username="${escapeHtml(m.username || '')}">
+              ${m.avatarUrl
+                ? `<img src="${escapeHtml(m.avatarUrl)}" alt="${escapeHtml(m.name)}" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />`
+                : `<span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>`}
+              <div class="member-info-col">
+                <span class="member-name-text" style="font-size: 13px;">${escapeHtml(m.name)}</span>
+                ${m.username ? `<span class="member-handle-text">@${escapeHtml(m.username)}</span>` : ''}
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  const closeModal = () => backdrop.remove();
+  backdrop.querySelector('#btn-identify-close')?.addEventListener('click', closeModal);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeModal();
+  });
+
+  backdrop.querySelectorAll('.btn-choose-me').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.memberId;
+      const name = btn.dataset.memberName;
+      const username = btn.dataset.memberUsername;
+      if (id) localStorage.setItem('bardo_my_user_id', id);
+      if (name) localStorage.setItem('bardo_my_user_name', name);
+      currentDiscordUser = { id, name, username, global_name: name };
+      filterState.onlyMyTasks = true;
+      closeModal();
+      const container = document.querySelector('#kanban-content') || document.querySelector('#kanban-view');
+      if (container && currentBoardData) {
+        renderBoard(container, currentBoardData);
+      }
+      showToast(`Identificado como ${name}`, 'success');
+    });
+  });
+}
+
 function bindBoardEvents(container) {
   const boardColumns = Array.isArray(currentBoardData?.columns) && currentBoardData.columns.length > 0
     ? currentBoardData.columns
@@ -2124,7 +2334,20 @@ function bindBoardEvents(container) {
   });
 
   container.querySelector('#toggle-my-tasks')?.addEventListener('click', () => {
+    const { ids, names } = getMyUserIdentities();
+    if (!filterState.onlyMyTasks && ids.length === 0 && names.length === 0) {
+      const boardMembers = getAssignableMembers(currentBoardData);
+      if (boardMembers.length > 0) {
+        openIdentifyMeModal(boardMembers);
+        return;
+      }
+    }
     filterState.onlyMyTasks = !filterState.onlyMyTasks;
+    renderBoard(container, currentBoardData);
+  });
+
+  container.querySelector('#filter-assignee')?.addEventListener('change', (e) => {
+    filterState.assignee = e.target.value;
     renderBoard(container, currentBoardData);
   });
 
@@ -2139,7 +2362,7 @@ function bindBoardEvents(container) {
   });
 
   container.querySelector('#btn-clear-all-filters')?.addEventListener('click', () => {
-    filterState = { search: '', onlyMyTasks: false, priority: 'all', label: 'all' };
+    filterState = { search: '', onlyMyTasks: false, assignee: 'all', priority: 'all', label: 'all' };
     renderBoard(container, currentBoardData);
   });
 
@@ -2365,16 +2588,18 @@ function openModal(modalConfig) {
         <div class="form-group">
           <label>Chips / etiquetas</label>
           <p class="form-supporting-text">Etiquetas visuales para categorizar y filtrar la tarea.</p>
-          <div class="notion-chips-container" id="task-chips-box">
-            <div class="notion-chips-selected" id="task-chips-selected"></div>
-            <input
-              id="task-chip-input"
-              class="notion-chip-inline-input"
-              type="text"
-              placeholder="Escribe o crea un chip…"
-              autocomplete="off"
-            />
-            <div id="task-chip-dropdown" class="notion-chip-dropdown" style="display: none;"></div>
+          <div class="notion-chips-wrapper" id="task-chips-wrapper">
+            <div class="notion-chips-container" id="task-chips-box">
+              <div class="notion-chips-selected" id="task-chips-selected"></div>
+              <input
+                id="task-chip-input"
+                class="notion-chip-inline-input"
+                type="text"
+                placeholder="Escribe o crea un chip…"
+                autocomplete="off"
+              />
+            </div>
+            <div id="task-chip-dropdown" class="notion-chips-dropdown notion-chip-dropdown" style="display: none;"></div>
           </div>
         </div>
 
@@ -2399,6 +2624,7 @@ function openModal(modalConfig) {
   // ==========================================================
   // LÓGICA DE CHIPS / ETIQUETAS (REUTILIZAR O CREAR)
   // ==========================================================
+  const chipsWrapper = backdrop.querySelector('#task-chips-wrapper');
   const chipsBox = backdrop.querySelector('#task-chips-box');
   const chipsSelected = backdrop.querySelector('#task-chips-selected');
   const chipInput = backdrop.querySelector('#task-chip-input');
@@ -2484,7 +2710,8 @@ function openModal(modalConfig) {
 
     // Bindings de creación
     chipDropdown.querySelectorAll('[data-create-chip]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
         e.stopPropagation();
         const name = btn.dataset.createChip;
         const color = btn.dataset.chipColor;
@@ -2501,7 +2728,8 @@ function openModal(modalConfig) {
 
     // Bindings de reutilización de chip existente
     chipDropdown.querySelectorAll('[data-pick-chip]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
         e.stopPropagation();
         const name = btn.dataset.pickChip;
         const color = btn.dataset.chipColor;
@@ -2562,6 +2790,7 @@ function openModal(modalConfig) {
   // ==========================================================
   // LÓGICA DE AUTOCOMPLETADO DE MIEMBROS DE DISCORD
   // ==========================================================
+  const memberBox = backdrop.querySelector('#discord-member-box');
   const memberNameInput = backdrop.querySelector('#task-assignee-name-input');
   const memberIdInput = backdrop.querySelector('#task-assignee-id-input');
   const memberDropdown = backdrop.querySelector('#discord-member-dropdown');
@@ -2570,15 +2799,16 @@ function openModal(modalConfig) {
   function updateMemberDropdown(query = '') {
     if (!memberDropdown) return;
     const cleanQuery = query.trim().replace(/^@/, '').toLowerCase();
-    const boardMembers = getBoardConfiguredMembers(currentBoardData);
+    const allMembers = getAssignableMembers(currentBoardData);
 
-    let matches = boardMembers;
+    let matches = allMembers;
     if (cleanQuery) {
-      matches = boardMembers.filter(
-        (m) => m.name.toLowerCase().includes(cleanQuery) ||
-               (m.username && m.username.toLowerCase().includes(cleanQuery)) ||
-               (m.id && m.id.includes(cleanQuery))
-      );
+      matches = allMembers.filter((m) => {
+        const name = (m.name || '').toLowerCase();
+        const username = (m.username || '').toLowerCase();
+        const id = String(m.id || '');
+        return name.includes(cleanQuery) || username.includes(cleanQuery) || id.includes(cleanQuery);
+      });
     }
 
     let html = '';
@@ -2587,7 +2817,7 @@ function openModal(modalConfig) {
       for (const m of matches) {
         const roleBadge = getMemberRoleBadge(m);
         html += `
-          <button type="button" class="member-menu-item" data-member-id="${escapeHtml(m.id)}" data-member-name="${escapeHtml(m.name)}">
+          <button type="button" class="member-menu-item" data-member-id="${escapeHtml(m.id)}" data-member-name="${escapeHtml(m.name)}" data-member-username="${escapeHtml(m.username || '')}" data-member-avatar="${escapeHtml(m.avatarUrl || '')}">
             ${m.avatarUrl
               ? `<img src="${escapeHtml(m.avatarUrl)}" alt="${escapeHtml(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />`
               : `<span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>`}
@@ -2600,9 +2830,9 @@ function openModal(modalConfig) {
         `;
       }
     } else if (cleanQuery) {
-      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No hay miembros del tablero que coincidan</div>`;
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros que coincidan con "${escapeHtml(cleanQuery)}"</div>`;
     } else {
-      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No hay miembros agregados en este tablero.<br><span style="font-size: 11px; color: var(--kb-text-muted);">Añade miembros desde la configuración del tablero.</span></div>`;
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">Escribe un nombre o selecciona un miembro</div>`;
     }
 
     if (!html) {
@@ -2618,13 +2848,26 @@ function openModal(modalConfig) {
     }, 40);
 
     memberDropdown.querySelectorAll('.member-menu-item').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
         e.stopPropagation();
         const id = btn.dataset.memberId;
         const name = btn.dataset.memberName;
+        const username = btn.dataset.memberUsername;
+        const avatarUrl = btn.dataset.memberAvatar;
         if (memberNameInput) memberNameInput.value = name;
         if (memberIdInput) memberIdInput.value = id;
         memberDropdown.style.display = 'none';
+
+        if (name && currentBoardData) {
+          const boardMembers = Array.isArray(currentBoardData.members) ? [...currentBoardData.members] : [];
+          const exists = boardMembers.some((m) => m.name.toLowerCase() === name.toLowerCase() || (id && String(m.id) === String(id)));
+          if (!exists) {
+            boardMembers.push({ id, name, username: username || '', avatarUrl: avatarUrl || null });
+            currentBoardData.members = boardMembers;
+            saveBoardSettingsRequest({ members: boardMembers }).catch(() => {});
+          }
+        }
       });
     });
   }
@@ -2649,10 +2892,10 @@ function openModal(modalConfig) {
 
   // Cerrar dropdowns al hacer clic fuera
   backdrop.addEventListener('click', (e) => {
-    if (!chipsBox?.contains(e.target) && chipDropdown) {
+    if (!chipsWrapper?.contains(e.target) && chipDropdown) {
       chipDropdown.style.display = 'none';
     }
-    if (!memberNameInput?.parentElement?.contains(e.target) && memberDropdown) {
+    if (!memberBox?.contains(e.target) && memberDropdown) {
       memberDropdown.style.display = 'none';
     }
     if (e.target === backdrop) closeModal();
