@@ -27,7 +27,7 @@ function normalizePreviewBlock(block) {
   if (isMarkdownTable(trimmed)) {
     return '*Tabla disponible en el documento completo.*';
   }
-  return trimmed;
+  return trimmed.replace(/<\/?u>/gi, '');
 }
 
 export function createDocumentPreview(markdown, limit = PREVIEW_LIMIT) {
