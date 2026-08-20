@@ -352,3 +352,52 @@ test('Operaciones CRUD completas de Kanban en BD (crear, editar, mover, eliminar
   const emptyBoard = await loadBoardWithTasks(db, 'board-1');
   assert.equal(emptyBoard.tasks.length, 0);
 });
+
+test('Kanban worker API expone miembros del servidor de Discord', async () => {
+  const kanbanWorkerModule = await import('../src/kanban-worker.js');
+  const kanbanWorker = kanbanWorkerModule.default;
+
+  const db = createMockKanbanDb();
+  await createBoard(db, {
+    id: 'board-guild-test',
+    guildId: '123456789012345678',
+    name: 'Tablero Servidor',
+    createdBy: 'admin-1',
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/guilds/123456789012345678/members')) {
+      return new Response(JSON.stringify([
+        {
+          user: { id: '999111', username: 'alex', global_name: 'Alex Developer', avatar: 'avatar1' },
+          nick: null,
+          roles: [],
+        },
+        {
+          user: { id: '999222', username: 'bot_bardo', bot: true },
+          nick: 'Bardo Bot',
+          roles: [],
+        },
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(null, { status: 404 });
+  };
+
+  try {
+    const env = { DB: db, DISCORD_TOKEN: 'fake-token' };
+    const req = new Request('http://localhost/api/boards/board-guild-test', { method: 'GET' });
+    const res = await kanbanWorker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.name, 'Tablero Servidor');
+    assert.ok(Array.isArray(data.guildMembers));
+    assert.equal(data.guildMembers.length, 1); // Bot excluido
+    assert.equal(data.guildMembers[0].name, 'Alex Developer');
+    assert.equal(data.guildMembers[0].username, 'alex');
+    assert.ok(data.guildMembers[0].avatarUrl.includes('999111'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+

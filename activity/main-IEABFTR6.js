@@ -11077,6 +11077,7 @@ var currentInstanceId = null;
 var currentBoardData = null;
 var currentDiscordUser = null;
 var connectedParticipants = [];
+var serverGuildMembers = [];
 var draggedTaskId = null;
 var isSyncing = false;
 var syncTimer = null;
@@ -12631,32 +12632,55 @@ function getAllBoardChips(allTasks = []) {
 }
 function getKnownDiscordMembers(allTasks = []) {
   const map = /* @__PURE__ */ new Map();
+  for (const m of serverGuildMembers) {
+    if (!m || !m.id) continue;
+    map.set(String(m.id), {
+      id: String(m.id),
+      name: m.name || m.username || "Usuario",
+      username: m.username || "",
+      avatarUrl: m.avatarUrl || null
+    });
+  }
   if (Array.isArray(currentBoardData?.members)) {
     for (const m of currentBoardData.members) {
       if (!m) continue;
       const id = String(m.id || m.name || m.username);
       const name = m.name || m.username || "Usuario";
-      map.set(id, { id, name, username: m.username || "" });
+      const existing = map.get(id);
+      map.set(id, {
+        id,
+        name,
+        username: m.username || existing?.username || "",
+        avatarUrl: m.avatarUrl || existing?.avatarUrl || null
+      });
     }
   }
   for (const p of connectedParticipants) {
     if (!p.id) continue;
     const name = p.nickname || p.global_name || p.username || "Usuario";
-    map.set(String(p.id), { id: String(p.id), name, username: p.username || "" });
+    const existing = map.get(String(p.id));
+    map.set(String(p.id), {
+      id: String(p.id),
+      name,
+      username: p.username || existing?.username || "",
+      avatarUrl: existing?.avatarUrl || (p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png?size=64` : null)
+    });
   }
   if (currentDiscordUser?.id) {
     const name = currentDiscordUser.global_name || currentDiscordUser.username || "Yo";
+    const existing = map.get(String(currentDiscordUser.id));
     map.set(String(currentDiscordUser.id), {
       id: String(currentDiscordUser.id),
       name,
-      username: currentDiscordUser.username || ""
+      username: currentDiscordUser.username || existing?.username || "",
+      avatarUrl: existing?.avatarUrl || (currentDiscordUser.avatar ? `https://cdn.discordapp.com/avatars/${currentDiscordUser.id}/${currentDiscordUser.avatar}.png?size=64` : null)
     });
   }
   for (const task of allTasks) {
     if (task.assigneeId && task.assigneeName) {
       const id = String(task.assigneeId);
       if (!map.has(id)) {
-        map.set(id, { id, name: task.assigneeName, username: "" });
+        map.set(id, { id, name: task.assigneeName, username: "", avatarUrl: null });
       }
     }
   }
@@ -13282,7 +13306,7 @@ function openModal(modalConfig) {
       for (const m of matches) {
         html += `
           <button type="button" class="member-menu-item" data-member-id="${escapeHtml2(m.id)}" data-member-name="${escapeHtml2(m.name)}">
-            <span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>
+            ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />` : `<span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>`}
             <div class="member-info-col">
               <span class="member-name-text">${escapeHtml2(m.name)}</span>
               ${m.username ? `<span class="member-handle-text">@${escapeHtml2(m.username)}</span>` : ""}
@@ -13580,26 +13604,7 @@ async function openBoardSettingsModal(board) {
   if (activeDiscordSdk2) {
     await refreshDiscordParticipants(activeDiscordSdk2);
   }
-  const knownFromDiscord = [];
-  if (currentDiscordUser) {
-    knownFromDiscord.push({
-      id: String(currentDiscordUser.id),
-      name: currentDiscordUser.global_name || currentDiscordUser.username || "Yo",
-      username: currentDiscordUser.username || ""
-    });
-  }
-  for (const p of connectedParticipants) {
-    if (!p.id) continue;
-    const name = p.nickname || p.global_name || p.username || "Usuario";
-    if (!knownFromDiscord.some((m) => m.id === String(p.id))) {
-      knownFromDiscord.push({ id: String(p.id), name, username: p.username || "" });
-    }
-  }
-  for (const t of board.tasks || []) {
-    if (t.assigneeId && t.assigneeName && !knownFromDiscord.some((m) => m.id === String(t.assigneeId))) {
-      knownFromDiscord.push({ id: String(t.assigneeId), name: t.assigneeName, username: "" });
-    }
-  }
+  const knownFromDiscord = getKnownDiscordMembers(board.tasks || []);
   const backdrop = document.createElement("div");
   backdrop.id = "bardo-board-settings-modal-backdrop";
   backdrop.className = "kanban-modal-backdrop";
@@ -13815,7 +13820,7 @@ async function openBoardSettingsModal(board) {
     }
     membersListEl.innerHTML = modalMembers.map((m, idx) => `
       <div class="board-member-pill">
-        <span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>
+        ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />` : `<span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>`}
         <span>${escapeHtml2(m.name)}</span>
         <button type="button" class="board-member-pill-remove" data-remove-member-idx="${idx}" title="Quitar miembro" aria-label="Quitar">\u2715</button>
       </div>
@@ -13839,20 +13844,33 @@ async function openBoardSettingsModal(board) {
       return;
     }
     suggestionsEl.innerHTML = `
-      <span style="font-size: 11px; color: var(--kb-text-muted); width: 100%;">Sugerencias detectadas en Discord:</span>
-      ${unadded.map((m) => `
-        <button type="button" class="board-member-suggestion-btn" data-suggest-id="${escapeHtml2(m.id)}" data-suggest-name="${escapeHtml2(m.name)}" data-suggest-username="${escapeHtml2(m.username || "")}">
-          <span>+</span>
-          <span>${escapeHtml2(m.name)}</span>
-        </button>
-      `).join("")}
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 4px;">
+        <span style="font-size: 11px; color: var(--kb-text-muted);">Miembros del servidor (${unadded.length} disponibles):</span>
+        ${unadded.length > 1 ? `<button type="button" id="btn-add-all-server-members" class="btn-secondary" style="height: 22px; padding: 0 8px; font-size: 11px; border-radius: 6px; cursor: pointer;">+ A\xF1adir todos</button>` : ""}
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; width: 100%; max-height: 120px; overflow-y: auto; padding: 2px 0;">
+        ${unadded.map((m) => `
+          <button type="button" class="board-member-suggestion-btn" data-suggest-id="${escapeHtml2(m.id)}" data-suggest-name="${escapeHtml2(m.name)}" data-suggest-username="${escapeHtml2(m.username || "")}" data-suggest-avatar="${escapeHtml2(m.avatarUrl || "")}">
+            ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;" />` : `<span>+</span>`}
+            <span>${escapeHtml2(m.name)}</span>
+          </button>
+        `).join("")}
+      </div>
     `;
+    suggestionsEl.querySelector("#btn-add-all-server-members")?.addEventListener("click", () => {
+      for (const m of unadded) {
+        modalMembers.push({ id: m.id, name: m.name, username: m.username || "", avatarUrl: m.avatarUrl || null });
+      }
+      renderMembersList();
+      renderSuggestions();
+    });
     suggestionsEl.querySelectorAll("[data-suggest-id]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.suggestId;
         const name = btn.dataset.suggestName;
         const username = btn.dataset.suggestUsername;
-        modalMembers.push({ id, name, username });
+        const avatarUrl = btn.dataset.suggestAvatar || null;
+        modalMembers.push({ id, name, username, avatarUrl });
         renderMembersList();
         renderSuggestions();
       });
@@ -13906,8 +13924,8 @@ async function openBoardSettingsModal(board) {
       `;
     }
     html += matches.map((m) => `
-      <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}">
-        <span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>
+      <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}" data-pick-avatar="${escapeHtml2(m.avatarUrl || "")}">
+        ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />` : `<span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>`}
         <div class="member-info-col">
           <span class="member-name-text">${escapeHtml2(m.name)}</span>
           ${m.username ? `<span class="member-handle-text">@${escapeHtml2(m.username)}</span>` : ""}
@@ -13926,7 +13944,8 @@ async function openBoardSettingsModal(board) {
         const id = btn.dataset.pickId;
         const name = btn.dataset.pickName;
         const username = btn.dataset.pickUsername;
-        modalMembers.push({ id, name, username });
+        const avatarUrl = btn.dataset.pickAvatar || null;
+        modalMembers.push({ id, name, username, avatarUrl });
         renderMembersList();
         renderSuggestions();
         if (addInput) addInput.value = "";
@@ -13985,7 +14004,11 @@ async function fetchBoard() {
     cache: "no-store"
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+  const data = await response.json();
+  if (Array.isArray(data?.guildMembers) && data.guildMembers.length > 0) {
+    serverGuildMembers = data.guildMembers;
+  }
+  return data;
 }
 async function saveBoardSettingsRequest(payload) {
   if (!currentInstanceId) throw new Error("Se requiere contexto de Activity");

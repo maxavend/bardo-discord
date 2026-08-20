@@ -317,6 +317,85 @@ async function verifyBoardActivityAccess(request, env, boardId) {
   return null;
 }
 
+const guildMembersCache = new Map();
+
+function formatDiscordMember(m, guildId) {
+  if (!m || !m.user) return null;
+  const u = m.user;
+  const name = m.nick || u.global_name || u.username || 'Usuario';
+  const username = u.username || '';
+
+  let avatarUrl = null;
+  if (m.avatar) {
+    avatarUrl = `https://cdn.discordapp.com/guilds/${guildId}/users/${u.id}/avatars/${m.avatar}.png?size=64`;
+  } else if (u.avatar) {
+    avatarUrl = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=64`;
+  }
+
+  return {
+    id: String(u.id),
+    name,
+    username,
+    avatarUrl,
+    isBot: Boolean(u.bot),
+    roles: Array.isArray(m.roles) ? m.roles : [],
+  };
+}
+
+async function fetchGuildMembersFromDiscord(env, guildId, query = '') {
+  if (!env?.DISCORD_TOKEN || !guildId) return [];
+  const cleanGuildId = String(guildId).trim();
+  if (!/^\d{17,20}$/.test(cleanGuildId)) return [];
+
+  if (query && query.trim()) {
+    try {
+      const q = encodeURIComponent(query.trim());
+      const searchRes = await fetch(`https://discord.com/api/v10/guilds/${cleanGuildId}/members/search?query=${q}&limit=50`, {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_TOKEN}`,
+        },
+      });
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        return (data || []).map((m) => formatDiscordMember(m, cleanGuildId)).filter(Boolean);
+      }
+    } catch (err) {
+      console.warn('Error buscando miembros en Discord API:', err);
+    }
+  }
+
+  const cached = guildMembersCache.get(cleanGuildId);
+  const now = Date.now();
+  if (cached && (now - cached.timestamp < 60000)) {
+    return cached.members;
+  }
+
+  try {
+    const res = await fetch(`https://discord.com/api/v10/guilds/${cleanGuildId}/members?limit=1000`, {
+      headers: {
+        Authorization: `Bot ${env.DISCORD_TOKEN}`,
+      },
+    });
+
+    if (!res.ok) {
+      console.warn(`Discord API error (${res.status}) obteniendo miembros para guild ${cleanGuildId}`);
+      return cached ? cached.members : [];
+    }
+
+    const rawMembers = await res.json();
+    const formatted = (rawMembers || [])
+      .map((m) => formatDiscordMember(m, cleanGuildId))
+      .filter(Boolean)
+      .filter((m) => !m.isBot);
+
+    guildMembersCache.set(cleanGuildId, { timestamp: now, members: formatted });
+    return formatted;
+  } catch (error) {
+    console.error('Error fetching guild members from Discord API:', error);
+    return cached ? cached.members : [];
+  }
+}
+
 async function handleBoardApi(request, url, env) {
   if (!env.DB) return jsonResponse({ error: 'Database unavailable' }, 503);
   const pathWithoutPrefix = url.pathname.slice(BOARD_API_PREFIX.length);
@@ -329,10 +408,28 @@ async function handleBoardApi(request, url, env) {
   if (request.method === 'GET' && parts.length === 1) {
     const board = await loadBoardWithTasks(env.DB, boardId);
     if (!board) return jsonResponse({ error: 'Board not found' }, 404);
-    return jsonResponse(board, 200, {
+
+    let guildMembers = [];
+    if (board.guildId) {
+      guildMembers = await fetchGuildMembersFromDiscord(env, board.guildId);
+    }
+
+    return jsonResponse({
+      ...board,
+      guildMembers,
+    }, 200, {
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     });
+  }
+
+  if (request.method === 'GET' && parts.length === 2 && parts[1] === 'guild-members') {
+    const board = await loadBoard(env.DB, boardId);
+    if (!board) return jsonResponse({ error: 'Board not found' }, 404);
+    const query = url.searchParams.get('q') || '';
+    const guildId = url.searchParams.get('guild_id') || board.guildId;
+    const members = await fetchGuildMembersFromDiscord(env, guildId, query);
+    return jsonResponse({ ok: true, members }, 200);
   }
 
   if (request.method === 'POST' && parts.length === 2 && parts[1] === 'tasks') {
