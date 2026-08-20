@@ -84,69 +84,69 @@
           <div class="action-status-container">
             <span id="action-status" class="action-status" aria-live="polite"></span>
           </div>
+        </header>
 
-          <!-- Barra de formato estilo Notion (Visible en modo edición) -->
-          <div id="editor-toolbar" class="editor-toolbar" style="display: none;" aria-label="Herramientas de formato">
-            <div class="toolbar-group">
-              <div class="custom-select-wrap tb-select-wrap">
-                <select id="tb-block-type" class="tb-select" aria-label="Tipo de bloque">
-                  <option value="p">Párrafo</option>
-                  <option value="h1">Encabezado 1</option>
-                  <option value="h2">Encabezado 2</option>
-                  <option value="h3">Encabezado 3</option>
-                  <option value="blockquote">Cita</option>
-                  <option value="pre">Código</option>
-                </select>
-                <span class="select-arrow" aria-hidden="true">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </span>
-              </div>
-            </div>
-
-            <div class="tb-divider"></div>
-
-            <div class="toolbar-group">
-              <button type="button" class="tb-btn" data-format="bold" title="Negrita (Ctrl+B)" aria-label="Negrita">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H6v-8Zm0 0h8a3.5 3.5 0 0 0 0-7H6v7Z"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="italic" title="Cursiva (Ctrl+I)" aria-label="Cursiva">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="strikeThrough" title="Tachado" aria-label="Tachado">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="inlineCode" title="Código inline (Ctrl+E)" aria-label="Código inline">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="link" title="Enlace (Ctrl+K)" aria-label="Insertar enlace">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-              </button>
-            </div>
-
-            <div class="tb-divider"></div>
-
-            <div class="toolbar-group">
-              <button type="button" class="tb-btn" data-format="bulletList" title="Lista con viñetas" aria-label="Lista con viñetas">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="numberList" title="Lista numerada" aria-label="Lista numerada">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="table" title="Insertar tabla" aria-label="Insertar tabla">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M12 3v18"/></svg>
-              </button>
-              <button type="button" class="tb-btn" data-format="divider" title="Línea divisoria" aria-label="Línea divisoria">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>
-              </button>
-            </div>
-
-            <div class="tb-divider"></div>
-
-            <div class="toolbar-hint">
-              <span>Escribe <code>/</code> para comandos</span>
+        <!-- Barra de formato estilo Notion (Sticky y flotante durante el scroll) -->
+        <div id="editor-toolbar" class="editor-toolbar" style="display: none;" aria-label="Herramientas de formato">
+          <div class="toolbar-group">
+            <div class="custom-select-wrap tb-select-wrap">
+              <select id="tb-block-type" class="tb-select" aria-label="Tipo de bloque">
+                <option value="p">Párrafo</option>
+                <option value="h1">Encabezado 1</option>
+                <option value="h2">Encabezado 2</option>
+                <option value="h3">Encabezado 3</option>
+                <option value="blockquote">Cita</option>
+                <option value="pre">Código</option>
+              </select>
+              <span class="select-arrow" aria-hidden="true">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </span>
             </div>
           </div>
-        </header>
+
+          <div class="tb-divider"></div>
+
+          <div class="toolbar-group">
+            <button type="button" class="tb-btn" data-format="bold" title="Negrita (Ctrl+B)" aria-label="Negrita">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H6v-8Zm0 0h8a3.5 3.5 0 0 0 0-7H6v7Z"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="italic" title="Cursiva (Ctrl+I)" aria-label="Cursiva">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="strikeThrough" title="Tachado" aria-label="Tachado">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="inlineCode" title="Código inline (Ctrl+E)" aria-label="Código inline">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="link" title="Enlace (Ctrl+K)" aria-label="Insertar enlace">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </button>
+          </div>
+
+          <div class="tb-divider"></div>
+
+          <div class="toolbar-group">
+            <button type="button" class="tb-btn" data-format="bulletList" title="Lista con viñetas" aria-label="Lista con viñetas">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="numberList" title="Lista numerada" aria-label="Lista numerada">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="table" title="Insertar tabla" aria-label="Insertar tabla">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M12 3v18"/></svg>
+            </button>
+            <button type="button" class="tb-btn" data-format="divider" title="Línea divisoria" aria-label="Línea divisoria">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>
+            </button>
+          </div>
+
+          <div class="tb-divider"></div>
+
+          <div class="toolbar-hint">
+            <span>Escribe <code>/</code> para comandos</span>
+          </div>
+        </div>
 
         <!-- Menú flotante Slash Command estilo Notion -->
         <div id="slash-command-menu" class="slash-command-menu" style="display: none;" role="menu"></div>
