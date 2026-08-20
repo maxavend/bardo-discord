@@ -1,4 +1,5 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
+import { DOCX_STYLE_MAP, ensureDocumentTitle, pdfTextToMarkdown } from '../import-format.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const MAX_PDF_PAGES = 80;
@@ -34,68 +35,8 @@ async function resolveActivityInstanceId() {
   }
 }
 
-function ensureDocumentTitle(markdown, title) {
-  const normalized = String(markdown || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-  if (!normalized) return `# ${title}`;
-  const firstLine = normalized.split('\n').find((line) => line.trim()) || '';
-  return /^#\s+/.test(firstLine.trim()) ? normalized : `# ${title}\n\n${normalized}`;
-}
-
-function pdfTextToMarkdown(text, title) {
-  const normalized = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-  if (normalized.replace(/\s/g, '').length < 30) {
-    return `# ${title}\n\n> Bardo no encontró suficiente texto seleccionable en este PDF. Los documentos escaneados todavía necesitan OCR para poder convertirse.`;
-  }
-
-  const output = [`# ${title}`];
-  const paragraph = [];
-
-  const flushParagraph = () => {
-    if (!paragraph.length) return;
-    output.push(paragraph.join(' ').replace(/\s+/g, ' ').trim());
-    paragraph.length = 0;
-  };
-
-  for (const rawLine of normalized.split('\n')) {
-    const line = rawLine.trim();
-    if (!line) {
-      flushParagraph();
-      continue;
-    }
-
-    const numberedHeading = /^\d+(?:\.\d+)*[.)]?\s+[A-ZÁÉÍÓÚÜÑ]/.test(line) && line.length <= 120;
-    const uppercaseHeading =
-      line.length >= 3 &&
-      line.length <= 80 &&
-      /[A-ZÁÉÍÓÚÜÑ]/.test(line) &&
-      line === line.toLocaleUpperCase('es');
-
-    if (numberedHeading || uppercaseHeading) {
-      flushParagraph();
-      output.push(`## ${line}`);
-      continue;
-    }
-
-    const bullet = line.match(/^[•●▪◦-]\s*(.+)$/);
-    if (bullet) {
-      flushParagraph();
-      output.push(`- ${bullet[1]}`);
-      continue;
-    }
-
-    if (paragraph.length && paragraph.at(-1).endsWith('-') && /^[a-záéíóúüñ]/.test(line)) {
-      paragraph[paragraph.length - 1] = `${paragraph.at(-1).slice(0, -1)}${line}`;
-    } else {
-      paragraph.push(line);
-    }
-  }
-
-  flushParagraph();
-  return output.filter(Boolean).join('\n\n').trim();
-}
-
 async function importPdf(arrayBuffer, title) {
-  setImportStatus('Adaptando PDF', 'Reconstruyendo el contenido para el lector de Bardo…');
+  setImportStatus('Adaptando PDF', 'Reconstruyendo encabezados, listas y contenido para el lector de Bardo…');
 
   if (typeof Promise.try !== 'function') {
     Object.defineProperty(Promise, 'try', {
@@ -124,7 +65,7 @@ async function importPdf(arrayBuffer, title) {
 }
 
 async function importDocx(arrayBuffer, title) {
-  setImportStatus('Adaptando Word', 'Convirtiendo títulos, listas y tablas al formato de Bardo…');
+  setImportStatus('Adaptando Word', 'Convirtiendo títulos, estilos, listas y tablas al formato de Bardo…');
 
   const [mammothModule, turndownModule, gfmModule] = await Promise.all([
     import('mammoth'),
@@ -139,7 +80,9 @@ async function importDocx(arrayBuffer, title) {
   const result = await mammoth.convertToHtml(
     { arrayBuffer },
     {
-      includeEmbeddedStyleMap: false,
+      styleMap: DOCX_STYLE_MAP,
+      includeDefaultStyleMap: true,
+      includeEmbeddedStyleMap: true,
       externalFileAccess: false,
     },
   );
@@ -159,10 +102,13 @@ async function importDocx(arrayBuffer, title) {
     emDelimiter: '*',
     strongDelimiter: '**',
   });
+  turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
 
   const markdown = turndown
     .turndown(template.innerHTML)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
