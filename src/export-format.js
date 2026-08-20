@@ -46,6 +46,7 @@ export function stripLeadingTitle(markdown, title) {
 
 function cleanMarkdownInline(text) {
   return String(text || '')
+    .replace(/<\/?u>/gi, '')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
     .replace(/~~([^~]+)~~/g, '$1')
