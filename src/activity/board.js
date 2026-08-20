@@ -1010,32 +1010,40 @@ function injectStyles() {
       width: 100%;
       max-width: 540px;
       background: var(--kb-surface);
-      border: none;
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
       border-radius: var(--kb-radius-modal);
       box-shadow: var(--kb-shadow-modal);
-      padding: 20px;
+      padding: 0;
       box-sizing: border-box;
       animation: slideUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      max-height: 90vh;
+      max-height: 88vh;
       overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
     }
 
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { transform: translateY(12px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
     .modal-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 6px;
+      padding: 16px 20px 14px;
+      background: var(--kb-surface);
+      border-bottom: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.08));
+      flex-shrink: 0;
     }
     .modal-title {
       margin: 0;
       font-size: 16px;
       font-weight: 750;
+      color: var(--kb-text-primary);
     }
     .modal-close-btn {
       background: none;
@@ -1053,6 +1061,8 @@ function injectStyles() {
       display: flex;
       flex-direction: column;
       gap: 14px;
+      padding: 18px 20px 22px;
+      box-sizing: border-box;
     }
     .form-group {
       display: flex;
@@ -1229,26 +1239,36 @@ function injectStyles() {
       display: flex;
     }
     .notion-chip-remove:hover { opacity: 1; }
-    .notion-chips-input {
+    .notion-chips-container:focus-within {
+      background: var(--kb-surface-hover);
+      border-color: var(--kb-border-active, rgba(255, 255, 255, 0.18));
+    }
+    .notion-chip-inline-input,
+    .notion-chips-input,
+    #task-chip-input {
       flex: 1;
-      min-width: 120px;
-      background: transparent;
-      border: none;
-      outline: none;
+      min-width: 140px;
+      height: 26px;
+      background: transparent !important;
+      background-color: transparent !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
       color: var(--kb-text-primary);
       font: inherit;
-      font-size: 12.5px;
-      padding: 2px 0;
+      font-size: 13px;
+      padding: 0 4px;
+      margin: 0;
     }
     .notion-chips-dropdown {
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
       right: 0;
-      background: var(--kb-surface-hover);
-      border: none;
+      background: var(--kb-surface-raised);
+      border: 1px solid var(--kb-border-active, rgba(255, 255, 255, 0.16));
       border-radius: 8px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
       z-index: 1200;
       max-height: 180px;
       overflow-y: auto;
@@ -1325,12 +1345,12 @@ function injectStyles() {
       top: calc(100% + 4px);
       left: 0;
       right: 0;
-      background: var(--kb-surface-hover);
-      border: none;
+      background: var(--kb-surface-raised);
+      border: 1px solid var(--kb-border-active, rgba(255, 255, 255, 0.16));
       border-radius: 8px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
       z-index: 1200;
-      max-height: 200px;
+      max-height: 220px;
       overflow-y: auto;
       padding: 4px;
       display: flex;
@@ -1737,6 +1757,45 @@ function getAllBoardChips(allTasks = []) {
       }
     }
   }
+  return Array.from(map.values());
+}
+
+function getBoardConfiguredMembers(board) {
+  if (!board) return [];
+  const map = new Map();
+
+  // 1. Miembros configurados explícitamente en el tablero
+  if (Array.isArray(board.members)) {
+    for (const m of board.members) {
+      if (!m) continue;
+      const id = String(m.id || m.name || m.username);
+      const name = m.name || m.username || 'Usuario';
+      map.set(id, {
+        id,
+        name,
+        username: m.username || '',
+        avatarUrl: m.avatarUrl || null,
+        roles: Array.isArray(m.roles) ? m.roles : [],
+      });
+    }
+  }
+
+  // 2. Si el tablero no tiene miembros configurados explícitamente, incluir miembros asignados a tareas existentes
+  if (map.size === 0 && Array.isArray(board.tasks)) {
+    for (const t of board.tasks) {
+      if (t.assigneeName) {
+        const id = t.assigneeId ? String(t.assigneeId) : t.assigneeName;
+        map.set(id, {
+          id,
+          name: t.assigneeName,
+          username: '',
+          avatarUrl: null,
+          roles: [],
+        });
+      }
+    }
+  }
+
   return Array.from(map.values());
 }
 
@@ -2511,11 +2570,11 @@ function openModal(modalConfig) {
   function updateMemberDropdown(query = '') {
     if (!memberDropdown) return;
     const cleanQuery = query.trim().replace(/^@/, '').toLowerCase();
-    const currentMembers = getKnownDiscordMembers(currentBoardData?.tasks || []);
+    const boardMembers = getBoardConfiguredMembers(currentBoardData);
 
-    let matches = currentMembers;
+    let matches = boardMembers;
     if (cleanQuery) {
-      matches = currentMembers.filter(
+      matches = boardMembers.filter(
         (m) => m.name.toLowerCase().includes(cleanQuery) ||
                (m.username && m.username.toLowerCase().includes(cleanQuery)) ||
                (m.id && m.id.includes(cleanQuery))
@@ -2526,6 +2585,7 @@ function openModal(modalConfig) {
 
     if (matches.length > 0) {
       for (const m of matches) {
+        const roleBadge = getMemberRoleBadge(m);
         html += `
           <button type="button" class="member-menu-item" data-member-id="${escapeHtml(m.id)}" data-member-name="${escapeHtml(m.name)}">
             ${m.avatarUrl
@@ -2535,11 +2595,14 @@ function openModal(modalConfig) {
               <span class="member-name-text">${escapeHtml(m.name)}</span>
               ${m.username ? `<span class="member-handle-text">@${escapeHtml(m.username)}</span>` : ''}
             </div>
+            ${roleBadge ? `<span class="member-role-badge" style="background: ${roleBadge.color}22; color: ${roleBadge.color}; border: 1px solid ${roleBadge.color}44; font-size: 10px; padding: 1px 6px; border-radius: 999px; margin-left: auto;">${escapeHtml(roleBadge.name)}</span>` : ''}
           </button>
         `;
       }
     } else if (cleanQuery) {
-      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor</div>`;
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No hay miembros del tablero que coincidan</div>`;
+    } else {
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No hay miembros agregados en este tablero.<br><span style="font-size: 11px; color: var(--kb-text-muted);">Añade miembros desde la configuración del tablero.</span></div>`;
     }
 
     if (!html) {
@@ -2549,6 +2612,10 @@ function openModal(modalConfig) {
 
     memberDropdown.innerHTML = html;
     memberDropdown.style.display = 'flex';
+
+    setTimeout(() => {
+      memberDropdown.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 40);
 
     memberDropdown.querySelectorAll('.member-menu-item').forEach((btn) => {
       btn.addEventListener('click', (e) => {
