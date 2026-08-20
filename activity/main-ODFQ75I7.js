@@ -10236,6 +10236,421 @@ async function htmlToMarkdown(html) {
   if (gfm) turndown.use(gfm);
   return turndown.turndown(html).replace(/\n{3,}/g, "\n\n").trim();
 }
+var PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
+var CHECK_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;
+var editorToolbarEl = document.querySelector("#editor-toolbar");
+var tbBlockTypeEl = document.querySelector("#tb-block-type");
+var slashMenuEl = document.querySelector("#slash-command-menu");
+var bubbleMenuEl = document.querySelector("#selection-bubble-menu");
+var slashActive = false;
+var slashQuery = "";
+var slashSelectedIndex = 0;
+var SLASH_COMMANDS = [
+  {
+    id: "p",
+    title: "Texto",
+    desc: "Empieza a escribir con texto plano",
+    keywords: ["texto", "parrafo", "p", "normal"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>`,
+    action: () => applyFormatting("p")
+  },
+  {
+    id: "h1",
+    title: "Encabezado 1",
+    desc: "T\xEDtulo de secci\xF3n grande",
+    keywords: ["h1", "titulo", "encabezado", "grande"],
+    icon: `<span style="font-weight: 800; font-size: 13px;">H1</span>`,
+    action: () => applyFormatting("h1")
+  },
+  {
+    id: "h2",
+    title: "Encabezado 2",
+    desc: "Subt\xEDtulo mediano",
+    keywords: ["h2", "subtitulo", "mediano"],
+    icon: `<span style="font-weight: 700; font-size: 12px;">H2</span>`,
+    action: () => applyFormatting("h2")
+  },
+  {
+    id: "h3",
+    title: "Encabezado 3",
+    desc: "T\xEDtulo de secci\xF3n peque\xF1o",
+    keywords: ["h3", "pequeno", "seccion"],
+    icon: `<span style="font-weight: 600; font-size: 11px;">H3</span>`,
+    action: () => applyFormatting("h3")
+  },
+  {
+    id: "bulletList",
+    title: "Lista con vi\xF1etas",
+    desc: "Crea una lista simple con vi\xF1etas",
+    keywords: ["lista", "vineta", "bullet", "puntos", "ul"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>`,
+    action: () => applyFormatting("bulletList")
+  },
+  {
+    id: "numberList",
+    title: "Lista numerada",
+    desc: "Crea una lista ordenada con n\xFAmeros",
+    keywords: ["lista", "numerada", "ordenada", "ol", "1"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>`,
+    action: () => applyFormatting("numberList")
+  },
+  {
+    id: "blockquote",
+    title: "Cita",
+    desc: "Destaca una frase o cita importante",
+    keywords: ["cita", "quote", "destacado", "bloque"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg>`,
+    action: () => applyFormatting("blockquote")
+  },
+  {
+    id: "pre",
+    title: "Bloque de c\xF3digo",
+    desc: "Escribe fragmentos de c\xF3digo",
+    keywords: ["codigo", "code", "bloque", "script", "pre"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+    action: () => applyFormatting("pre")
+  },
+  {
+    id: "table",
+    title: "Tabla",
+    desc: "Inserta una tabla simple 2x3",
+    keywords: ["tabla", "grid", "table", "filas", "columnas"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M12 3v18"/></svg>`,
+    action: () => applyFormatting("table")
+  },
+  {
+    id: "divider",
+    title: "Divisor",
+    desc: "Inserta una l\xEDnea divisoria horizontal",
+    keywords: ["divisor", "linea", "separador", "hr"],
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>`,
+    action: () => applyFormatting("divider")
+  }
+];
+function applyFormatting(format, value = null) {
+  if (!isEditing) return;
+  bodyEl?.focus();
+  switch (format) {
+    case "bold":
+      document.execCommand("bold", false, null);
+      break;
+    case "italic":
+      document.execCommand("italic", false, null);
+      break;
+    case "strikeThrough":
+      document.execCommand("strikeThrough", false, null);
+      break;
+    case "inlineCode": {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) break;
+      const range = sel.getRangeAt(0);
+      const codeParent = range.commonAncestorContainer.parentElement?.closest("code");
+      if (codeParent) {
+        const textNode = document.createTextNode(codeParent.textContent || "");
+        codeParent.replaceWith(textNode);
+      } else if (!range.collapsed) {
+        const span = document.createElement("code");
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+      }
+      break;
+    }
+    case "link": {
+      const url = prompt("Ingresa la URL del enlace:", "https://");
+      if (url && url.trim() && url !== "https://") {
+        document.execCommand("createLink", false, url.trim());
+      }
+      break;
+    }
+    case "h1":
+    case "h2":
+    case "h3":
+    case "p":
+    case "blockquote":
+    case "pre":
+      document.execCommand("formatBlock", false, `<${format}>`);
+      break;
+    case "bulletList":
+      document.execCommand("insertUnorderedList", false, null);
+      break;
+    case "numberList":
+      document.execCommand("insertOrderedList", false, null);
+      break;
+    case "divider":
+      document.execCommand("insertHorizontalRule", false, null);
+      break;
+    case "table": {
+      const tableHtml = `<div class="table-wrap"><table><thead><tr><th>Encabezado 1</th><th>Encabezado 2</th></tr></thead><tbody><tr><td>Celda 1</td><td>Celda 2</td></tr><tr><td>Celda 3</td><td>Celda 4</td></tr></tbody></table></div><p><br></p>`;
+      document.execCommand("insertHTML", false, tableHtml);
+      break;
+    }
+    default:
+      if (value) document.execCommand("formatBlock", false, `<${value}>`);
+      break;
+  }
+  handleEditorInput();
+}
+function getFilteredSlashCommands(query = "") {
+  const q = query.trim().toLowerCase();
+  if (!q) return SLASH_COMMANDS;
+  return SLASH_COMMANDS.filter(
+    (cmd) => cmd.title.toLowerCase().includes(q) || cmd.desc.toLowerCase().includes(q) || cmd.keywords.some((k) => k.includes(q))
+  );
+}
+function renderSlashMenu() {
+  if (!slashMenuEl) return;
+  const filtered = getFilteredSlashCommands(slashQuery);
+  if (filtered.length === 0) {
+    slashMenuEl.style.display = "none";
+    return;
+  }
+  if (slashSelectedIndex >= filtered.length) {
+    slashSelectedIndex = 0;
+  }
+  slashMenuEl.innerHTML = `
+    <div class="slash-cmd-header">Bloques b\xE1sicos</div>
+    ${filtered.map((cmd, idx) => `
+      <button type="button" class="slash-cmd-item ${idx === slashSelectedIndex ? "is-selected" : ""}" data-slash-id="${cmd.id}">
+        <span class="slash-cmd-icon">${cmd.icon}</span>
+        <div class="slash-cmd-text">
+          <span class="slash-cmd-title">${escapeHtml(cmd.title)}</span>
+          <span class="slash-cmd-desc">${escapeHtml(cmd.desc)}</span>
+        </div>
+      </button>
+    `).join("")}
+  `;
+  slashMenuEl.style.display = "flex";
+  slashMenuEl.querySelectorAll(".slash-cmd-item").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cmdId = btn.dataset.slashId;
+      const cmd = SLASH_COMMANDS.find((c) => c.id === cmdId);
+      if (cmd) executeSlashCommand(cmd);
+    });
+  });
+}
+function executeSlashCommand(cmd) {
+  hideSlashMenu();
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (node && node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || "";
+      const slashIndex = text.lastIndexOf("/");
+      if (slashIndex >= 0) {
+        node.textContent = text.slice(0, slashIndex);
+      }
+    }
+  }
+  cmd.action();
+}
+function hideSlashMenu() {
+  slashActive = false;
+  slashQuery = "";
+  slashSelectedIndex = 0;
+  if (slashMenuEl) slashMenuEl.style.display = "none";
+}
+function updateSlashMenuPosition() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !slashMenuEl) return;
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const top = rect.bottom + window.scrollY + 6;
+  const left = Math.min(Math.max(rect.left + window.scrollX, 16), window.innerWidth - 290);
+  slashMenuEl.style.top = `${top}px`;
+  slashMenuEl.style.left = `${left}px`;
+}
+function updateBubbleMenu() {
+  if (!bubbleMenuEl || !isEditing) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !bodyEl?.contains(sel.anchorNode)) {
+    bubbleMenuEl.style.display = "none";
+    return;
+  }
+  const text = sel.toString().trim();
+  if (!text) {
+    bubbleMenuEl.style.display = "none";
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    bubbleMenuEl.style.display = "none";
+    return;
+  }
+  const top = rect.top + window.scrollY - 42;
+  const left = Math.max(16, rect.left + window.scrollX + rect.width / 2 - 130);
+  bubbleMenuEl.style.top = `${top}px`;
+  bubbleMenuEl.style.left = `${left}px`;
+  bubbleMenuEl.style.display = "flex";
+}
+document.addEventListener("selectionchange", () => {
+  if (isEditing) {
+    updateBubbleMenu();
+  }
+});
+document.querySelectorAll("[data-format]").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    const format = btn.dataset.format;
+    applyFormatting(format);
+  });
+});
+tbBlockTypeEl?.addEventListener("change", (e) => {
+  const block = e.target.value;
+  applyFormatting(block);
+});
+bodyEl?.addEventListener("keydown", (e) => {
+  if (!isEditing) return;
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === "b" || e.key === "B") {
+      e.preventDefault();
+      applyFormatting("bold");
+      return;
+    }
+    if (e.key === "i" || e.key === "I") {
+      e.preventDefault();
+      applyFormatting("italic");
+      return;
+    }
+    if (e.key === "e" || e.key === "E") {
+      e.preventDefault();
+      applyFormatting("inlineCode");
+      return;
+    }
+    if (e.key === "k" || e.key === "K") {
+      e.preventDefault();
+      applyFormatting("link");
+      return;
+    }
+    if (e.key === "s" || e.key === "S") {
+      e.preventDefault();
+      saveDocumentChanges(true);
+      return;
+    }
+  }
+  if (slashActive) {
+    const filtered = getFilteredSlashCommands(slashQuery);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      slashSelectedIndex = (slashSelectedIndex + 1) % filtered.length;
+      renderSlashMenu();
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      slashSelectedIndex = (slashSelectedIndex - 1 + filtered.length) % filtered.length;
+      renderSlashMenu();
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered[slashSelectedIndex]) {
+        executeSlashCommand(filtered[slashSelectedIndex]);
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      hideSlashMenu();
+      return;
+    }
+  }
+  if (e.key === " ") {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      const range = sel.getRangeAt(0);
+      const node = range.startContainer;
+      if (node && node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || "";
+        const offset = range.startOffset;
+        const prefix = text.slice(0, offset).trim();
+        if (prefix === "#") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("h1");
+          return;
+        }
+        if (prefix === "##") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("h2");
+          return;
+        }
+        if (prefix === "###") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("h3");
+          return;
+        }
+        if (prefix === "-" || prefix === "*") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("bulletList");
+          return;
+        }
+        if (prefix === "1.") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("numberList");
+          return;
+        }
+        if (prefix === ">") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("blockquote");
+          return;
+        }
+        if (prefix === "---") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("divider");
+          return;
+        }
+        if (prefix === "```") {
+          e.preventDefault();
+          node.textContent = text.slice(offset);
+          applyFormatting("pre");
+          return;
+        }
+      }
+    }
+  }
+});
+bodyEl?.addEventListener("keyup", (e) => {
+  if (!isEditing) return;
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (node && node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || "";
+      const offset = range.startOffset;
+      const textBefore = text.slice(0, offset);
+      const slashIndex = textBefore.lastIndexOf("/");
+      if (slashIndex >= 0 && !/\s/.test(textBefore.slice(slashIndex + 1))) {
+        slashActive = true;
+        slashQuery = textBefore.slice(slashIndex + 1);
+        updateSlashMenuPosition();
+        renderSlashMenu();
+        return;
+      }
+    }
+  }
+  if (slashActive) {
+    hideSlashMenu();
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!slashMenuEl?.contains(e.target) && slashActive) {
+    hideSlashMenu();
+  }
+  if (!bubbleMenuEl?.contains(e.target) && !bodyEl?.contains(e.target)) {
+    if (bubbleMenuEl) bubbleMenuEl.style.display = "none";
+  }
+});
 async function saveDocumentChanges(isManual = false) {
   if (!currentDocumentData?.id) return;
   const title = (titleEl?.textContent || "").trim() || "Documento";
@@ -10262,7 +10677,7 @@ ${bodyMarkdown}`;
     currentDocumentData.title = title;
     currentDocumentData.markdown = fullMarkdown;
     document.title = `${title} \xB7 Bardo`;
-    showActionStatus("Guardado \u2713", false, true);
+    showActionStatus("Guardado", false);
   } catch (error) {
     console.error("Error guardando documento:", error);
     showActionStatus("No se pudo guardar", true);
@@ -10272,8 +10687,9 @@ function toggleEditMode() {
   isEditing = !isEditing;
   if (isEditing) {
     documentEl?.classList.add("is-editing");
+    if (editorToolbarEl) editorToolbarEl.style.display = "flex";
     if (editButtonEl) {
-      editButtonEl.textContent = "\u{1F4BE} Guardar";
+      editButtonEl.innerHTML = `${CHECK_SVG}<span>Guardar</span>`;
       editButtonEl.className = "action-button action-button-editing";
     }
     if (titleEl) titleEl.contentEditable = "true";
@@ -10284,8 +10700,11 @@ function toggleEditMode() {
     showActionStatus("Modo edici\xF3n");
   } else {
     documentEl?.classList.remove("is-editing");
+    if (editorToolbarEl) editorToolbarEl.style.display = "none";
+    if (slashMenuEl) slashMenuEl.style.display = "none";
+    if (bubbleMenuEl) bubbleMenuEl.style.display = "none";
     if (editButtonEl) {
-      editButtonEl.textContent = "\u270F\uFE0F Editar";
+      editButtonEl.innerHTML = `${PENCIL_SVG}<span>Editar</span>`;
       editButtonEl.className = "action-button action-button-secondary";
     }
     if (titleEl) titleEl.contentEditable = "false";
@@ -10416,10 +10835,30 @@ var FALLBACK_CLIENT_ID3 = "1539704001535156254";
 var BOARD_PREFIX = "bardo:board:";
 var BOARD_TARGET_PREFIX = "board:";
 var PRIORITY_THEMES = {
-  urgent: { label: "Urgente", color: "#f23f43", bg: "rgba(242, 63, 67, 0.15)", icon: "\u{1F525}" },
-  high: { label: "Alta", color: "#f0b232", bg: "rgba(240, 178, 50, 0.15)", icon: "\u25B2" },
-  medium: { label: "Media", color: "#5865f2", bg: "rgba(88, 101, 242, 0.15)", icon: "\u25CF" },
-  low: { label: "Baja", color: "#8a8e9b", bg: "rgba(138, 142, 155, 0.15)", icon: "\u25BC" }
+  urgent: {
+    label: "Urgente",
+    color: "#f23f43",
+    bg: "rgba(242, 63, 67, 0.15)",
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>'
+  },
+  high: {
+    label: "Alta",
+    color: "#f0b232",
+    bg: "rgba(240, 178, 50, 0.15)",
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>'
+  },
+  medium: {
+    label: "Media",
+    color: "#5865f2",
+    bg: "rgba(88, 101, 242, 0.15)",
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>'
+  },
+  low: {
+    label: "Baja",
+    color: "#8a8e9b",
+    bg: "rgba(138, 142, 155, 0.15)",
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>'
+  }
 };
 var activeDiscordSdk2 = null;
 var currentBoardId = null;
@@ -11800,16 +12239,19 @@ function renderBoard(container, board) {
 
       <div class="filter-group">
         <button id="toggle-my-tasks" class="toggle-chip ${filterState.onlyMyTasks ? "is-active" : ""}" type="button">
-          <span>\u{1F464}</span> Mis tareas
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span>Mis tareas</span>
         </button>
 
         <div class="custom-select-wrap">
           <select id="filter-priority" aria-label="Filtrar por prioridad">
             <option value="all" ${filterState.priority === "all" ? "selected" : ""}>Todas las prioridades</option>
-            <option value="urgent" ${filterState.priority === "urgent" ? "selected" : ""}>\u{1F525} Urgente</option>
-            <option value="high" ${filterState.priority === "high" ? "selected" : ""}>\u25B2 Alta</option>
-            <option value="medium" ${filterState.priority === "medium" ? "selected" : ""}>\u25CF Media</option>
-            <option value="low" ${filterState.priority === "low" ? "selected" : ""}>\u25BC Baja</option>
+            <option value="urgent" ${filterState.priority === "urgent" ? "selected" : ""}>Urgente</option>
+            <option value="high" ${filterState.priority === "high" ? "selected" : ""}>Alta</option>
+            <option value="medium" ${filterState.priority === "medium" ? "selected" : ""}>Media</option>
+            <option value="low" ${filterState.priority === "low" ? "selected" : ""}>Baja</option>
           </select>
           <span class="select-arrow" aria-hidden="true">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -11858,7 +12300,12 @@ function renderBoard(container, board) {
               <div class="column-title-wrap" data-edit-column="${status.id}" role="button" tabindex="0" title="Editar columna ${escapeHtml2(status.label)}" style="cursor: pointer;">
                 <span class="column-indicator"></span>
                 <h2 class="kanban-column-title">${escapeHtml2(status.label)}</h2>
-                <span class="btn-edit-col-icon" title="Editar columna">\u2699\uFE0F</span>
+                <span class="btn-edit-col-icon" title="Editar columna">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </span>
               </div>
               <div class="column-actions">
                 <span class="kanban-count">${countDisplay}</span>
@@ -12099,7 +12546,11 @@ function openModal(modalConfig) {
           <label>Responsable</label>
           <div class="discord-member-container" id="discord-member-box">
             <div class="discord-member-input-wrap">
-              <span class="member-icon">\u{1F464}</span>
+              <span class="member-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
               <input
                 id="task-assignee-name-input"
                 class="form-input discord-member-input"
@@ -12185,7 +12636,7 @@ function openModal(modalConfig) {
       if (allBoardChips.length >= MAX_BOARD_CHIPS) {
         html += `
           <div style="padding: 6px 10px; color: var(--kb-text-muted); font-size: 11.5px;">
-            \u26A0\uFE0F L\xEDmite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
+            L\xEDmite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
           </div>
         `;
       } else {

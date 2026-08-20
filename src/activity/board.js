@@ -29,10 +29,30 @@ const COLUMN_THEMES = {
 };
 
 const PRIORITY_THEMES = {
-  urgent: { label: 'Urgente', color: '#f23f43', bg: 'rgba(242, 63, 67, 0.15)', icon: '🔥' },
-  high: { label: 'Alta', color: '#f0b232', bg: 'rgba(240, 178, 50, 0.15)', icon: '▲' },
-  medium: { label: 'Media', color: '#5865f2', bg: 'rgba(88, 101, 242, 0.15)', icon: '●' },
-  low: { label: 'Baja', color: '#8a8e9b', bg: 'rgba(138, 142, 155, 0.15)', icon: '▼' },
+  urgent: {
+    label: 'Urgente',
+    color: '#f23f43',
+    bg: 'rgba(242, 63, 67, 0.15)',
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>',
+  },
+  high: {
+    label: 'Alta',
+    color: '#f0b232',
+    bg: 'rgba(240, 178, 50, 0.15)',
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>',
+  },
+  medium: {
+    label: 'Media',
+    color: '#5865f2',
+    bg: 'rgba(88, 101, 242, 0.15)',
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>',
+  },
+  low: {
+    label: 'Baja',
+    color: '#8a8e9b',
+    bg: 'rgba(138, 142, 155, 0.15)',
+    icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>',
+  },
 };
 
 let activeDiscordSdk = null;
@@ -1486,16 +1506,19 @@ function renderBoard(container, board) {
 
       <div class="filter-group">
         <button id="toggle-my-tasks" class="toggle-chip ${filterState.onlyMyTasks ? 'is-active' : ''}" type="button">
-          <span>👤</span> Mis tareas
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          <span>Mis tareas</span>
         </button>
 
         <div class="custom-select-wrap">
           <select id="filter-priority" aria-label="Filtrar por prioridad">
             <option value="all" ${filterState.priority === 'all' ? 'selected' : ''}>Todas las prioridades</option>
-            <option value="urgent" ${filterState.priority === 'urgent' ? 'selected' : ''}>🔥 Urgente</option>
-            <option value="high" ${filterState.priority === 'high' ? 'selected' : ''}>▲ Alta</option>
-            <option value="medium" ${filterState.priority === 'medium' ? 'selected' : ''}>● Media</option>
-            <option value="low" ${filterState.priority === 'low' ? 'selected' : ''}>▼ Baja</option>
+            <option value="urgent" ${filterState.priority === 'urgent' ? 'selected' : ''}>Urgente</option>
+            <option value="high" ${filterState.priority === 'high' ? 'selected' : ''}>Alta</option>
+            <option value="medium" ${filterState.priority === 'medium' ? 'selected' : ''}>Media</option>
+            <option value="low" ${filterState.priority === 'low' ? 'selected' : ''}>Baja</option>
           </select>
           <span class="select-arrow" aria-hidden="true">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -1545,7 +1568,12 @@ function renderBoard(container, board) {
               <div class="column-title-wrap" data-edit-column="${status.id}" role="button" tabindex="0" title="Editar columna ${escapeHtml(status.label)}" style="cursor: pointer;">
                 <span class="column-indicator"></span>
                 <h2 class="kanban-column-title">${escapeHtml(status.label)}</h2>
-                <span class="btn-edit-col-icon" title="Editar columna">⚙️</span>
+                <span class="btn-edit-col-icon" title="Editar columna">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </span>
               </div>
               <div class="column-actions">
                 <span class="kanban-count">${countDisplay}</span>
@@ -1827,7 +1855,11 @@ function openModal(modalConfig) {
           <label>Responsable</label>
           <div class="discord-member-container" id="discord-member-box">
             <div class="discord-member-input-wrap">
-              <span class="member-icon">👤</span>
+              <span class="member-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
               <input
                 id="task-assignee-name-input"
                 class="form-input discord-member-input"
@@ -1928,7 +1960,7 @@ function openModal(modalConfig) {
       if (allBoardChips.length >= MAX_BOARD_CHIPS) {
         html += `
           <div style="padding: 6px 10px; color: var(--kb-text-muted); font-size: 11.5px;">
-            ⚠️ Límite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
+            Límite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
           </div>
         `;
       } else {
