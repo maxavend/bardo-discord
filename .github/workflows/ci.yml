@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: ['main', 'feat/**']
+    branches: ['main', 'feat/**', 'codex/**']
   pull_request:
-    branches: ['main']
+    branches: ['main', 'feat/bardo-unified-experience']
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,12 +17,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Syntax check
+      - name: Build and static checks
         run: npm run check
 
-      - name: Tests
-        run: npm test
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Worker integration tests
+        run: npm run test:worker
+
+      - name: E2E gate
+        run: npm run test:e2e
+
+      - name: Accessibility gate
+        run: npm run test:a11y

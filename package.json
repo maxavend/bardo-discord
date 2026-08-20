@@ -11,8 +11,16 @@
     "dev": "npm run build:activity && wrangler dev",
     "deploy": "npm run build:activity && wrangler deploy",
     "register": "node --env-file=.env scripts/register-commands.js",
-    "test": "npm run build:activity && node --test",
-    "check": "node scripts/build-activity.js && node --check src/event-worker.js && node --check src/event-db.js && node --check src/event.js && node --check src/kanban-worker.js && node --check src/worker.js && node --check src/backup-r2.js && node --check src/kanban-db.js && node --check src/kanban.js && node --check src/components.js && node --check src/document-id.js && node --check src/export-format.js && node --check src/import-format.js && node --check src/pagination.js && node --check src/db.js && node --check src/activity/app.js && node --check src/activity/board.js && node --check src/activity/event.js && node --check scripts/register-commands.js && node --check scripts/restore.js && node --check scripts/build-activity.js"
+    "check:syntax": "node scripts/check-syntax.js",
+    "check:promises": "node scripts/check-floating-promises.js",
+    "types:generate": "wrangler types .wrangler/worker-configuration.d.ts --include-runtime=false",
+    "check": "npm run build && npm run check:syntax && npm run check:promises && npm run types:generate",
+    "test": "npm run build && node --test",
+    "test:unit": "node --test test/backup-r2.test.js test/components.test.js test/db.test.js test/event.test.js test/export-format.test.js test/import-db.test.js test/import-format.test.js test/pagination.test.js",
+    "test:worker": "node --test test/worker.test.js test/kanban.test.js test/security-characterization.test.js test/worker-runtime.test.js",
+    "test:e2e": "node --test test/e2e/phase0.test.js",
+    "test:a11y": "node --test test/a11y/phase0.test.js",
+    "analyze": "wrangler check startup"
   },
   "engines": {
     "node": ">=22.12.0"
