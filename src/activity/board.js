@@ -90,10 +90,74 @@ function parseBoardId(value) {
   return null;
 }
 
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
+  document.documentElement.classList.toggle('theme-light', isLight);
+  document.documentElement.classList.toggle('theme-dark', !isLight);
+}
+
+function initTheme(sdk) {
+  const params = new URLSearchParams(window.location.search);
+  const paramTheme = params.get('theme');
+  if (paramTheme) {
+    applyTheme(paramTheme);
+  } else if (sdk?.theme) {
+    applyTheme(sdk.theme);
+  } else if (sdk?.config?.theme) {
+    applyTheme(sdk.config.theme);
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    applyTheme('light');
+  } else {
+    applyTheme('dark');
+  }
+
+  if (sdk?.subscribe) {
+    try {
+      sdk.subscribe('THEME_CHANGE', ({ theme }) => {
+        if (theme) applyTheme(theme);
+      });
+    } catch {}
+  }
+}
+
+async function refreshDiscordParticipants(sdk) {
+  if (!sdk) return;
+  try {
+    if (sdk.commands?.getInstanceConnectedParticipants) {
+      const res = await sdk.commands.getInstanceConnectedParticipants();
+      if (Array.isArray(res?.participants) && res.participants.length > 0) {
+        connectedParticipants = res.participants;
+        if (!currentDiscordUser && connectedParticipants.length > 0) {
+          currentDiscordUser = connectedParticipants[0];
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudieron obtener los participantes de Discord:', err);
+  }
+
+  try {
+    if (sdk.commands?.getChannel && sdk.channelId) {
+      const ch = await sdk.commands.getChannel({ channel_id: sdk.channelId });
+      if (Array.isArray(ch?.recipients)) {
+        for (const r of ch.recipients) {
+          if (r?.id && !connectedParticipants.some((p) => String(p.id) === String(r.id))) {
+            connectedParticipants.push(r);
+          }
+        }
+      }
+    }
+  } catch {}
+}
+
 async function initDiscordSdk() {
   if (activeDiscordSdk) return activeDiscordSdk;
   const params = new URLSearchParams(window.location.search);
   const embedded = params.has('frame_id') || window.location.hostname.endsWith('.discordsays.com');
+
+  initTheme(null);
+
   if (!embedded) return null;
 
   try {
@@ -101,17 +165,23 @@ async function initDiscordSdk() {
     await sdk.ready();
     activeDiscordSdk = sdk;
 
-    // Intentar obtener participantes de la Activity
+    initTheme(sdk);
+
+    // Escuchar actualizaciones de participantes
     try {
-      if (sdk.commands?.getInstanceConnectedParticipants) {
-        const res = await sdk.commands.getInstanceConnectedParticipants();
-        if (Array.isArray(res?.participants)) {
-          connectedParticipants = res.participants;
-        }
+      if (sdk.subscribe) {
+        sdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', ({ participants }) => {
+          if (Array.isArray(participants)) {
+            connectedParticipants = participants;
+            if (!currentDiscordUser && connectedParticipants.length > 0) {
+              currentDiscordUser = connectedParticipants[0];
+            }
+          }
+        });
       }
-    } catch {
-      // Ignorar si no está disponible
-    }
+    } catch {}
+
+    await refreshDiscordParticipants(sdk);
 
     return sdk;
   } catch (error) {
@@ -194,7 +264,9 @@ function injectStyles() {
   style.textContent = `
     html[data-bardo-mode="board"] body > .shell { display: none !important; }
     
-    :root {
+    :root,
+    [data-theme="dark"],
+    .theme-dark {
       --kb-bg: #111214;
       --kb-surface: #1e1f22;
       --kb-surface-raised: #2b2d31;
@@ -217,8 +289,27 @@ function injectStyles() {
       --kb-scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
     }
 
+    [data-theme="light"],
+    .theme-light {
+      --kb-bg: #f2f3f5;
+      --kb-surface: #ffffff;
+      --kb-surface-raised: #e9eaec;
+      --kb-surface-hover: #dcdee1;
+      --kb-border: transparent;
+      --kb-border-subtle: transparent;
+      --kb-text-primary: #060607;
+      --kb-text-muted: #4e5058;
+      --kb-text-dim: #80848e;
+      --kb-blurple: #5865f2;
+      --kb-blurple-hover: #4752c4;
+      --kb-shadow-card: none;
+      --kb-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.18);
+      --kb-scrollbar-thumb: rgba(0, 0, 0, 0.16);
+      --kb-scrollbar-thumb-hover: rgba(0, 0, 0, 0.28);
+    }
+
     @media (prefers-color-scheme: light) {
-      :root {
+      :root:not([data-theme="dark"]) {
         --kb-bg: #f2f3f5;
         --kb-surface: #ffffff;
         --kb-surface-raised: #e9eaec;
@@ -261,6 +352,8 @@ function injectStyles() {
     .kanban-shell {
       min-height: 100vh;
       padding: 16px 0 32px;
+      padding-top: max(env(safe-area-inset-top, 0px), 16px);
+      padding-bottom: max(env(safe-area-inset-bottom, 0px), 32px);
       color: var(--kb-text-primary);
       background: var(--kb-bg);
       box-sizing: border-box;
@@ -424,20 +517,23 @@ function injectStyles() {
       line-height: 1.1;
     }
     .btn-edit-board-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 7px;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       background: transparent;
       border: none;
-      color: var(--kb-text-muted);
+      color: var(--kb-text-dim);
+      opacity: 0.35;
       cursor: pointer;
       padding: 0;
-      transition: all 0.12s ease;
+      transition: all 0.15s ease;
     }
-    .btn-edit-board-icon:hover {
+    .btn-edit-board-icon:hover,
+    .btn-edit-board-icon:focus-visible {
+      opacity: 1;
       background: var(--kb-surface-raised);
       color: var(--kb-text-primary);
     }
@@ -591,17 +687,17 @@ function injectStyles() {
     .mobile-column-tabs {
       display: none;
       gap: 6px;
-      overflow-x: auto;
       padding: 4px 0 10px;
       margin-bottom: 8px;
       padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
       box-sizing: border-box;
+      flex-wrap: wrap;
     }
     .mobile-tab-btn {
-      flex: 1;
-      min-width: 80px;
-      padding: 6px 10px;
-      border-radius: 7px;
+      flex: 0 0 auto;
+      width: auto;
+      padding: 5px 11px;
+      border-radius: var(--kb-radius-pill);
       background: var(--kb-surface);
       border: none;
       color: var(--kb-text-muted);
@@ -610,6 +706,7 @@ function injectStyles() {
       cursor: pointer;
       white-space: nowrap;
       text-align: center;
+      transition: all 0.12s ease;
     }
     .mobile-tab-btn.is-active {
       color: #ffffff;
@@ -629,6 +726,7 @@ function injectStyles() {
       scrollbar-width: thin;
       scrollbar-color: var(--kb-scrollbar-thumb, rgba(255, 255, 255, 0.16)) transparent !important;
       flex: 1;
+      -webkit-overflow-scrolling: touch;
     }
 
     .kanban-track {
@@ -637,11 +735,13 @@ function injectStyles() {
       align-items: flex-start;
       min-width: 100%;
       box-sizing: border-box;
+      overflow: visible;
     }
 
     .kanban-column {
-      flex: 0 0 280px;
-      width: 280px;
+      flex: 1 1 280px;
+      min-width: 280px;
+      max-width: 380px;
       background: var(--kb-surface);
       border: none;
       border-radius: 12px;
@@ -726,12 +826,17 @@ function injectStyles() {
     .btn-edit-col-icon {
       display: inline-flex;
       align-items: center;
-      opacity: 0.45;
+      justify-content: center;
+      color: var(--kb-text-dim);
+      opacity: 0.35;
       margin-left: 2px;
-      transition: opacity 0.12s ease;
+      transition: all 0.15s ease;
+      cursor: pointer;
     }
-    .column-title-wrap:hover .btn-edit-col-icon {
+    .column-title-wrap:hover .btn-edit-col-icon,
+    .column-title-wrap:focus-visible .btn-edit-col-icon {
       opacity: 1;
+      color: var(--kb-text-primary);
     }
 
     .kanban-list {
@@ -1348,17 +1453,47 @@ function injectStyles() {
     }
 
     @media (max-width: 860px) {
-      .kanban-shell { padding: 12px 10px 24px; }
-      .kanban-header { flex-direction: column; gap: 8px; }
-      .kanban-toolbar { gap: 8px; }
-      .mobile-column-tabs { display: flex; }
-      .kanban-board {
-        grid-template-columns: repeat(4, 84vw);
-        gap: 10px;
-        scroll-snap-type: x mandatory;
-        scroll-behavior: smooth;
+      .kanban-shell {
+        padding-top: calc(env(safe-area-inset-top, 0px) + 56px);
+        padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px);
+        padding-inline: 0;
       }
-      .kanban-column { scroll-snap-align: center; }
+      .kanban-header {
+        flex-direction: column;
+        gap: 8px;
+        padding-inline: max(env(safe-area-inset-left, 0px), 16px);
+      }
+      .kanban-topbar {
+        padding-inline: max(env(safe-area-inset-left, 0px), 16px);
+      }
+      .kanban-toolbar {
+        gap: 8px;
+        padding-inline: max(env(safe-area-inset-left, 0px), 16px);
+      }
+      .mobile-column-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-inline: max(env(safe-area-inset-left, 0px), 16px);
+      }
+      .mobile-tab-btn {
+        flex: 0 0 auto;
+        width: auto;
+      }
+      .kanban-scroll-container {
+        padding-inline: max(env(safe-area-inset-left, 0px), 16px);
+        scroll-padding-inline: max(env(safe-area-inset-left, 0px), 16px);
+        scroll-snap-type: x mandatory;
+      }
+      .kanban-track {
+        gap: 12px;
+      }
+      .kanban-column {
+        flex: 0 0 calc(85vw - 20px);
+        min-width: 260px;
+        max-width: 340px;
+        scroll-snap-align: start;
+      }
       .form-row { grid-template-columns: 1fr; }
     }
   `;
@@ -2530,18 +2665,22 @@ function openColumnModal(columnToEdit = null) {
   });
 }
 
-function openBoardSettingsModal(board) {
+async function openBoardSettingsModal(board) {
   if (!board) return;
 
   const currentMembers = Array.isArray(board.members) ? [...board.members] : [];
   let modalMembers = [...currentMembers];
+
+  if (activeDiscordSdk) {
+    await refreshDiscordParticipants(activeDiscordSdk);
+  }
 
   // Obtener sugerencias de Discord disponibles
   const knownFromDiscord = [];
   if (currentDiscordUser) {
     knownFromDiscord.push({
       id: String(currentDiscordUser.id),
-      name: currentDiscordUser.global_name || currentDiscordUser.username,
+      name: currentDiscordUser.global_name || currentDiscordUser.username || 'Yo',
       username: currentDiscordUser.username || '',
     });
   }

@@ -237,9 +237,42 @@ function resolveClientId() {
   return FALLBACK_CLIENT_ID;
 }
 
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
+  document.documentElement.classList.toggle('theme-light', isLight);
+  document.documentElement.classList.toggle('theme-dark', !isLight);
+}
+
+function initTheme(sdk) {
+  const params = new URLSearchParams(window.location.search);
+  const paramTheme = params.get('theme');
+  if (paramTheme) {
+    applyTheme(paramTheme);
+  } else if (sdk?.theme) {
+    applyTheme(sdk.theme);
+  } else if (sdk?.config?.theme) {
+    applyTheme(sdk.config.theme);
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    applyTheme('light');
+  } else {
+    applyTheme('dark');
+  }
+
+  if (sdk?.subscribe) {
+    try {
+      sdk.subscribe('THEME_CHANGE', ({ theme }) => {
+        if (theme) applyTheme(theme);
+      });
+    } catch {}
+  }
+}
+
 async function initDiscordSdk() {
   const params = new URLSearchParams(window.location.search);
   const isEmbedded = params.has('frame_id') && params.has('instance_id');
+
+  initTheme(null);
 
   if (!isEmbedded) {
     return null;
@@ -249,6 +282,7 @@ async function initDiscordSdk() {
     const clientId = resolveClientId();
     const discordSdk = new DiscordSDK(clientId);
     await discordSdk.ready();
+    initTheme(discordSdk);
     return discordSdk;
   } catch (error) {
     console.warn('No se pudo inicializar DiscordSDK:', error);
