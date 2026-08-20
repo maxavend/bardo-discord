@@ -179,12 +179,13 @@ function createMockKanbanDb() {
                 return { success: true };
               }
               if (q.includes('UPDATE boards SET name = ?')) {
-                const [name, description, members, updated_at, id] = params;
+                const [name, description, members, columns, updated_at, id] = params;
                 const b = boards.get(id);
                 if (b) {
                   b.name = name;
                   b.description = description;
                   b.members = members;
+                  b.columns = columns;
                   b.updated_at = updated_at;
                 }
                 return { success: true };

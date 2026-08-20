@@ -11414,6 +11414,8 @@ function injectStyles() {
       font-weight: 600;
       cursor: pointer;
       box-sizing: border-box;
+      white-space: nowrap;
+      flex-shrink: 0;
       transition: background 0.15s ease, transform 0.08s ease;
     }
     .btn-primary:hover { background: var(--kb-blurple-hover); }
@@ -11434,6 +11436,8 @@ function injectStyles() {
       font-weight: 500;
       cursor: pointer;
       box-sizing: border-box;
+      white-space: nowrap;
+      flex-shrink: 0;
       transition: background 0.15s ease;
     }
     .btn-secondary:hover { background: var(--kb-surface-hover); }
@@ -11449,6 +11453,8 @@ function injectStyles() {
       color: var(--kb-text-muted);
       cursor: pointer;
       box-sizing: border-box;
+      white-space: nowrap;
+      flex-shrink: 0;
       transition: all 0.15s ease;
     }
     .btn-icon:hover { color: var(--kb-text-primary); background: var(--kb-surface-hover); }
@@ -12355,6 +12361,91 @@ function injectStyles() {
       border-style: solid;
     }
 
+    /* Column Manager dentro de Configuraci\xF3n de Tablero */
+    .modal-columns-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .modal-column-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: var(--kb-surface);
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: background 0.12s ease;
+    }
+    .modal-column-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+    .modal-column-input {
+      flex: 1;
+      height: 28px;
+      padding: 0 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--kb-text-primary);
+      font-size: 12.5px;
+      font-weight: 600;
+      outline: none;
+    }
+    .modal-column-input:focus {
+      background: var(--kb-surface-raised);
+      border-color: var(--kb-blurple);
+    }
+    .modal-column-btn {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-dim);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+      transition: all 0.1s ease;
+      flex: 0 0 auto;
+    }
+    .modal-column-btn:hover {
+      color: var(--kb-text-primary);
+      background: var(--kb-surface-raised);
+    }
+    .modal-column-btn:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+    }
+    .modal-column-btn.btn-remove-col:hover {
+      color: var(--kb-danger);
+    }
+    .btn-add-modal-col {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--kb-surface);
+      border: 1px dashed var(--kb-text-dim);
+      border-radius: 7px;
+      color: var(--kb-text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .btn-add-modal-col:hover {
+      color: var(--kb-blurple);
+      border-color: var(--kb-blurple);
+      background: var(--kb-surface-raised);
+    }
+
     .modal-actions {
       display: flex;
       align-items: center;
@@ -12505,11 +12596,8 @@ function createShell() {
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
           </svg>
         </button>
-        <button id="btn-add-col-global" class="btn-secondary" type="button" title="Agregar columna (m\xE1x. 5)">
-          <span>+</span> Columna
-        </button>
         <button id="btn-new-task-global" class="btn-primary" type="button">
-          <span>+</span> Nueva tarea
+          <span>+</span> Tarea
         </button>
       </div>
     </header>
@@ -12521,14 +12609,6 @@ function createShell() {
   document.body.appendChild(shell);
   shell.querySelector("#btn-sync")?.addEventListener("click", async () => {
     await refreshBoard(true);
-  });
-  shell.querySelector("#btn-add-col-global")?.addEventListener("click", () => {
-    const currentCols = currentBoardData?.columns || DEFAULT_KANBAN_COLUMNS;
-    if (currentCols.length >= MAX_BOARD_COLUMNS) {
-      showToast(`M\xE1ximo ${MAX_BOARD_COLUMNS} columnas por tablero`, "info");
-      return;
-    }
-    openColumnModal(null);
   });
   shell.querySelector("#btn-new-task-global")?.addEventListener("click", () => {
     const firstColId = (currentBoardData?.columns || DEFAULT_KANBAN_COLUMNS)[0]?.id || "backlog";
@@ -12663,10 +12743,6 @@ function renderBoard(container, board) {
   const hasActiveFilters = Boolean(
     filterState.search || filterState.onlyMyTasks || filterState.priority !== "all" || filterState.label !== "all"
   );
-  const globalAddColBtn = document.querySelector("#btn-add-col-global");
-  if (globalAddColBtn) {
-    globalAddColBtn.style.display = boardColumns.length < MAX_BOARD_COLUMNS ? "inline-flex" : "none";
-  }
   container.className = "";
   container.innerHTML = `
     <header class="kanban-header">
@@ -13195,6 +13271,14 @@ function openModal(modalConfig) {
       );
     }
     let html = "";
+    if (cleanQuery && !matches.some((m) => m.name.toLowerCase() === cleanQuery)) {
+      html += `
+        <button type="button" class="member-menu-item notion-menu-create" data-member-id="m-${Date.now()}" data-member-name="${escapeHtml2(query.trim())}">
+          <span>+</span>
+          <span>Asignar a "<strong>${escapeHtml2(query.trim())}</strong>"</span>
+        </button>
+      `;
+    }
     if (matches.length > 0) {
       for (const m of matches) {
         html += `
@@ -13207,12 +13291,6 @@ function openModal(modalConfig) {
           </button>
         `;
       }
-    } else if (cleanQuery) {
-      html += `
-        <div style="padding: 8px 10px; color: var(--kb-text-dim); font-size: 11.5px;">
-          Presiona guardar para asignar a <strong>"${escapeHtml2(query)}"</strong>
-        </div>
-      `;
     }
     if (!html) {
       memberDropdown.style.display = "none";
@@ -13342,6 +13420,20 @@ function openModal(modalConfig) {
           labels
         });
         showToast("Tarea creada", "success");
+      }
+      if (assigneeName) {
+        const boardMembers = Array.isArray(currentBoardData?.members) ? [...currentBoardData.members] : [];
+        const exists = boardMembers.some((m) => m.name.toLowerCase() === assigneeName.toLowerCase() || assigneeId && m.id === assigneeId);
+        if (!exists) {
+          boardMembers.push({
+            id: assigneeId || `m-${Date.now()}`,
+            name: assigneeName,
+            username: assigneeName
+          });
+          currentBoardData.members = boardMembers;
+          saveBoardSettingsRequest({ members: boardMembers }).catch(() => {
+          });
+        }
       }
       closeModal();
       await refreshBoard(false);
@@ -13484,6 +13576,8 @@ async function openBoardSettingsModal(board) {
   if (!board) return;
   const currentMembers = Array.isArray(board.members) ? [...board.members] : [];
   let modalMembers = [...currentMembers];
+  const currentColumns = Array.isArray(board.columns) && board.columns.length > 0 ? JSON.parse(JSON.stringify(board.columns)) : JSON.parse(JSON.stringify(DEFAULT_KANBAN_COLUMNS));
+  let modalColumns = [...currentColumns];
   if (activeDiscordSdk2) {
     await refreshDiscordParticipants(activeDiscordSdk2);
   }
@@ -13511,7 +13605,7 @@ async function openBoardSettingsModal(board) {
   backdrop.id = "bardo-board-settings-modal-backdrop";
   backdrop.className = "kanban-modal-backdrop";
   backdrop.innerHTML = `
-    <div class="kanban-modal" role="dialog" aria-modal="true" style="max-width: 520px;">
+    <div class="kanban-modal" role="dialog" aria-modal="true" style="max-width: 560px;">
       <header class="modal-header">
         <h2 class="modal-title">Configuraci\xF3n del tablero</h2>
         <button id="btn-board-modal-close" class="modal-close-btn" type="button" aria-label="Cerrar">\u2715</button>
@@ -13525,6 +13619,32 @@ async function openBoardSettingsModal(board) {
         <div class="form-group">
           <label for="board-desc-input">Descripci\xF3n</label>
           <textarea id="board-desc-input" class="form-textarea" placeholder="Prop\xF3sito, equipo o alcance de este tablero\u2026" maxlength="500">${escapeHtml2(board.description || "")}</textarea>
+        </div>
+
+        <!-- Gesti\xF3n de Columnas (m\xE1x 5) -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="margin: 0;">Columnas del tablero</label>
+            <span id="board-col-count-text" style="font-size: 11px; color: var(--kb-text-dim);"></span>
+          </div>
+          <p style="margin: 0 0 8px; font-size: 12px; color: var(--kb-text-muted);">
+            Gestiona los nombres, colores y orden de las columnas de trabajo.
+          </p>
+          <div id="board-modal-columns-list" class="modal-columns-list"></div>
+          
+          <div id="board-add-col-wrap" style="margin-top: 8px;">
+            <button type="button" id="btn-show-add-col-box" class="btn-add-modal-col">
+              <span>+</span> A\xF1adir columna
+            </button>
+            <div id="board-add-col-box" style="display: none; margin-top: 8px; padding: 10px; background: var(--kb-surface); border-radius: 8px; border: 1px solid var(--kb-border-subtle, rgba(255,255,255,0.08));">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input id="new-col-name-input" class="form-input" type="text" placeholder="Nombre de columna\u2026" maxlength="30" style="height: 32px; font-size: 12.5px;" />
+                <button type="button" id="btn-confirm-add-col" class="btn-primary" style="height: 32px; font-size: 12px; padding: 0 12px;">A\xF1adir</button>
+                <button type="button" id="btn-cancel-add-col" class="btn-secondary" style="height: 32px; font-size: 12px; padding: 0 10px;">Cancelar</button>
+              </div>
+              <div id="new-col-palette" style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Miembros del equipo habilitados para asignaci\xF3n -->
@@ -13573,6 +13693,116 @@ async function openBoardSettingsModal(board) {
     </div>
   `;
   document.body.appendChild(backdrop);
+  const columnsListEl = backdrop.querySelector("#board-modal-columns-list");
+  const colCountText = backdrop.querySelector("#board-col-count-text");
+  const showAddColBtn = backdrop.querySelector("#btn-show-add-col-box");
+  const addColBox = backdrop.querySelector("#board-add-col-box");
+  const newColNameInput = backdrop.querySelector("#new-col-name-input");
+  const confirmAddColBtn = backdrop.querySelector("#btn-confirm-add-col");
+  const cancelAddColBtn = backdrop.querySelector("#btn-cancel-add-col");
+  const paletteEl = backdrop.querySelector("#new-col-palette");
+  let selectedNewColColor = CHIP_COLOR_PALETTE[0].color;
+  function renderPalette() {
+    if (!paletteEl) return;
+    paletteEl.innerHTML = CHIP_COLOR_PALETTE.map((c) => `
+      <button type="button" class="color-dot-btn ${c.color === selectedNewColColor ? "is-selected" : ""}" data-pick-new-col-color="${c.color}" style="width: 22px; height: 22px; border-radius: 50%; background: ${c.color}; border: none; cursor: pointer; outline: ${c.color === selectedNewColColor ? "2px solid #fff" : "none"}; outline-offset: 2px;"></button>
+    `).join("");
+    paletteEl.querySelectorAll("[data-pick-new-col-color]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedNewColColor = btn.dataset.pickNewColColor;
+        renderPalette();
+      });
+    });
+  }
+  function renderColumnsList() {
+    if (!columnsListEl) return;
+    if (colCountText) colCountText.textContent = `${modalColumns.length}/${MAX_BOARD_COLUMNS}`;
+    if (showAddColBtn) {
+      showAddColBtn.style.display = modalColumns.length < MAX_BOARD_COLUMNS ? "inline-flex" : "none";
+    }
+    columnsListEl.innerHTML = modalColumns.map((col, idx) => `
+      <div class="modal-column-row" data-col-idx="${idx}">
+        <span class="modal-column-dot" style="background: ${col.color || "#5865f2"};"></span>
+        <input type="text" class="modal-column-input" value="${escapeHtml2(col.label)}" maxlength="30" data-col-input-idx="${idx}" placeholder="Nombre de columna" />
+        <button type="button" class="modal-column-btn" data-move-col="up" data-col-idx="${idx}" ${idx === 0 ? "disabled" : ""} title="Mover arriba">\u25B2</button>
+        <button type="button" class="modal-column-btn" data-move-col="down" data-col-idx="${idx}" ${idx === modalColumns.length - 1 ? "disabled" : ""} title="Mover abajo">\u25BC</button>
+        <button type="button" class="modal-column-btn btn-remove-col" data-remove-col-idx="${idx}" ${modalColumns.length <= 1 ? "disabled" : ""} title="Eliminar columna">\u2715</button>
+      </div>
+    `).join("");
+    columnsListEl.querySelectorAll("[data-col-input-idx]").forEach((input) => {
+      input.addEventListener("input", (e) => {
+        const idx = Number(e.target.dataset.colInputIdx);
+        if (modalColumns[idx]) {
+          modalColumns[idx].label = e.target.value;
+        }
+      });
+    });
+    columnsListEl.querySelectorAll("[data-move-col]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.colIdx);
+        const dir = btn.dataset.moveCol;
+        if (dir === "up" && idx > 0) {
+          const temp = modalColumns[idx];
+          modalColumns[idx] = modalColumns[idx - 1];
+          modalColumns[idx - 1] = temp;
+          renderColumnsList();
+        } else if (dir === "down" && idx < modalColumns.length - 1) {
+          const temp = modalColumns[idx];
+          modalColumns[idx] = modalColumns[idx + 1];
+          modalColumns[idx + 1] = temp;
+          renderColumnsList();
+        }
+      });
+    });
+    columnsListEl.querySelectorAll("[data-remove-col-idx]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.dataset.removeColIdx);
+        if (modalColumns.length > 1) {
+          modalColumns.splice(idx, 1);
+          renderColumnsList();
+        }
+      });
+    });
+  }
+  showAddColBtn?.addEventListener("click", () => {
+    if (addColBox) addColBox.style.display = "block";
+    if (showAddColBtn) showAddColBtn.style.display = "none";
+    if (newColNameInput) {
+      newColNameInput.value = "";
+      newColNameInput.focus();
+    }
+    selectedNewColColor = CHIP_COLOR_PALETTE[modalColumns.length % CHIP_COLOR_PALETTE.length].color;
+    renderPalette();
+  });
+  cancelAddColBtn?.addEventListener("click", () => {
+    if (addColBox) addColBox.style.display = "none";
+    if (showAddColBtn) showAddColBtn.style.display = modalColumns.length < MAX_BOARD_COLUMNS ? "inline-flex" : "none";
+  });
+  function handleAddNewColumn() {
+    const name = newColNameInput?.value.trim();
+    if (!name) return;
+    if (modalColumns.length >= MAX_BOARD_COLUMNS) {
+      showToast(`M\xE1ximo ${MAX_BOARD_COLUMNS} columnas por tablero`, "error");
+      return;
+    }
+    const newId = name.toLowerCase().replace(/[^a-z0-9_-]/g, "") || `col-${Date.now()}`;
+    let id = newId;
+    let counter = 1;
+    while (modalColumns.some((c) => c.id === id)) {
+      id = `${newId}-${counter}`;
+      counter += 1;
+    }
+    modalColumns.push({ id, label: name, color: selectedNewColColor });
+    if (addColBox) addColBox.style.display = "none";
+    renderColumnsList();
+  }
+  confirmAddColBtn?.addEventListener("click", handleAddNewColumn);
+  newColNameInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddNewColumn();
+    }
+  });
   const membersListEl = backdrop.querySelector("#board-members-list");
   const suggestionsEl = backdrop.querySelector("#board-member-suggestions");
   const addInput = backdrop.querySelector("#board-member-add-input");
@@ -13657,20 +13887,26 @@ async function openBoardSettingsModal(board) {
     }
   });
   addInput?.addEventListener("input", (e) => {
-    const q = e.target.value.trim().toLowerCase();
+    const q = e.target.value.trim();
     if (!q || !dropdownEl) {
       if (dropdownEl) dropdownEl.style.display = "none";
       return;
     }
+    const qLower = q.toLowerCase().replace(/^@/, "");
     const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
     const matches = knownFromDiscord.filter(
-      (m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()) && (m.name.toLowerCase().includes(q) || m.username && m.username.toLowerCase().includes(q))
+      (m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()) && (m.name.toLowerCase().includes(qLower) || m.username && m.username.toLowerCase().includes(qLower))
     );
-    if (matches.length === 0) {
-      dropdownEl.style.display = "none";
-      return;
+    let html = "";
+    if (!modalMembers.some((m) => m.name.toLowerCase() === qLower)) {
+      html += `
+        <button type="button" class="member-menu-item notion-menu-create" data-pick-custom="${escapeHtml2(q)}">
+          <span>+</span>
+          <span>A\xF1adir a "<strong>${escapeHtml2(q)}</strong>" como miembro</span>
+        </button>
+      `;
     }
-    dropdownEl.innerHTML = matches.map((m) => `
+    html += matches.map((m) => `
       <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}">
         <span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>
         <div class="member-info-col">
@@ -13679,7 +13915,13 @@ async function openBoardSettingsModal(board) {
         </div>
       </button>
     `).join("");
+    dropdownEl.innerHTML = html;
     dropdownEl.style.display = "flex";
+    dropdownEl.querySelectorAll("[data-pick-custom]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        addManualMember(btn.dataset.pickCustom);
+      });
+    });
     dropdownEl.querySelectorAll("[data-pick-id]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.pickId;
@@ -13701,6 +13943,7 @@ async function openBoardSettingsModal(board) {
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) closeBoardModal();
   });
+  renderColumnsList();
   renderMembersList();
   renderSuggestions();
   const form = backdrop.querySelector("#board-settings-form");
@@ -13715,14 +13958,16 @@ async function openBoardSettingsModal(board) {
       const res = await saveBoardSettingsRequest({
         name,
         description,
-        members: modalMembers
+        members: modalMembers,
+        columns: modalColumns
       });
       if (res.board) {
         currentBoardData = {
           ...currentBoardData,
           name: res.board.name,
           description: res.board.description,
-          members: res.board.members
+          members: res.board.members,
+          columns: res.board.columns
         };
       }
       closeBoardModal();

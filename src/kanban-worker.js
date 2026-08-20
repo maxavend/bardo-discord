@@ -386,6 +386,7 @@ async function handleBoardApi(request, url, env) {
       name: payload?.name,
       description: payload?.description,
       members: payload?.members,
+      columns: payload?.columns,
     });
     return jsonResponse({ ok: true, board: updated });
   }

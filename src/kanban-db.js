@@ -70,7 +70,7 @@ export async function createBoard(db, { id, guildId, name, description, columns,
   return { id, guildId, name: cleanName, description: cleanDescription, columns: validColumns, members: validMembers, createdBy, createdAt: now, updatedAt: now };
 }
 
-export async function updateBoardSettings(db, boardId, { name, description, members }) {
+export async function updateBoardSettings(db, boardId, { name, description, members, columns }) {
   const board = await loadBoard(db, boardId);
   if (!board) return null;
 
@@ -80,18 +80,20 @@ export async function updateBoardSettings(db, boardId, { name, description, memb
 
   const cleanDescription = description !== undefined ? (description ? String(description).trim().slice(0, 500) : '') : board.description;
   const validMembers = members !== undefined && Array.isArray(members) ? members : board.members || [];
+  const validColumns = columns !== undefined && Array.isArray(columns) ? validateBoardColumns(columns) : board.columns || [];
 
   await db.prepare(
     `UPDATE boards
-     SET name = ?, description = ?, members = ?, updated_at = ?
+     SET name = ?, description = ?, members = ?, columns = ?, updated_at = ?
      WHERE id = ?`,
-  ).bind(cleanName, cleanDescription || null, JSON.stringify(validMembers), now, boardId).run();
+  ).bind(cleanName, cleanDescription || null, JSON.stringify(validMembers), JSON.stringify(validColumns), now, boardId).run();
 
   return {
     ...board,
     name: cleanName,
     description: cleanDescription,
     members: validMembers,
+    columns: validColumns,
     updatedAt: now,
   };
 }
