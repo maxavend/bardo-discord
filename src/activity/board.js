@@ -2481,17 +2481,6 @@ function openModal(modalConfig) {
       );
     }
 
-    let html = '';
-
-    if (cleanQuery && !matches.some((m) => m.name.toLowerCase() === cleanQuery)) {
-      html += `
-        <button type="button" class="member-menu-item notion-menu-create" data-member-id="m-${Date.now()}" data-member-name="${escapeHtml(query.trim())}">
-          <span>+</span>
-          <span>Asignar a "<strong>${escapeHtml(query.trim())}</strong>"</span>
-        </button>
-      `;
-    }
-
     if (matches.length > 0) {
       for (const m of matches) {
         html += `
@@ -2506,6 +2495,8 @@ function openModal(modalConfig) {
           </button>
         `;
       }
+    } else if (cleanQuery) {
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor</div>`;
     }
 
     if (!html) {
@@ -3261,42 +3252,31 @@ async function openBoardSettingsModal(board) {
 
     const qLower = q.toLowerCase().replace(/^@/, '');
     const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
-    const matches = knownFromDiscord.filter(
+    const matches = serverGuildMembers.filter(
       (m) => !addedIds.has(String(m.id).toLowerCase()) &&
              !addedIds.has(m.name.toLowerCase()) &&
              (m.name.toLowerCase().includes(qLower) || (m.username && m.username.toLowerCase().includes(qLower)))
     );
 
     let html = '';
-    if (!modalMembers.some((m) => m.name.toLowerCase() === qLower)) {
-      html += `
-        <button type="button" class="member-menu-item notion-menu-create" data-pick-custom="${escapeHtml(q)}">
-          <span>+</span>
-          <span>Añadir a "<strong>${escapeHtml(q)}</strong>" como miembro</span>
+    if (matches.length > 0) {
+      html += matches.map((m) => `
+        <button type="button" class="member-menu-item" data-pick-id="${escapeHtml(m.id)}" data-pick-name="${escapeHtml(m.name)}" data-pick-username="${escapeHtml(m.username || '')}" data-pick-avatar="${escapeHtml(m.avatarUrl || '')}">
+          ${m.avatarUrl
+            ? `<img src="${escapeHtml(m.avatarUrl)}" alt="${escapeHtml(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />`
+            : `<span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>`}
+          <div class="member-info-col">
+            <span class="member-name-text">${escapeHtml(m.name)}</span>
+            ${m.username ? `<span class="member-handle-text">@${escapeHtml(m.username)}</span>` : ''}
+          </div>
         </button>
-      `;
+      `).join('');
+    } else if (q) {
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor que coincidan</div>`;
     }
-
-    html += matches.map((m) => `
-      <button type="button" class="member-menu-item" data-pick-id="${escapeHtml(m.id)}" data-pick-name="${escapeHtml(m.name)}" data-pick-username="${escapeHtml(m.username || '')}" data-pick-avatar="${escapeHtml(m.avatarUrl || '')}">
-        ${m.avatarUrl
-          ? `<img src="${escapeHtml(m.avatarUrl)}" alt="${escapeHtml(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />`
-          : `<span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>`}
-        <div class="member-info-col">
-          <span class="member-name-text">${escapeHtml(m.name)}</span>
-          ${m.username ? `<span class="member-handle-text">@${escapeHtml(m.username)}</span>` : ''}
-        </div>
-      </button>
-    `).join('');
 
     dropdownEl.innerHTML = html;
     dropdownEl.style.display = 'flex';
-
-    dropdownEl.querySelectorAll('[data-pick-custom]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        addManualMember(btn.dataset.pickCustom);
-      });
-    });
 
     dropdownEl.querySelectorAll('[data-pick-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -3327,6 +3307,23 @@ async function openBoardSettingsModal(board) {
   renderMembersList();
   renderSuggestions();
 
+  // Si aún no tenemos miembros del servidor, consultamos la API con el guildId de la sesión
+  if (serverGuildMembers.length === 0 && currentBoardId) {
+    const guildQs = activeDiscordSdk?.guildId ? `?guild_id=${encodeURIComponent(activeDiscordSdk.guildId)}` : '';
+    fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/guild-members${guildQs}`, {
+      headers: { Accept: 'application/json' },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.members) && data.members.length > 0) {
+          serverGuildMembers = data.members;
+          renderMembersList();
+          renderSuggestions();
+        }
+      })
+      .catch(() => {});
+  }
+
   // Guardar configuración del tablero
   const form = backdrop.querySelector('#board-settings-form');
   form?.addEventListener('submit', async (e) => {
@@ -3342,17 +3339,17 @@ async function openBoardSettingsModal(board) {
       const res = await saveBoardSettingsRequest({
         name,
         description,
-        members: modalMembers,
         columns: modalColumns,
+        members: modalMembers,
       });
 
-      if (res.board) {
+      if (currentBoardData) {
         currentBoardData = {
           ...currentBoardData,
-          name: res.board.name,
-          description: res.board.description,
-          members: res.board.members,
-          columns: res.board.columns,
+          name,
+          description,
+          members: modalMembers,
+          columns: modalColumns,
         };
       }
 
@@ -3369,7 +3366,12 @@ async function openBoardSettingsModal(board) {
 
 // API Requests
 async function fetchBoard() {
-  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
+  const params = new URLSearchParams();
+  if (activeDiscordSdk?.guildId) {
+    params.set('guild_id', activeDiscordSdk.guildId);
+  }
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}${qs}`, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',
   });

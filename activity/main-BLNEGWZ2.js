@@ -10070,8 +10070,8 @@ function renderInline(value) {
   text = text.replace(/~~([^~]+)~~/g, "<del>$1</del>");
   text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   text = text.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
-  codeTokens.forEach((html, index) => {
-    text = text.replace(`%%BARDOCODE${index}%%`, html);
+  codeTokens.forEach((html2, index) => {
+    text = text.replace(`%%BARDOCODE${index}%%`, html2);
   });
   return text;
 }
@@ -10112,7 +10112,7 @@ function stripLeadingTitle(markdown, title) {
 function renderMarkdown(markdown) {
   const cleaned = cleanEscapedMarkdown(markdown);
   const lines = cleaned.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-  const html = [];
+  const html2 = [];
   let index = 0;
   while (index < lines.length) {
     const line = lines[index];
@@ -10131,7 +10131,7 @@ function renderMarkdown(markdown) {
       }
       if (index < lines.length) index += 1;
       const languageAttr = language ? ` data-language="${escapeHtml(language)}"` : "";
-      html.push(`<pre><code${languageAttr}>${escapeHtml(code.join("\n"))}</code></pre>`);
+      html2.push(`<pre><code${languageAttr}>${escapeHtml(code.join("\n"))}</code></pre>`);
       continue;
     }
     if (line.includes("|") && isTableSeparator(lines[index + 1] ?? "")) {
@@ -10141,18 +10141,18 @@ function renderMarkdown(markdown) {
         tableLines.push(lines[index]);
         index += 1;
       }
-      html.push(renderTable(tableLines));
+      html2.push(renderTable(tableLines));
       continue;
     }
     const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const level = Math.min(heading[1].length, 4);
-      html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+      html2.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
       index += 1;
       continue;
     }
     if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      html.push("<hr>");
+      html2.push("<hr>");
       index += 1;
       continue;
     }
@@ -10162,7 +10162,7 @@ function renderMarkdown(markdown) {
         quoteLines.push(lines[index].trim().replace(/^>\s?/, ""));
         index += 1;
       }
-      html.push(`<blockquote><p>${quoteLines.map(renderInline).join("<br>")}</p></blockquote>`);
+      html2.push(`<blockquote><p>${quoteLines.map(renderInline).join("<br>")}</p></blockquote>`);
       continue;
     }
     if (/^[-*+]\s+/.test(trimmed)) {
@@ -10171,7 +10171,7 @@ function renderMarkdown(markdown) {
         items.push(lines[index].trim().replace(/^[-*+]\s+/, ""));
         index += 1;
       }
-      html.push(`<ul>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
+      html2.push(`<ul>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
       continue;
     }
     if (/^\d+[.)]\s+/.test(trimmed)) {
@@ -10180,7 +10180,7 @@ function renderMarkdown(markdown) {
         items.push(lines[index].trim().replace(/^\d+[.)]\s+/, ""));
         index += 1;
       }
-      html.push(`<ol>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`);
+      html2.push(`<ol>${items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ol>`);
       continue;
     }
     const paragraph = [trimmed];
@@ -10189,9 +10189,9 @@ function renderMarkdown(markdown) {
       paragraph.push(lines[index].trim());
       index += 1;
     }
-    html.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
+    html2.push(`<p>${paragraph.map(renderInline).join("<br>")}</p>`);
   }
-  return html.join("\n");
+  return html2.join("\n");
 }
 function formatDate(value) {
   if (!value) return null;
@@ -10429,7 +10429,7 @@ function showError(message) {
   errorMessageEl.textContent = message;
   setView("error");
 }
-async function htmlToMarkdown(html) {
+async function htmlToMarkdown(html2) {
   const [turndownModule, gfmModule] = await Promise.all([
     import("./chunks/turndown.browser.es-GTXT4OBN.js"),
     import("./chunks/turndown-plugin-gfm.es-NRPX52H6.js")
@@ -10445,7 +10445,7 @@ async function htmlToMarkdown(html) {
   });
   turndown.escape = (str) => str;
   if (gfm) turndown.use(gfm);
-  const raw = turndown.turndown(html);
+  const raw = turndown.turndown(html2);
   return cleanEscapedMarkdown(raw).replace(/\n{3,}/g, "\n\n").trim();
 }
 var PENCIL_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`;
@@ -13225,18 +13225,18 @@ function openModal(modalConfig) {
     const matches = allBoardChips.filter(
       (c) => !selectedNames.has(c.name.toLowerCase()) && (!cleanQuery || c.name.toLowerCase().includes(cleanQuery.toLowerCase()))
     );
-    let html = "";
+    let html2 = "";
     const exactMatch = allBoardChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase()) || modalSelectedChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase());
     if (cleanQuery && !exactMatch) {
       if (allBoardChips.length >= MAX_BOARD_CHIPS) {
-        html += `
+        html2 += `
           <div style="padding: 6px 10px; color: var(--kb-text-muted); font-size: 11.5px;">
             L\xEDmite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
           </div>
         `;
       } else {
         const autoColor = getDeterministicColor(cleanQuery);
-        html += `
+        html2 += `
           <button type="button" class="notion-menu-item notion-menu-create" data-create-chip="${escapeHtml2(cleanQuery)}" data-chip-color="${autoColor}">
             <span>+ Crear chip <strong>"${escapeHtml2(cleanQuery)}"</strong></span>
             <span style="width: 10px; height: 10px; border-radius: 50%; background: ${autoColor};"></span>
@@ -13246,7 +13246,7 @@ function openModal(modalConfig) {
     }
     for (const chip of matches) {
       const color = chip.color || getDeterministicColor(chip.name);
-      html += `
+      html2 += `
         <button type="button" class="notion-menu-item" data-pick-chip="${escapeHtml2(chip.name)}" data-chip-color="${escapeHtml2(color)}">
           <span class="notion-menu-item-tag">
             <span style="width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>
@@ -13255,11 +13255,11 @@ function openModal(modalConfig) {
         </button>
       `;
     }
-    if (!html) {
+    if (!html2) {
       chipDropdown.style.display = "none";
       return;
     }
-    chipDropdown.innerHTML = html;
+    chipDropdown.innerHTML = html2;
     chipDropdown.style.display = "flex";
     chipDropdown.querySelectorAll("[data-create-chip]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
@@ -13340,15 +13340,6 @@ function openModal(modalConfig) {
         (m) => m.name.toLowerCase().includes(cleanQuery) || m.username.toLowerCase().includes(cleanQuery) || m.id.includes(cleanQuery)
       );
     }
-    let html = "";
-    if (cleanQuery && !matches.some((m) => m.name.toLowerCase() === cleanQuery)) {
-      html += `
-        <button type="button" class="member-menu-item notion-menu-create" data-member-id="m-${Date.now()}" data-member-name="${escapeHtml2(query.trim())}">
-          <span>+</span>
-          <span>Asignar a "<strong>${escapeHtml2(query.trim())}</strong>"</span>
-        </button>
-      `;
-    }
     if (matches.length > 0) {
       for (const m of matches) {
         html += `
@@ -13361,6 +13352,8 @@ function openModal(modalConfig) {
           </button>
         `;
       }
+    } else if (cleanQuery) {
+      html = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor</div>`;
     }
     if (!html) {
       memberDropdown.style.display = "none";
@@ -14017,34 +14010,25 @@ async function openBoardSettingsModal(board) {
     }
     const qLower = q.toLowerCase().replace(/^@/, "");
     const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
-    const matches = knownFromDiscord.filter(
+    const matches = serverGuildMembers.filter(
       (m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()) && (m.name.toLowerCase().includes(qLower) || m.username && m.username.toLowerCase().includes(qLower))
     );
-    let html = "";
-    if (!modalMembers.some((m) => m.name.toLowerCase() === qLower)) {
-      html += `
-        <button type="button" class="member-menu-item notion-menu-create" data-pick-custom="${escapeHtml2(q)}">
-          <span>+</span>
-          <span>A\xF1adir a "<strong>${escapeHtml2(q)}</strong>" como miembro</span>
+    let html2 = "";
+    if (matches.length > 0) {
+      html2 += matches.map((m) => `
+        <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}" data-pick-avatar="${escapeHtml2(m.avatarUrl || "")}">
+          ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />` : `<span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>`}
+          <div class="member-info-col">
+            <span class="member-name-text">${escapeHtml2(m.name)}</span>
+            ${m.username ? `<span class="member-handle-text">@${escapeHtml2(m.username)}</span>` : ""}
+          </div>
         </button>
-      `;
+      `).join("");
+    } else if (q) {
+      html2 = `<div style="padding: 10px 12px; font-size: 12px; color: var(--kb-text-dim); text-align: center;">No se encontraron miembros del servidor que coincidan</div>`;
     }
-    html += matches.map((m) => `
-      <button type="button" class="member-menu-item" data-pick-id="${escapeHtml2(m.id)}" data-pick-name="${escapeHtml2(m.name)}" data-pick-username="${escapeHtml2(m.username || "")}" data-pick-avatar="${escapeHtml2(m.avatarUrl || "")}">
-        ${m.avatarUrl ? `<img src="${escapeHtml2(m.avatarUrl)}" alt="${escapeHtml2(m.name)}" style="width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />` : `<span class="member-avatar-mini">${escapeHtml2(initials(m.name))}</span>`}
-        <div class="member-info-col">
-          <span class="member-name-text">${escapeHtml2(m.name)}</span>
-          ${m.username ? `<span class="member-handle-text">@${escapeHtml2(m.username)}</span>` : ""}
-        </div>
-      </button>
-    `).join("");
-    dropdownEl.innerHTML = html;
+    dropdownEl.innerHTML = html2;
     dropdownEl.style.display = "flex";
-    dropdownEl.querySelectorAll("[data-pick-custom]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        addManualMember(btn.dataset.pickCustom);
-      });
-    });
     dropdownEl.querySelectorAll("[data-pick-id]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.pickId;
@@ -14070,6 +14054,19 @@ async function openBoardSettingsModal(board) {
   renderColumnsList();
   renderMembersList();
   renderSuggestions();
+  if (serverGuildMembers.length === 0 && currentBoardId) {
+    const guildQs = activeDiscordSdk2?.guildId ? `?guild_id=${encodeURIComponent(activeDiscordSdk2.guildId)}` : "";
+    fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/guild-members${guildQs}`, {
+      headers: { Accept: "application/json" }
+    }).then((r) => r.json()).then((data) => {
+      if (Array.isArray(data?.members) && data.members.length > 0) {
+        serverGuildMembers = data.members;
+        renderMembersList();
+        renderSuggestions();
+      }
+    }).catch(() => {
+    });
+  }
   const form = backdrop.querySelector("#board-settings-form");
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -14082,16 +14079,16 @@ async function openBoardSettingsModal(board) {
       const res = await saveBoardSettingsRequest({
         name,
         description,
-        members: modalMembers,
-        columns: modalColumns
+        columns: modalColumns,
+        members: modalMembers
       });
-      if (res.board) {
+      if (currentBoardData) {
         currentBoardData = {
           ...currentBoardData,
-          name: res.board.name,
-          description: res.board.description,
-          members: res.board.members,
-          columns: res.board.columns
+          name,
+          description,
+          members: modalMembers,
+          columns: modalColumns
         };
       }
       closeBoardModal();
@@ -14105,7 +14102,12 @@ async function openBoardSettingsModal(board) {
   });
 }
 async function fetchBoard() {
-  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
+  const params = new URLSearchParams();
+  if (activeDiscordSdk2?.guildId) {
+    params.set("guild_id", activeDiscordSdk2.guildId);
+  }
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}${qs}`, {
     headers: { Accept: "application/json" },
     cache: "no-store"
   });

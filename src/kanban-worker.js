@@ -343,9 +343,13 @@ function formatDiscordMember(m, guildId) {
 }
 
 async function fetchGuildMembersFromDiscord(env, guildId, query = '') {
-  if (!env?.DISCORD_TOKEN || !guildId) return [];
+  if (!env?.DISCORD_TOKEN) {
+    console.warn('[Bardo] Falta DISCORD_TOKEN en las variables de entorno/secretos del Worker.');
+    return { ok: false, error: 'NO_TOKEN', members: [] };
+  }
+  if (!guildId) return { ok: false, error: 'NO_GUILD_ID', members: [] };
   const cleanGuildId = String(guildId).trim();
-  if (!/^\d{17,20}$/.test(cleanGuildId)) return [];
+  if (!/^\d{17,20}$/.test(cleanGuildId)) return { ok: false, error: 'INVALID_GUILD_ID', members: [] };
 
   if (query && query.trim()) {
     try {
@@ -357,17 +361,21 @@ async function fetchGuildMembersFromDiscord(env, guildId, query = '') {
       });
       if (searchRes.ok) {
         const data = await searchRes.json();
-        return (data || []).map((m) => formatDiscordMember(m, cleanGuildId)).filter(Boolean);
+        const formatted = (data || []).map((m) => formatDiscordMember(m, cleanGuildId)).filter(Boolean);
+        return { ok: true, members: formatted };
+      } else {
+        const errText = await searchRes.text().catch(() => '');
+        console.warn(`[Bardo] Error buscando miembros en Discord API (${searchRes.status}):`, errText);
       }
     } catch (err) {
-      console.warn('Error buscando miembros en Discord API:', err);
+      console.warn('[Bardo] Error buscando miembros en Discord API:', err);
     }
   }
 
   const cached = guildMembersCache.get(cleanGuildId);
   const now = Date.now();
   if (cached && (now - cached.timestamp < 60000)) {
-    return cached.members;
+    return { ok: true, members: cached.members };
   }
 
   try {
@@ -378,8 +386,12 @@ async function fetchGuildMembersFromDiscord(env, guildId, query = '') {
     });
 
     if (!res.ok) {
-      console.warn(`Discord API error (${res.status}) obteniendo miembros para guild ${cleanGuildId}`);
-      return cached ? cached.members : [];
+      const errText = await res.text().catch(() => '');
+      console.warn(`[Bardo] Discord API error (${res.status}) obteniendo miembros para guild ${cleanGuildId}:`, errText);
+      if (res.status === 403) {
+        return { ok: false, error: 'INTENT_REQUIRED', members: cached ? cached.members : [] };
+      }
+      return { ok: false, error: `HTTP_${res.status}`, members: cached ? cached.members : [] };
     }
 
     const rawMembers = await res.json();
@@ -389,10 +401,10 @@ async function fetchGuildMembersFromDiscord(env, guildId, query = '') {
       .filter((m) => !m.isBot);
 
     guildMembersCache.set(cleanGuildId, { timestamp: now, members: formatted });
-    return formatted;
+    return { ok: true, members: formatted };
   } catch (error) {
-    console.error('Error fetching guild members from Discord API:', error);
-    return cached ? cached.members : [];
+    console.error('[Bardo] Error fetching guild members from Discord API:', error);
+    return { ok: false, error: error.message, members: cached ? cached.members : [] };
   }
 }
 
@@ -409,14 +421,25 @@ async function handleBoardApi(request, url, env) {
     const board = await loadBoardWithTasks(env.DB, boardId);
     if (!board) return jsonResponse({ error: 'Board not found' }, 404);
 
+    const guildId = url.searchParams.get('guild_id') || board.guildId;
+    if (guildId && !board.guildId && env.DB) {
+      await env.DB.prepare('UPDATE boards SET guild_id = ? WHERE id = ?').bind(guildId, boardId).run().catch(() => {});
+      board.guildId = guildId;
+    }
+
     let guildMembers = [];
-    if (board.guildId) {
-      guildMembers = await fetchGuildMembersFromDiscord(env, board.guildId);
+    let guildError = null;
+    if (guildId) {
+      const res = await fetchGuildMembersFromDiscord(env, guildId);
+      guildMembers = res.members || [];
+      if (!res.ok) guildError = res.error;
     }
 
     return jsonResponse({
       ...board,
+      guildId,
       guildMembers,
+      guildError,
     }, 200, {
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
@@ -428,8 +451,11 @@ async function handleBoardApi(request, url, env) {
     if (!board) return jsonResponse({ error: 'Board not found' }, 404);
     const query = url.searchParams.get('q') || '';
     const guildId = url.searchParams.get('guild_id') || board.guildId;
-    const members = await fetchGuildMembersFromDiscord(env, guildId, query);
-    return jsonResponse({ ok: true, members }, 200);
+    if (guildId && !board.guildId && env.DB) {
+      await env.DB.prepare('UPDATE boards SET guild_id = ? WHERE id = ?').bind(guildId, boardId).run().catch(() => {});
+    }
+    const res = await fetchGuildMembersFromDiscord(env, guildId, query);
+    return jsonResponse({ ok: res.ok, members: res.members || [], error: res.error || null }, 200);
   }
 
   if (request.method === 'POST' && parts.length === 2 && parts[1] === 'tasks') {
