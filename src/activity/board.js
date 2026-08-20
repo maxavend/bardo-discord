@@ -1061,12 +1061,25 @@ function injectStyles() {
       gap: 5px;
       position: relative;
     }
-    .form-group label {
+    .form-group label,
+    .form-label {
       font-size: 11px;
       font-weight: 700;
       color: var(--kb-text-muted);
       text-transform: uppercase;
-      letter-spacing: .03em;
+      letter-spacing: .04em;
+      margin: 0;
+    }
+    .form-supporting-text {
+      margin: 0 0 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--kb-text-muted);
+    }
+    .form-helper-text {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--kb-text-dim);
     }
     .form-input,
     .form-textarea,
@@ -1396,9 +1409,40 @@ function injectStyles() {
       gap: 8px;
       padding: 6px 10px;
       background: var(--kb-surface);
+      border: 1px solid var(--kb-border-subtle, rgba(255, 255, 255, 0.06));
       border-radius: 8px;
       box-sizing: border-box;
-      transition: background 0.12s ease;
+      transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+      user-select: none;
+    }
+    .modal-column-row.is-dragging {
+      opacity: 0.35;
+      border: 1px dashed var(--kb-blurple);
+    }
+    .modal-column-row.is-drag-over {
+      border-color: var(--kb-blurple);
+      background: var(--kb-surface-hover);
+      transform: scale(1.01);
+    }
+    .modal-column-drag-handle {
+      width: 20px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-dim);
+      cursor: grab;
+      padding: 0;
+      flex: 0 0 auto;
+      transition: color 0.12s ease;
+      touch-action: none;
+    }
+    .modal-column-drag-handle:hover {
+      color: var(--kb-text-primary);
+    }
+    .modal-column-drag-handle:active {
+      cursor: grabbing;
     }
     .modal-column-dot {
       width: 14px;
@@ -1417,6 +1461,7 @@ function injectStyles() {
       font-size: 12.5px;
       font-weight: 600;
       outline: none;
+      user-select: auto;
     }
     .modal-column-input:focus {
       background: var(--kb-surface-raised);
@@ -2198,6 +2243,7 @@ function openModal(modalConfig) {
         <!-- Responsable con Autocomplete Inteligente de Discord -->
         <div class="form-group">
           <label>Responsable</label>
+          <p class="form-supporting-text">Asigna a un miembro del servidor de Discord.</p>
           <div class="discord-member-container" id="discord-member-box">
             <div class="discord-member-input-wrap">
               <span class="member-icon" aria-hidden="true">
@@ -2223,6 +2269,7 @@ function openModal(modalConfig) {
         <!-- Chips estilo Notion / Linear (Integrado en Input) -->
         <div class="form-group">
           <label>Chips / Etiquetas</label>
+          <p class="form-supporting-text">Etiquetas visuales para categorizar y filtrar la tarea.</p>
           <div class="notion-chips-container" id="notion-chips-box">
             <div class="notion-chips-selected" id="notion-chips-selected"></div>
             <input
@@ -2663,6 +2710,7 @@ function openColumnModal(columnToEdit = null) {
         </div>
         <div class="form-group">
           <label>Color distintivo</label>
+          <p class="form-supporting-text">Selecciona un color distintivo para esta columna.</p>
           <div class="color-palette-picker" style="display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0;">
             ${CHIP_COLOR_PALETTE.map((c) => `
               <button type="button" class="color-dot-btn ${c.color === initialColor ? 'is-selected' : ''}" data-color="${c.color}" style="width: 28px; height: 28px; border-radius: 50%; background: ${c.color}; border: none; cursor: pointer; transition: transform 0.1s ease; outline: ${c.color === initialColor ? '2px solid #fff' : 'none'}; outline-offset: 2px;"></button>
@@ -2823,13 +2871,11 @@ async function openBoardSettingsModal(board) {
 
         <!-- Gestión de Columnas (máx 5) -->
         <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="margin: 0;">Columnas del tablero</label>
-            <span id="board-col-count-text" style="font-size: 11px; color: var(--kb-text-dim);"></span>
+            <span id="board-col-count-text" class="form-helper-text"></span>
           </div>
-          <p style="margin: 0 0 8px; font-size: 12px; color: var(--kb-text-muted);">
-            Gestiona los nombres, colores y orden de las columnas de trabajo.
-          </p>
+          <p class="form-supporting-text">Gestiona los nombres, colores y orden de las columnas de trabajo.</p>
           <div id="board-modal-columns-list" class="modal-columns-list"></div>
           
           <div id="board-add-col-wrap" style="margin-top: 8px;">
@@ -2850,9 +2896,7 @@ async function openBoardSettingsModal(board) {
         <!-- Miembros del equipo habilitados para asignación -->
         <div class="form-group">
           <label>Miembros del equipo</label>
-          <p style="margin: 0 0 8px; font-size: 12px; color: var(--kb-text-muted);">
-            Gestiona los miembros que podrán asignarse a las tareas de este tablero.
-          </p>
+          <p class="form-supporting-text">Gestiona los miembros que podrán asignarse a las tareas de este tablero.</p>
 
           <!-- Input para agregar miembro manual o buscar -->
           <div class="discord-member-container" id="board-member-add-box">
@@ -2923,6 +2967,8 @@ async function openBoardSettingsModal(board) {
     });
   }
 
+  let draggedColIdx = null;
+
   function renderColumnsList() {
     if (!columnsListEl) return;
     if (colCountText) colCountText.textContent = `${modalColumns.length}/${MAX_BOARD_COLUMNS}`;
@@ -2932,11 +2978,19 @@ async function openBoardSettingsModal(board) {
     }
 
     columnsListEl.innerHTML = modalColumns.map((col, idx) => `
-      <div class="modal-column-row" data-col-idx="${idx}">
+      <div class="modal-column-row" data-col-idx="${idx}" draggable="true">
+        <div class="modal-column-drag-handle" title="Arrastrar para reordenar" aria-label="Reordenar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="8" cy="5" r="2"/>
+            <circle cx="16" cy="5" r="2"/>
+            <circle cx="8" cy="12" r="2"/>
+            <circle cx="16" cy="12" r="2"/>
+            <circle cx="8" cy="19" r="2"/>
+            <circle cx="16" cy="19" r="2"/>
+          </svg>
+        </div>
         <span class="modal-column-dot" style="background: ${col.color || '#5865f2'};"></span>
         <input type="text" class="modal-column-input" value="${escapeHtml(col.label)}" maxlength="30" data-col-input-idx="${idx}" placeholder="Nombre de columna" />
-        <button type="button" class="modal-column-btn" data-move-col="up" data-col-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Mover arriba">▲</button>
-        <button type="button" class="modal-column-btn" data-move-col="down" data-col-idx="${idx}" ${idx === modalColumns.length - 1 ? 'disabled' : ''} title="Mover abajo">▼</button>
         <button type="button" class="modal-column-btn btn-remove-col" data-remove-col-idx="${idx}" ${modalColumns.length <= 1 ? 'disabled' : ''} title="Eliminar columna">✕</button>
       </div>
     `).join('');
@@ -2950,22 +3004,83 @@ async function openBoardSettingsModal(board) {
       });
     });
 
-    columnsListEl.querySelectorAll('[data-move-col]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.dataset.colIdx);
-        const dir = btn.dataset.moveCol;
-        if (dir === 'up' && idx > 0) {
-          const temp = modalColumns[idx];
-          modalColumns[idx] = modalColumns[idx - 1];
-          modalColumns[idx - 1] = temp;
-          renderColumnsList();
-        } else if (dir === 'down' && idx < modalColumns.length - 1) {
-          const temp = modalColumns[idx];
-          modalColumns[idx] = modalColumns[idx + 1];
-          modalColumns[idx + 1] = temp;
+    columnsListEl.querySelectorAll('.modal-column-row').forEach((row) => {
+      row.addEventListener('dragstart', (e) => {
+        draggedColIdx = Number(row.dataset.colIdx);
+        row.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(draggedColIdx));
+      });
+
+      row.addEventListener('dragend', () => {
+        draggedColIdx = null;
+        row.classList.remove('is-dragging');
+        columnsListEl.querySelectorAll('.modal-column-row').forEach((r) => r.classList.remove('is-drag-over'));
+      });
+
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const targetIdx = Number(row.dataset.colIdx);
+        if (draggedColIdx !== null && draggedColIdx !== targetIdx) {
+          row.classList.add('is-drag-over');
+        }
+      });
+
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('is-drag-over');
+      });
+
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('is-drag-over');
+        const targetIdx = Number(row.dataset.colIdx);
+        if (draggedColIdx !== null && draggedColIdx !== targetIdx) {
+          const [moved] = modalColumns.splice(draggedColIdx, 1);
+          modalColumns.splice(targetIdx, 0, moved);
           renderColumnsList();
         }
       });
+
+      // Soporte táctil / mobile para arrastre de columnas
+      const handle = row.querySelector('.modal-column-drag-handle');
+      if (handle) {
+        handle.addEventListener('touchstart', () => {
+          draggedColIdx = Number(row.dataset.colIdx);
+          row.classList.add('is-dragging');
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', (e) => {
+          if (draggedColIdx === null) return;
+          const touch = e.touches[0];
+          const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+          const targetRow = elUnder?.closest('.modal-column-row');
+          columnsListEl.querySelectorAll('.modal-column-row').forEach((r) => {
+            if (r === targetRow && Number(r.dataset.colIdx) !== draggedColIdx) {
+              r.classList.add('is-drag-over');
+            } else {
+              r.classList.remove('is-drag-over');
+            }
+          });
+        }, { passive: true });
+
+        handle.addEventListener('touchend', (e) => {
+          if (draggedColIdx !== null) {
+            const touch = e.changedTouches[0];
+            const elUnder = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetRow = elUnder?.closest('.modal-column-row');
+            if (targetRow) {
+              const targetIdx = Number(targetRow.dataset.colIdx);
+              if (!isNaN(targetIdx) && targetIdx !== draggedColIdx) {
+                const [moved] = modalColumns.splice(draggedColIdx, 1);
+                modalColumns.splice(targetIdx, 0, moved);
+              }
+            }
+            draggedColIdx = null;
+            renderColumnsList();
+          }
+        });
+      }
     });
 
     columnsListEl.querySelectorAll('[data-remove-col-idx]').forEach((btn) => {
@@ -3034,7 +3149,7 @@ async function openBoardSettingsModal(board) {
   function renderMembersList() {
     if (!membersListEl) return;
     if (modalMembers.length === 0) {
-      membersListEl.innerHTML = `<span style="font-size: 12px; color: var(--kb-text-dim);">No hay miembros configurados. Se sugerirán los participantes de la sesión.</span>`;
+      membersListEl.innerHTML = `<span class="form-helper-text">No hay miembros configurados. Se sugerirán los miembros del servidor.</span>`;
       return;
     }
 
