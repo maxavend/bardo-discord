@@ -14,11 +14,14 @@ const titleEl = document.querySelector('#document-title');
 const metaEl = document.querySelector('#document-meta');
 const bodyEl = document.querySelector('#document-body');
 const copyButtonEl = document.querySelector('#copy-document');
+const editButtonEl = document.querySelector('#edit-document');
 const downloadSelectEl = document.querySelector('#download-select');
 const actionStatusEl = document.querySelector('#action-status');
 
 let currentDocumentData = null;
 let actionStatusTimer = null;
+let autoSaveTimer = null;
+let isEditing = false;
 let activeDiscordSdk = null;
 
 function escapeHtml(value) {
@@ -503,7 +506,99 @@ function showError(message) {
   setView('error');
 }
 
+async function htmlToMarkdown(html) {
+  const [turndownModule, gfmModule] = await Promise.all([
+    import('turndown'),
+    import('turndown-plugin-gfm'),
+  ]);
+  const TurndownService = turndownModule.default || turndownModule;
+  const gfm = gfmModule.gfm || gfmModule.default?.gfm;
+  const turndown = new TurndownService({
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+    emDelimiter: '*',
+  });
+  if (gfm) turndown.use(gfm);
+  return turndown.turndown(html).replace(/\n{3,}/g, '\n\n').trim();
+}
+
+async function saveDocumentChanges(isManual = false) {
+  if (!currentDocumentData?.id) return;
+  const title = (titleEl?.textContent || '').trim() || 'Documento';
+
+  if (isManual) {
+    showActionStatus('Guardando…');
+  }
+
+  try {
+    const rawHtml = bodyEl?.innerHTML || '';
+    const bodyMarkdown = await htmlToMarkdown(rawHtml);
+    const fullMarkdown = `# ${title}\n\n${bodyMarkdown}`;
+
+    const res = await fetch(`/api/documents/${encodeURIComponent(currentDocumentData.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        markdown: fullMarkdown,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    currentDocumentData.title = title;
+    currentDocumentData.markdown = fullMarkdown;
+    document.title = `${title} · Bardo`;
+
+    showActionStatus('Guardado ✓', false, true);
+  } catch (error) {
+    console.error('Error guardando documento:', error);
+    showActionStatus('No se pudo guardar', true);
+  }
+}
+
+function toggleEditMode() {
+  isEditing = !isEditing;
+
+  if (isEditing) {
+    documentEl?.classList.add('is-editing');
+    if (editButtonEl) {
+      editButtonEl.textContent = '💾 Guardar';
+      editButtonEl.className = 'action-button action-button-editing';
+    }
+    if (titleEl) titleEl.contentEditable = 'true';
+    if (bodyEl) {
+      bodyEl.contentEditable = 'true';
+      bodyEl.focus();
+    }
+    showActionStatus('Modo edición');
+  } else {
+    documentEl?.classList.remove('is-editing');
+    if (editButtonEl) {
+      editButtonEl.textContent = '✏️ Editar';
+      editButtonEl.className = 'action-button action-button-secondary';
+    }
+    if (titleEl) titleEl.contentEditable = 'false';
+    if (bodyEl) bodyEl.contentEditable = 'false';
+    saveDocumentChanges(true);
+  }
+}
+
+function handleEditorInput() {
+  if (!isEditing) return;
+  showActionStatus('Guardando…');
+  window.clearTimeout(autoSaveTimer);
+  autoSaveTimer = window.setTimeout(() => {
+    saveDocumentChanges(false);
+  }, 2500);
+}
+
 copyButtonEl?.addEventListener('click', copyDocument);
+editButtonEl?.addEventListener('click', toggleEditMode);
+titleEl?.addEventListener('input', handleEditorInput);
+bodyEl?.addEventListener('input', handleEditorInput);
 
 downloadSelectEl?.addEventListener('change', async (event) => {
   const format = event.target.value;

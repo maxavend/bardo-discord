@@ -1,18 +1,62 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
+import {
+  CHIP_COLOR_PALETTE,
+  DEFAULT_KANBAN_COLUMNS,
+  KANBAN_PRIORITIES,
+  KANBAN_STATUSES,
+  MAX_BOARD_CHIPS,
+  MAX_BOARD_COLUMNS,
+  boardTarget,
+  getDeterministicColor,
+  normalizeKanbanPriority,
+  normalizeKanbanStatus,
+  parseBoardTarget,
+  parseLabels,
+  priorityColor,
+  priorityLabel,
+  statusLabel,
+} from '../kanban.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const BOARD_PREFIX = 'bardo:board:';
 const BOARD_TARGET_PREFIX = 'board:';
-const STATUSES = [
-  { id: 'backlog', label: 'Backlog' },
-  { id: 'todo', label: 'Por hacer' },
-  { id: 'doing', label: 'En curso' },
-  { id: 'done', label: 'Hecho' },
-];
 
+const COLUMN_THEMES = {
+  backlog: { accent: '#8a8e9b', badgeBg: 'rgba(138, 142, 155, 0.16)' },
+  todo: { accent: '#5865f2', badgeBg: 'rgba(88, 101, 242, 0.16)' },
+  doing: { accent: '#f0b232', badgeBg: 'rgba(240, 178, 50, 0.16)' },
+  done: { accent: '#23a55a', badgeBg: 'rgba(35, 165, 90, 0.16)' },
+};
+
+const PRIORITY_THEMES = {
+  urgent: { label: 'Urgente', color: '#f23f43', bg: 'rgba(242, 63, 67, 0.15)', icon: '🔥' },
+  high: { label: 'Alta', color: '#f0b232', bg: 'rgba(240, 178, 50, 0.15)', icon: '▲' },
+  medium: { label: 'Media', color: '#5865f2', bg: 'rgba(88, 101, 242, 0.15)', icon: '●' },
+  low: { label: 'Baja', color: '#8a8e9b', bg: 'rgba(138, 142, 155, 0.15)', icon: '▼' },
+};
+
+let activeDiscordSdk = null;
 let currentBoardId = null;
 let currentInstanceId = null;
+let currentBoardData = null;
+let currentDiscordUser = null;
+let connectedParticipants = [];
 let draggedTaskId = null;
+let isSyncing = false;
+let syncTimer = null;
+let toastTimer = null;
+
+// Filtros
+let filterState = {
+  search: '',
+  onlyMyTasks: false,
+  priority: 'all',
+  label: 'all',
+};
+
+// Modal activo: null | { mode: 'create', status: 'backlog' } | { mode: 'edit', task: {...} }
+let activeModalState = null;
+let modalSelectedChips = [];
 
 function resolveClientId() {
   const host = window.location.hostname || '';
@@ -27,6 +71,7 @@ function parseBoardId(value) {
 }
 
 async function initDiscordSdk() {
+  if (activeDiscordSdk) return activeDiscordSdk;
   const params = new URLSearchParams(window.location.search);
   const embedded = params.has('frame_id') || window.location.hostname.endsWith('.discordsays.com');
   if (!embedded) return null;
@@ -34,6 +79,20 @@ async function initDiscordSdk() {
   try {
     const sdk = new DiscordSDK(resolveClientId());
     await sdk.ready();
+    activeDiscordSdk = sdk;
+
+    // Intentar obtener participantes de la Activity
+    try {
+      if (sdk.commands?.getInstanceConnectedParticipants) {
+        const res = await sdk.commands.getInstanceConnectedParticipants();
+        if (Array.isArray(res?.participants)) {
+          connectedParticipants = res.participants;
+        }
+      }
+    } catch {
+      // Ignorar si no está disponible
+    }
+
     return sdk;
   } catch (error) {
     console.warn('No se pudo iniciar DiscordSDK para el tablero:', error);
@@ -86,57 +145,1107 @@ function initials(name) {
     .join('') || '?';
 }
 
+function showToast(message, type = 'info') {
+  const existing = document.querySelector('#bardo-toast');
+  if (existing) existing.remove();
+  if (toastTimer) clearTimeout(toastTimer);
+
+  const toast = document.createElement('div');
+  toast.id = 'bardo-toast';
+  toast.className = `kanban-toast toast-${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+    <span class="toast-msg">${escapeHtml(message)}</span>
+  `;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add('is-visible'));
+
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('is-visible');
+    setTimeout(() => toast.remove(), 250);
+  }, 3200);
+}
+
 function injectStyles() {
   if (document.querySelector('#bardo-kanban-styles')) return;
   const style = document.createElement('style');
   style.id = 'bardo-kanban-styles';
   style.textContent = `
     html[data-bardo-mode="board"] body > .shell { display: none !important; }
-    .kanban-shell { min-height: 100vh; padding: 18px 18px 28px; color: var(--text-primary, #f2f3f5); background: var(--app-bg, #111214); box-sizing: border-box; }
-    .kanban-topbar { max-width: 1440px; margin: 0 auto 20px; display: flex; align-items: center; gap: 10px; }
-    .kanban-avatar { width: 32px; height: 32px; border-radius: 9px; object-fit: cover; flex: 0 0 auto; }
-    .kanban-brand strong { display: block; font-size: 14px; line-height: 1.15; }
-    .kanban-brand span { display: block; margin-top: 2px; color: var(--text-muted, #a9abb3); font-size: 12px; }
-    .kanban-header { max-width: 1440px; margin: 0 auto 18px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
-    .kanban-eyebrow { margin: 0 0 7px; color: var(--text-muted, #a9abb3); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .kanban-title { margin: 0; font-size: clamp(24px, 3vw, 36px); letter-spacing: -.035em; line-height: 1.05; }
-    .kanban-description { max-width: 720px; margin: 8px 0 0; color: var(--text-muted, #a9abb3); font-size: 14px; line-height: 1.5; }
-    .kanban-helper { color: var(--text-muted, #a9abb3); font-size: 12px; text-align: right; }
-    .kanban-board { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(245px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
-    .kanban-column { min-width: 245px; background: color-mix(in srgb, var(--surface, #1e1f22) 94%, transparent); border: 1px solid var(--border, #2c2e33); border-radius: 14px; padding: 10px; min-height: 190px; }
-    .kanban-column.is-over { outline: 2px solid var(--accent, #5865f2); outline-offset: 2px; }
-    .kanban-column-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 10px; }
-    .kanban-column-title { margin: 0; font-size: 13px; font-weight: 700; }
-    .kanban-count { min-width: 23px; height: 23px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--surface-raised, #2b2d31); color: var(--text-muted, #a9abb3); font-size: 11px; font-weight: 700; }
-    .kanban-list { display: grid; gap: 8px; }
-    .task-card { border: 1px solid var(--border, #303238); border-radius: 11px; background: var(--surface-raised, #232428); padding: 11px; cursor: grab; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
-    .task-card:active { cursor: grabbing; }
-    .task-card.is-moving { opacity: .55; }
-    .task-title { margin: 0; font-size: 14px; line-height: 1.35; font-weight: 700; }
-    .task-description { margin: 6px 0 0; color: var(--text-muted, #b5bac1); font-size: 12px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-    .task-labels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
-    .task-chip { display: inline-flex; align-items: center; min-height: 21px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent, #5865f2) 18%, transparent); color: var(--text-primary, #f2f3f5); font-size: 10px; font-weight: 650; }
-    .task-footer { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .task-assignee { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-muted, #b5bac1); font-size: 11px; }
-    .task-assignee-avatar { width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; background: var(--surface, #34363c); color: var(--text-primary, #f2f3f5); font-size: 9px; font-weight: 800; flex: 0 0 auto; }
-    .task-assignee span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .task-status-select { max-width: 105px; height: 28px; border: 1px solid var(--border, #3a3c42); border-radius: 7px; background: var(--surface, #1e1f22); color: var(--text-primary, #f2f3f5); font: inherit; font-size: 10px; padding: 0 5px; }
-    .kanban-empty { padding: 22px 10px; color: var(--text-muted, #8f939c); font-size: 12px; text-align: center; border: 1px dashed var(--border, #34363c); border-radius: 9px; }
-    .kanban-state { max-width: 620px; margin: 22vh auto 0; padding: 24px; text-align: center; color: var(--text-muted, #b5bac1); }
-    .kanban-state strong { display: block; margin-bottom: 7px; color: var(--text-primary, #f2f3f5); font-size: 16px; }
-    @media (prefers-color-scheme: light) {
-      .kanban-shell { color: #202124; background: #f7f7f8; }
-      .kanban-column { background: #f0f1f3; border-color: #dedfe3; }
-      .task-card { background: #fff; border-color: #e1e2e6; }
-      .task-status-select { background: #fff; color: #202124; border-color: #d9dade; }
-      .task-assignee-avatar { background: #eceef2; color: #30323a; }
+    
+    :root {
+      --kb-bg: #111214;
+      --kb-surface: #1e1f22;
+      --kb-surface-raised: #2b2d31;
+      --kb-surface-hover: #35373c;
+      --kb-border: transparent;
+      --kb-border-subtle: transparent;
+      --kb-text-primary: #f2f3f5;
+      --kb-text-muted: #949ba4;
+      --kb-text-dim: #72767d;
+      --kb-blurple: #5865f2;
+      --kb-blurple-hover: #4752c4;
+      --kb-danger: #f23f43;
+      --kb-danger-hover: #da373b;
+      --kb-radius-card: 10px;
+      --kb-radius-modal: 14px;
+      --kb-radius-pill: 999px;
+      --kb-shadow-card: none;
+      --kb-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.45);
     }
-    @media (max-width: 760px) {
-      .kanban-shell { padding: 14px 12px 24px; }
-      .kanban-header { align-items: start; flex-direction: column; }
-      .kanban-helper { text-align: left; }
-      .kanban-board { grid-template-columns: repeat(4, 82vw); gap: 10px; scroll-snap-type: x proximity; }
-      .kanban-column { scroll-snap-align: start; }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --kb-bg: #f2f3f5;
+        --kb-surface: #ffffff;
+        --kb-surface-raised: #e9eaec;
+        --kb-surface-hover: #dcdee1;
+        --kb-border: transparent;
+        --kb-border-subtle: transparent;
+        --kb-text-primary: #060607;
+        --kb-text-muted: #4e5058;
+        --kb-text-dim: #80848e;
+        --kb-blurple: #5865f2;
+        --kb-blurple-hover: #4752c4;
+        --kb-shadow-card: none;
+        --kb-shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.18);
+      }
+    }
+
+    /* Scrollbar moderna y delgada */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #2b2d31; }
+    * { scrollbar-width: thin; scrollbar-color: #1a1b1e transparent; }
+
+    .kanban-shell {
+      min-height: 100vh;
+      padding: 16px 20px 32px;
+      color: var(--kb-text-primary);
+      background: var(--kb-bg);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Topbar con Avatar Flat */
+    .kanban-topbar {
+      max-width: 1520px;
+      width: 100%;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 12px;
+    }
+    .kanban-brand-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .kanban-avatar-box {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: var(--kb-surface);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      flex: 0 0 auto;
+      transition: transform 0.15s ease;
+    }
+    .kanban-avatar-box:hover { transform: scale(1.05); }
+    .kanban-avatar {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 2px;
+      box-sizing: border-box;
+      display: block;
+    }
+
+    .kanban-brand strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .kanban-brand span {
+      display: block;
+      margin-top: 1px;
+      color: var(--kb-text-muted);
+      font-size: 11px;
+    }
+
+    .kanban-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Buttons */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--kb-blurple);
+      color: #ffffff;
+      border: none;
+      border-radius: 7px;
+      padding: 7px 13px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.08s ease;
+    }
+    .btn-primary:hover { background: var(--kb-blurple-hover); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--kb-surface-raised);
+      color: var(--kb-text-primary);
+      border: none;
+      border-radius: 7px;
+      padding: 7px 11px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn-secondary:hover { background: var(--kb-surface-hover); }
+
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      background: var(--kb-surface-raised);
+      border: none;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-icon:hover { color: var(--kb-text-primary); background: var(--kb-surface-hover); }
+    .btn-icon.is-spinning svg { animation: spin 0.8s linear infinite; }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Header */
+    .kanban-header {
+      max-width: 1520px;
+      width: 100%;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .kanban-header-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .kanban-eyebrow {
+      margin: 0 0 4px;
+      color: var(--kb-text-dim);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .kanban-title {
+      margin: 0;
+      font-size: clamp(22px, 2.6vw, 32px);
+      font-weight: 800;
+      letter-spacing: -.03em;
+      line-height: 1.1;
+    }
+    .kanban-description {
+      max-width: 760px;
+      margin: 5px 0 0;
+      color: var(--kb-text-muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    /* Toolbar / Filters Flat */
+    .kanban-toolbar {
+      max-width: 1520px;
+      width: 100%;
+      margin: 0 auto 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 0;
+      background: transparent;
+      border: none;
+      box-sizing: border-box;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      min-width: 190px;
+    }
+    .search-box input {
+      width: 100%;
+      height: 34px;
+      padding: 0 28px 0 32px;
+      background: var(--kb-surface);
+      border: none;
+      border-radius: 7px;
+      color: var(--kb-text-primary);
+      font-size: 12.5px;
+      outline: none;
+      box-sizing: border-box;
+      transition: background 0.15s ease;
+    }
+    .search-box input:focus {
+      background: var(--kb-surface-raised);
+    }
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--kb-text-dim);
+      pointer-events: none;
+      display: flex;
+    }
+    .search-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--kb-text-dim);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .search-clear:hover { color: var(--kb-text-primary); }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Select Wrapper Flat */
+    .custom-select-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .custom-select-wrap select {
+      appearance: none;
+      -webkit-appearance: none;
+      height: 34px;
+      padding: 0 32px 0 11px;
+      background: var(--kb-surface);
+      border: none;
+      border-radius: 7px;
+      color: var(--kb-text-primary);
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      transition: background 0.15s ease;
+    }
+    .custom-select-wrap select:focus {
+      background: var(--kb-surface-raised);
+    }
+    .custom-select-wrap .select-arrow {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: var(--kb-text-dim);
+      display: flex;
+    }
+
+    /* Botón "Mis tareas" Flat */
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 7px;
+      background: var(--kb-surface);
+      border: none;
+      color: var(--kb-text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .toggle-chip:hover { color: var(--kb-text-primary); background: var(--kb-surface-hover); }
+    .toggle-chip.is-active {
+      background: var(--kb-blurple);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .toggle-chip.is-active span { color: #ffffff; }
+
+    .clear-filters-btn {
+      background: none;
+      border: none;
+      color: var(--kb-blurple);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 4px 6px;
+      text-decoration: underline;
+    }
+
+    /* Mobile Column Navigation Tabs */
+    .mobile-column-tabs {
+      display: none;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 4px 0 10px;
+      margin-bottom: 8px;
+    }
+    .mobile-tab-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 6px 10px;
+      border-radius: 7px;
+      background: var(--kb-surface);
+      border: none;
+      color: var(--kb-text-muted);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .mobile-tab-btn.is-active {
+      color: #ffffff;
+      background: var(--tab-color, var(--kb-blurple));
+    }
+
+    /* Board Grid Flat */
+    .kanban-board {
+      max-width: 1520px;
+      width: 100%;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(260px, 1fr));
+      gap: 14px;
+      align-items: start;
+      overflow-x: auto;
+      padding-bottom: 14px;
+      flex: 1;
+    }
+
+    .kanban-column {
+      min-width: 260px;
+      background: var(--kb-surface);
+      border: none;
+      border-radius: 12px;
+      padding: 12px 10px;
+      min-height: 260px;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.12s ease;
+    }
+    .kanban-column.is-over {
+      background: color-mix(in srgb, var(--kb-surface) 88%, var(--column-accent, var(--kb-blurple)));
+    }
+
+    /* Cabecera de Columna */
+    .kanban-column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 4px 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--column-accent, var(--kb-blurple)) 65%, transparent);
+    }
+    .column-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .column-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--column-accent, var(--kb-blurple));
+      flex: 0 0 auto;
+    }
+    .kanban-column-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: -0.01em;
+    }
+    .column-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .kanban-count {
+      min-width: 22px;
+      height: 22px;
+      padding: 0 6px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: var(--kb-radius-pill);
+      background: var(--column-badge-bg, var(--kb-surface-raised));
+      color: var(--column-accent, var(--kb-text-muted));
+      font-size: 11px;
+      font-weight: 750;
+    }
+    .btn-add-task-col {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1;
+      transition: all 0.12s ease;
+    }
+    .btn-add-task-col:hover {
+      color: var(--kb-text-primary);
+      background: var(--kb-surface-raised);
+    }
+    .btn-edit-col-icon {
+      font-size: 11px;
+      opacity: 0.45;
+      margin-left: 2px;
+      transition: opacity 0.12s ease;
+    }
+    .column-title-wrap:hover .btn-edit-col-icon {
+      opacity: 1;
+    }
+
+    .kanban-add-column-card {
+      min-width: 260px;
+      min-height: 140px;
+      border-radius: 12px;
+      background: var(--kb-surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.12s ease;
+      user-select: none;
+    }
+    .kanban-add-column-card:hover {
+      background: var(--kb-surface-raised);
+      color: var(--kb-text-primary);
+    }
+    .kanban-add-column-card small {
+      font-size: 11px;
+      color: var(--kb-text-dim);
+      font-weight: 400;
+    }
+
+    .kanban-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      min-height: 120px;
+    }
+
+    /* Cards Flat */
+    .task-card {
+      border: none;
+      border-radius: var(--kb-radius-card);
+      background: var(--kb-surface-raised);
+      padding: 12px;
+      cursor: grab;
+      transition: transform 0.12s ease, background 0.12s ease;
+      position: relative;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .task-card:hover {
+      transform: translateY(-1px);
+      background: var(--kb-surface-hover);
+    }
+    .task-card:active { cursor: grabbing; }
+    .task-card.is-moving { opacity: 0.35; transform: scale(0.97); }
+    .task-card.is-touch-dragging {
+      opacity: 0.85;
+      transform: scale(1.03);
+      z-index: 100;
+    }
+
+    .task-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 7px;
+    }
+    .priority-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: var(--kb-radius-pill);
+      font-size: 10px;
+      font-weight: 750;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .task-title {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.35;
+      font-weight: 700;
+      color: var(--kb-text-primary);
+      word-break: break-word;
+    }
+    .task-description {
+      margin: 6px 0 0;
+      color: var(--kb-text-muted);
+      font-size: 12px;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .task-labels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 9px;
+    }
+    .task-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 0 7px;
+      border-radius: var(--kb-radius-pill);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+
+    /* Footer limpio */
+    .task-footer {
+      margin-top: 10px;
+      padding-top: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .task-assignee {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--kb-text-muted);
+      font-size: 11px;
+    }
+    .task-assignee-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--kb-surface);
+      color: var(--kb-text-primary);
+      font-size: 9px;
+      font-weight: 800;
+      flex: 0 0 auto;
+      border: none;
+    }
+    .task-assignee-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    /* Card sutil de "Sin tareas" Flat */
+    .kanban-empty {
+      padding: 24px 12px;
+      color: var(--kb-text-dim);
+      font-size: 12px;
+      text-align: center;
+      background: var(--kb-surface-raised);
+      border: none;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-col-empty-add {
+      background: none;
+      border: none;
+      color: var(--kb-blurple);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* Modal Flat */
+    .kanban-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      box-sizing: border-box;
+      animation: fadeIn 0.15s ease;
+    }
+    .kanban-modal {
+      width: 100%;
+      max-width: 540px;
+      background: var(--kb-surface);
+      border: none;
+      border-radius: var(--kb-radius-modal);
+      box-shadow: var(--kb-shadow-modal);
+      padding: 20px;
+      box-sizing: border-box;
+      animation: slideUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(12px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 6px;
+    }
+    .modal-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 750;
+    }
+    .modal-close-btn {
+      background: none;
+      border: none;
+      color: var(--kb-text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .modal-close-btn:hover { color: var(--kb-text-primary); }
+
+    .modal-form {
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      position: relative;
+    }
+    .form-group label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--kb-text-muted);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .form-input,
+    .form-textarea,
+    .form-select {
+      width: 100%;
+      background: var(--kb-surface-raised);
+      border: none;
+      border-radius: 7px;
+      color: var(--kb-text-primary);
+      font: inherit;
+      font-size: 13px;
+      padding: 8px 11px;
+      box-sizing: border-box;
+      outline: none;
+      transition: background 0.12s ease;
+    }
+    .form-input:focus,
+    .form-textarea:focus,
+    .form-select:focus {
+      background: var(--kb-surface-hover);
+    }
+    .form-textarea {
+      min-height: 72px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Segmented Controls for Priority */
+    .segmented-control {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3px;
+      background: var(--kb-surface-raised);
+      padding: 3px;
+      border-radius: 8px;
+      border: none;
+    }
+    .seg-btn {
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 3px;
+      font-size: 11px;
+      font-weight: 650;
+      color: var(--kb-text-muted);
+      cursor: pointer;
+      transition: all 0.12s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+    }
+    .seg-btn:hover { color: var(--kb-text-primary); }
+    .seg-btn.is-selected {
+      background: var(--kb-surface);
+      color: var(--kb-text-primary);
+    }
+    .seg-btn[data-priority="urgent"].is-selected { color: #f23f43; }
+    .seg-btn[data-priority="high"].is-selected { color: #f0b232; }
+    .seg-btn[data-priority="medium"].is-selected { color: #5865f2; }
+    .seg-btn[data-priority="low"].is-selected { color: #8a8e9b; }
+
+    /* ==========================================================
+       NOTION / LINEAR STYLE INTEGRATED CHIP INPUT (FLAT)
+       ========================================================== */
+    .notion-chips-container {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+      background: var(--kb-surface-raised);
+      border: none;
+      border-radius: 7px;
+      padding: 5px 8px;
+      min-height: 38px;
+      box-sizing: border-box;
+      cursor: text;
+      position: relative;
+    }
+    .notion-chips-selected {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .notion-chip-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: var(--kb-radius-pill);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.2;
+      animation: fadeIn 0.1s ease;
+    }
+    .notion-chip-remove {
+      background: none;
+      border: none;
+      color: inherit;
+      opacity: 0.65;
+      cursor: pointer;
+      padding: 0;
+      font-size: 11px;
+      line-height: 1;
+      display: flex;
+    }
+    .notion-chip-remove:hover { opacity: 1; }
+    .notion-chips-input {
+      flex: 1;
+      min-width: 120px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--kb-text-primary);
+      font: inherit;
+      font-size: 12.5px;
+      padding: 2px 0;
+    }
+    .notion-chips-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--kb-surface-hover);
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      z-index: 1200;
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .notion-menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: background 0.1s ease;
+    }
+    .notion-menu-item:hover,
+    .notion-menu-item.is-highlighted {
+      background: var(--kb-surface-raised);
+    }
+    .notion-menu-create {
+      color: var(--kb-blurple);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ==========================================================
+       DISCORD MEMBER AUTOCOMPLETE SELECTOR (FLAT)
+       ========================================================== */
+    .discord-member-container {
+      position: relative;
+    }
+    .discord-member-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .member-icon {
+      position: absolute;
+      left: 10px;
+      color: var(--kb-text-dim);
+      font-size: 13px;
+      pointer-events: none;
+    }
+    .discord-member-input {
+      padding-left: 32px;
+      padding-right: 28px;
+    }
+    .member-clear-btn {
+      position: absolute;
+      right: 8px;
+      background: none;
+      border: none;
+      color: var(--kb-text-dim);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .member-clear-btn:hover { color: var(--kb-text-primary); }
+    .discord-member-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--kb-surface-hover);
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      z-index: 1200;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .member-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: var(--kb-text-primary);
+      font-size: 12.5px;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: background 0.1s ease;
+    }
+    .member-menu-item:hover {
+      background: var(--kb-surface-raised);
+    }
+    .member-avatar-mini {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--kb-surface-raised);
+      display: grid;
+      place-items: center;
+      font-size: 9.5px;
+      font-weight: 800;
+      border: none;
+      flex: 0 0 auto;
+    }
+    .member-info-col {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .member-name-text {
+      font-weight: 600;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .member-handle-text {
+      font-size: 10.5px;
+      color: var(--kb-text-muted);
+    }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+      padding-top: 8px;
+    }
+    .modal-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--kb-danger);
+      border: none;
+      border-radius: 7px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .btn-danger:hover { background: var(--kb-danger); color: #fff; }
+    .btn-danger.is-confirming {
+      background: var(--kb-danger);
+      color: #fff;
+      animation: pulse 0.8s infinite alternate;
+    }
+
+    @keyframes pulse { from { opacity: 0.9; } to { opacity: 1; } }
+
+    /* Toast */
+    .kanban-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--kb-surface-raised);
+      border: none;
+      border-radius: 9px;
+      padding: 10px 16px;
+      color: var(--kb-text-primary);
+      font-size: 13px;
+      font-weight: 550;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .kanban-toast.is-visible { opacity: 1; transform: translateY(0); }
+    .toast-success .toast-icon { color: #23a55a; font-weight: 800; }
+    .toast-error .toast-icon { color: #f23f43; font-weight: 800; }
+    .toast-info .toast-icon { color: #5865f2; font-weight: 800; }
+
+    /* States */
+    .kanban-state {
+      max-width: 600px;
+      margin: 20vh auto 0;
+      padding: 24px;
+      text-align: center;
+      color: var(--kb-text-muted);
+    }
+    .kanban-state strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--kb-text-primary);
+      font-size: 17px;
+    }
+
+    @media (max-width: 860px) {
+      .kanban-shell { padding: 12px 10px 24px; }
+      .kanban-header { flex-direction: column; gap: 8px; }
+      .kanban-toolbar { gap: 8px; }
+      .mobile-column-tabs { display: flex; }
+      .kanban-board {
+        grid-template-columns: repeat(4, 84vw);
+        gap: 10px;
+        scroll-snap-type: x mandatory;
+        scroll-behavior: smooth;
+      }
+      .kanban-column { scroll-snap-align: center; }
+      .form-row { grid-template-columns: 1fr; }
     }
   `;
   document.head.appendChild(style);
@@ -153,68 +1262,1132 @@ function createShell() {
   const avatar = document.querySelector('.brand-avatar')?.src || '';
   shell.innerHTML = `
     <header class="kanban-topbar">
-      ${avatar ? `<img class="kanban-avatar" src="${escapeHtml(avatar)}" alt="Bardo" />` : ''}
-      <div class="kanban-brand"><strong>Bardo</strong><span>Tableros y tareas</span></div>
+      <div class="kanban-brand-group">
+        ${avatar ? `
+          <div class="kanban-avatar-box">
+            <img class="kanban-avatar" src="${escapeHtml(avatar)}" alt="Bardo" />
+          </div>
+        ` : ''}
+        <div class="kanban-brand">
+          <strong>Bardo Kanban</strong>
+          <span id="sync-indicator">Sincronizado</span>
+        </div>
+      </div>
+      <div class="kanban-top-actions">
+        <button id="btn-sync" class="btn-icon" title="Refrescar tablero" type="button" aria-label="Refrescar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+        </button>
+        <button id="btn-add-col-global" class="btn-secondary" type="button" title="Agregar columna (máx. 5)">
+          <span>+</span> Columna
+        </button>
+        <button id="btn-new-task-global" class="btn-primary" type="button">
+          <span>+</span> Nueva tarea
+        </button>
+      </div>
     </header>
-    <section id="kanban-content" class="kanban-state"><strong>Abriendo tablero</strong>Preparando tus tareas…</section>
+    <section id="kanban-content" class="kanban-state">
+      <strong>Abriendo tablero</strong>
+      <p>Cargando tareas del equipo…</p>
+    </section>
   `;
   document.body.appendChild(shell);
+
+  shell.querySelector('#btn-sync')?.addEventListener('click', async () => {
+    await refreshBoard(true);
+  });
+
+  shell.querySelector('#btn-add-col-global')?.addEventListener('click', () => {
+    const currentCols = currentBoardData?.columns || DEFAULT_KANBAN_COLUMNS;
+    if (currentCols.length >= MAX_BOARD_COLUMNS) {
+      showToast(`Máximo ${MAX_BOARD_COLUMNS} columnas por tablero`, 'info');
+      return;
+    }
+    openColumnModal(null);
+  });
+
+  shell.querySelector('#btn-new-task-global')?.addEventListener('click', () => {
+    const firstColId = (currentBoardData?.columns || DEFAULT_KANBAN_COLUMNS)[0]?.id || 'backlog';
+    openModal({ mode: 'create', status: firstColId });
+  });
+
   return shell.querySelector('#kanban-content');
 }
 
+function getAllBoardChips(allTasks = []) {
+  const map = new Map();
+  for (const task of allTasks) {
+    const chips = parseLabels(task.labels || []);
+    for (const c of chips) {
+      if (!c.name) continue;
+      const key = c.name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { name: c.name, color: c.color || getDeterministicColor(c.name) });
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+function getKnownDiscordMembers(allTasks = []) {
+  const map = new Map();
+
+  // 1. Participantes conectados en la Activity de Discord
+  for (const p of connectedParticipants) {
+    if (!p.id) continue;
+    const name = p.nickname || p.global_name || p.username || 'Usuario';
+    map.set(String(p.id), { id: String(p.id), name, username: p.username || '' });
+  }
+
+  // 2. Miembros asignados en tareas existentes
+  for (const task of allTasks) {
+    if (task.assigneeId && task.assigneeName) {
+      const id = String(task.assigneeId);
+      if (!map.has(id)) {
+        map.set(id, { id, name: task.assigneeName, username: '' });
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function getFilteredTasks(tasks = []) {
+  return tasks.filter((task) => {
+    // Búsqueda
+    if (filterState.search) {
+      const q = filterState.search.toLowerCase();
+      const matchTitle = (task.title || '').toLowerCase().includes(q);
+      const matchDesc = (task.description || '').toLowerCase().includes(q);
+      const matchAssignee = (task.assigneeName || '').toLowerCase().includes(q);
+      const taskChips = parseLabels(task.labels || []);
+      const matchLabels = taskChips.some((l) => (l.name || '').toLowerCase().includes(q));
+      if (!matchTitle && !matchDesc && !matchAssignee && !matchLabels) return false;
+    }
+
+    // Mis tareas
+    if (filterState.onlyMyTasks && currentDiscordUser) {
+      const myId = currentDiscordUser.id;
+      const myName = (currentDiscordUser.username || '').toLowerCase();
+      const taskAssigneeId = task.assigneeId;
+      const taskAssigneeName = (task.assigneeName || '').toLowerCase();
+      if (taskAssigneeId !== myId && !taskAssigneeName.includes(myName)) {
+        return false;
+      }
+    }
+
+    // Prioridad
+    if (filterState.priority !== 'all' && task.priority !== filterState.priority) {
+      return false;
+    }
+
+    // Chip / Label
+    if (filterState.label !== 'all') {
+      const taskChips = parseLabels(task.labels || []);
+      const hasLabel = taskChips.some((l) => (l.name || '').toLowerCase() === filterState.label.toLowerCase());
+      if (!hasLabel) return false;
+    }
+
+    return true;
+  });
+}
+
 function renderTask(task) {
-  const statusOptions = STATUSES.map((status) => `<option value="${status.id}" ${status.id === task.status ? 'selected' : ''}>${status.label}</option>`).join('');
-  const labels = (task.labels || []).map((label) => `<span class="task-chip">${escapeHtml(label)}</span>`).join('');
+  const priorityInfo = PRIORITY_THEMES[task.priority] || PRIORITY_THEMES.medium;
+  const chips = parseLabels(task.labels || []);
+
+  const labelsHtml = chips.map((chip) => {
+    const color = chip.color || getDeterministicColor(chip.name);
+    return `
+      <span class="task-chip" style="background: ${color}20; border: 1px solid ${color}45; color: ${color};">
+        ${escapeHtml(chip.name)}
+      </span>
+    `;
+  }).join('');
+
   const assignee = task.assigneeName
-    ? `<div class="task-assignee"><span class="task-assignee-avatar">${escapeHtml(initials(task.assigneeName))}</span><span>${escapeHtml(task.assigneeName)}</span></div>`
-    : `<div class="task-assignee"><span class="task-assignee-avatar">—</span><span>Sin asignar</span></div>`;
+    ? `<div class="task-assignee"><span class="task-assignee-avatar">${escapeHtml(initials(task.assigneeName))}</span><span class="task-assignee-name">${escapeHtml(task.assigneeName)}</span></div>`
+    : `<div class="task-assignee"><span class="task-assignee-avatar">—</span><span class="task-assignee-name">Sin asignar</span></div>`;
 
   return `
-    <article class="task-card" draggable="true" data-task-id="${escapeHtml(task.id)}">
+    <article class="task-card" draggable="true" data-task-id="${escapeHtml(task.id)}" tabindex="0" role="button" aria-label="Ver o editar ${escapeHtml(task.title)}">
+      <div class="task-header">
+        <span class="priority-badge" style="color: ${priorityInfo.color}; background: ${priorityInfo.bg};">
+          ${priorityInfo.icon} ${priorityInfo.label}
+        </span>
+      </div>
       <h3 class="task-title">${escapeHtml(task.title)}</h3>
       ${task.description ? `<p class="task-description">${escapeHtml(task.description)}</p>` : ''}
-      ${labels ? `<div class="task-labels">${labels}</div>` : ''}
+      ${labelsHtml ? `<div class="task-labels">${labelsHtml}</div>` : ''}
       <footer class="task-footer">
         ${assignee}
-        <select class="task-status-select" data-task-status="${escapeHtml(task.id)}" aria-label="Mover ${escapeHtml(task.title)}">${statusOptions}</select>
       </footer>
     </article>
   `;
 }
 
 function renderBoard(container, board) {
-  document.title = `${board.name} · Bardo`;
-  const grouped = Object.fromEntries(STATUSES.map((status) => [status.id, []]));
-  for (const task of board.tasks || []) (grouped[task.status] || grouped.backlog).push(task);
+  currentBoardData = board;
+  document.title = `${board.name} · Bardo Kanban`;
+
+  const boardColumns = Array.isArray(board.columns) && board.columns.length > 0 ? board.columns : DEFAULT_KANBAN_COLUMNS;
+  const allTasks = board.tasks || [];
+  const filteredTasks = getFilteredTasks(allTasks);
+  const allBoardChips = getAllBoardChips(allTasks);
+
+  const fallbackStatus = boardColumns[0]?.id || 'backlog';
+  const grouped = Object.fromEntries(boardColumns.map((status) => [status.id, []]));
+  const totals = Object.fromEntries(boardColumns.map((status) => [status.id, 0]));
+
+  for (const task of allTasks) {
+    const status = grouped[task.status] ? task.status : fallbackStatus;
+    totals[status] = (totals[status] || 0) + 1;
+  }
+  for (const task of filteredTasks) {
+    const status = grouped[task.status] ? task.status : fallbackStatus;
+    grouped[status].push(task);
+  }
+
+  const hasActiveFilters = Boolean(
+    filterState.search ||
+    filterState.onlyMyTasks ||
+    filterState.priority !== 'all' ||
+    filterState.label !== 'all'
+  );
+
+  // Botón global de columna en topbar
+  const globalAddColBtn = document.querySelector('#btn-add-col-global');
+  if (globalAddColBtn) {
+    globalAddColBtn.style.display = boardColumns.length < MAX_BOARD_COLUMNS ? 'inline-flex' : 'none';
+  }
 
   container.className = '';
   container.innerHTML = `
     <header class="kanban-header">
-      <div>
-        <p class="kanban-eyebrow">Tablero</p>
+      <div class="kanban-header-info">
+        <p class="kanban-eyebrow">Tablero de equipo</p>
         <h1 class="kanban-title">${escapeHtml(board.name)}</h1>
         ${board.description ? `<p class="kanban-description">${escapeHtml(board.description)}</p>` : ''}
       </div>
-      <div class="kanban-helper">Agrega nuevas tarjetas con <strong>/tarea</strong><br />Arrastra o cambia el estado para moverlas.</div>
     </header>
-    <section class="kanban-board" aria-label="Kanban ${escapeHtml(board.name)}">
-      ${STATUSES.map((status) => `
-        <section class="kanban-column" data-status="${status.id}">
-          <header class="kanban-column-header">
-            <h2 class="kanban-column-title">${status.label}</h2>
-            <span class="kanban-count">${grouped[status.id].length}</span>
-          </header>
-          <div class="kanban-list">
-            ${grouped[status.id].length ? grouped[status.id].map(renderTask).join('') : '<div class="kanban-empty">Sin tareas</div>'}
+
+    <!-- Barra de Herramientas (Limpia, sin card) -->
+    <section class="kanban-toolbar" aria-label="Filtros y búsqueda">
+      <div class="search-box">
+        <span class="search-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+        </span>
+        <input id="filter-search" type="search" placeholder="Buscar por título, responsable o chip…" value="${escapeHtml(filterState.search)}" />
+        ${filterState.search ? '<button id="btn-clear-search" class="search-clear" type="button">✕</button>' : ''}
+      </div>
+
+      <div class="filter-group">
+        <button id="toggle-my-tasks" class="toggle-chip ${filterState.onlyMyTasks ? 'is-active' : ''}" type="button">
+          <span>👤</span> Mis tareas
+        </button>
+
+        <div class="custom-select-wrap">
+          <select id="filter-priority" aria-label="Filtrar por prioridad">
+            <option value="all" ${filterState.priority === 'all' ? 'selected' : ''}>Todas las prioridades</option>
+            <option value="urgent" ${filterState.priority === 'urgent' ? 'selected' : ''}>🔥 Urgente</option>
+            <option value="high" ${filterState.priority === 'high' ? 'selected' : ''}>▲ Alta</option>
+            <option value="medium" ${filterState.priority === 'medium' ? 'selected' : ''}>● Media</option>
+            <option value="low" ${filterState.priority === 'low' ? 'selected' : ''}>▼ Baja</option>
+          </select>
+          <span class="select-arrow" aria-hidden="true">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </div>
+
+        ${allBoardChips.length ? `
+          <div class="custom-select-wrap">
+            <select id="filter-label" aria-label="Filtrar por chip">
+              <option value="all" ${filterState.label === 'all' ? 'selected' : ''}>Todos los chips (${allBoardChips.length}/${MAX_BOARD_CHIPS})</option>
+              ${allBoardChips.map((c) => `<option value="${escapeHtml(c.name)}" ${filterState.label === c.name ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+            </select>
+            <span class="select-arrow" aria-hidden="true">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
           </div>
-        </section>
-      `).join('')}
+        ` : ''}
+
+        ${hasActiveFilters ? `<button id="btn-clear-all-filters" class="clear-filters-btn" type="button">Limpiar filtros</button>` : ''}
+      </div>
+    </section>
+
+    <!-- Navegador de pestañas móviles de columnas -->
+    <nav class="mobile-column-tabs" aria-label="Pestañas de columnas">
+      ${boardColumns.map((status) => {
+        const accent = status.color || '#5865f2';
+        const count = totals[status.id] || 0;
+        return `
+          <button class="mobile-tab-btn" data-jump-to-status="${status.id}" style="--tab-color: ${accent};" type="button">
+            ${escapeHtml(status.label)} (${count})
+          </button>
+        `;
+      }).join('')}
+    </nav>
+
+    <!-- Columnas Kanban -->
+    <section class="kanban-board" style="grid-template-columns: repeat(${boardColumns.length + (boardColumns.length < MAX_BOARD_COLUMNS ? 1 : 0)}, minmax(260px, 1fr));" aria-label="Columnas Kanban">
+      ${boardColumns.map((status) => {
+        const accent = status.color || '#5865f2';
+        const count = grouped[status.id]?.length || 0;
+        const total = totals[status.id] || 0;
+        const countDisplay = hasActiveFilters && count !== total ? `${count}/${total}` : count;
+
+        return `
+          <section class="kanban-column" id="col-${status.id}" data-status="${status.id}" style="--column-accent: ${accent}; --column-badge-bg: ${accent}22;">
+            <header class="kanban-column-header">
+              <div class="column-title-wrap" data-edit-column="${status.id}" role="button" tabindex="0" title="Editar columna ${escapeHtml(status.label)}" style="cursor: pointer;">
+                <span class="column-indicator"></span>
+                <h2 class="kanban-column-title">${escapeHtml(status.label)}</h2>
+                <span class="btn-edit-col-icon" title="Editar columna">⚙️</span>
+              </div>
+              <div class="column-actions">
+                <span class="kanban-count">${countDisplay}</span>
+                <button class="btn-add-task-col" data-add-to-status="${status.id}" title="Agregar tarea en ${escapeHtml(status.label)}" type="button" aria-label="Agregar tarea">+</button>
+              </div>
+            </header>
+            <div class="kanban-list" data-status-list="${status.id}">
+              ${grouped[status.id]?.length
+                ? grouped[status.id].map(renderTask).join('')
+                : `<div class="kanban-empty">
+                    <span>Sin tareas</span>
+                    <button class="btn-col-empty-add" data-add-to-status="${status.id}" type="button">+ Agregar tarea</button>
+                   </div>`
+              }
+            </div>
+          </section>
+        `;
+      }).join('')}
+
+      ${boardColumns.length < MAX_BOARD_COLUMNS ? `
+        <div class="kanban-add-column-card" id="btn-add-column-card" role="button" tabindex="0" title="Agregar nueva columna">
+          <span>+ Agregar columna</span>
+          <small>${boardColumns.length}/${MAX_BOARD_COLUMNS} columnas</small>
+        </div>
+      ` : ''}
     </section>
   `;
 
-  bindInteractions(container);
+  bindBoardEvents(container);
 }
 
+function bindBoardEvents(container) {
+  const boardColumns = Array.isArray(currentBoardData?.columns) && currentBoardData.columns.length > 0
+    ? currentBoardData.columns
+    : DEFAULT_KANBAN_COLUMNS;
+
+  // Filtros
+  const searchInput = container.querySelector('#filter-search');
+  searchInput?.addEventListener('input', (e) => {
+    filterState.search = e.target.value;
+    renderBoard(container, currentBoardData);
+    const nextInput = container.querySelector('#filter-search');
+    if (nextInput) {
+      nextInput.focus();
+      nextInput.setSelectionRange(nextInput.value.length, nextInput.value.length);
+    }
+  });
+
+  container.querySelector('#btn-clear-search')?.addEventListener('click', () => {
+    filterState.search = '';
+    renderBoard(container, currentBoardData);
+  });
+
+  container.querySelector('#toggle-my-tasks')?.addEventListener('click', () => {
+    filterState.onlyMyTasks = !filterState.onlyMyTasks;
+    renderBoard(container, currentBoardData);
+  });
+
+  container.querySelector('#filter-priority')?.addEventListener('change', (e) => {
+    filterState.priority = e.target.value;
+    renderBoard(container, currentBoardData);
+  });
+
+  container.querySelector('#filter-label')?.addEventListener('change', (e) => {
+    filterState.label = e.target.value;
+    renderBoard(container, currentBoardData);
+  });
+
+  container.querySelector('#btn-clear-all-filters')?.addEventListener('click', () => {
+    filterState = { search: '', onlyMyTasks: false, priority: 'all', label: 'all' };
+    renderBoard(container, currentBoardData);
+  });
+
+  // Botones móviles para saltar a columnas
+  container.querySelectorAll('[data-jump-to-status]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const statusId = btn.dataset.jumpToStatus;
+      const targetCol = container.querySelector(`#col-${statusId}`);
+      targetCol?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      container.querySelectorAll('.mobile-tab-btn').forEach((b) => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+    });
+  });
+
+  // Botones de agregar en columnas
+  container.querySelectorAll('[data-add-to-status]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal({ mode: 'create', status: btn.dataset.addToStatus });
+    });
+  });
+
+  // Edición de columnas (click en título de columna)
+  container.querySelectorAll('[data-edit-column]').forEach((trigger) => {
+    const colId = trigger.dataset.editColumn;
+    const col = boardColumns.find((c) => c.id === colId);
+    if (col) {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openColumnModal(col);
+      });
+      trigger.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openColumnModal(col);
+        }
+      });
+    }
+  });
+
+  // Tarjeta de agregar columna
+  container.querySelector('#btn-add-column-card')?.addEventListener('click', () => {
+    openColumnModal(null);
+  });
+  container.querySelector('#btn-add-column-card')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openColumnModal(null);
+    }
+  });
+
+  // Click / Touch en tarjeta
+  container.querySelectorAll('.task-card').forEach((card) => {
+    let touchTimer = null;
+    let touchMoved = false;
+
+    card.addEventListener('click', () => {
+      if (touchMoved) return;
+      const taskId = card.dataset.taskId;
+      const task = (currentBoardData?.tasks || []).find((t) => t.id === taskId);
+      if (task) openModal({ mode: 'edit', task });
+    });
+
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const taskId = card.dataset.taskId;
+        const task = (currentBoardData?.tasks || []).find((t) => t.id === taskId);
+        if (task) openModal({ mode: 'edit', task });
+      }
+    });
+
+    // Drag & Drop Desktop
+    card.addEventListener('dragstart', () => {
+      draggedTaskId = card.dataset.taskId;
+      card.classList.add('is-moving');
+    });
+    card.addEventListener('dragend', () => {
+      draggedTaskId = null;
+      card.classList.remove('is-moving');
+      container.querySelectorAll('.kanban-column').forEach((col) => col.classList.remove('is-over'));
+    });
+
+    // Touch Long-Press Drag para móviles
+    card.addEventListener('touchstart', () => {
+      touchMoved = false;
+      touchTimer = setTimeout(() => {
+        draggedTaskId = card.dataset.taskId;
+        card.classList.add('is-touch-dragging');
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 220);
+    }, { passive: true });
+
+    card.addEventListener('touchmove', (e) => {
+      if (!draggedTaskId) {
+        clearTimeout(touchTimer);
+        return;
+      }
+      touchMoved = true;
+      const touch = e.touches[0];
+      const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+      const col = elem?.closest('.kanban-column');
+      container.querySelectorAll('.kanban-column').forEach((c) => c.classList.remove('is-over'));
+      if (col) col.classList.add('is-over');
+    }, { passive: true });
+
+    card.addEventListener('touchend', async (e) => {
+      clearTimeout(touchTimer);
+      if (draggedTaskId) {
+        const changedTouch = e.changedTouches[0];
+        const elem = document.elementFromPoint(changedTouch.clientX, changedTouch.clientY);
+        const col = elem?.closest('.kanban-column');
+        card.classList.remove('is-touch-dragging');
+        container.querySelectorAll('.kanban-column').forEach((c) => c.classList.remove('is-over'));
+        if (col && col.dataset.status) {
+          const targetStatus = col.dataset.status;
+          await moveTaskOptimistic(draggedTaskId, targetStatus);
+        }
+        draggedTaskId = null;
+      }
+    });
+  });
+
+  // Columnas Drag Over & Drop
+  container.querySelectorAll('.kanban-column').forEach((column) => {
+    column.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      column.classList.add('is-over');
+    });
+    column.addEventListener('dragleave', () => {
+      column.classList.remove('is-over');
+    });
+    column.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      column.classList.remove('is-over');
+      if (!draggedTaskId) return;
+      const targetStatus = column.dataset.status;
+      await moveTaskOptimistic(draggedTaskId, targetStatus);
+    });
+  });
+}
+
+function openModal(modalConfig) {
+  activeModalState = modalConfig;
+  document.querySelector('#bardo-modal-backdrop')?.remove();
+
+  const isEdit = modalConfig.mode === 'edit';
+  const task = modalConfig.task || {};
+  const boardColumns = Array.isArray(currentBoardData?.columns) && currentBoardData.columns.length > 0
+    ? currentBoardData.columns
+    : DEFAULT_KANBAN_COLUMNS;
+  const currentStatus = modalConfig.status || task.status || boardColumns[0]?.id || 'backlog';
+  const currentPriority = task.priority || 'medium';
+
+  modalSelectedChips = parseLabels(task.labels || []);
+  const allBoardChips = getAllBoardChips(currentBoardData?.tasks || []);
+  const knownMembers = getKnownDiscordMembers(currentBoardData?.tasks || []);
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'bardo-modal-backdrop';
+  backdrop.className = 'kanban-modal-backdrop';
+
+  backdrop.innerHTML = `
+    <div class="kanban-modal" role="dialog" aria-modal="true" aria-labelledby="modal-heading">
+      <header class="modal-header">
+        <h2 id="modal-heading" class="modal-title">${isEdit ? 'Editar tarea' : 'Nueva tarea'}</h2>
+        <button id="btn-modal-close" class="modal-close-btn" type="button" aria-label="Cerrar">✕</button>
+      </header>
+
+      <form id="modal-task-form" class="modal-form">
+        <div class="form-group">
+          <label for="task-title-input">Título *</label>
+          <input id="task-title-input" class="form-input" type="text" placeholder="Ej: Diseñar flujo de onboarding" value="${escapeHtml(task.title || '')}" required maxlength="120" autofocus />
+        </div>
+
+        <div class="form-group">
+          <label for="task-desc-input">Descripción</label>
+          <textarea id="task-desc-input" class="form-textarea" placeholder="Agrega detalles, contexto o enlaces…">${escapeHtml(task.description || '')}</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Columna / Estado</label>
+            <div class="custom-select-wrap">
+              <select id="task-status-input" class="form-select">
+                ${boardColumns.map((s) => `<option value="${s.id}" ${s.id === currentStatus ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+              </select>
+              <span class="select-arrow" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Prioridad</label>
+            <div class="segmented-control" id="priority-selector">
+              ${KANBAN_PRIORITIES.map((p) => `
+                <button type="button" class="seg-btn ${p.id === currentPriority ? 'is-selected' : ''}" data-priority="${p.id}">
+                  ${p.label}
+                </button>
+              `).join('')}
+            </div>
+            <input type="hidden" id="task-priority-input" value="${currentPriority}" />
+          </div>
+        </div>
+
+        <!-- Responsable con Autocomplete Inteligente de Discord -->
+        <div class="form-group">
+          <label>Responsable</label>
+          <div class="discord-member-container" id="discord-member-box">
+            <div class="discord-member-input-wrap">
+              <span class="member-icon">👤</span>
+              <input
+                id="task-assignee-name-input"
+                class="form-input discord-member-input"
+                type="text"
+                placeholder="Buscar miembro de Discord o escribir nombre…"
+                value="${escapeHtml(task.assigneeName || '')}"
+                autocomplete="off"
+              />
+              <input type="hidden" id="task-assignee-id-input" value="${escapeHtml(task.assigneeId || '')}" />
+              ${task.assigneeName ? '<button type="button" id="btn-clear-assignee" class="member-clear-btn" title="Quitar asignación">✕</button>' : ''}
+            </div>
+            <div id="discord-member-dropdown" class="discord-member-dropdown" style="display: none;"></div>
+          </div>
+        </div>
+
+        <!-- Chips estilo Notion / Linear (Integrado en Input) -->
+        <div class="form-group">
+          <label>Chips / Etiquetas</label>
+          <div class="notion-chips-container" id="notion-chips-box">
+            <div class="notion-chips-selected" id="notion-chips-selected"></div>
+            <input
+              id="notion-chips-input"
+              class="notion-chips-input"
+              type="text"
+              placeholder="${modalSelectedChips.length ? 'Otro chip…' : 'Escribe o crea un chip…'}"
+              maxlength="24"
+              autocomplete="off"
+            />
+            <div id="notion-chips-dropdown" class="notion-chips-dropdown" style="display: none;"></div>
+          </div>
+        </div>
+
+        <footer class="modal-actions">
+          <div>
+            ${isEdit ? `<button id="btn-delete-task" class="btn-danger" type="button">Eliminar tarea</button>` : ''}
+          </div>
+          <div class="modal-actions-right">
+            <button id="btn-modal-cancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="btn-modal-submit" class="btn-primary" type="submit">
+              ${isEdit ? 'Guardar cambios' : 'Crear tarea'}
+            </button>
+          </div>
+        </footer>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  // ==========================================================
+  // LÓGICA DE CHIPS ESTILO NOTION (MÁX 8 CHIPS)
+  // ==========================================================
+  const chipsBox = backdrop.querySelector('#notion-chips-box');
+  const chipsSelected = backdrop.querySelector('#notion-chips-selected');
+  const chipInput = backdrop.querySelector('#notion-chips-input');
+  const chipDropdown = backdrop.querySelector('#notion-chips-dropdown');
+
+  function renderSelectedChipsPills() {
+    if (!chipsSelected) return;
+    chipsSelected.innerHTML = modalSelectedChips.map((chip, idx) => {
+      const color = chip.color || getDeterministicColor(chip.name);
+      return `
+        <span class="notion-chip-pill" style="background: ${color}22; border: 1px solid ${color}55; color: ${color};">
+          <span>${escapeHtml(chip.name)}</span>
+          <button type="button" class="notion-chip-remove" data-remove-chip-idx="${idx}" aria-label="Quitar">✕</button>
+        </span>
+      `;
+    }).join('');
+
+    chipsSelected.querySelectorAll('[data-remove-chip-idx]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.dataset.removeChipIdx);
+        modalSelectedChips.splice(idx, 1);
+        renderSelectedChipsPills();
+        if (chipInput) chipInput.placeholder = modalSelectedChips.length ? 'Otro chip…' : 'Escribe o crea un chip…';
+      });
+    });
+  }
+
+  function updateChipDropdown(query = '') {
+    if (!chipDropdown) return;
+    const cleanQuery = query.trim();
+    const selectedNames = new Set(modalSelectedChips.map((c) => c.name.toLowerCase()));
+
+    // Filtrar chips existentes
+    const matches = allBoardChips.filter(
+      (c) => !selectedNames.has(c.name.toLowerCase()) && (!cleanQuery || c.name.toLowerCase().includes(cleanQuery.toLowerCase()))
+    );
+
+    let html = '';
+
+    // Si hay texto y no coincide exactamente con un chip existente, ofrecer crear
+    const exactMatch = allBoardChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase()) ||
+                       modalSelectedChips.some((c) => c.name.toLowerCase() === cleanQuery.toLowerCase());
+
+    if (cleanQuery && !exactMatch) {
+      if (allBoardChips.length >= MAX_BOARD_CHIPS) {
+        html += `
+          <div style="padding: 6px 10px; color: var(--kb-text-muted); font-size: 11.5px;">
+            ⚠️ Límite de ${MAX_BOARD_CHIPS} chips por tablero alcanzado.
+          </div>
+        `;
+      } else {
+        const autoColor = getDeterministicColor(cleanQuery);
+        html += `
+          <button type="button" class="notion-menu-item notion-menu-create" data-create-chip="${escapeHtml(cleanQuery)}" data-chip-color="${autoColor}">
+            <span>+ Crear chip <strong>"${escapeHtml(cleanQuery)}"</strong></span>
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: ${autoColor};"></span>
+          </button>
+        `;
+      }
+    }
+
+    // Lista de sugerencias existentes
+    for (const chip of matches) {
+      const color = chip.color || getDeterministicColor(chip.name);
+      html += `
+        <button type="button" class="notion-menu-item" data-pick-chip="${escapeHtml(chip.name)}" data-chip-color="${escapeHtml(color)}">
+          <span class="notion-menu-item-tag">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>
+            <span>${escapeHtml(chip.name)}</span>
+          </span>
+        </button>
+      `;
+    }
+
+    if (!html) {
+      chipDropdown.style.display = 'none';
+      return;
+    }
+
+    chipDropdown.innerHTML = html;
+    chipDropdown.style.display = 'flex';
+
+    // Bindings de selección
+    chipDropdown.querySelectorAll('[data-create-chip]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const name = btn.dataset.createChip;
+        const color = btn.dataset.chipColor;
+        modalSelectedChips.push({ name, color });
+        renderSelectedChipsPills();
+        if (chipInput) {
+          chipInput.value = '';
+          chipInput.placeholder = 'Otro chip…';
+          chipInput.focus();
+        }
+        chipDropdown.style.display = 'none';
+      });
+    });
+
+    chipDropdown.querySelectorAll('[data-pick-chip]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const name = btn.dataset.pickChip;
+        const color = btn.dataset.chipColor;
+        modalSelectedChips.push({ name, color });
+        renderSelectedChipsPills();
+        if (chipInput) {
+          chipInput.value = '';
+          chipInput.placeholder = 'Otro chip…';
+          chipInput.focus();
+        }
+        chipDropdown.style.display = 'none';
+      });
+    });
+  }
+
+  chipsBox?.addEventListener('click', () => {
+    chipInput?.focus();
+  });
+
+  chipInput?.addEventListener('focus', () => {
+    updateChipDropdown(chipInput.value);
+  });
+
+  chipInput?.addEventListener('input', (e) => {
+    updateChipDropdown(e.target.value);
+  });
+
+  chipInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = chipInput.value.trim().replace(/^,|,$/g, '').slice(0, 24);
+      if (!val) return;
+
+      const exists = modalSelectedChips.some((c) => c.name.toLowerCase() === val.toLowerCase());
+      if (!exists) {
+        const existingBoardChip = allBoardChips.find((c) => c.name.toLowerCase() === val.toLowerCase());
+        if (!existingBoardChip && allBoardChips.length >= MAX_BOARD_CHIPS) {
+          showToast(`Máximo ${MAX_BOARD_CHIPS} chips por tablero`, 'info');
+          return;
+        }
+        const color = existingBoardChip?.color || getDeterministicColor(val);
+        modalSelectedChips.push({ name: val, color });
+        renderSelectedChipsPills();
+      }
+      chipInput.value = '';
+      chipInput.placeholder = 'Otro chip…';
+      if (chipDropdown) chipDropdown.style.display = 'none';
+    } else if (e.key === 'Backspace' && !chipInput.value && modalSelectedChips.length) {
+      modalSelectedChips.pop();
+      renderSelectedChipsPills();
+      chipInput.placeholder = modalSelectedChips.length ? 'Otro chip…' : 'Escribe o crea un chip…';
+    }
+  });
+
+  renderSelectedChipsPills();
+
+  // ==========================================================
+  // LÓGICA DE AUTOCOMPLETADO DE MIEMBROS DE DISCORD
+  // ==========================================================
+  const memberNameInput = backdrop.querySelector('#task-assignee-name-input');
+  const memberIdInput = backdrop.querySelector('#task-assignee-id-input');
+  const memberDropdown = backdrop.querySelector('#discord-member-dropdown');
+  const clearAssigneeBtn = backdrop.querySelector('#btn-clear-assignee');
+
+  function updateMemberDropdown(query = '') {
+    if (!memberDropdown) return;
+    const cleanQuery = query.trim().replace(/^@/, '').toLowerCase();
+
+    let matches = knownMembers;
+    if (cleanQuery) {
+      matches = knownMembers.filter(
+        (m) => m.name.toLowerCase().includes(cleanQuery) || m.username.toLowerCase().includes(cleanQuery) || m.id.includes(cleanQuery)
+      );
+    }
+
+    let html = '';
+
+    if (matches.length > 0) {
+      for (const m of matches) {
+        html += `
+          <button type="button" class="member-menu-item" data-member-id="${escapeHtml(m.id)}" data-member-name="${escapeHtml(m.name)}">
+            <span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>
+            <div class="member-info-col">
+              <span class="member-name-text">${escapeHtml(m.name)}</span>
+              ${m.username ? `<span class="member-handle-text">@${escapeHtml(m.username)}</span>` : ''}
+            </div>
+          </button>
+        `;
+      }
+    } else if (cleanQuery) {
+      html += `
+        <div style="padding: 8px 10px; color: var(--kb-text-dim); font-size: 11.5px;">
+          Presiona guardar para asignar a <strong>"${escapeHtml(query)}"</strong>
+        </div>
+      `;
+    }
+
+    if (!html) {
+      memberDropdown.style.display = 'none';
+      return;
+    }
+
+    memberDropdown.innerHTML = html;
+    memberDropdown.style.display = 'flex';
+
+    memberDropdown.querySelectorAll('.member-menu-item').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.memberId;
+        const name = btn.dataset.memberName;
+        if (memberNameInput) memberNameInput.value = name;
+        if (memberIdInput) memberIdInput.value = id;
+        memberDropdown.style.display = 'none';
+      });
+    });
+  }
+
+  memberNameInput?.addEventListener('focus', () => {
+    updateMemberDropdown(memberNameInput.value);
+  });
+
+  memberNameInput?.addEventListener('input', (e) => {
+    if (memberIdInput && !/^\d{17,20}$/.test(e.target.value.trim())) {
+      memberIdInput.value = '';
+    }
+    updateMemberDropdown(e.target.value);
+  });
+
+  clearAssigneeBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (memberNameInput) memberNameInput.value = '';
+    if (memberIdInput) memberIdInput.value = '';
+    clearAssigneeBtn.remove();
+  });
+
+  // Cerrar dropdowns al hacer clic fuera
+  backdrop.addEventListener('click', (e) => {
+    if (!chipsBox?.contains(e.target) && chipDropdown) {
+      chipDropdown.style.display = 'none';
+    }
+    if (!memberNameInput?.parentElement?.contains(e.target) && memberDropdown) {
+      memberDropdown.style.display = 'none';
+    }
+    if (e.target === backdrop) closeModal();
+  });
+
+  // Selector segmentado de prioridad
+  const priorityInput = backdrop.querySelector('#task-priority-input');
+  backdrop.querySelectorAll('#priority-selector .seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      backdrop.querySelectorAll('#priority-selector .seg-btn').forEach((b) => b.classList.remove('is-selected'));
+      btn.classList.add('is-selected');
+      priorityInput.value = btn.dataset.priority;
+    });
+  });
+
+  // Cerrar modal
+  function closeModal() {
+    activeModalState = null;
+    backdrop.remove();
+  }
+
+  backdrop.querySelector('#btn-modal-close')?.addEventListener('click', closeModal);
+  backdrop.querySelector('#btn-modal-cancel')?.addEventListener('click', closeModal);
+
+  window.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape' && activeModalState) {
+      closeModal();
+      window.removeEventListener('keydown', escHandler);
+    }
+  });
+
+  // Eliminar tarea con confirmación
+  if (isEdit) {
+    const deleteBtn = backdrop.querySelector('#btn-delete-task');
+    let confirmDelete = false;
+
+    deleteBtn?.addEventListener('click', async () => {
+      if (!confirmDelete) {
+        confirmDelete = true;
+        deleteBtn.textContent = '¿Confirmar eliminación?';
+        deleteBtn.classList.add('is-confirming');
+        setTimeout(() => {
+          confirmDelete = false;
+          deleteBtn.textContent = 'Eliminar tarea';
+          deleteBtn.classList.remove('is-confirming');
+        }, 3500);
+        return;
+      }
+
+      try {
+        await deleteTaskRequest(task.id);
+        closeModal();
+        showToast('Tarea eliminada', 'success');
+        await refreshBoard(false);
+      } catch (error) {
+        console.error('Error eliminando tarea:', error);
+        showToast('No se pudo eliminar la tarea', 'error');
+      }
+    });
+  }
+
+  // Guardar / Crear tarea
+  const form = backdrop.querySelector('#modal-task-form');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = backdrop.querySelector('#task-title-input')?.value.trim();
+    if (!title) return;
+
+    const description = backdrop.querySelector('#task-desc-input')?.value.trim() || '';
+    const status = backdrop.querySelector('#task-status-input')?.value || boardColumns[0]?.id || 'backlog';
+    const priority = backdrop.querySelector('#task-priority-input')?.value || 'medium';
+    
+    const rawAssigneeName = memberNameInput?.value.trim() || null;
+    const rawAssigneeId = memberIdInput?.value.trim() || null;
+
+    let assigneeId = rawAssigneeId;
+    let assigneeName = rawAssigneeName;
+
+    if (rawAssigneeName && /^\d{17,20}$/.test(rawAssigneeName)) {
+      assigneeId = rawAssigneeName;
+    }
+
+    const labels = modalSelectedChips;
+
+    const submitBtn = backdrop.querySelector('#btn-modal-submit');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      if (isEdit) {
+        await updateTaskRequest(task.id, {
+          title,
+          description,
+          status,
+          priority,
+          assigneeId,
+          assigneeName,
+          labels,
+        });
+        showToast('Cambios guardados', 'success');
+      } else {
+        await createTaskRequest({
+          title,
+          description,
+          status,
+          priority,
+          assigneeId,
+          assigneeName,
+          labels,
+        });
+        showToast('Tarea creada', 'success');
+      }
+
+      closeModal();
+      await refreshBoard(false);
+    } catch (error) {
+      console.error('Error guardando tarea:', error);
+      showToast(error.message || 'No se pudo guardar la tarea', 'error');
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
+function openColumnModal(columnToEdit = null) {
+  const isEdit = Boolean(columnToEdit);
+  const currentColumns = currentBoardData?.columns || DEFAULT_KANBAN_COLUMNS;
+  const initialLabel = columnToEdit?.label || '';
+  const initialColor = columnToEdit?.color || CHIP_COLOR_PALETTE[currentColumns.length % CHIP_COLOR_PALETTE.length].color;
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'bardo-column-modal-backdrop';
+  backdrop.className = 'kanban-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="kanban-modal" role="dialog" aria-modal="true">
+      <header class="modal-header">
+        <h2 class="modal-title">${isEdit ? 'Editar columna' : `Nueva columna (máx. ${MAX_BOARD_COLUMNS})`}</h2>
+        <button id="btn-col-modal-close" class="modal-close-btn" type="button" aria-label="Cerrar">✕</button>
+      </header>
+      <form id="col-modal-form" class="modal-form">
+        <div class="form-group">
+          <label for="col-name-input">Nombre de columna *</label>
+          <input id="col-name-input" class="form-input" type="text" placeholder="Ej: En revisión" value="${escapeHtml(initialLabel)}" required maxlength="30" autofocus />
+        </div>
+        <div class="form-group">
+          <label>Color distintivo</label>
+          <div class="color-palette-picker" style="display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0;">
+            ${CHIP_COLOR_PALETTE.map((c) => `
+              <button type="button" class="color-dot-btn ${c.color === initialColor ? 'is-selected' : ''}" data-color="${c.color}" style="width: 28px; height: 28px; border-radius: 50%; background: ${c.color}; border: none; cursor: pointer; transition: transform 0.1s ease; outline: ${c.color === initialColor ? '2px solid #fff' : 'none'}; outline-offset: 2px;"></button>
+            `).join('')}
+          </div>
+          <input type="hidden" id="col-color-input" value="${initialColor}" />
+        </div>
+        <footer class="modal-actions">
+          <div>
+            ${isEdit && currentColumns.length > 1 ? `<button id="btn-delete-col" class="btn-danger" type="button">Eliminar columna</button>` : ''}
+          </div>
+          <div class="modal-actions-right">
+            <button id="btn-col-modal-cancel" class="btn-secondary" type="button">Cancelar</button>
+            <button id="btn-col-modal-submit" class="btn-primary" type="submit">${isEdit ? 'Guardar' : 'Crear columna'}</button>
+          </div>
+        </footer>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  const colorInput = backdrop.querySelector('#col-color-input');
+  backdrop.querySelectorAll('.color-dot-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      backdrop.querySelectorAll('.color-dot-btn').forEach((b) => {
+        b.classList.remove('is-selected');
+        b.style.outline = 'none';
+      });
+      btn.classList.add('is-selected');
+      btn.style.outline = '2px solid #fff';
+      btn.style.outlineOffset = '2px';
+      colorInput.value = btn.dataset.color;
+    });
+  });
+
+  function closeColModal() {
+    backdrop.remove();
+  }
+
+  backdrop.querySelector('#btn-col-modal-close')?.addEventListener('click', closeColModal);
+  backdrop.querySelector('#btn-col-modal-cancel')?.addEventListener('click', closeColModal);
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeColModal();
+  });
+
+  // Eliminar columna
+  if (isEdit && currentColumns.length > 1) {
+    const delBtn = backdrop.querySelector('#btn-delete-col');
+    let confirmDel = false;
+    delBtn?.addEventListener('click', async () => {
+      if (!confirmDel) {
+        confirmDel = true;
+        delBtn.textContent = '¿Confirmar eliminación?';
+        delBtn.classList.add('is-confirming');
+        setTimeout(() => {
+          confirmDel = false;
+          delBtn.textContent = 'Eliminar columna';
+          delBtn.classList.remove('is-confirming');
+        }, 3500);
+        return;
+      }
+
+      const updatedColumns = currentColumns.filter((c) => c.id !== columnToEdit.id);
+      try {
+        await saveBoardColumnsRequest(updatedColumns);
+        currentBoardData.columns = updatedColumns;
+        closeColModal();
+        showToast('Columna eliminada', 'success');
+        await refreshBoard(false);
+      } catch (err) {
+        console.error('Error eliminando columna:', err);
+        showToast(err.message || 'No se pudo eliminar la columna', 'error');
+      }
+    });
+  }
+
+  // Guardar / Crear
+  const form = backdrop.querySelector('#col-modal-form');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = backdrop.querySelector('#col-name-input')?.value.trim();
+    if (!name) return;
+    const color = colorInput?.value || '#5865f2';
+
+    let updatedColumns;
+    if (isEdit) {
+      updatedColumns = currentColumns.map((c) => (c.id === columnToEdit.id ? { ...c, label: name, color } : c));
+    } else {
+      if (currentColumns.length >= MAX_BOARD_COLUMNS) {
+        showToast(`Máximo ${MAX_BOARD_COLUMNS} columnas por tablero`, 'error');
+        return;
+      }
+      const newId = name.toLowerCase().replace(/[^a-z0-9_-]/g, '') || `col-${Date.now()}`;
+      let id = newId;
+      let counter = 1;
+      while (currentColumns.some((c) => c.id === id)) {
+        id = `${newId}-${counter}`;
+        counter += 1;
+      }
+      updatedColumns = [...currentColumns, { id, label: name, color }];
+    }
+
+    const submitBtn = backdrop.querySelector('#btn-col-modal-submit');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      await saveBoardColumnsRequest(updatedColumns);
+      currentBoardData.columns = updatedColumns;
+      closeColModal();
+      showToast(isEdit ? 'Columna guardada' : 'Columna creada', 'success');
+      await refreshBoard(false);
+    } catch (err) {
+      console.error('Error guardando columna:', err);
+      showToast(err.message || 'No se pudo guardar la columna', 'error');
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
+// API Requests
 async function fetchBoard() {
   const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}`, {
     headers: { Accept: 'application/json' },
@@ -224,68 +2397,127 @@ async function fetchBoard() {
   return response.json();
 }
 
-async function moveTask(taskId, status, selectEl = null) {
-  if (!currentInstanceId) {
-    if (selectEl) selectEl.value = selectEl.dataset.previousStatus || selectEl.value;
-    return;
-  }
+async function saveBoardColumnsRequest(columns) {
+  if (!currentInstanceId) throw new Error('Se requiere contexto de Activity');
+  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/columns`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-bardo-instance-id': currentInstanceId,
+    },
+    body: JSON.stringify({ columns }),
+  });
+  if (!response.ok) throw new Error(`Error al guardar columnas (HTTP ${response.status})`);
+  return response.json();
+}
 
-  document.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.classList.add('is-moving');
+async function createTaskRequest(payload) {
+  if (!currentInstanceId) throw new Error('Se requiere contexto de Activity');
+  const response = await fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/tasks`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-bardo-instance-id': currentInstanceId,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`Error al crear tarea (HTTP ${response.status})`);
+  return response.json();
+}
+
+async function updateTaskRequest(taskId, payload) {
+  if (!currentInstanceId) throw new Error('Se requiere contexto de Activity');
   const response = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       'x-bardo-instance-id': currentInstanceId,
     },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
-
-  if (!response.ok) {
-    document.querySelector(`[data-task-id="${CSS.escape(taskId)}"]`)?.classList.remove('is-moving');
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const board = await fetchBoard();
-  renderBoard(document.querySelector('#kanban-content'), board);
+  if (!response.ok) throw new Error(`Error al actualizar tarea (HTTP ${response.status})`);
+  return response.json();
 }
 
-function bindInteractions(container) {
-  container.querySelectorAll('.task-card').forEach((card) => {
-    card.addEventListener('dragstart', () => {
-      draggedTaskId = card.dataset.taskId;
-      card.classList.add('is-moving');
-    });
-    card.addEventListener('dragend', () => {
-      draggedTaskId = null;
-      card.classList.remove('is-moving');
-      container.querySelectorAll('.kanban-column').forEach((column) => column.classList.remove('is-over'));
-    });
+async function deleteTaskRequest(taskId) {
+  if (!currentInstanceId) throw new Error('Se requiere contexto de Activity');
+  const response = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'DELETE',
+    headers: {
+      'x-bardo-instance-id': currentInstanceId,
+    },
   });
+  if (!response.ok) throw new Error(`Error al borrar tarea (HTTP ${response.status})`);
+  return response.json();
+}
 
-  container.querySelectorAll('.kanban-column').forEach((column) => {
-    column.addEventListener('dragover', (event) => {
-      event.preventDefault();
-      column.classList.add('is-over');
-    });
-    column.addEventListener('dragleave', () => column.classList.remove('is-over'));
-    column.addEventListener('drop', async (event) => {
-      event.preventDefault();
-      column.classList.remove('is-over');
-      if (!draggedTaskId) return;
-      try { await moveTask(draggedTaskId, column.dataset.status); } catch (error) { console.error('No se pudo mover la tarea:', error); }
-    });
-  });
+async function moveTaskOptimistic(taskId, status) {
+  if (!currentInstanceId) {
+    showToast('Sesión de Activity no identificada', 'error');
+    return;
+  }
 
-  container.querySelectorAll('[data-task-status]').forEach((select) => {
-    select.dataset.previousStatus = select.value;
-    select.addEventListener('change', async () => {
-      try {
-        await moveTask(select.dataset.taskStatus, select.value, select);
-      } catch (error) {
-        console.error('No se pudo cambiar el estado:', error);
-        select.value = select.dataset.previousStatus;
-      }
-    });
+  // Actualización optimista local
+  if (currentBoardData?.tasks) {
+    const task = currentBoardData.tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.status = status;
+      renderBoard(document.querySelector('#kanban-content'), currentBoardData);
+    }
+  }
+
+  try {
+    await updateTaskRequest(taskId, { status });
+    await refreshBoard(false);
+  } catch (error) {
+    console.error('Error al mover tarea:', error);
+    showToast('No se pudo mover la tarea', 'error');
+    await refreshBoard(false);
+  }
+}
+
+async function refreshBoard(isManual = false) {
+  if (isSyncing || !currentBoardId) return;
+  isSyncing = true;
+
+  const syncBtn = document.querySelector('#btn-sync');
+  const syncIndicator = document.querySelector('#sync-indicator');
+  if (isManual && syncBtn) syncBtn.classList.add('is-spinning');
+  if (syncIndicator) syncIndicator.textContent = 'Sincronizando…';
+
+  try {
+    const board = await fetchBoard();
+    currentBoardData = board;
+
+    // Solo re-renderizamos si no hay un modal abierto para no interrumpir al usuario
+    if (!activeModalState && !draggedTaskId) {
+      renderBoard(document.querySelector('#kanban-content'), board);
+    }
+
+    if (syncIndicator) syncIndicator.textContent = 'Actualizado';
+  } catch (error) {
+    console.error('Error sincronizando tablero:', error);
+    if (isManual) showToast('Error al conectar con Bardo', 'error');
+    if (syncIndicator) syncIndicator.textContent = 'Sin conexión';
+  } finally {
+    isSyncing = false;
+    if (syncBtn) syncBtn.classList.remove('is-spinning');
+  }
+}
+
+function startPolling() {
+  if (syncTimer) clearInterval(syncTimer);
+
+  syncTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && !activeModalState && !draggedTaskId) {
+      refreshBoard(false);
+    }
+  }, 7500);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      refreshBoard(false);
+    }
   });
 }
 
@@ -299,10 +2531,14 @@ async function startBoard() {
   try {
     const board = await fetchBoard();
     renderBoard(container, board);
+    startPolling();
   } catch (error) {
     console.error('No se pudo abrir el tablero:', error);
     container.className = 'kanban-state';
-    container.innerHTML = '<strong>No pudimos abrir este tablero</strong>Cierra esta vista y vuelve a abrirlo desde Bardo.';
+    container.innerHTML = `
+      <strong>No pudimos abrir este tablero</strong>
+      <p>Cierra esta vista y vuelve a abrirlo desde el mensaje de Bardo en Discord.</p>
+    `;
   }
 }
 

@@ -15,12 +15,12 @@ const documentCommand = new SlashCommandBuilder()
     option
       .setName('archivo')
       .setDescription('Markdown, TXT, PDF o Word (.docx)')
-      .setRequired(true),
+      .setRequired(false),
   )
   .addStringOption((option) =>
     option
       .setName('titulo')
-      .setDescription('Título opcional para el documento.'),
+      .setDescription('Título del documento o nombre de un nuevo documento.'),
   );
 
 const boardCommand = new SlashCommandBuilder()
@@ -76,6 +76,17 @@ const taskCommand = new SlashCommandBuilder()
         { name: 'Por hacer', value: 'todo' },
         { name: 'En curso', value: 'doing' },
         { name: 'Hecho', value: 'done' },
+      ),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('prioridad')
+      .setDescription('Nivel de prioridad de la tarea.')
+      .addChoices(
+        { name: 'Baja', value: 'low' },
+        { name: 'Media', value: 'medium' },
+        { name: 'Alta', value: 'high' },
+        { name: 'Urgente', value: 'urgent' },
       ),
   );
 

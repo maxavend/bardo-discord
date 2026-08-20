@@ -45,7 +45,7 @@ Al crear o abrir un tablero, Bardo publica **📋 Abrir tablero**, que lanza la 
 ### Crear una tarea
 
 ```text
-/tarea tablero:ORION titulo:Revisar onboarding responsable:@Cami chips:UX, urgente estado:backlog
+/tarea tablero:ORION titulo:Revisar onboarding responsable:@Cami chips:UX, urgente estado:backlog prioridad:alta
 ```
 
 Opciones de `/tarea`:
@@ -56,17 +56,15 @@ Opciones de `/tarea`:
 - `responsable`: usuario seleccionado mediante el picker nativo de Discord.
 - `chips`: etiquetas separadas por coma; Bardo conserva hasta 6.
 - `estado`: Backlog, Por hacer, En curso o Hecho.
+- `prioridad`: Baja, Media, Alta o Urgente.
 
-La Activity muestra cuatro columnas fijas:
+La Activity ofrece una experiencia interactiva completa:
 
-- Backlog
-- Por hacer
-- En curso
-- Hecho
-
-Las tarjetas muestran título, descripción, chips y responsable. Se pueden mover por drag & drop en desktop o mediante el selector de estado, que también funciona en móvil.
-
-Este MVP no usa IA. Fechas límite, subtareas, prioridades, automatizaciones e integraciones externas quedan fuera de esta fase.
+- **Cuatro columnas con acentos visuales**: Backlog (gris), Por hacer (azul blurple), En curso (ámbar) y Hecho (verde esmeralda).
+- **Gestión completa (CRUD)**: creación rápida con `+` en cada columna o botón global, modal centrado de edición y borrado con confirmación.
+- **Búsqueda y filtros en tiempo real**: buscador por texto, filtro rápido "Mis tareas", selector de prioridad y filtro por etiquetas/chips.
+- **Sincronización multi-usuario inteligente**: polling adaptativo de 7s pausado en segundo plano para optimizar cuota de Cloudflare.
+- **Interacción fluida**: Drag & drop en desktop y selectores rápidos en móvil.
 
 ## Arquitectura
 
@@ -90,13 +88,6 @@ PDF y DOCX se convierten en el cliente de la Activity, no dentro del Worker. Al 
 ```bash
 npm install
 cp .env.example .env
-```
-
-`.env` se usa para scripts locales como registrar comandos:
-
-```env
-DISCORD_TOKEN=pega_aqui_el_token_del_bot
-DISCORD_GUILD_ID=pega_aqui_el_id_de_tu_servidor
 ```
 
 ## Registrar comandos
@@ -157,6 +148,7 @@ Las migraciones viven en `migrations/`.
 - `0002`: contextos de Discord Activity.
 - `0003`: importación temporal PDF/DOCX.
 - `0004`: tableros y tareas Kanban.
+- `0005`: columna de prioridad e índices en tareas Kanban.
 
 ## Desarrollo y tests
 

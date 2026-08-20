@@ -176,22 +176,56 @@ async function handleCommandInteraction(interaction, env, ctx) {
 
     const attachmentId = archivoOption?.value;
     const resolvedAttachment = interaction.data?.resolved?.attachments?.[attachmentId];
-    const explicitTitle = tituloOption?.value;
+    const explicitTitle = tituloOption?.value?.trim();
 
-    if (!resolvedAttachment) {
+    if (resolvedAttachment) {
+      ctx.waitUntil(processAndSaveDocument(env, interaction, resolvedAttachment, explicitTitle));
       return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'No se encontró el archivo adjunto.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
       });
     }
 
-    ctx.waitUntil(processAndSaveDocument(env, interaction, resolvedAttachment, explicitTitle));
+    if (explicitTitle) {
+      if (!env.DB) {
+        return jsonResponse({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { content: 'La base de datos de Bardo no está disponible.', flags: InteractionResponseFlags.EPHEMERAL },
+        });
+      }
+
+      const title = explicitTitle.slice(0, 200);
+      const createdBy = interaction.member?.user?.id || interaction.user?.id || 'unknown';
+      const documentId = crypto.randomUUID();
+      const originalMarkdown = `# ${title}\n\nDocumento creado con Bardo. Abre el lector completo para comenzar a escribir.`;
+      const pages = ['Documento creado con Bardo. Abre el lector completo para comenzar a escribir.'];
+
+      const document = {
+        id: documentId,
+        title,
+        originalMarkdown,
+        pages,
+        sourceName: `${title}.md`,
+        createdAt: new Date().toISOString(),
+        createdBy,
+      };
+
+      await saveDocument(env.DB, documentId, document);
+
+      const applicationId = interaction.application_id || env.DISCORD_APPLICATION_ID;
+      const documentPayload = buildDocumentPayload(document, { applicationId, documentId });
+
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: documentPayload,
+      });
+    }
 
     return jsonResponse({
-      type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'Adjunta un archivo (.md, .txt, .pdf, .docx) o indica un **título** para crear un documento nuevo (ej: `/doc titulo: Minuta`).',
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
     });
   }
 
@@ -471,6 +505,45 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
   return jsonResponse({ ok: true });
 }
 
+async function handleDocumentEditApi(request, documentId, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
+
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) {
+    return jsonResponse({ error: 'Document not found' }, 404);
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const title = typeof payload?.title === 'string' ? payload.title.replace(/\s+/g, ' ').trim().slice(0, 200) : document.title;
+  const markdown = typeof payload?.markdown === 'string' ? payload.markdown.trim() : document.originalMarkdown;
+
+  if (!title) return jsonResponse({ error: 'El título es requerido' }, 400);
+  if (!markdown) return jsonResponse({ error: 'El contenido es requerido' }, 400);
+
+  const byteLength = new TextEncoder().encode(markdown).byteLength;
+  if (byteLength > MAX_STORED_DOCUMENT_BYTES) {
+    return jsonResponse({ error: 'El documento es demasiado grande' }, 413);
+  }
+
+  const { body } = extractDocumentTitle(markdown, title);
+  const pages = firstPreviewPage(body);
+
+  await env.DB
+    .prepare('UPDATE documents SET title = ?, original_markdown = ?, pages = ? WHERE id = ?')
+    .bind(title, markdown, JSON.stringify(pages), documentId)
+    .run();
+
+  return jsonResponse({ ok: true, document: { id: documentId, title, markdown, pages } });
+}
+
 async function handleActivityContextApi(url, env) {
   if (!env.DB) {
     return jsonResponse({ error: 'Database unavailable' }, 503);
@@ -566,6 +639,10 @@ export default {
 
       if (request.method === 'GET' && route.action === null) {
         return handleDocumentApi(route.documentId, env);
+      }
+
+      if (request.method === 'PATCH' && route.action === null) {
+        return handleDocumentEditApi(request, route.documentId, env);
       }
 
       if (request.method === 'GET' && (route.action === 'export' || route.action === 'download')) {
