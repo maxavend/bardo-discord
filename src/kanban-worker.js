@@ -158,9 +158,16 @@ async function handleBoardCommand(interaction, env) {
 }
 
 async function sendTaskAssignmentDm(env, { assigneeId, boardName, taskTitle, priority, assignedByName, boardId }) {
-  if (!env.DISCORD_TOKEN || !assigneeId) return;
+  if (!env.DISCORD_TOKEN) {
+    console.warn('[Bardo] DISCORD_TOKEN no configurado; no se puede enviar DM de asignación');
+    return;
+  }
+  if (!assigneeId) return;
   const cleanAssigneeId = String(assigneeId).trim();
-  if (!/^\d{17,20}$/.test(cleanAssigneeId)) return;
+  if (!/^\d{17,20}$/.test(cleanAssigneeId)) {
+    console.warn(`[Bardo] ID de responsable no es un Snowflake de Discord válido (${cleanAssigneeId}); se omite DM`);
+    return;
+  }
 
   try {
     const channelRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
@@ -173,7 +180,8 @@ async function sendTaskAssignmentDm(env, { assigneeId, boardName, taskTitle, pri
     });
 
     if (!channelRes.ok) {
-      console.warn('No se pudo crear canal DM con usuario:', channelRes.status);
+      const errText = await channelRes.text().catch(() => '');
+      console.warn(`[Bardo] No se pudo crear canal DM con ${cleanAssigneeId}: HTTP ${channelRes.status} ${errText}`);
       return;
     }
 
@@ -188,7 +196,7 @@ async function sendTaskAssignmentDm(env, { assigneeId, boardName, taskTitle, pri
       assignedByName ? `Asignado por: **${assignedByName}**` : null,
     ].filter(Boolean).join('\n');
 
-    await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+    const msgRes = await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bot ${env.DISCORD_TOKEN}`,
@@ -199,8 +207,15 @@ async function sendTaskAssignmentDm(env, { assigneeId, boardName, taskTitle, pri
         components: [boardButton(boardId)],
       }),
     });
+
+    if (!msgRes.ok) {
+      const errText = await msgRes.text().catch(() => '');
+      console.warn(`[Bardo] No se pudo enviar mensaje DM a ${cleanAssigneeId}: HTTP ${msgRes.status} ${errText}`);
+    } else {
+      console.log(`[Bardo] Notificación DM enviada exitosamente a ${cleanAssigneeId} para tarea "${taskTitle}"`);
+    }
   } catch (error) {
-    console.error('Error enviando notificación DM:', error);
+    console.error(`[Bardo] Error inesperado enviando notificación DM a ${cleanAssigneeId}:`, error);
   }
 }
 
@@ -539,7 +554,7 @@ export async function sendUrgentTaskReminders(env) {
   }
 }
 
-async function handleBoardApi(request, url, env) {
+async function handleBoardApi(request, url, env, ctx = null) {
   if (!env.DB) return jsonResponse({ error: 'Database unavailable' }, 503);
   const pathWithoutPrefix = url.pathname.slice(BOARD_API_PREFIX.length);
   const parts = pathWithoutPrefix.split('/').filter(Boolean);
@@ -629,14 +644,19 @@ async function handleBoardApi(request, url, env) {
     });
 
     if (task.assigneeId) {
-      sendTaskAssignmentDm(env, {
+      const dmPromise = sendTaskAssignmentDm(env, {
         assigneeId: task.assigneeId,
         boardName: board.name,
         taskTitle: task.title,
         priority: task.priority,
         assignedByName: null,
         boardId: board.id,
-      }).catch(() => {});
+      });
+      if (ctx && typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(dmPromise);
+      } else {
+        await dmPromise;
+      }
     }
 
     return jsonResponse({ ok: true, task }, 201);
@@ -684,7 +704,7 @@ async function handleBoardApi(request, url, env) {
   return new Response('Method not allowed', { status: 405 });
 }
 
-async function handleTaskApi(request, url, env) {
+async function handleTaskApi(request, url, env, ctx = null) {
   if (!env.DB) return jsonResponse({ error: 'Database unavailable' }, 503);
   const encodedId = url.pathname.slice(TASK_API_PREFIX.length).split('/')[0];
   if (!encodedId) return jsonResponse({ error: 'Task id required' }, 400);
@@ -705,14 +725,19 @@ async function handleTaskApi(request, url, env) {
     if (payload?.assigneeId && payload.assigneeId !== task.assigneeId) {
       const board = await loadBoard(env.DB, task.boardId);
       if (board) {
-        sendTaskAssignmentDm(env, {
+        const dmPromise = sendTaskAssignmentDm(env, {
           assigneeId: payload.assigneeId,
           boardName: board.name,
           taskTitle: updated.title,
           priority: updated.priority,
           assignedByName: null,
           boardId: board.id,
-        }).catch(() => {});
+        });
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(dmPromise);
+        } else {
+          await dmPromise;
+        }
       }
     }
 
@@ -732,10 +757,10 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname.startsWith(BOARD_API_PREFIX)) {
-      return handleBoardApi(request, url, env);
+      return handleBoardApi(request, url, env, ctx);
     }
     if (url.pathname.startsWith(TASK_API_PREFIX)) {
-      return handleTaskApi(request, url, env);
+      return handleTaskApi(request, url, env, ctx);
     }
 
     if (request.method === 'POST' && (url.pathname === '/' || url.pathname === '')) {
@@ -764,7 +789,7 @@ export default {
       if (interaction.type === InteractionType.APPLICATION_COMMAND) {
         const cmd = interaction.data?.name;
         if (cmd === 'tablero') return handleBoardCommand(interaction, env);
-        if (cmd === 'tarea') return handleTaskCommand(interaction, env);
+        if (cmd === 'tarea') return handleTaskCommand(interaction, env, ctx);
       }
 
       if (interaction.type === InteractionType.MESSAGE_COMPONENT) {

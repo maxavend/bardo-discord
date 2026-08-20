@@ -13549,12 +13549,25 @@ function openModal(modalConfig) {
     const status = backdrop.querySelector("#task-status-input")?.value || boardColumns[0]?.id || "backlog";
     const priority = backdrop.querySelector("#task-priority-input")?.value || "medium";
     const rawAssigneeName = memberNameInput?.value.trim() || null;
-    const rawAssigneeId = memberIdInput?.value.trim() || null;
-    let assigneeId = rawAssigneeId;
-    let assigneeName = rawAssigneeName;
-    if (rawAssigneeName && /^\d{17,20}$/.test(rawAssigneeName)) {
-      assigneeId = rawAssigneeName;
+    let rawAssigneeId = memberIdInput?.value.trim() || null;
+    if (rawAssigneeName) {
+      if (/^\d{17,20}$/.test(rawAssigneeName)) {
+        rawAssigneeId = rawAssigneeName;
+      } else if (!rawAssigneeId || !/^\d{17,20}$/.test(rawAssigneeId)) {
+        const allKnown = [
+          ...currentBoardData?.members || [],
+          ...serverGuildMembers
+        ];
+        const match = allKnown.find(
+          (m) => m.name && m.name.toLowerCase() === rawAssigneeName.toLowerCase() || m.username && m.username.toLowerCase() === rawAssigneeName.toLowerCase().replace(/^@/, "") || m.id && m.id === rawAssigneeName
+        );
+        if (match && match.id && /^\d{17,20}$/.test(String(match.id))) {
+          rawAssigneeId = String(match.id);
+        }
+      }
     }
+    const assigneeId = rawAssigneeId || null;
+    const assigneeName = rawAssigneeName || null;
     const labels = modalSelectedChips;
     const submitBtn = backdrop.querySelector("#btn-modal-submit");
     if (submitBtn) submitBtn.disabled = true;
