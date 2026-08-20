@@ -57,9 +57,28 @@ export function normalizeKanbanStatus(value, fallback = 'backlog', allowedStatus
   const normalized = String(value || '').trim().toLowerCase();
   if (Array.isArray(allowedStatuses) && allowedStatuses.length > 0) {
     const ids = new Set(allowedStatuses.map((s) => (typeof s === 'string' ? s : s.id)));
-    return ids.has(normalized) ? normalized : (allowedStatuses[0]?.id || allowedStatuses[0] || fallback);
+    if (ids.has(normalized)) return normalized;
+    return fallback;
   }
   return STATUS_IDS.has(normalized) ? normalized : fallback;
+}
+
+export function requireKanbanColumn(columns, value, { fallback = null } = {}) {
+  const validColumns = validateBoardColumns(columns);
+  const requested = String(value ?? '').trim();
+  const candidate = requested || (fallback ? String(fallback) : '');
+  const column = validColumns.find((item) => item.id === candidate);
+  if (column) return column;
+
+  const error = new Error(`La columna “${candidate || requested || 'sin especificar'}” no existe en este tablero.`);
+  error.code = 'INVALID_KANBAN_COLUMN';
+  error.columnId = candidate || null;
+  throw error;
+}
+
+export function legacyStatusForColumn(columnId) {
+  const normalized = String(columnId || '').trim().toLowerCase();
+  return STATUS_IDS.has(normalized) ? normalized : 'backlog';
 }
 
 export function normalizeKanbanPriority(value, fallback = 'medium') {
@@ -100,7 +119,6 @@ export function getDeterministicColor(text) {
 export function parseLabels(value) {
   if (!value) return [];
 
-  // Si ya es un array de objetos o strings
   if (Array.isArray(value)) {
     const seen = new Set();
     const result = [];
@@ -118,7 +136,6 @@ export function parseLabels(value) {
     return result;
   }
 
-  // Si es un string separado por comas
   const seen = new Set();
   const labels = [];
 
@@ -151,7 +168,5 @@ export function parseBoardTarget(value) {
 }
 
 export function statusLabel(status) {
-  return KANBAN_STATUSES.find((item) => item.id === status)?.label || 'Backlog';
+  return KANBAN_STATUSES.find((item) => item.id === status)?.label || String(status || 'Backlog');
 }
-
-

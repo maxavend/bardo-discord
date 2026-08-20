@@ -102,6 +102,11 @@ globalThis.__bardoActivityAuth = { state, ready: authPromise };
 // must degrade gracefully instead of throwing ReferenceError.
 globalThis.getMemberRoleBadge ||= (() => null);
 
+async function performPrivateFetch(input, init, headers) {
+  if (input instanceof Request) return originalFetch(new Request(input, { ...init, headers }));
+  return originalFetch(input, { ...init, headers });
+}
+
 window.fetch = async (input, init = {}) => {
   const requestUrl = input instanceof Request ? input.url : String(input);
   const url = new URL(requestUrl, window.location.href);
@@ -120,16 +125,22 @@ window.fetch = async (input, init = {}) => {
 
   let response;
   try {
-    if (input instanceof Request) {
-      response = await originalFetch(new Request(input, { ...init, headers }));
-    } else {
-      response = await originalFetch(input, { ...init, headers });
-    }
+    response = await performPrivateFetch(input, init, headers);
   } catch (error) {
-    if (/\/guild-(?:members|roles)/.test(url.pathname)) {
-      showRetryNotice('No pudimos cargar las personas del servidor.');
-    }
+    if (/\/guild-(?:members|roles)/.test(url.pathname)) showRetryNotice('No pudimos cargar las personas del servidor.');
     throw error;
+  }
+
+  if (response.status === 409 && /\/api\/boards\//.test(url.pathname) && !(input instanceof Request)) {
+    const conflict = await response.clone().json().catch(() => null);
+    if (conflict?.code === 'COLUMN_HAS_TASKS' && conflict.suggestedDestinationId) {
+      const count = Number(conflict.affectedCount || 0);
+      const confirmed = window.confirm(`Esta columna contiene ${count} tarea${count === 1 ? '' : 's'}. ¿Moverla${count === 1 ? '' : 's'} a otra columna y eliminarla?`);
+      if (confirmed) {
+        headers.set('x-bardo-confirm-column-move', conflict.suggestedDestinationId);
+        response = await performPrivateFetch(input, init, headers);
+      }
+    }
   }
 
   if (/\/guild-(?:members|roles)/.test(url.pathname) && response.status >= 500) {

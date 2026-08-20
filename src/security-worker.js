@@ -1,8 +1,14 @@
 import eventWorker from './event-worker.js';
-import { loadBoard, loadBoardWithTasks, loadTask } from './kanban-db.js';
+import {
+  ColumnTasksRequireDestinationError,
+  loadBoard,
+  loadBoardWithTasks,
+  loadTask,
+  updateBoardColumns,
+  updateBoardSettings,
+} from './kanban-db.js';
 import { loadEvent } from './event-db.js';
 import { normalizeDocumentId } from './document-id.js';
-import { parseBoardTarget } from './kanban.js';
 import { parseEventTarget } from './event.js';
 import { handleDiscordOAuthExchange } from './auth/discord-oauth.js';
 import {
@@ -27,13 +33,24 @@ function parsePathParts(pathname, prefix) {
   if (!rest) return [];
   const parts = [];
   for (const part of rest.split('/').filter(Boolean)) {
-    try {
-      parts.push(decodeURIComponent(part));
-    } catch {
-      return null;
-    }
+    try { parts.push(decodeURIComponent(part)); } catch { return null; }
   }
   return parts;
+}
+
+async function readJson(request) {
+  try { return await request.json(); } catch { return null; }
+}
+
+function columnConflict(error) {
+  return jsonResponse({
+    error: error.message,
+    code: error.code,
+    removedColumnIds: error.removedColumnIds,
+    affectedCount: error.affectedCount,
+    destinations: error.destinations,
+    suggestedDestinationId: error.suggestedDestinationId,
+  }, 409);
 }
 
 async function authorizeDocument(request, env, url) {
@@ -150,13 +167,54 @@ async function authorizeActivityContext(request, env, url) {
   return access.ok ? { access } : { response: access.response };
 }
 
+async function handleSecuredBoardMutation(request, env, result) {
+  const confirmationDestination = request.headers.get('x-bardo-confirm-column-move')?.trim() || null;
+
+  if (request.method === 'PATCH' && !result.subroute) {
+    const payload = await readJson(request);
+    if (!payload) return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+
+    const keys = Object.keys(payload);
+    if (keys.length === 1 && keys[0] === 'members') {
+      return jsonResponse({ ok: true, board: result.board, membershipMutationIgnored: true });
+    }
+
+    try {
+      const updated = await updateBoardSettings(env.DB, result.boardId, {
+        name: payload.name,
+        description: payload.description,
+        members: payload.members,
+        columns: payload.columns,
+      }, { moveTasksTo: confirmationDestination });
+      return jsonResponse({ ok: true, board: updated });
+    } catch (error) {
+      if (error instanceof ColumnTasksRequireDestinationError || error?.code === 'COLUMN_HAS_TASKS') return columnConflict(error);
+      return jsonResponse({ error: error instanceof Error ? error.message : 'Board update failed' }, 400);
+    }
+  }
+
+  if ((request.method === 'PATCH' || request.method === 'PUT') && result.subroute === 'columns') {
+    const payload = await readJson(request);
+    if (!Array.isArray(payload?.columns)) return jsonResponse({ error: 'Se requiere un array de columnas' }, 400);
+    try {
+      const updated = await updateBoardColumns(env.DB, result.boardId, payload.columns, {
+        moveTasksTo: confirmationDestination,
+      });
+      return jsonResponse({ ok: true, board: updated });
+    } catch (error) {
+      if (error instanceof ColumnTasksRequireDestinationError || error?.code === 'COLUMN_HAS_TASKS') return columnConflict(error);
+      return jsonResponse({ error: error instanceof Error ? error.message : 'Column update failed' }, 400);
+    }
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx = { waitUntil: () => {} }) {
     const url = new URL(request.url);
 
-    if (url.pathname === '/api/auth/token') {
-      return handleDiscordOAuthExchange(request, env);
-    }
+    if (url.pathname === '/api/auth/token') return handleDiscordOAuthExchange(request, env);
 
     if (url.pathname.startsWith('/api/documents/')) {
       const result = await authorizeDocument(request, env, url);
@@ -179,6 +237,9 @@ export default {
         if (!board) return jsonResponse({ error: 'Not found' }, 404);
         return jsonResponse({ ...board, guildId: board.guildId });
       }
+
+      const mutation = await handleSecuredBoardMutation(request, env, result);
+      if (mutation) return mutation;
       return eventWorker.fetch(request, env, ctx);
     }
 
@@ -194,16 +255,11 @@ export default {
       return eventWorker.fetch(request, env, ctx);
     }
 
-    if (url.pathname.startsWith('/api/')) {
-      return jsonResponse({ error: 'Not found' }, 404);
-    }
-
+    if (url.pathname.startsWith('/api/')) return jsonResponse({ error: 'Not found' }, 404);
     return eventWorker.fetch(request, env, ctx);
   },
 
   async scheduled(event, env, ctx = { waitUntil: () => {} }) {
-    if (typeof eventWorker.scheduled === 'function') {
-      return eventWorker.scheduled(event, env, ctx);
-    }
+    if (typeof eventWorker.scheduled === 'function') return eventWorker.scheduled(event, env, ctx);
   },
 };
