@@ -11008,13 +11008,13 @@ function injectStyles() {
     /* Scrollbar moderna y delgada */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #2b2d31; }
-    * { scrollbar-width: thin; scrollbar-color: #1a1b1e transparent; }
+    ::-webkit-scrollbar-thumb { background: #2b2d31; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f4248; }
+    * { scrollbar-width: thin; scrollbar-color: #2b2d31 transparent; }
 
     .kanban-shell {
       min-height: 100vh;
-      padding: 16px 20px 32px;
+      padding: 16px 0 32px;
       color: var(--kb-text-primary);
       background: var(--kb-bg);
       box-sizing: border-box;
@@ -11027,11 +11027,13 @@ function injectStyles() {
       max-width: 1520px;
       width: 100%;
       margin: 0 auto 12px;
+      padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       padding-bottom: 12px;
+      box-sizing: border-box;
     }
     .kanban-brand-group {
       display: flex;
@@ -11039,9 +11041,9 @@ function injectStyles() {
       gap: 10px;
     }
     .kanban-avatar-box {
-      width: 36px;
-      height: 36px;
-      border-radius: 11px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
       background: var(--kb-surface);
       display: grid;
       place-items: center;
@@ -11078,19 +11080,22 @@ function injectStyles() {
       gap: 8px;
     }
 
-    /* Buttons */
+    /* Buttons con dimensiones id\xE9nticas */
     .btn-primary {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      gap: 5px;
       background: var(--kb-blurple);
       color: #ffffff;
       border: none;
       border-radius: 7px;
-      padding: 7px 13px;
-      font-size: 13px;
+      height: 32px;
+      padding: 0 13px;
+      font-size: 12.5px;
       font-weight: 600;
       cursor: pointer;
+      box-sizing: border-box;
       transition: background 0.15s ease, transform 0.08s ease;
     }
     .btn-primary:hover { background: var(--kb-blurple-hover); }
@@ -11099,15 +11104,18 @@ function injectStyles() {
     .btn-secondary {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      gap: 5px;
       background: var(--kb-surface-raised);
       color: var(--kb-text-primary);
       border: none;
       border-radius: 7px;
-      padding: 7px 11px;
-      font-size: 12px;
+      height: 32px;
+      padding: 0 12px;
+      font-size: 12.5px;
       font-weight: 500;
       cursor: pointer;
+      box-sizing: border-box;
       transition: background 0.15s ease;
     }
     .btn-secondary:hover { background: var(--kb-surface-hover); }
@@ -11122,6 +11130,7 @@ function injectStyles() {
       border: none;
       color: var(--kb-text-muted);
       cursor: pointer;
+      box-sizing: border-box;
       transition: all 0.15s ease;
     }
     .btn-icon:hover { color: var(--kb-text-primary); background: var(--kb-surface-hover); }
@@ -11137,10 +11146,12 @@ function injectStyles() {
       max-width: 1520px;
       width: 100%;
       margin: 0 auto 12px;
+      padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 16px;
+      box-sizing: border-box;
     }
     .kanban-header-info {
       flex: 1;
@@ -11174,11 +11185,13 @@ function injectStyles() {
       max-width: 1520px;
       width: 100%;
       margin: 0 auto 16px;
+      padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 10px;
-      padding: 0;
+      padding-top: 0;
+      padding-bottom: 0;
       background: transparent;
       border: none;
       box-sizing: border-box;
@@ -11312,6 +11325,8 @@ function injectStyles() {
       overflow-x: auto;
       padding: 4px 0 10px;
       margin-bottom: 8px;
+      padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
+      box-sizing: border-box;
     }
     .mobile-tab-btn {
       flex: 1;
@@ -11332,22 +11347,32 @@ function injectStyles() {
       background: var(--tab-color, var(--kb-blurple));
     }
 
-    /* Board Grid Flat */
-    .kanban-board {
-      max-width: 1520px;
+    /* Arquitectura de Scroll Horizontal (Contenedor externo + Track interno) */
+    .kanban-scroll-container {
       width: 100%;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(260px, 1fr));
-      gap: 14px;
-      align-items: start;
+      max-width: 100%;
       overflow-x: auto;
-      padding-bottom: 14px;
+      overflow-y: visible;
+      box-sizing: border-box;
+      padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
+      scroll-padding-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
+      padding-bottom: 24px;
+      scrollbar-width: thin;
+      scrollbar-color: #2b2d31 transparent;
       flex: 1;
     }
 
+    .kanban-track {
+      display: inline-flex;
+      gap: 16px;
+      align-items: flex-start;
+      min-width: 100%;
+      box-sizing: border-box;
+    }
+
     .kanban-column {
-      min-width: 260px;
+      flex: 0 0 280px;
+      width: 280px;
       background: var(--kb-surface);
       border: none;
       border-radius: 12px;
@@ -11355,20 +11380,26 @@ function injectStyles() {
       min-height: 260px;
       display: flex;
       flex-direction: column;
+      box-sizing: border-box;
       transition: background 0.12s ease;
     }
     .kanban-column.is-over {
       background: color-mix(in srgb, var(--kb-surface) 88%, var(--column-accent, var(--kb-blurple)));
     }
 
-    /* Cabecera de Columna */
+    /* Cabecera de Columna con Divider Sutil (Dark & Light) */
     .kanban-column-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 2px 4px 10px;
       margin-bottom: 10px;
-      border-bottom: 1px solid color-mix(in srgb, var(--column-accent, var(--kb-blurple)) 65%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--column-accent, var(--kb-blurple)) 22%, rgba(255, 255, 255, 0.05));
+    }
+    @media (prefers-color-scheme: light) {
+      .kanban-column-header {
+        border-bottom: 1px solid color-mix(in srgb, var(--column-accent, var(--kb-blurple)) 18%, rgba(0, 0, 0, 0.08));
+      }
     }
     .column-title-wrap {
       display: flex;
@@ -11424,40 +11455,14 @@ function injectStyles() {
       background: var(--kb-surface-raised);
     }
     .btn-edit-col-icon {
-      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
       opacity: 0.45;
       margin-left: 2px;
       transition: opacity 0.12s ease;
     }
     .column-title-wrap:hover .btn-edit-col-icon {
       opacity: 1;
-    }
-
-    .kanban-add-column-card {
-      min-width: 260px;
-      min-height: 140px;
-      border-radius: 12px;
-      background: var(--kb-surface);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 5px;
-      color: var(--kb-text-muted);
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.12s ease;
-      user-select: none;
-    }
-    .kanban-add-column-card:hover {
-      background: var(--kb-surface-raised);
-      color: var(--kb-text-primary);
-    }
-    .kanban-add-column-card small {
-      font-size: 11px;
-      color: var(--kb-text-dim);
-      font-weight: 400;
     }
 
     .kanban-list {
@@ -12287,47 +12292,42 @@ function renderBoard(container, board) {
   }).join("")}
     </nav>
 
-    <!-- Columnas Kanban -->
-    <section class="kanban-board" style="grid-template-columns: repeat(${boardColumns.length + (boardColumns.length < MAX_BOARD_COLUMNS ? 1 : 0)}, minmax(260px, 1fr));" aria-label="Columnas Kanban">
-      ${boardColumns.map((status) => {
+    <!-- Columnas Kanban (Scroll Container + Track) -->
+    <section class="kanban-scroll-container" aria-label="Columnas Kanban">
+      <div class="kanban-track">
+        ${boardColumns.map((status) => {
     const accent = status.color || "#5865f2";
     const count = grouped[status.id]?.length || 0;
     const total = totals[status.id] || 0;
     const countDisplay = hasActiveFilters && count !== total ? `${count}/${total}` : count;
     return `
-          <section class="kanban-column" id="col-${status.id}" data-status="${status.id}" style="--column-accent: ${accent}; --column-badge-bg: ${accent}22;">
-            <header class="kanban-column-header">
-              <div class="column-title-wrap" data-edit-column="${status.id}" role="button" tabindex="0" title="Editar columna ${escapeHtml2(status.label)}" style="cursor: pointer;">
-                <span class="column-indicator"></span>
-                <h2 class="kanban-column-title">${escapeHtml2(status.label)}</h2>
-                <span class="btn-edit-col-icon" title="Editar columna">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </span>
+            <section class="kanban-column" id="col-${status.id}" data-status="${status.id}" style="--column-accent: ${accent}; --column-badge-bg: ${accent}22;">
+              <header class="kanban-column-header">
+                <div class="column-title-wrap" data-edit-column="${status.id}" role="button" tabindex="0" title="Editar columna ${escapeHtml2(status.label)}" style="cursor: pointer;">
+                  <span class="column-indicator"></span>
+                  <h2 class="kanban-column-title">${escapeHtml2(status.label)}</h2>
+                  <span class="btn-edit-col-icon" title="Editar columna">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </span>
+                </div>
+                <div class="column-actions">
+                  <span class="kanban-count">${countDisplay}</span>
+                  <button class="btn-add-task-col" data-add-to-status="${status.id}" title="Agregar tarea en ${escapeHtml2(status.label)}" type="button" aria-label="Agregar tarea">+</button>
+                </div>
+              </header>
+              <div class="kanban-list" data-status-list="${status.id}">
+                ${grouped[status.id]?.length ? grouped[status.id].map(renderTask).join("") : `<div class="kanban-empty">
+                      <span>Sin tareas</span>
+                      <button class="btn-col-empty-add" data-add-to-status="${status.id}" type="button">+ Agregar tarea</button>
+                     </div>`}
               </div>
-              <div class="column-actions">
-                <span class="kanban-count">${countDisplay}</span>
-                <button class="btn-add-task-col" data-add-to-status="${status.id}" title="Agregar tarea en ${escapeHtml2(status.label)}" type="button" aria-label="Agregar tarea">+</button>
-              </div>
-            </header>
-            <div class="kanban-list" data-status-list="${status.id}">
-              ${grouped[status.id]?.length ? grouped[status.id].map(renderTask).join("") : `<div class="kanban-empty">
-                    <span>Sin tareas</span>
-                    <button class="btn-col-empty-add" data-add-to-status="${status.id}" type="button">+ Agregar tarea</button>
-                   </div>`}
-            </div>
-          </section>
-        `;
+            </section>
+          `;
   }).join("")}
-
-      ${boardColumns.length < MAX_BOARD_COLUMNS ? `
-        <div class="kanban-add-column-card" id="btn-add-column-card" role="button" tabindex="0" title="Agregar nueva columna">
-          <span>+ Agregar columna</span>
-          <small>${boardColumns.length}/${MAX_BOARD_COLUMNS} columnas</small>
-        </div>
-      ` : ""}
+      </div>
     </section>
   `;
   bindBoardEvents(container);
@@ -12393,15 +12393,6 @@ function bindBoardEvents(container) {
           openColumnModal(col);
         }
       });
-    }
-  });
-  container.querySelector("#btn-add-column-card")?.addEventListener("click", () => {
-    openColumnModal(null);
-  });
-  container.querySelector("#btn-add-column-card")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openColumnModal(null);
     }
   });
   container.querySelectorAll(".task-card").forEach((card) => {

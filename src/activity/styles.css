@@ -19,24 +19,24 @@
   display: none !important;
 }
 
-/* Scrollbar nativa estilo Discord al borde derecho */
+/* Scrollbar moderna y sutil estilo Discord (homologada con Kanban) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
+  background: #2b2d31;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2b2d31;
+  background: #3f4248;
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: #1a1b1e transparent;
+  scrollbar-color: #2b2d31 transparent;
 }
 
 html,
