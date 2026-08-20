@@ -188,7 +188,11 @@ function renderHero() {
       <button class="ev-btn" data-action="edit-event">Editar</button>
       <button class="ev-btn" data-action="share">Compartir agenda</button>
       <button class="ev-btn" data-action="duplicate">Duplicar</button>
-      ${data.status === 'live' ? `<button class="ev-btn primary" data-action="finish">Finalizar</button>` : data.status === 'finished' ? `<button class="ev-btn primary" data-action="minutes">Abrir minuta</button>` : `<button class="ev-btn primary" data-action="start">Iniciar reunión</button>`}
+      ${data.status === 'live'
+        ? `<button class="ev-btn primary" data-action="finish">Finalizar</button>`
+        : data.status === 'finished'
+          ? `<button class="ev-btn" data-action="publish-minutes">Publicar minuta</button><button class="ev-btn primary" data-action="minutes">Abrir minuta</button>`
+          : `<button class="ev-btn primary" data-action="start">Iniciar reunión</button>`}
     </div>
   </section>
   <div class="ev-summary"><span class="ev-stat"><b>${data.blocks?.length || 0}</b> bloques</span><span class="ev-stat"><b>${(data.blocks || []).reduce((n,b)=>n+(b.items?.length||0),0)}</b> puntos</span><span class="ev-stat"><b>${data.decisions?.length || 0}</b> decisiones</span><span class="ev-stat"><b>${data.tasks?.length || 0}</b> tareas</span>${overtime > 0 ? `<span class="ev-stat ev-overtime">Agenda +${overtime} min sobre el tiempo</span>` : ''}</div>`;
@@ -242,6 +246,7 @@ async function renderCalendar() {
     const json = await res.json();
     const events = json.events || [];
     root.innerHTML = `<div class="ev-calendar-head"><div><h2 style="margin:0">Eventos</h2><div class="ev-calendar-meta">Próximos, finalizados y sesiones de esta semana</div></div><button class="ev-btn primary" data-action="new-event">+ Evento</button></div><div class="ev-calendar-list">${events.length ? events.map((event)=>`<div class="ev-calendar-event" data-open-event="${esc(event.id)}"><div class="ev-date"><b>${esc(event.eventDate.slice(5))}</b>${esc(event.startTime)}</div><div><div class="ev-calendar-title">${esc(event.title)}</div><div class="ev-calendar-meta">${esc(eventStatusLabel(event.status))} · ${formatDuration(event.expectedDuration)}</div></div><span class="ev-badge ${event.status === 'live' ? 'live' : ''}">${esc(eventStatusLabel(event.status))}</span></div>`).join('') : `<div class="ev-empty">No hay eventos todavía.</div>`}</div>`;
+    bindEvents();
   } catch (error) {
     root.innerHTML = `<div class="ev-empty">${esc(error.message)}</div>`;
   }
@@ -387,6 +392,7 @@ async function action(el) {
   if (actionName==='start') { await api('/start',{method:'POST',body:{}}); await loadEvent(); toast('Reunión iniciada'); }
   if (actionName==='finish') { await api('/finish',{method:'POST',body:{}}); await loadEvent(); toast('Reunión finalizada'); }
   if (actionName==='share') { await api('/publish',{method:'POST',body:{}}); toast('Agenda publicada en Discord'); }
+  if (actionName==='publish-minutes') { await api('/publish-minutes',{method:'POST',body:{}}); toast('Minuta publicada en Discord'); }
   if (actionName==='duplicate') { const res=await api('/duplicate',{method:'POST',body:{}}); eventId=res.event.id; await loadEvent(); toast('Evento duplicado'); }
   if (actionName==='minutes') {
     const res=await api('/minutes',{method:'POST',body:{}});
