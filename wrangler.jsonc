@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bardo-discord",
-  "main": "src/kanban-worker.js",
+  "main": "src/event-worker.js",
   "compatibility_date": "2026-08-19",
   "compatibility_flags": [
     "nodejs_compat"
@@ -30,7 +30,8 @@
   ],
   "triggers": {
     "crons": [
-      "0 3 * * *"
+      "0 3 * * *",
+      "*/5 * * * *"
     ]
   }
 }
