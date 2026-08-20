@@ -20,6 +20,7 @@ import {
   updateBoardSettings,
   updateTask,
 } from './kanban-db.js';
+import { createDatabaseSnapshot } from './backup-r2.js';
 import {
   BARDO_BOARD_PREFIX,
   KANBAN_PRIORITIES,
@@ -515,5 +516,14 @@ export default {
     }
 
     return baseWorker.fetch(request, env, ctx);
+  },
+
+  async scheduled(event, env, ctx = { waitUntil: () => {} }) {
+    console.log(`Cron trigger iniciado (${event?.cron || 'scheduled'}): ejecutando snapshot de base de datos D1 a R2`);
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(createDatabaseSnapshot(env));
+    } else {
+      await createDatabaseSnapshot(env);
+    }
   },
 };

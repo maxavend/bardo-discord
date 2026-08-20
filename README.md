@@ -66,16 +66,62 @@ La Activity ofrece una experiencia interactiva completa:
 - **Sincronización multi-usuario inteligente**: polling adaptativo de 7s pausado en segundo plano para optimizar cuota de Cloudflare.
 - **Interacción fluida**: Drag & drop en desktop y selectores rápidos en móvil.
 
-## Arquitectura
+## Arquitectura y Almacenamiento (D1 + R2)
+
+Bardo combina almacenamiento operativo relacional en **Cloudflare D1** con almacenamiento de archivo y respaldo durable en **Cloudflare R2**:
 
 - **Discord HTTP Interactions**: recibe `/doc`, `/tablero` y `/tarea` sin Gateway persistente.
 - **Components V2 / componentes interactivos**: previews y botones de lanzamiento.
 - **Discord Activity**: lector de documentos y mini Kanban embebidos.
 - **Cloudflare Workers Static Assets**: sirve las Activities y parsers lazy de PDF/DOCX.
-- **Cloudflare D1**: almacena documentos, tableros, tareas y contextos de Activity.
-- **Worker Kanban wrapper**: intercepta únicamente tareas/tableros y delega el resto al Worker de documentos existente.
+- **Cloudflare D1 (`bardo-db`)**: base de datos relacional operativa para documentos, tableros, tareas y contextos de sesión.
+- **Cloudflare R2 (`bardo-backups`)**: capa persistente de archivo para:
+  1. **Archivos originales permanentes**: `documents/{documentId}/original.{pdf|docx|md|txt}` conservados de forma duradera con metadatos.
+  2. **Respaldos normalizados**: `documents/{documentId}/document.md` y `documents/{documentId}/metadata.json` actualizados al normalizar o editar.
+  3. **Snapshots diarios de D1**: `database/YYYY-MM-DD/{timestamp}/` generados automáticamente cada día vía Cron Trigger (`0 3 * * *`).
 
-PDF y DOCX se convierten en el cliente de la Activity, no dentro del Worker. Al terminar, Bardo guarda el Markdown normalizado en D1 y elimina el binario temporal.
+PDF y DOCX se convierten en el cliente de la Activity, no dentro del Worker. Al terminar, Bardo guarda el Markdown normalizado en D1 y libera el `source_blob` temporal de D1, mientras que el archivo original en R2 se preserva de forma permanente.
+
+## Configuración de R2 y Backups
+
+### 1. Crear el bucket R2 en Cloudflare
+
+Si el bucket aún no existe en tu cuenta de Cloudflare, créalo con Wrangler o desde el Dashboard:
+
+```bash
+npx wrangler r2 bucket create bardo-backups
+```
+
+### 2. Regla de Ciclo de Vida (Retención de 90 días para snapshots)
+
+Para optimizar el almacenamiento dentro del plan gratuito de Cloudflare, se recomienda configurar una regla de ciclo de vida para los snapshots de base de datos:
+
+1. Ve a **Cloudflare Dashboard → R2 Object Storage → `bardo-backups`**.
+2. Entra a la pestaña **Settings / Configuración → Lifecycle Rules / Reglas de ciclo de vida**.
+3. Añade una regla:
+   - **Prefix / Prefijo**: `database/`
+   - **Action / Acción**: Delete objects older than / Eliminar objetos con más de **90 días**.
+4. Deja la raíz y el prefijo `documents/` **sin fecha de expiración** para conservar permanentemente los documentos y sus archivos originales.
+
+### 3. Recuperación de Desastres (Disaster Recovery)
+
+Bardo incluye la utilidad CLI `scripts/restore.js` para consultar y restaurar datos en caso de contingencia:
+
+```bash
+# Listar snapshots diarios disponibles en R2
+node scripts/restore.js --list-snapshots
+
+# Inspeccionar un snapshot específico
+node scripts/restore.js --inspect-snapshot database/2026-08-20/1787250000000
+
+# Inspeccionar metadatos de un documento en R2
+node scripts/restore.js --inspect-doc <ID_DOCUMENTO>
+
+# Localizar y descargar el archivo original
+node scripts/restore.js --download-original <ID_DOCUMENTO> original.pdf
+```
+
+Para restaurar una base de datos D1 desde un snapshot o reconstruir un documento específico, el módulo `src/backup-r2.js` expone las funciones `restoreDocumentToD1(env, docId)` y `restoreDatabaseFromSnapshot(env, snapshotPrefix)`.
 
 ## Requisitos
 
@@ -149,6 +195,8 @@ Las migraciones viven en `migrations/`.
 - `0003`: importación temporal PDF/DOCX.
 - `0004`: tableros y tareas Kanban.
 - `0005`: columna de prioridad e índices en tareas Kanban.
+- `0006`: gestión y persistencia de columnas personalizadas de tablero.
+- `0007`: miembros persistentes por tablero.
 
 ## Desarrollo y tests
 
@@ -164,6 +212,8 @@ npm run dev
 - `.env` y credenciales están fuera del repositorio.
 - Los secretos de producción residen en Cloudflare Secrets.
 - Los documentos y tableros usan UUID opacos.
+- Los backups en R2 son completamente privados (sin acceso público directo).
+- No se almacenan tokens de Discord, firmas ni credenciales dentro de los backups.
 - La fuente binaria de PDF/DOCX solo se entrega a la Activity asociada.
 - Los cambios de estado del Kanban requieren un `activity_instance_id` asociado al tablero abierto.
-- Después de normalizar PDF/DOCX, el binario temporal se elimina de D1.
+- Después de normalizar PDF/DOCX, el binario temporal se elimina de D1 para ahorrar espacio, conservando el archivo original de forma permanente y segura en R2.

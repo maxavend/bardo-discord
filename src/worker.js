@@ -18,6 +18,7 @@ import {
   saveDocument,
   saveDocumentSource,
 } from './db.js';
+import { saveOriginalToR2, saveNormalizedBackupToR2 } from './backup-r2.js';
 
 const MAX_STORED_DOCUMENT_BYTES = 1_800_000;
 const DOCUMENT_API_PREFIX = '/api/documents/';
@@ -124,14 +125,40 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 
     await saveDocument(env.DB, documentId, document);
 
+    const sourceMime = attachment.content_type || (sourceType === 'pdf'
+      ? 'application/pdf'
+      : sourceType === 'docx'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'text/plain; charset=utf-8');
+
     if (!isTextSourceType(sourceType)) {
       await saveDocumentSource(env.DB, documentId, {
         bytes: downloaded.bytes,
-        mime: attachment.content_type || (sourceType === 'pdf'
-          ? 'application/pdf'
-          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        mime: sourceMime,
         type: sourceType,
       });
+    }
+
+    // Guardado persistente en Cloudflare R2 (original + respaldo normalizado)
+    try {
+      await saveOriginalToR2(env, documentId, {
+        bytes: downloaded.bytes,
+        text: downloaded.text,
+        mime: sourceMime,
+        type: sourceType,
+        name: sourceName,
+        createdBy,
+        createdAt: document.createdAt,
+      });
+      await saveNormalizedBackupToR2(env, documentId, {
+        ...document,
+        sourceType,
+        sourceMime,
+        importStatus: isTextSourceType(sourceType) ? 'ready' : 'pending',
+        hasSource: true,
+      });
+    } catch (r2Error) {
+      console.warn('Advertencia al respaldar en R2:', r2Error);
     }
 
     const documentPayload = buildDocumentPayload(document, {
@@ -210,6 +237,18 @@ async function handleCommandInteraction(interaction, env, ctx) {
       };
 
       await saveDocument(env.DB, documentId, document);
+
+      try {
+        await saveNormalizedBackupToR2(env, documentId, {
+          ...document,
+          sourceType: 'markdown',
+          sourceMime: 'text/markdown; charset=utf-8',
+          importStatus: 'ready',
+          hasSource: false,
+        });
+      } catch (r2Error) {
+        console.warn('Advertencia al respaldar documento nuevo en R2:', r2Error);
+      }
 
       const applicationId = interaction.application_id || env.DISCORD_APPLICATION_ID;
       const documentPayload = buildDocumentPayload(document, { applicationId, documentId });
@@ -502,6 +541,18 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
   }
 
   await cacheNormalizedDocument(env.DB, documentId, markdown, pages);
+
+  try {
+    await saveNormalizedBackupToR2(env, documentId, {
+      ...document,
+      originalMarkdown: markdown,
+      pages,
+      importStatus: 'ready',
+    });
+  } catch (r2Error) {
+    console.warn('Advertencia al actualizar respaldo R2 tras normalización:', r2Error);
+  }
+
   return jsonResponse({ ok: true });
 }
 
@@ -540,6 +591,17 @@ async function handleDocumentEditApi(request, documentId, env) {
     .prepare('UPDATE documents SET title = ?, original_markdown = ?, pages = ? WHERE id = ?')
     .bind(title, markdown, JSON.stringify(pages), documentId)
     .run();
+
+  try {
+    await saveNormalizedBackupToR2(env, documentId, {
+      ...document,
+      title,
+      originalMarkdown: markdown,
+      pages,
+    });
+  } catch (r2Error) {
+    console.warn('Advertencia al actualizar respaldo R2 tras edición:', r2Error);
+  }
 
   return jsonResponse({ ok: true, document: { id: documentId, title, markdown, pages } });
 }
