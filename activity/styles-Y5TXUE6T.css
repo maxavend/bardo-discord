@@ -305,13 +305,12 @@ select {
 .is-editing #document-body {
   outline: none;
   caret-color: #5865f2;
-  border-radius: 6px;
-  padding: 4px 6px;
-  transition: background 120ms ease;
+  background: transparent;
+  padding: 0;
 }
 .is-editing #document-title:focus,
 .is-editing #document-body:focus {
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
   outline: none;
   box-shadow: none;
 }
