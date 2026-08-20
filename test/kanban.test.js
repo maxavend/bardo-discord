@@ -99,138 +99,152 @@ function createMockKanbanDb() {
     tasks,
     prepare(query) {
       const q = query.replace(/\s+/g, ' ');
-      return {
-        bind(...params) {
-          return {
-            async first() {
-              if (q.includes('FROM boards WHERE id = ?')) {
-                const [id] = params;
-                const b = boards.get(id);
-                return b ? { ...b } : null;
-              }
-              if (q.includes('FROM boards') && query.includes('guild_id = ?')) {
-                const [guildId, val1, val2] = params;
-                for (const b of boards.values()) {
-                  if (b.guild_id === guildId && (b.id === val1 || b.name.toLowerCase() === String(val2).toLowerCase())) {
-                    return { ...b };
-                  }
+      function createExecutors(params = []) {
+        return {
+          async first() {
+            if (q.includes('FROM boards WHERE id = ?')) {
+              const [id] = params;
+              const b = boards.get(id);
+              return b ? { ...b } : null;
+            }
+            if (q.includes('FROM boards') && query.includes('guild_id = ?')) {
+              const [guildId, val1, val2] = params;
+              for (const b of boards.values()) {
+                if (b.guild_id === guildId && (b.id === val1 || b.name.toLowerCase() === String(val2).toLowerCase())) {
+                  return { ...b };
                 }
-                return null;
-              }
-              if (q.includes('FROM tasks WHERE id = ?')) {
-                const [id] = params;
-                const t = tasks.get(id);
-                return t ? { ...t } : null;
-              }
-              if (q.includes('MAX(position)')) {
-                const [boardId, status] = params;
-                let maxPos = -1;
-                for (const t of tasks.values()) {
-                  if (t.board_id === boardId && t.status === status && t.position > maxPos) {
-                    maxPos = t.position;
-                  }
-                }
-                return { next_position: maxPos + 1 };
               }
               return null;
-            },
-            async all() {
-              if (q.includes('FROM tasks WHERE board_id = ?') || (q.includes('FROM tasks') && q.includes('board_id = ?'))) {
-                const [boardId] = params;
-                const list = [];
-                for (const t of tasks.values()) {
-                  if (t.board_id === boardId) list.push({ ...t });
+            }
+            if (q.includes('FROM tasks WHERE id = ?')) {
+              const [id] = params;
+              const t = tasks.get(id);
+              return t ? { ...t } : null;
+            }
+            if (q.includes('MAX(position)')) {
+              const [boardId, status] = params;
+              let maxPos = -1;
+              for (const t of tasks.values()) {
+                if (t.board_id === boardId && t.status === status && t.position > maxPos) {
+                  maxPos = t.position;
                 }
-                return { results: list };
               }
-              if (q.includes('FROM boards WHERE guild_id = ?') || (q.includes('FROM boards') && q.includes('guild_id = ?'))) {
-                const [guildId, limit] = params;
-                const list = [];
-                for (const b of boards.values()) {
-                  if (b.guild_id === guildId) list.push({ ...b });
+              return { next_position: maxPos + 1 };
+            }
+            return null;
+          },
+          async all() {
+            if (q.includes("priority = 'urgent'") || q.includes('t.priority = ?') || q.includes('t.priority = \'urgent\'')) {
+              const list = [];
+              for (const t of tasks.values()) {
+                if (t.priority === 'urgent' && t.status !== 'done' && t.assignee_id) {
+                  const b = boards.get(t.board_id);
+                  list.push({ ...t, board_name: b?.name || 'Tablero' });
                 }
-                return { results: list.slice(0, limit) };
               }
-              return { results: [] };
-            },
-            async run() {
-              if (q.includes('INSERT INTO boards')) {
-                if (params.length === 9) {
-                  const [id, guild_id, name, description, columns, members, created_by, created_at, updated_at] = params;
-                  boards.set(id, { id, guild_id, name, description, columns, members, created_by, created_at, updated_at });
-                } else {
-                  const [id, guild_id, name, description, columns, created_by, created_at, updated_at] = params;
-                  boards.set(id, { id, guild_id, name, description, columns, members: '[]', created_by, created_at, updated_at });
-                }
-                return { success: true };
+              return { results: list };
+            }
+            if (q.includes('FROM tasks WHERE board_id = ?') || (q.includes('FROM tasks') && q.includes('board_id = ?'))) {
+              const [boardId] = params;
+              const list = [];
+              for (const t of tasks.values()) {
+                if (t.board_id === boardId) list.push({ ...t });
               }
-              if (q.includes('INSERT INTO tasks')) {
-                const [id, board_id, title, description, status, priority, assignee_id, assignee_name, labels, position, created_by, created_at, updated_at] = params;
-                tasks.set(id, { id, board_id, title, description, status, priority, assignee_id, assignee_name, labels, position, created_by, created_at, updated_at });
-                return { success: true };
+              return { results: list };
+            }
+            if (q.includes('FROM boards WHERE guild_id = ?') || (q.includes('FROM boards') && q.includes('guild_id = ?'))) {
+              const [guildId, limit] = params;
+              const list = [];
+              for (const b of boards.values()) {
+                if (b.guild_id === guildId) list.push({ ...b });
               }
-              if (q.includes('UPDATE boards SET columns = ?')) {
-                const [columns, updated_at, id] = params;
-                const b = boards.get(id);
-                if (b) {
-                  b.columns = columns;
-                  b.updated_at = updated_at;
-                }
-                return { success: true };
-              }
-              if (q.includes('UPDATE boards SET name = ?')) {
-                const [name, description, members, columns, updated_at, id] = params;
-                const b = boards.get(id);
-                if (b) {
-                  b.name = name;
-                  b.description = description;
-                  b.members = members;
-                  b.columns = columns;
-                  b.updated_at = updated_at;
-                }
-                return { success: true };
-              }
-              if (q.includes('UPDATE tasks SET status = ?')) {
-                const [status, position, updated_at, id] = params;
-                const t = tasks.get(id);
-                if (t) {
-                  t.status = status;
-                  t.position = position;
-                  t.updated_at = updated_at;
-                }
-                return { success: true };
-              }
-              if (q.includes('UPDATE tasks SET')) {
-                const [title, description, status, priority, assignee_id, assignee_name, labels, position, updated_at, id] = params;
-                const t = tasks.get(id);
-                if (t) {
-                  t.title = title;
-                  t.description = description;
-                  t.status = status;
-                  t.priority = priority;
-                  t.assignee_id = assignee_id;
-                  t.assignee_name = assignee_name;
-                  t.labels = labels;
-                  t.position = position;
-                  t.updated_at = updated_at;
-                }
-                return { success: true };
-              }
-              if (q.includes('DELETE FROM tasks WHERE id = ?')) {
-                const [id] = params;
-                tasks.delete(id);
-                return { success: true };
-              }
-              if (q.includes('UPDATE boards SET updated_at = ?')) {
-                const [updated_at, id] = params;
-                const b = boards.get(id);
-                if (b) b.updated_at = updated_at;
-                return { success: true };
+              return { results: list.slice(0, limit) };
+            }
+            return { results: [] };
+          },
+          async run() {
+            if (q.includes('INSERT INTO boards')) {
+              if (params.length === 9) {
+                const [id, guild_id, name, description, columns, members, created_by, created_at, updated_at] = params;
+                boards.set(id, { id, guild_id, name, description, columns, members, created_by, created_at, updated_at });
+              } else {
+                const [id, guild_id, name, description, columns, created_by, created_at, updated_at] = params;
+                boards.set(id, { id, guild_id, name, description, columns, members: '[]', created_by, created_at, updated_at });
               }
               return { success: true };
-            },
-          };
+            }
+            if (q.includes('INSERT INTO tasks')) {
+              const [id, board_id, title, description, status, priority, assignee_id, assignee_name, labels, position, created_by, created_at, updated_at] = params;
+              tasks.set(id, { id, board_id, title, description, status, priority, assignee_id, assignee_name, labels, position, created_by, created_at, updated_at });
+              return { success: true };
+            }
+            if (q.includes('UPDATE boards SET columns = ?')) {
+              const [columns, updated_at, id] = params;
+              const b = boards.get(id);
+              if (b) {
+                b.columns = columns;
+                b.updated_at = updated_at;
+              }
+              return { success: true };
+            }
+            if (q.includes('UPDATE boards SET name = ?')) {
+              const [name, description, members, columns, updated_at, id] = params;
+              const b = boards.get(id);
+              if (b) {
+                b.name = name;
+                b.description = description;
+                b.members = members;
+                b.columns = columns;
+                b.updated_at = updated_at;
+              }
+              return { success: true };
+            }
+            if (q.includes('UPDATE tasks SET status = ?')) {
+              const [status, position, updated_at, id] = params;
+              const t = tasks.get(id);
+              if (t) {
+                t.status = status;
+                t.position = position;
+                t.updated_at = updated_at;
+              }
+              return { success: true };
+            }
+            if (q.includes('UPDATE tasks SET')) {
+              const [title, description, status, priority, assignee_id, assignee_name, labels, position, updated_at, id] = params;
+              const t = tasks.get(id);
+              if (t) {
+                t.title = title;
+                t.description = description;
+                t.status = status;
+                t.priority = priority;
+                t.assignee_id = assignee_id;
+                t.assignee_name = assignee_name;
+                t.labels = labels;
+                t.position = position;
+                t.updated_at = updated_at;
+              }
+              return { success: true };
+            }
+            if (q.includes('DELETE FROM tasks WHERE id = ?')) {
+              const [id] = params;
+              tasks.delete(id);
+              return { success: true };
+            }
+            if (q.includes('UPDATE boards SET updated_at = ?')) {
+              const [updated_at, id] = params;
+              const b = boards.get(id);
+              if (b) b.updated_at = updated_at;
+              return { success: true };
+            }
+            return { success: true };
+          },
+        };
+      }
+      return {
+        bind(...params) {
+          return createExecutors(params);
         },
+        ...createExecutors([]),
       };
     },
   };
@@ -400,4 +414,111 @@ test('Kanban worker API expone miembros del servidor de Discord', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('Kanban worker API expone roles del servidor de Discord', async () => {
+  const db = createMockKanbanDb();
+  await createBoard(db, {
+    id: 'board-roles-test',
+    guildId: '123456789012345678',
+    name: 'Tablero con Roles',
+  });
+
+  const kanbanWorkerModule = await import('../src/kanban-worker.js');
+  const kanbanWorker = kanbanWorkerModule.default;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/roles')) {
+      return new Response(JSON.stringify([
+        { id: '111', name: '@everyone', color: 0, position: 0 },
+        { id: '222', name: 'Frontend', color: 0x3498db, position: 2 },
+        { id: '333', name: 'Diseño', color: 0xe91e63, position: 1 },
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const env = { DB: db, DISCORD_TOKEN: 'fake-token' };
+    const req = new Request('http://localhost/api/boards/board-roles-test/guild-roles', { method: 'GET' });
+    const res = await kanbanWorker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.ok, true);
+    assert.equal(data.roles.length, 2); // Excluye @everyone
+    assert.equal(data.roles[0].name, 'Frontend');
+    assert.equal(data.roles[0].color, '#3498db');
+    assert.equal(data.roles[1].name, 'Diseño');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('sendUrgentTaskReminders envía recordatorios DM a responsables de tareas urgentes pendientes', async () => {
+  const db = createMockKanbanDb();
+  await createBoard(db, {
+    id: 'board-reminder-test',
+    guildId: '123456789012345678',
+    name: 'Tablero Lanzamiento',
+  });
+
+  await createTask(db, {
+    id: 'task-urg-1',
+    boardId: 'board-reminder-test',
+    title: 'Arreglar bug crítico de login',
+    priority: 'urgent',
+    status: 'in_progress',
+    assigneeId: '987654321012345678',
+    assigneeName: 'Carlos Dev',
+  });
+
+  await createTask(db, {
+    id: 'task-urg-2',
+    boardId: 'board-reminder-test',
+    title: 'Tarea no urgente ignorada',
+    priority: 'medium',
+    status: 'in_progress',
+    assigneeId: '987654321012345678',
+  });
+
+  await createTask(db, {
+    id: 'task-urg-3',
+    boardId: 'board-reminder-test',
+    title: 'Tarea urgente ya terminada',
+    priority: 'urgent',
+    status: 'done',
+    assigneeId: '987654321012345678',
+  });
+
+  const kanbanWorkerModule = await import('../src/kanban-worker.js');
+  const { sendUrgentTaskReminders } = kanbanWorkerModule;
+
+  const messagesSent = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/users/@me/channels')) {
+      return new Response(JSON.stringify({ id: 'dm-channel-123' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/channels/dm-channel-123/messages')) {
+      const body = JSON.parse(options?.body || '{}');
+      messagesSent.push(body);
+      return new Response(JSON.stringify({ id: 'msg-456' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(null, { status: 404 });
+  };
+
+  try {
+    const env = { DB: db, DISCORD_TOKEN: 'fake-token' };
+    const result = await sendUrgentTaskReminders(env);
+    assert.equal(result.sentCount, 1);
+    assert.equal(messagesSent.length, 1);
+    assert.ok(messagesSent[0].content.includes('Arreglar bug crítico de login'));
+    assert.ok(messagesSent[0].content.includes('Tablero: **Tablero Lanzamiento**'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 

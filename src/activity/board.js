@@ -62,6 +62,7 @@ let currentBoardData = null;
 let currentDiscordUser = null;
 let connectedParticipants = [];
 let serverGuildMembers = [];
+let serverGuildRoles = [];
 let draggedTaskId = null;
 let isSyncing = false;
 let syncTimer = null;
@@ -2913,6 +2914,14 @@ async function openBoardSettingsModal(board) {
           <!-- Sugerencias rápidas de Discord -->
           <div id="board-member-suggestions" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
 
+          <!-- Añadir por Roles de Discord -->
+          <div id="board-role-picker-wrap" style="margin-top: 8px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <span style="font-size: 11px; color: var(--kb-text-muted); font-weight: 600;">Añadir por Rol de Discord:</span>
+            </div>
+            <div id="board-role-chips" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+          </div>
+
           <!-- Lista de miembros agregados -->
           <div id="board-members-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px;"></div>
         </div>
@@ -3137,6 +3146,16 @@ async function openBoardSettingsModal(board) {
   const addBtn = backdrop.querySelector('#btn-add-member-manual');
   const dropdownEl = backdrop.querySelector('#board-member-dropdown');
 
+  function getMemberRoleBadge(member) {
+    if (!member || !Array.isArray(member.roles) || !Array.isArray(serverGuildRoles)) return null;
+    for (const role of serverGuildRoles) {
+      if (member.roles.includes(role.id)) {
+        return role;
+      }
+    }
+    return null;
+  }
+
   function renderMembersList() {
     if (!membersListEl) return;
     if (modalMembers.length === 0) {
@@ -3144,15 +3163,20 @@ async function openBoardSettingsModal(board) {
       return;
     }
 
-    membersListEl.innerHTML = modalMembers.map((m, idx) => `
+    membersListEl.innerHTML = modalMembers.map((m, idx) => {
+      const fullMember = serverGuildMembers.find((gm) => String(gm.id) === String(m.id)) || m;
+      const role = getMemberRoleBadge(fullMember);
+      return `
       <div class="board-member-pill">
         ${m.avatarUrl
           ? `<img src="${escapeHtml(m.avatarUrl)}" alt="${escapeHtml(m.name)}" style="width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" />`
           : `<span class="member-avatar-mini">${escapeHtml(initials(m.name))}</span>`}
         <span>${escapeHtml(m.name)}</span>
+        ${role ? `<span style="font-size: 9.5px; font-weight: 600; color: ${role.color || 'var(--kb-text-muted)'}; background: ${role.color ? role.color + '22' : 'rgba(255,255,255,0.06)'}; padding: 1px 4px; border-radius: 3px;">@${escapeHtml(role.name)}</span>` : ''}
         <button type="button" class="board-member-pill-remove" data-remove-member-idx="${idx}" title="Quitar miembro" aria-label="Quitar">✕</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     membersListEl.querySelectorAll('[data-remove-member-idx]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -3161,6 +3185,7 @@ async function openBoardSettingsModal(board) {
         modalMembers.splice(idx, 1);
         renderMembersList();
         renderSuggestions();
+        renderRolePicker();
       });
     });
   }
@@ -3168,7 +3193,7 @@ async function openBoardSettingsModal(board) {
   function renderSuggestions() {
     if (!suggestionsEl) return;
     const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
-    const unadded = knownFromDiscord.filter((m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()));
+    const unadded = serverGuildMembers.filter((m) => !addedIds.has(String(m.id).toLowerCase()) && !addedIds.has(m.name.toLowerCase()));
 
     if (unadded.length === 0) {
       suggestionsEl.innerHTML = '';
@@ -3181,14 +3206,18 @@ async function openBoardSettingsModal(board) {
         ${unadded.length > 1 ? `<button type="button" id="btn-add-all-server-members" class="btn-secondary" style="height: 22px; padding: 0 8px; font-size: 11px; border-radius: 6px; cursor: pointer;">+ Añadir todos</button>` : ''}
       </div>
       <div style="display: flex; gap: 6px; flex-wrap: wrap; width: 100%; max-height: 120px; overflow-y: auto; padding: 2px 0;">
-        ${unadded.map((m) => `
+        ${unadded.map((m) => {
+          const role = getMemberRoleBadge(m);
+          return `
           <button type="button" class="board-member-suggestion-btn" data-suggest-id="${escapeHtml(m.id)}" data-suggest-name="${escapeHtml(m.name)}" data-suggest-username="${escapeHtml(m.username || '')}" data-suggest-avatar="${escapeHtml(m.avatarUrl || '')}">
             ${m.avatarUrl
               ? `<img src="${escapeHtml(m.avatarUrl)}" alt="${escapeHtml(m.name)}" style="width: 16px; height: 16px; border-radius: 50%; object-fit: cover;" />`
               : `<span>+</span>`}
             <span>${escapeHtml(m.name)}</span>
+            ${role ? `<span style="font-size: 9.5px; font-weight: 600; color: ${role.color || 'var(--kb-text-muted)'}; background: ${role.color ? role.color + '22' : 'rgba(255,255,255,0.06)'}; padding: 1px 4px; border-radius: 3px;">@${escapeHtml(role.name)}</span>` : ''}
           </button>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     `;
 
@@ -3198,6 +3227,7 @@ async function openBoardSettingsModal(board) {
       }
       renderMembersList();
       renderSuggestions();
+      renderRolePicker();
     });
 
     suggestionsEl.querySelectorAll('[data-suggest-id]').forEach((btn) => {
@@ -3209,6 +3239,64 @@ async function openBoardSettingsModal(board) {
         modalMembers.push({ id, name, username, avatarUrl });
         renderMembersList();
         renderSuggestions();
+        renderRolePicker();
+      });
+    });
+  }
+
+  function renderRolePicker() {
+    const roleWrap = backdrop.querySelector('#board-role-picker-wrap');
+    const roleChipsEl = backdrop.querySelector('#board-role-chips');
+    if (!roleWrap || !roleChipsEl) return;
+
+    if (!Array.isArray(serverGuildRoles) || serverGuildRoles.length === 0) {
+      roleWrap.style.display = 'none';
+      return;
+    }
+
+    const addedIds = new Set(modalMembers.map((m) => String(m.id || m.name).toLowerCase()));
+    const rolesWithCounts = serverGuildRoles.map((role) => {
+      const roleMembers = serverGuildMembers.filter((m) => Array.isArray(m.roles) && m.roles.includes(role.id));
+      const unaddedCount = roleMembers.filter((m) => !addedIds.has(String(m.id).toLowerCase())).length;
+      return {
+        role,
+        total: roleMembers.length,
+        unaddedCount,
+        members: roleMembers,
+      };
+    }).filter((item) => item.total > 0);
+
+    if (rolesWithCounts.length === 0) {
+      roleWrap.style.display = 'none';
+      return;
+    }
+
+    roleWrap.style.display = 'block';
+    roleChipsEl.innerHTML = rolesWithCounts.map(({ role, total, unaddedCount }) => `
+      <button type="button" class="board-role-btn" data-role-id="${escapeHtml(role.id)}" ${unaddedCount === 0 ? 'disabled' : ''} style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--kb-radius-pill); font-size: 11.5px; font-weight: 600; background: var(--kb-surface); border: 1px solid ${role.color || 'var(--kb-border-subtle)'}; color: ${role.color || 'var(--kb-text-primary)'}; cursor: ${unaddedCount === 0 ? 'default' : 'pointer'}; opacity: ${unaddedCount === 0 ? '0.45' : '1'}; transition: all 0.12s ease;">
+        <span>@${escapeHtml(role.name)}</span>
+        <span style="font-size: 10px; opacity: 0.85; padding: 1px 5px; border-radius: 8px; background: rgba(255,255,255,0.08);">${unaddedCount > 0 ? `+${unaddedCount}` : '✓'}</span>
+      </button>
+    `).join('');
+
+    roleChipsEl.querySelectorAll('[data-role-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const roleId = btn.dataset.roleId;
+        const item = rolesWithCounts.find((r) => r.role.id === roleId);
+        if (!item || item.unaddedCount === 0) return;
+
+        let addedThisTime = 0;
+        for (const m of item.members) {
+          if (!addedIds.has(String(m.id).toLowerCase())) {
+            modalMembers.push({ id: m.id, name: m.name, username: m.username || '', avatarUrl: m.avatarUrl || null });
+            addedIds.add(String(m.id).toLowerCase());
+            addedThisTime += 1;
+          }
+        }
+        renderMembersList();
+        renderSuggestions();
+        renderRolePicker();
+        showToast(`Añadidos ${addedThisTime} miembros con el rol @${item.role.name}`, 'success');
       });
     });
   }
@@ -3227,6 +3315,7 @@ async function openBoardSettingsModal(board) {
       });
       renderMembersList();
       renderSuggestions();
+      renderRolePicker();
     }
     if (addInput) addInput.value = '';
     if (dropdownEl) dropdownEl.style.display = 'none';
@@ -3287,6 +3376,7 @@ async function openBoardSettingsModal(board) {
         modalMembers.push({ id, name, username, avatarUrl });
         renderMembersList();
         renderSuggestions();
+        renderRolePicker();
         if (addInput) addInput.value = '';
         dropdownEl.style.display = 'none';
       });
@@ -3306,22 +3396,29 @@ async function openBoardSettingsModal(board) {
   renderColumnsList();
   renderMembersList();
   renderSuggestions();
+  renderRolePicker();
 
-  // Si aún no tenemos miembros del servidor, consultamos la API con el guildId de la sesión
-  if (serverGuildMembers.length === 0 && currentBoardId) {
+  // Si aún no tenemos miembros o roles del servidor, consultamos la API con el guildId de la sesión
+  if ((serverGuildMembers.length === 0 || serverGuildRoles.length === 0) && currentBoardId) {
     const guildQs = activeDiscordSdk?.guildId ? `?guild_id=${encodeURIComponent(activeDiscordSdk.guildId)}` : '';
-    fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/guild-members${guildQs}`, {
-      headers: { Accept: 'application/json' },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data?.members) && data.members.length > 0) {
-          serverGuildMembers = data.members;
-          renderMembersList();
-          renderSuggestions();
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/guild-members${guildQs}`, {
+        headers: { Accept: 'application/json' },
+      }).then((r) => r.json()).catch(() => null),
+      fetch(`/api/boards/${encodeURIComponent(currentBoardId)}/guild-roles${guildQs}`, {
+        headers: { Accept: 'application/json' },
+      }).then((r) => r.json()).catch(() => null),
+    ]).then(([membersData, rolesData]) => {
+      if (Array.isArray(membersData?.members) && membersData.members.length > 0) {
+        serverGuildMembers = membersData.members;
+      }
+      if (Array.isArray(rolesData?.roles) && rolesData.roles.length > 0) {
+        serverGuildRoles = rolesData.roles;
+      }
+      renderMembersList();
+      renderSuggestions();
+      renderRolePicker();
+    }).catch(() => {});
   }
 
   // Guardar configuración del tablero
@@ -3379,6 +3476,9 @@ async function fetchBoard() {
   const data = await response.json();
   if (Array.isArray(data?.guildMembers) && data.guildMembers.length > 0) {
     serverGuildMembers = data.guildMembers;
+  }
+  if (Array.isArray(data?.guildRoles) && data.guildRoles.length > 0) {
+    serverGuildRoles = data.guildRoles;
   }
   return data;
 }

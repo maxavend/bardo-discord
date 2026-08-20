@@ -408,6 +408,125 @@ async function fetchGuildMembersFromDiscord(env, guildId, query = '') {
   }
 }
 
+const guildRolesCache = new Map();
+
+async function fetchGuildRolesFromDiscord(env, guildId) {
+  if (!env?.DISCORD_TOKEN || !guildId) return [];
+  const cleanGuildId = String(guildId).trim();
+  if (!/^\d{17,20}$/.test(cleanGuildId)) return [];
+
+  const cached = guildRolesCache.get(cleanGuildId);
+  const now = Date.now();
+  if (cached && (now - cached.timestamp < 60000)) {
+    return cached.roles;
+  }
+
+  try {
+    const res = await fetch(`https://discord.com/api/v10/guilds/${cleanGuildId}/roles`, {
+      headers: {
+        Authorization: `Bot ${env.DISCORD_TOKEN}`,
+      },
+    });
+
+    if (!res.ok) {
+      console.warn(`[Bardo] Discord API error (${res.status}) obteniendo roles para guild ${cleanGuildId}`);
+      return cached ? cached.roles : [];
+    }
+
+    const rawRoles = await res.json();
+    const formatted = (rawRoles || [])
+      .filter((r) => r.name !== '@everyone' && !r.managed)
+      .map((r) => ({
+        id: String(r.id),
+        name: r.name,
+        color: r.color ? `#${r.color.toString(16).padStart(6, '0')}` : null,
+        position: r.position,
+      }))
+      .sort((a, b) => b.position - a.position);
+
+    guildRolesCache.set(cleanGuildId, { timestamp: now, roles: formatted });
+    return formatted;
+  } catch (err) {
+    console.error('[Bardo] Error fetching guild roles from Discord API:', err);
+    return cached ? cached.roles : [];
+  }
+}
+
+export async function sendUrgentTaskReminders(env) {
+  if (!env?.DB || !env?.DISCORD_TOKEN) return { sentCount: 0 };
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT t.id, t.title, t.priority, t.status, t.assignee_id, t.assignee_name, t.board_id, b.name as board_name
+      FROM tasks t
+      JOIN boards b ON t.board_id = b.id
+      WHERE t.priority = 'urgent'
+        AND t.status != 'done'
+        AND t.assignee_id IS NOT NULL
+    `).all();
+
+    if (!Array.isArray(results) || results.length === 0) {
+      return { sentCount: 0 };
+    }
+
+    const byAssignee = new Map();
+    for (const task of results) {
+      const uid = String(task.assignee_id);
+      if (!byAssignee.has(uid)) {
+        byAssignee.set(uid, []);
+      }
+      byAssignee.get(uid).push(task);
+    }
+
+    let sentCount = 0;
+    for (const [assigneeId, tasks] of byAssignee.entries()) {
+      try {
+        const channelRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${env.DISCORD_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ recipient_id: assigneeId }),
+        });
+
+        if (!channelRes.ok) continue;
+        const dmChannel = await channelRes.json();
+        if (!dmChannel?.id) continue;
+
+        const taskListLines = tasks.map((t) => `• **${t.title}** (Tablero: **${t.board_name}**)`);
+        const content = [
+          `🚨 **Recordatorio de Bardo: Tareas Urgentes Pendientes**`,
+          `¡Hola! Tienes **${tasks.length}** tarea${tasks.length > 1 ? 's' : ''} urgente${tasks.length > 1 ? 's' : ''} pendiente${tasks.length > 1 ? 's' : ''} por terminar:`,
+          '',
+          ...taskListLines,
+          '',
+          `¡Ánimo con tus pendientes! Haz clic abajo para abrir tu tablero.`,
+        ].join('\n');
+
+        const primaryBoardId = tasks[0].board_id;
+        await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${env.DISCORD_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content,
+            components: [boardButton(primaryBoardId)],
+          }),
+        });
+        sentCount += 1;
+      } catch (err) {
+        console.warn(`[Bardo] Error enviando recordatorio urgente a ${assigneeId}:`, err);
+      }
+    }
+    return { sentCount };
+  } catch (err) {
+    console.error('[Bardo] Error en sendUrgentTaskReminders:', err);
+    return { sentCount: 0, error: err.message };
+  }
+}
+
 async function handleBoardApi(request, url, env) {
   if (!env.DB) return jsonResponse({ error: 'Database unavailable' }, 503);
   const pathWithoutPrefix = url.pathname.slice(BOARD_API_PREFIX.length);
@@ -428,17 +547,23 @@ async function handleBoardApi(request, url, env) {
     }
 
     let guildMembers = [];
+    let guildRoles = [];
     let guildError = null;
     if (guildId) {
-      const res = await fetchGuildMembersFromDiscord(env, guildId);
-      guildMembers = res.members || [];
-      if (!res.ok) guildError = res.error;
+      const [membersRes, rolesRes] = await Promise.all([
+        fetchGuildMembersFromDiscord(env, guildId),
+        fetchGuildRolesFromDiscord(env, guildId),
+      ]);
+      guildMembers = membersRes.members || [];
+      guildRoles = rolesRes || [];
+      if (!membersRes.ok) guildError = membersRes.error;
     }
 
     return jsonResponse({
       ...board,
       guildId,
       guildMembers,
+      guildRoles,
       guildError,
     }, 200, {
       'Cache-Control': 'private, no-store',
@@ -456,6 +581,14 @@ async function handleBoardApi(request, url, env) {
     }
     const res = await fetchGuildMembersFromDiscord(env, guildId, query);
     return jsonResponse({ ok: res.ok, members: res.members || [], error: res.error || null }, 200);
+  }
+
+  if (request.method === 'GET' && parts.length === 2 && parts[1] === 'guild-roles') {
+    const board = await loadBoard(env.DB, boardId);
+    if (!board) return jsonResponse({ error: 'Board not found' }, 404);
+    const guildId = url.searchParams.get('guild_id') || board.guildId;
+    const roles = await fetchGuildRolesFromDiscord(env, guildId);
+    return jsonResponse({ ok: true, roles }, 200);
   }
 
   if (request.method === 'POST' && parts.length === 2 && parts[1] === 'tasks') {
@@ -642,11 +775,15 @@ export default {
   },
 
   async scheduled(event, env, ctx = { waitUntil: () => {} }) {
-    console.log(`Cron trigger iniciado (${event?.cron || 'scheduled'}): ejecutando snapshot de base de datos D1 a R2`);
+    console.log(`Cron trigger iniciado (${event?.cron || 'scheduled'})`);
+    const tasksPromise = Promise.all([
+      createDatabaseSnapshot(env),
+      sendUrgentTaskReminders(env),
+    ]);
     if (ctx && typeof ctx.waitUntil === 'function') {
-      ctx.waitUntil(createDatabaseSnapshot(env));
+      ctx.waitUntil(tasksPromise);
     } else {
-      await createDatabaseSnapshot(env);
+      await tasksPromise;
     }
   },
 };
