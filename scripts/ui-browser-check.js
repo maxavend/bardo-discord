@@ -119,7 +119,9 @@ function assertBrowserContract(dom, label, { a11y = true } = {}) {
   if (a11y && !dom.includes('data-a11y-check="pass"')) throw new Error(`${label} accessibility contract failed: ${diagnostics(dom)}`);
 }
 const expectedPath = resolve('test/visual/baseline-signatures.json');
-const expected = existsSync(expectedPath) ? JSON.parse(await readFile(expectedPath, 'utf8')) : {};
+const expectedConfig = existsSync(expectedPath) ? JSON.parse(await readFile(expectedPath, 'utf8')) : {};
+const expectedIsPlatformMap = Boolean(expectedConfig.darwin || expectedConfig.linux || expectedConfig.win32);
+const expected = expectedIsPlatformMap ? (expectedConfig[process.platform] || {}) : expectedConfig;
 const updateBaseline = process.env.UPDATE_VISUAL_BASELINE === '1';
 const signatures = {};
 const pngHashes = {};
@@ -167,7 +169,10 @@ try {
   console.log('A11Y_HIGH_CONTRAST PASS');
   await writeFile(join(outDir, 'visual-signatures.json'), `${JSON.stringify(signatures, null, 2)}\n`);
   await writeFile(join(outDir, 'png-hashes.json'), `${JSON.stringify(pngHashes, null, 2)}\n`);
-  if (updateBaseline) await writeFile(expectedPath, `${JSON.stringify(signatures, null, 2)}\n`);
+  if (updateBaseline) {
+    const nextExpected = expectedIsPlatformMap ? { ...expectedConfig, [process.platform]: signatures } : signatures;
+    await writeFile(expectedPath, `${JSON.stringify(nextExpected, null, 2)}\n`);
+  }
 } finally {
   if (client) {
     await client.send('Browser.close').catch(() => {});

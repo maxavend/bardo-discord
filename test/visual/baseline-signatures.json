@@ -1,14 +1,30 @@
 {
-  "docs-390": "2c80e4dd",
-  "docs-768": "313cd5e5",
-  "docs-1440": "313cd5e5",
-  "kanban-390": "f7989080",
-  "kanban-768": "00a62a8f",
-  "kanban-1440": "e8289787",
-  "planner-390": "dee57c69",
-  "planner-768": "4a3ed67c",
-  "planner-1440": "54dd3b1e",
-  "home-390": "36fa179d",
-  "home-768": "9441ff35",
-  "home-1440": "ec09efb9"
+  "darwin": {
+    "docs-390": "2c80e4dd",
+    "docs-768": "313cd5e5",
+    "docs-1440": "313cd5e5",
+    "kanban-390": "f7989080",
+    "kanban-768": "00a62a8f",
+    "kanban-1440": "e8289787",
+    "planner-390": "dee57c69",
+    "planner-768": "4a3ed67c",
+    "planner-1440": "54dd3b1e",
+    "home-390": "36fa179d",
+    "home-768": "9441ff35",
+    "home-1440": "ec09efb9"
+  },
+  "linux": {
+    "docs-390": "e541dd8c",
+    "docs-768": "763530ec",
+    "docs-1440": "763530ec",
+    "kanban-390": "cbc141d1",
+    "kanban-768": "6186f3f8",
+    "kanban-1440": "76ce3c94",
+    "planner-390": "7c08b898",
+    "planner-768": "758688da",
+    "planner-1440": "c668fb96",
+    "home-390": "74bce6e9",
+    "home-768": "33eeb051",
+    "home-1440": "5d72f885"
+  }
 }
