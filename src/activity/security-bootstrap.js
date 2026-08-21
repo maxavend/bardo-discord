@@ -3,6 +3,7 @@ import { getMemberRoleBadge } from './member-role.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const INSTANCE_STORAGE_KEY = 'bardo.discord.instance-id';
+const SESSION_STORAGE_KEY = 'bardo.discord.session';
 const originalFetch = window.fetch.bind(window);
 
 function resolveClientId() {
@@ -22,6 +23,33 @@ function storedInstanceId() {
 function rememberInstanceId(instanceId) {
   if (!instanceId) return;
   try { window.sessionStorage.setItem(INSTANCE_STORAGE_KEY, instanceId); } catch {}
+}
+
+function storedSession(instanceId) {
+  try {
+    const session = JSON.parse(window.sessionStorage.getItem(SESSION_STORAGE_KEY) || 'null');
+    if (session?.instanceId !== instanceId || !session?.sessionToken || !session?.accessToken) return null;
+    if (!Number.isFinite(session.expiresAt) || session.expiresAt <= Date.now() + 30_000) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function rememberSession(session) {
+  try { window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session)); } catch {}
+}
+
+function forgetSession() {
+  try { window.sessionStorage.removeItem(SESSION_STORAGE_KEY); } catch {}
+}
+
+function withTimeout(promise, message, timeoutMs = 8_000) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
 }
 
 function showRetryNotice(message) {
@@ -55,24 +83,31 @@ async function authenticateActivity() {
   const instanceId = sdk.instanceId || queryInstanceId;
   if (!instanceId) throw new Error('Discord no entregó el identificador de la Activity.');
   rememberInstanceId(instanceId);
-  await sdk.ready();
+  const cached = storedSession(instanceId);
+  if (cached) {
+    void sdk.ready()
+      .then(() => sdk.commands.authenticate({ access_token: cached.accessToken }))
+      .catch((error) => console.warn('No se pudo refrescar DiscordSDK en segundo plano:', error));
+    return { ...cached, sdk };
+  }
+  await withTimeout(sdk.ready(), 'Discord no respondió al iniciar la Activity.');
   const guildId = sdk.guildId || params.get('guild_id') || null;
   let authorization;
   try {
-    authorization = await sdk.commands.authorize({
+    authorization = await withTimeout(sdk.commands.authorize({
       client_id: resolveClientId(),
       response_type: 'code',
       state: '',
       prompt: 'none',
       scope: ['identify'],
-    });
+    }), 'Discord no respondió al validar la sesión.');
   } catch (promptErr) {
-    authorization = await sdk.commands.authorize({
+    authorization = await withTimeout(sdk.commands.authorize({
       client_id: resolveClientId(),
       response_type: 'code',
       state: '',
       scope: ['identify'],
-    });
+    }), 'Discord no respondió al solicitar autorización.');
   }
   if (!authorization?.code) throw new Error('Discord no devolvió un código de autorización.');
 
@@ -95,11 +130,16 @@ async function authenticateActivity() {
     console.warn('Discord SDK authenticate skipped/failed:', err);
   }
 
-  return {
+  const session = {
     instanceId,
     guildId,
     sessionToken: tokens.session_token,
     accessToken: tokens.access_token,
+    expiresAt: Date.now() + Math.max(60, Number(tokens.expires_in) || 3600) * 1000,
+  };
+  rememberSession(session);
+  return {
+    ...session,
     sdk,
   };
 }
@@ -179,6 +219,7 @@ window.fetch = async (input, init = {}) => {
     showRetryNotice('No pudimos cargar las personas del servidor.');
   }
   if ((response.status === 401 || response.status === 403) && isEmbeddedActivity()) {
+    forgetSession();
     showRetryNotice('Tu sesión de Bardo ya no es válida.');
   }
   return response;

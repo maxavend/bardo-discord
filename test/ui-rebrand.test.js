@@ -79,6 +79,10 @@ test('Discord authentication resolves instance and document targets from the SDK
   assert.match(security, /const instanceId = sdk\.instanceId \|\| queryInstanceId/);
   assert.doesNotMatch(security, /!isEmbeddedActivity\(\) \|\| !instanceId/);
   assert.match(security, /sessionStorage\.setItem\(INSTANCE_STORAGE_KEY, instanceId\)/);
+  assert.match(security, /sessionStorage\.setItem\(SESSION_STORAGE_KEY, JSON\.stringify\(session\)\)/);
+  assert.match(security, /const cached = storedSession\(instanceId\)/);
+  assert.match(security, /withTimeout\(sdk\.ready\(\)/);
+  assert.match(security, /forgetSession\(\)/);
   assert.match(reader, /window\.location\.hostname\.endsWith\('\.discordsays\.com'\)/);
   assert.match(reader, /globalThis\.__bardoActivityAuth\?\.ready/);
   assert.match(reader, /return sharedAuth\.sdk/);

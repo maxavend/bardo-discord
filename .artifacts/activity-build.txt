@@ -1,8 +1,8 @@
-critical-shell: 66.7 KiB gzip
-home: 198.7 KiB gzip
-documents: 214.6 KiB gzip
-kanban: 211 KiB gzip
-planner: 198.1 KiB gzip
+critical-shell: 67 KiB gzip
+home: 199 KiB gzip
+documents: 214.9 KiB gzip
+kanban: 211.3 KiB gzip
+planner: 198.4 KiB gzip
 72x72 avatar: 6.7 KiB
 144x144 avatar: 23.1 KiB
 
