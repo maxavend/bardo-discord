@@ -28,6 +28,7 @@ BEFORE UPDATE OF title, original_markdown, pages ON documents
 WHEN OLD.title IS NOT NEW.title
   OR OLD.original_markdown IS NOT NEW.original_markdown
   OR OLD.pages IS NOT NEW.pages
+  OR OLD.version IS NOT NEW.version
 BEGIN
   INSERT OR IGNORE INTO document_revisions (
     id, document_id, version, title, original_markdown, pages, author_id, reason, created_at
