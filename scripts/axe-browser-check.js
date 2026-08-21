@@ -85,6 +85,20 @@ function runAxe(url) {
   });
 }
 
+function parseAxeJson(raw, view) {
+  // axe-cli may print a human-readable load-delay line before its JSON payload.
+  // Accept only that prefix shape by locating the first JSON token; the payload
+  // itself must still parse strictly as JSON so malformed evidence fails closed.
+  const firstArray = raw.indexOf('[');
+  const firstObject = raw.indexOf('{');
+  const starts = [firstArray, firstObject].filter((value) => value >= 0);
+  const start = starts.length ? Math.min(...starts) : -1;
+  if (start < 0) throw new Error(`axe-cli returned no JSON payload for ${view}: ${raw.slice(0, 1200)}`);
+  const json = raw.slice(start).trim();
+  try { return JSON.parse(json); }
+  catch { throw new Error(`axe-cli returned malformed JSON output for ${view}: ${raw.slice(0, 1200)}`); }
+}
+
 const views = ['docs', 'kanban', 'planner', 'home'];
 const evidence = {
   schemaVersion: 1,
@@ -101,9 +115,7 @@ try {
   for (const view of views) {
     const url = `http://127.0.0.1:4174/test/visual/fixture.html?view=${view}`;
     const raw = await runAxe(url);
-    let parsed;
-    try { parsed = JSON.parse(raw); }
-    catch { throw new Error(`axe-cli returned non-JSON output for ${view}: ${raw.slice(0, 1200)}`); }
+    const parsed = parseAxeJson(raw, view);
     const result = Array.isArray(parsed) ? parsed[0] : parsed;
     const violations = Array.isArray(result?.violations) ? result.violations : [];
     const counts = { violations: violations.length, critical: 0, serious: 0, moderate: 0, minor: 0, unknown: 0 };
