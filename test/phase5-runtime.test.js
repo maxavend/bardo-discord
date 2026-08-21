@@ -134,6 +134,20 @@ test('PATCH requires an expected version and restore always creates a new versio
   assert.ok(finalHistoryData.revisions.some((item) => item.version === 4));
 }));
 
+test('versioned edits preserve every generated page for long documents', async () => withRuntime(async (env) => {
+  await fixture(env);
+  const paragraphs = Array.from({ length: 18 }, (_, index) => `## Sección ${index + 1}\n\n${`contenido-${index + 1} `.repeat(280)}`).join('\n\n');
+  const markdown = `# Documento largo\n\n${paragraphs}`;
+  const response = await p5Entry.fetch(req(INSTANCE_A, `/api/documents/${DOC}`, {
+    method: 'PATCH', version: 1, body: { title: 'Documento largo', markdown },
+  }), env, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  const stored = await env.DB.prepare('SELECT pages FROM documents WHERE id = ?').bind(DOC).first();
+  const pages = JSON.parse(stored.pages);
+  assert.ok(pages.length > 1, 'el editor debe conservar la paginación completa, no solo la primera página');
+  assert.match(pages.at(-1), /Sección 18/);
+}));
+
 test('legacy/system document rewrites also advance version through the migration trigger', async () => withRuntime(async (env) => {
   await fixture(env);
   await saveDocument(env.DB, DOC, {
