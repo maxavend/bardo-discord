@@ -7,5 +7,7 @@ test('Phase 3 browser fixture asserts dialog semantics, accessible names and ove
   assert.match(fixture, /aria-modal="true"/);
   assert.match(fixture, /aria-label=/);
   assert.match(fixture, /dataset\.a11yCheck/);
-  assert.match(fixture, /scrollWidth<=innerWidth\+1/);
+  assert.match(fixture, /document\.documentElement\.scrollWidth/);
+  assert.match(fixture, /dataset\.scrollWidth/);
+  assert.match(fixture, /dataset\.innerWidth/);
 });
