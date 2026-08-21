@@ -74,10 +74,7 @@ function renderState(state, detail) {
   if (state === 'saved') clearDraft();
   if (state === 'error' || state === 'conflict') {
     clearTimeout(stateRenderTimer);
-    stateRenderTimer = window.setTimeout(() => {
-      renderState(state, detail);
-      showIssuePanel(state, detail);
-    }, 0);
+    stateRenderTimer = window.setTimeout(() => showIssuePanel(state, detail), 0);
   } else if (state !== 'saving') {
     document.querySelector('#bardo-editor-issue')?.remove();
   }
@@ -229,9 +226,13 @@ function showIssuePanel(state, detail) {
     : 'Conservamos un borrador local. Puedes reintentar sin salir del documento.';
   copy.append(strong, text); const actions = document.createElement('div'); actions.className = 'bardo-editor-issue-actions';
   actions.appendChild(button('Copiar mis cambios', copyOwnChanges));
-  if (state === 'error') {
+  if (state === 'error' && coordinator.retryJob) {
     actions.appendChild(button('Reintentar y recargar', () => {
       coordinator.retry().then(() => location.reload()).catch((error) => showIssuePanel(error?.code === 'DOCUMENT_VERSION_CONFLICT' ? 'conflict' : 'error', error));
+    }, true));
+  } else if (state === 'error') {
+    actions.appendChild(button('Intentar guardar de nuevo', () => {
+      protectEditorExit(editButton()).catch(() => showIssuePanel('error', null));
     }, true));
   } else {
     actions.appendChild(button('Recargar versión actual', () => location.reload(), true));
@@ -275,15 +276,42 @@ function applyDraft(draft) {
 }
 
 function triggerManualSave() {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+  (bodyNode() || document).dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+}
+
+function triggerSaveAndWait(timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    let timer = null;
+    const unsubscribe = coordinator.subscribe((state) => {
+      if (state === 'dirty' || state === 'saving') return;
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+      resolve(state);
+    });
+    timer = window.setTimeout(() => {
+      unsubscribe();
+      resolve(coordinator.state);
+    }, timeoutMs);
+    triggerManualSave();
+  });
+}
+
+async function settleEditorBeforeExit() {
+  let state = coordinator.state;
+  if (state === 'dirty') return triggerSaveAndWait();
+  if (state === 'saving') {
+    state = await coordinator.waitForSettled();
+    if (state === 'dirty') return triggerSaveAndWait();
+  }
+  return state;
 }
 
 async function protectEditorExit(target) {
-  if (coordinator.state === 'dirty') triggerManualSave();
-  const settled = await coordinator.waitForSettled();
+  if (!target) return;
+  const settled = await settleEditorBeforeExit();
   if (settled === 'saved' || settled === 'clean') {
     bypassExitProtection = true; target.click();
-  } else showIssuePanel(settled, coordinator.retryJob?.error || null);
+  } else showIssuePanel(settled === 'dirty' ? 'error' : settled, coordinator.retryJob?.error || null);
 }
 
 document.addEventListener('input', (event) => {
