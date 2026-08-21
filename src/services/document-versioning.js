@@ -100,12 +100,16 @@ export class DocumentVersionService {
       WHERE document_id = ? AND version NOT IN (
         SELECT version FROM document_revisions WHERE document_id = ? ORDER BY version DESC LIMIT ?
       )`).bind(documentId, documentId, HISTORY_LIMIT);
-    const [result] = typeof this.db.batch === 'function'
-      ? await this.db.batch([update, prune])
-      : [await update.run(), await prune.run()];
-    const changes = Number(result?.meta?.changes ?? result?.changes ?? 0);
-    if (changes !== 1) throw new DocumentVersionConflictError(await this.get(documentId));
-    return this.get(documentId);
+    if (typeof this.db.batch === 'function') await this.db.batch([update, prune]);
+    else { await update.run(); await prune.run(); }
+
+    const stored = await this.get(documentId);
+    const isOwnCommit = stored?.version === expectedVersion + 1
+      && stored.updatedAt === now
+      && stored.title === title
+      && stored.originalMarkdown === markdown;
+    if (!isOwnCommit) throw new DocumentVersionConflictError(stored);
+    return stored;
   }
 
   async history(documentId, limit = HISTORY_LIMIT) {
