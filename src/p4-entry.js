@@ -1,16 +1,19 @@
 import { InteractionType, verifyKey } from 'discord-interactions';
 import p2Entry from './p2-entry.js';
 import { ACTIVITY_ACTIONS, defaultPermissionsForTarget, verifyActivityAccess } from './auth/activity-access.js';
-import { saveActivityContext } from './db.js';
+import { loadDocument, saveActivityContext, saveDocument } from './db.js';
+import { saveNormalizedBackupToR2 } from './backup-r2.js';
+import { paginateMarkdown } from './pagination.js';
 import { BARDO_BOARD_PREFIX } from './kanban.js';
 import { findBoard, loadBoard, loadTask, deleteTask } from './kanban-db.js';
 import { BARDO_EVENT_PREFIX } from './event.js';
 import { loadEvent } from './event-db.js';
 import { homeTarget } from './home-target.js';
-import { EntityLinkService, entityBelongsToGuild } from './services/entity-links.js';
+import { EntityLinkService, entityBelongsToGuild, grantDocumentToGuild } from './services/entity-links.js';
 import { TaskService } from './services/task-service.js';
 
 const HOME_PERMISSIONS = Object.freeze(Object.values(ACTIVITY_ACTIONS));
+const LINKED_TASKS_MARKER = '<!-- bardo:linked-tasks -->';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
@@ -105,7 +108,7 @@ export async function handleHomeSection(request, env, section) {
     return json({ items: result.results || [] });
   }
   if (section === 'documents') {
-    const result = await env.DB.prepare(`SELECT DISTINCT d.id, d.title, d.created_at FROM documents d WHERE EXISTS (SELECT 1 FROM activity_contexts a WHERE a.document_id = d.id AND a.guild_id = ?) OR EXISTS (SELECT 1 FROM events e WHERE e.minute_document_id = d.id AND e.guild_id = ?) OR EXISTS (SELECT 1 FROM entity_links l WHERE l.guild_id = ? AND ((l.source_type='document' AND l.source_id=d.id) OR (l.target_type='document' AND l.target_id=d.id))) ORDER BY d.created_at DESC LIMIT ?`).bind(access.guildId, access.guildId, access.guildId, limit).all();
+    const result = await env.DB.prepare(`SELECT DISTINCT d.id, d.title, d.created_at FROM documents d WHERE EXISTS (SELECT 1 FROM document_guild_access g WHERE g.document_id = d.id AND g.guild_id = ?) OR EXISTS (SELECT 1 FROM activity_contexts a WHERE a.document_id = d.id AND a.guild_id = ?) OR EXISTS (SELECT 1 FROM events e WHERE e.minute_document_id = d.id AND e.guild_id = ?) OR EXISTS (SELECT 1 FROM entity_links l WHERE l.guild_id = ? AND ((l.source_type='document' AND l.source_id=d.id) OR (l.target_type='document' AND l.target_id=d.id))) ORDER BY d.created_at DESC LIMIT ?`).bind(access.guildId, access.guildId, access.guildId, access.guildId, limit).all();
     return json({ items: result.results || [] });
   }
   if (section === 'boards') {
@@ -173,6 +176,30 @@ export async function handleDocumentTask(request, env, ctx, documentId, taskId =
   }
 }
 
+function baseMinutesMarkdown(markdown) {
+  return String(markdown || '').split(LINKED_TASKS_MARKER)[0].trim();
+}
+
+async function syncMinutesTaskLinks(env, eventId, documentId, guildId, actor, links) {
+  await grantDocumentToGuild(env.DB, documentId, guildId, actor);
+  const result = await env.DB.prepare(`SELECT t.id, t.title, COALESCE(t.column_id,t.status) AS status, t.assignee_name, t.due_at, b.name AS board_name
+    FROM event_task_links l JOIN tasks t ON t.id = l.task_id JOIN boards b ON b.id = t.board_id
+    WHERE l.event_id = ? AND b.guild_id = ? ORDER BY t.created_at ASC`).bind(eventId, guildId).all();
+  const tasks = result.results || [];
+  for (const task of tasks) {
+    await links.create({ guildId, sourceType:'task', sourceId:task.id, targetType:'document', targetId:documentId, relationType:'task_references_document', createdBy:actor });
+  }
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) return;
+  const taskLines = tasks.length
+    ? tasks.map((task) => `- [ ] **${task.title}** — ${task.status}${task.assignee_name ? ` · ${task.assignee_name}` : ''}${task.due_at ? ` · vence ${task.due_at}` : ''} · ${task.board_name} · Bardo task:${task.id}`)
+    : ['- No se crearon tareas vinculadas.'];
+  const markdown = `${baseMinutesMarkdown(document.originalMarkdown)}\n\n${LINKED_TASKS_MARKER}\n\n## Tareas vinculadas\n\n${taskLines.join('\n')}`.trim();
+  const updated = { ...document, originalMarkdown:markdown, pages:paginateMarkdown(markdown) };
+  await saveDocument(env.DB, documentId, updated);
+  await saveNormalizedBackupToR2(env, documentId, { ...updated, sourceType:'markdown', importStatus:'ready' });
+}
+
 async function enrichEventResponse(request, env, response, eventId, action) {
   if (!response.ok) return response;
   const payload = await response.clone().json().catch(() => null);
@@ -182,7 +209,10 @@ async function enrichEventResponse(request, env, response, eventId, action) {
   const actor = access.ok ? access.userId : 'activity';
   const links = new EntityLinkService(env);
   if (action === 'tasks' && payload?.task?.id) await links.create({ guildId, sourceType: 'event', sourceId: eventId, targetType: 'task', targetId: payload.task.id, relationType: 'event_has_task', createdBy: actor });
-  if (action === 'minutes' && payload?.documentId) await links.create({ guildId, sourceType: 'event', sourceId: eventId, targetType: 'document', targetId: payload.documentId, relationType: 'event_has_minutes', createdBy: actor });
+  if (action === 'minutes' && payload?.documentId) {
+    await links.create({ guildId, sourceType: 'event', sourceId: eventId, targetType: 'document', targetId: payload.documentId, relationType: 'event_has_minutes', createdBy: actor });
+    await syncMinutesTaskLinks(env, eventId, payload.documentId, guildId, actor, links);
+  }
   return response;
 }
 
