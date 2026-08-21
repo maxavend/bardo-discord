@@ -3,6 +3,7 @@ const nativeSetInterval = window.setInterval.bind(window);
 const nativeClearInterval = window.clearInterval.bind(window);
 const nativeSetTimeout = window.setTimeout.bind(window);
 const nativeClearTimeout = window.clearTimeout.bind(window);
+const nativeResponseJson = Response.prototype.json;
 
 const resourceCache = new Map();
 const adaptiveTimers = new Map();
@@ -17,6 +18,25 @@ function trackedResource(url, method) {
 
 function isMutation(url, method) {
   return url.origin === location.origin && url.pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(method);
+}
+
+function looksLikePlannerPayload(payload) {
+  return Boolean(
+    payload && typeof payload === 'object' && payload.guildId &&
+    Array.isArray(payload.blocks) && Array.isArray(payload.participants) && Array.isArray(payload.boards),
+  );
+}
+
+if (!globalThis.__bardoResponseJsonBridgeInstalled) {
+  globalThis.__bardoResponseJsonBridgeInstalled = true;
+  Response.prototype.json = async function bardoResponseJson() {
+    const payload = await nativeResponseJson.call(this);
+    if (looksLikePlannerPayload(payload)) {
+      if (!Array.isArray(payload.guildMembers)) payload.guildMembers = [];
+      globalThis.__bardoPlannerData = payload;
+    }
+    return payload;
+  };
 }
 
 function markInteraction() {
