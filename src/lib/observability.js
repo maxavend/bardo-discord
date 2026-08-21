@@ -8,6 +8,11 @@ function cleanToken(value, max = 80) {
   return String(value).replace(/[^A-Za-z0-9._:-]/g, '_').slice(0, max) || null;
 }
 
+function cleanRoute(value, max = 120) {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value).replace(/[^A-Za-z0-9._:/-]/g, '_').slice(0, max) || null;
+}
+
 export function observableRoute(pathname) {
   const path = String(pathname || '/');
   const patterns = [
@@ -57,7 +62,8 @@ export async function emitStructuredLog(event, fields = {}, env = {}, level = 'l
   for (const [key, value] of Object.entries(fields)) {
     if (!SAFE_FIELDS.has(key) || value === null || value === undefined || value === '') continue;
     if (key === 'status' || key === 'durationMs' || key === 'lagMs' || key === 'count') record[key] = Number(value);
-    else record[key] = cleanToken(value, key === 'route' ? 120 : 96);
+    else if (key === 'route') record[key] = cleanRoute(value, 120);
+    else record[key] = cleanToken(value, 96);
   }
   const method = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
   method(JSON.stringify(record));
