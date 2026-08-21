@@ -31,12 +31,20 @@ export class EventService {
   async create(input, context = {}) {
     const normalized = this.normalizeInput(input, null, context);
     const participants = uniquePeople(input.participants || []);
-    const event = await createEventRecord(this.db, { ...normalized, id: input.id || crypto.randomUUID(), guildId: input.guildId || context.guildId, createdBy: input.createdBy || context.actorUserId || 'unknown', participants });
+    const event = await createEventRecord(this.db, {
+      ...normalized,
+      id: input.id || crypto.randomUUID(),
+      guildId: input.guildId || context.guildId,
+      createdBy: input.createdBy || context.actorUserId || 'unknown',
+      participants: [],
+    });
+    if (participants.length) await replaceParticipantsAtomic(this.db, event.id, participants);
+    const fullEvent = participants.length ? await loadEventFull(this.db, event.id) : event;
     for (const person of participants) {
       if (String(person.userId) === String(context.actorUserId || '')) continue;
       await this.notifications.enqueue({ guildId: event.guildId, userId: person.userId, eventType: 'event.invited', entityType: 'event', entityId: event.id, actorUserId: context.actorUserId || null, dedupeKey: `event.invited:${event.id}:${person.userId}` }, { waitUntil: context.waitUntil });
     }
-    return event;
+    return fullEvent;
   }
 
   async update(eventId, fields, context = {}) {
