@@ -8,6 +8,10 @@ if (!DISCORD_TOKEN || !DISCORD_GUILD_ID) {
   process.exit(1);
 }
 
+const homeCommand = new SlashCommandBuilder()
+  .setName('bardo')
+  .setDescription('Abre Bardo Home para conectar documentos, tareas y agenda.');
+
 const legacyDocumentCommand = new SlashCommandBuilder()
   .setName('doc')
   .setDescription('Publica documentos en Bardo.')
@@ -75,8 +79,8 @@ async function registerCommands() {
   });
   if (!appRes.ok) throw new Error(`Error obteniendo aplicación de Discord: ${appRes.status} ${await appRes.text()}`);
   const app = await appRes.json();
-  const commands = [legacyDocumentCommand, documentCommand, boardCommand, taskCommand, eventCommand].map((command) => command.toJSON());
-  console.log(`Preparando /doc, /documento, /tablero, /tarea y /evento para ${DISCORD_GUILD_ID} (App ID: ${app.id})...`);
+  const commands = [homeCommand, legacyDocumentCommand, documentCommand, boardCommand, taskCommand, eventCommand].map((command) => command.toJSON());
+  console.log(`Preparando /bardo, /doc, /documento, /tablero, /tarea y /evento para ${DISCORD_GUILD_ID} (App ID: ${app.id})...`);
   const regRes = await fetch(`https://discord.com/api/v10/applications/${app.id}/guilds/${DISCORD_GUILD_ID}/commands`, {
     method: 'PUT',
     headers: { Authorization: `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
