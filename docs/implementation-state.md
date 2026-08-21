@@ -2,33 +2,64 @@
 
 Updated: 2026-08-20
 Plan: Plan maestro de implementación agéntica — Bardo para Discord v1.0
-Current phase: 0 — Baseline, execution safety and characterization
+Current phase: 2 — Domain, time, members, commands and notifications
 Phase status: PHASE_READY
 
-## Frozen baseline
+## Repository state
 
 - Repository: `maxavend/bardo-discord`
+- Frozen technical baseline: `feat/tasks-kanban` @ `b11883e170c051a0879cda2667c4745174bcbae1`
 - Integration branch: `feat/bardo-unified-experience`
-- Phase branch: `codex/p0-baseline`
-- Technical base: `feat/tasks-kanban`
-- Frozen base SHA: `b11883e170c051a0879cda2667c4745174bcbae1`
 - Integration PR: #5 (draft)
-- Phase PR: #6 (draft, `codex/p0-baseline` → `feat/bardo-unified-experience`)
-- Temporary CI-validation PR: #7 (draft, do not merge)
-- Reference PR: #3 (draft, `feat/tasks-kanban` → `main`)
-- Related PR: #4 (draft, `feat/events-planner` → `main`)
+- Phase 1 certified SHA: `cac810e90f35c37acc3ba840bdcf369eb8addfd4`
+- Phase 2 branch: `codex/p2-domain-time-notifications`
+- Phase 2 PR: #9 (draft → `feat/bardo-unified-experience`)
+- Phase 2 code gate SHA: `057e1ddb324f56be228098f62dc1182416fb44a1`
 
-## Branch comparison
+`main` is not a target of phase work. No production deploy, remote migration, Discord command registration or branch deletion is authorized by this state document.
 
-At phase start:
+## Certified phases
 
-- `feat/tasks-kanban` is exactly at `b11883e170c051a0879cda2667c4745174bcbae1`.
-- `feat/tasks-kanban` is 9 commits ahead of `feat/events-planner` and 0 commits behind it. The Event Planner work is therefore already contained in the chosen technical base; PR #4 must not be merged into the integration branch as a block.
-- `feat/document-editor` and `feat/tasks-kanban` have diverged. Their merge base is `642c9d6ec7680edea19b34c83bf79eba7a8ce1d4`; the Kanban branch is 50 commits ahead of that branch while `feat/document-editor` has 15 commits not in the Kanban branch. Any editor capability must be ported selectively after comparison, never by blind merge.
+### Phase 0 — PHASE_READY
 
-## Existing migrations
+Baseline, branch genealogy, migration history, route characterization, reproducible `npm ci`, split test commands, floating-promise regression check, Wrangler binding types and local Workers/D1/cron harness are established.
 
-The frozen baseline contains these applied-history files and they are immutable references for this plan:
+### Phase 1 — PHASE_READY
+
+Certified at `cac810e90f35c37acc3ba840bdcf369eb8addfd4` by CI run #239 (`32431819691`).
+
+Delivered:
+
+- centralized Activity authorization and short-lived signed session identity;
+- full protection for Documents, Kanban and Events private routes;
+- guild/resource binding and UUID-not-authorization behavior;
+- authenticated document export;
+- custom Kanban columns through forward-only migrations `0009` and `0010`;
+- assignee role-helper runtime fix;
+- atomic critical D1 writes via `DB.batch()`.
+
+### Phase 2 — PHASE_READY
+
+Implementation is documented in `docs/phase2-domain-time-notifications.md`.
+
+Delivered:
+
+- shared `DocumentService`, `TaskService`, `EventService`, `NotificationService` and `MemberDirectoryService`;
+- one flexible timezone-aware temporal parser;
+- authorized remote member search and accessible task MemberPicker;
+- Discord autocomplete plus guided event modal support;
+- shared task creation path for slash command, Kanban Activity and Event Planner;
+- notification preferences, idempotent delivery ledger, retries and privacy-safe DM failures;
+- event reminder windows and minutes-ready notifications;
+- migration `0011_create_notifications.sql`.
+
+The Discord command definitions were updated in source only. `scripts/register-commands.js` was not executed.
+
+The `/bardo` Home command remains intentionally coupled to Phase 4, where the master plan defines the actual Bardo Home experience. Phase 2 does not invent a placeholder Home surface merely to satisfy command registration before its product destination exists.
+
+## Migration history
+
+Immutable historical migrations:
 
 1. `0001_create_documents.sql`
 2. `0002_create_activity_contexts.sql`
@@ -39,90 +70,48 @@ The frozen baseline contains these applied-history files and they are immutable 
 7. `0007_add_board_members.sql`
 8. `0008_create_events.sql`
 
-Future migrations start at the next free number after re-checking the repository. Existing migrations are never edited to implement new behavior.
+Forward-only plan migrations so far:
 
-## Current command surface
+9. `0009_activity_context_authorization.sql`
+10. `0010_add_task_column_id.sql`
+11. `0011_create_notifications.sql`
 
-The baseline implements these command families in the Worker chain:
+No remote migration has been applied by this plan.
 
-- Documents: `/doc` with temporary compatibility for `/documento`.
-- Kanban: `/tablero` and `/tarea`.
-- Events: `/evento`.
+## Runtime
 
-Registration details remain owned by `scripts/register-commands.js`; global command registration is outside Phase 0 and requires explicit authorization before any remote registration.
+- Worker entry: `src/p2-entry.js`.
+- Phase 2 orchestrator: `src/p2-worker.js`.
+- Legacy Workers remain behind the strangler layer for untouched routes.
+- D1: `DB` → `bardo-db`.
+- R2: `BACKUPS` → `bardo-backups`.
+- Assets: `ASSETS`.
+- Cron: daily snapshot plus five-minute notification/reminder processing.
 
-## Runtime and storage baseline
+## Quality gates
 
-- Worker entry point: `src/event-worker.js`.
-- Worker composition: Events wraps Kanban, which wraps Documents.
-- D1 binding: `DB` → `bardo-db`.
-- R2 binding: `BACKUPS` → `bardo-backups`.
-- Static Activity binding: `ASSETS`.
-- Cron baseline: daily snapshot (`0 3 * * *`) plus five-minute scheduled processing (`*/5 * * * *`).
-- Node engine: `>=22.12.0`.
-- Wrangler baseline: `^4.124.0`.
+Phase 2 has real unit and Worker/runtime coverage for:
 
-## Phase 0 characterization findings
+- all required duration and clock formats;
+- invalid time/duration/date cases and leap years;
+- timezone precedence and DST spring/fall behavior;
+- authorized remote member lookup and bot filtering;
+- notification preference persistence and unique dedupe keys in local D1;
+- Discord DM privacy/transient error classification;
+- shared task-service wiring across the three task entry points;
+- Activity security regression tests from Phase 1;
+- all local D1 migrations through `0011`.
 
-The route matrix in `docs/security-route-matrix.md` is the source of truth for Phase 1 security work. The most important baseline findings are:
-
-- Document GET, PATCH, export/download and Activity-context lookup currently allow UUID/instance-only access without a complete Activity authorization guard.
-- Document source/normalize use an instance→document guard, but it does not establish actor/action permissions.
-- Kanban board, guild-member and guild-role reads currently execute before board Activity authorization; the normal board payload can also include a large member/role directory.
-- Kanban mutations and Event Planner routes have partial Activity guards, but permission semantics still need centralization and cross-guild/action-level tests.
-- The initial async ownership scan characterized 9 pre-existing unowned async call sites and 10 owned-but-empty catch handlers. Phase 0 prevents new occurrences while preserving product behavior; later implementation phases must shrink this baseline debt.
-- `npm ci` currently reports two dependency audit findings (one moderate and one high). Phase 0 records them rather than applying an unreviewed dependency upgrade; they require explicit dependency-path triage before release.
-
-## Phase 0 verification
-
-Validated code head before this status-only closeout: `58ad92bf39703e74264eec81a9011c837347aaa9`.
-
-Two independent GitHub Actions runs completed successfully against the phase branch:
-
-- CI run #223 / run id `32428453018`: success.
-- CI run #224 / run id `32428454321`: success.
-
-Both completed the full `verify` job:
-
-- `npm ci` installation.
-- Activity build and syntax checks.
-- Floating-promise regression check.
-- Wrangler binding type generation.
-- Unit test suite.
-- Worker integration suite.
-- Cloudflare `createTestHarness()` runtime smoke with local D1 migrations and scheduled dispatch.
-- Executable E2E and accessibility gate scripts.
-
-The Phase 0 E2E and accessibility files are explicit `todo` gates, not claims of browser/axe coverage. Real browser, visual and accessibility execution is introduced by the later UI/QA phases defined in the master plan.
-
-## Preview / staging
-
-No staging or preview URL is encoded in the repository baseline. Phase 0 does not invent one and does not deploy. Environment isolation and preview deployment are deferred to Phase 6.
-
-## Rollback for Phase 0
-
-Phase 0 is documentation, characterization tests and local/CI tooling only. It does not change product behavior or schema. Rollback is therefore a normal Git revert of Phase 0 commits or resetting `feat/bardo-unified-experience` to the frozen SHA. No D1/R2 rollback is required.
-
-## Phase gate
-
-Phase 0 is `PHASE_READY` because:
-
-- the baseline is frozen and reproducible;
-- branch relationships and migration history are documented;
-- the private-route characterization matrix exists with positive/negative fixture vocabulary;
-- unsafe current behavior is explicitly marked as temporary debt rather than desired contract;
-- CI installs reproducibly with `npm ci`;
-- quality/test commands are separated and runnable;
-- a real local Workers/D1/cron integration harness is in place; and
-- the phase code passed two full CI runs.
-
-Phase 1 — Security, integrity and blocking bugs — is unlocked.
+The existing `test:e2e` and `test:a11y` commands are still Phase-0 TODO gates and must not be described as real browser/axe coverage. Browser, visual and full accessibility certification remains in the later UI/QA phases.
 
 ## Guardrails
 
 - Do not merge or deploy to `main`.
 - Do not apply remote migrations.
-- Do not register global Discord commands.
+- Do not execute Discord command registration without explicit authorization.
 - Do not delete historical branches.
-- Do not treat resource UUIDs as authorization.
-- Keep PR #5 as draft until a later human release gate.
+- Keep PR #5 draft until the human release gate.
+
+## Next phase
+
+Phase 3 — Bardo UI: design system and visual migration — is unlocked after the Phase 2 closeout commit passes CI and is fast-forwarded into `feat/bardo-unified-experience`.
