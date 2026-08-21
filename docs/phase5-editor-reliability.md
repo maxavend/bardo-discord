@@ -1,8 +1,10 @@
 # Phase 5 — Editor reliability and collaboration handoff
 
 Status: PHASE_READY
+Certified integration SHA: `73394286dc93f6af80c9b919183c02953ad71f4f`
 Code gate SHA: `27a1911f92954a16e0053d1a9fafe277e5b240f1`
 Code gate CI: #405 / `32486915409`
+Final closeout CI: #411 / `32487246451`
 Phase branch: `codex/p5-editor-reliability`
 Integration target: `feat/bardo-unified-experience`
 
@@ -48,7 +50,7 @@ The adversarial pass found that the initial versioned writer generated `pages` w
 
 ## Verification
 
-CI #405 (`32486915409`) passed on code gate SHA `27a1911f92954a16e0053d1a9fafe277e5b240f1`:
+CI #405 (`32486915409`) passed on code gate SHA `27a1911f92954a16e0053d1a9fafe277e5b240f1`, and final documentation-only closeout CI #411 (`32487246451`) reproduced the complete gate on integration SHA `73394286dc93f6af80c9b919183c02953ad71f4f`:
 
 - Activity build/static/syntax checks;
 - no new floating-promise regressions;
