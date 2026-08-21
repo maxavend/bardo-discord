@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-21T17:07:02.456Z",
+  "budgets": {
+    "criticalShellGzipBytes": 81920,
+    "initialRouteGzipBytes": 256000,
+    "maxUnjustifiedChunkGzipBytes": 512000,
+    "avatarBytes": 51200
+  },
+  "shell": {
+    "rawBytes": 215331,
+    "gzipBytes": 61070,
+    "files": [
+      "activity/bardo-ui-LWWMLHOM.css",
+      "activity/chunks/chunk-NLRERPBA.js",
+      "activity/chunks/chunk-SIUIQO43.js",
+      "activity/main-RP6VLKSF.js",
+      "activity/styles-6NTVVYM2.css"
+    ]
+  },
+  "routes": {
+    "home": {
+      "rawBytes": 232945,
+      "gzipBytes": 67395,
+      "files": [
+        "activity/bardo-ui-LWWMLHOM.css",
+        "activity/chunks/chunk-NLRERPBA.js",
+        "activity/chunks/chunk-SIUIQO43.js",
+        "activity/chunks/migration-adapters-LVNL65UE.js",
+        "activity/chunks/product-integration-DG3TGEPW.js",
+        "activity/main-RP6VLKSF.js",
+        "activity/styles-6NTVVYM2.css"
+      ]
+    },
+    "documents": {
+      "rawBytes": 279911,
+      "gzipBytes": 84854,
+      "files": [
+        "activity/bardo-ui-LWWMLHOM.css",
+        "activity/chunks/app-QL6FGLBR.js",
+        "activity/chunks/chunk-47YQ4K53.js",
+        "activity/chunks/chunk-FBAJU5PS.js",
+        "activity/chunks/chunk-NLRERPBA.js",
+        "activity/chunks/chunk-SIUIQO43.js",
+        "activity/chunks/editor-reliability-IA5NS3TI.js",
+        "activity/chunks/export-security-NRCIO3KH.js",
+        "activity/chunks/import-bootstrap-SGLWIA5N.js",
+        "activity/chunks/migration-adapters-LVNL65UE.js",
+        "activity/chunks/product-integration-DG3TGEPW.js",
+        "activity/main-RP6VLKSF.js",
+        "activity/styles-6NTVVYM2.css"
+      ]
+    },
+    "kanban": {
+      "rawBytes": 343910,
+      "gzipBytes": 92246,
+      "files": [
+        "activity/bardo-ui-LWWMLHOM.css",
+        "activity/chunks/board-YAVIKXTB.js",
+        "activity/chunks/chunk-NLRERPBA.js",
+        "activity/chunks/chunk-SIUIQO43.js",
+        "activity/chunks/member-picker-remote-DPFGXGQM.js",
+        "activity/chunks/migration-adapters-LVNL65UE.js",
+        "activity/chunks/product-integration-DG3TGEPW.js",
+        "activity/main-RP6VLKSF.js",
+        "activity/styles-6NTVVYM2.css"
+      ]
+    },
+    "planner": {
+      "rawBytes": 271095,
+      "gzipBytes": 79050,
+      "files": [
+        "activity/bardo-ui-LWWMLHOM.css",
+        "activity/chunks/chunk-NLRERPBA.js",
+        "activity/chunks/chunk-SIUIQO43.js",
+        "activity/chunks/event-JTIGEEOI.js",
+        "activity/chunks/migration-adapters-LVNL65UE.js",
+        "activity/chunks/planner-member-directory-LLZLEZJ4.js",
+        "activity/chunks/product-integration-DG3TGEPW.js",
+        "activity/main-RP6VLKSF.js",
+        "activity/styles-6NTVVYM2.css"
+      ]
+    }
+  },
+  "avatarAssets": [
+    {
+      "size": 72,
+      "file": "bardo-avatar-72-21E0A1D9.png",
+      "bytes": 6865
+    },
+    {
+      "size": 144,
+      "file": "bardo-avatar-144-539929E3.png",
+      "bytes": 23677
+    }
+  ],
+  "chunks": [
+    {
+      "file": "activity/chunks/pdfjs-PZGVVZHV.js",
+      "rawBytes": 1607677,
+      "gzipBytes": 497995,
+      "inputs": [
+        "node_modules/unpdf/dist/pdfjs.mjs"
+      ],
+      "lazyPdf": true,
+      "justification": "Parser PDF existente y lazy; no forma parte de Home, Kanban ni Planner inicial."
+    },
+    {
+      "file": "activity/chunks/lib-F4TOGYSG.js",
+      "rawBytes": 514108,
+      "gzipBytes": 130778,
+      "inputs": [
+        "node_modules/underscore/modules/_setup.js",
+        "node_modules/underscore/modules/restArguments.js",
+        "node_modules/underscore/modules/isObject.js",
+        "node_modules/underscore/modules/isNull.js",
+        "node_modules/underscore/modules/isUndefined.js",
+        "node_modules/underscore/modules/isBoolean.js",
+        "node_modules/underscore/modules/isElement.js",
+        "node_modules/underscore/modules/_tagTester.js",
+        "node_modules/underscore/modules/isString.js",
+        "node_modules/underscore/modules/isNumber.js",
+        "node_modules/underscore/modules/isDate.js",
+        "node_modules/underscore/modules/isRegExp.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-SIUIQO43.js",
+      "rawBytes": 150759,
+      "gzipBytes": 45075,
+      "inputs": [
+        "node_modules/@discord/embedded-app-sdk/output/_virtual/_commonjsHelpers.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/_virtual/index4.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/lib/eventemitter3/index2.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/_virtual/index.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/lib/zod/lib/index.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/_virtual/BigInteger2.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/lib/big-integer/BigInteger.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/_virtual/BigInteger.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/utils/BigFlagUtils.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/Constants.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/schema/common.mjs",
+        "node_modules/@discord/embedded-app-sdk/output/utils/zodUtils.mjs"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/board-YAVIKXTB.js",
+      "rawBytes": 105779,
+      "gzipBytes": 22805,
+      "inputs": [
+        "src/kanban.js",
+        "src/activity/board.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/event-JTIGEEOI.js",
+      "rawBytes": 32073,
+      "gzipBytes": 9227,
+      "inputs": [
+        "src/event.js",
+        "src/activity/event.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/app-QL6FGLBR.js",
+      "rawBytes": 20571,
+      "gzipBytes": 7036,
+      "inputs": [
+        "src/activity/app.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/main-RP6VLKSF.js",
+      "rawBytes": 15735,
+      "gzipBytes": 5796,
+      "inputs": [
+        "src/activity/ui/primitives.js",
+        "src/activity/ui/runtime.js",
+        "src/activity/member-role.js",
+        "src/activity/security-bootstrap.js",
+        "src/activity/resource-polling.js",
+        "src/activity/main.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/bardo-ui-LWWMLHOM.css",
+      "rawBytes": 28165,
+      "gzipBytes": 5388,
+      "inputs": [
+        "src/activity/ui/tokens.css",
+        "src/activity/ui/foundations.css",
+        "src/activity/ui/primitives.css",
+        "src/activity/ui/patterns.css",
+        "src/activity/ui/modules.css",
+        "src/activity/ui/product-integration.css",
+        "src/activity/ui/editor-reliability.css",
+        "src/activity/ui/bardo-ui.css"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/editor-reliability-IA5NS3TI.js",
+      "rawBytes": 14411,
+      "gzipBytes": 4941,
+      "inputs": [
+        "src/activity/editor-save-machine.js",
+        "src/activity/editor-reliability.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/styles-6NTVVYM2.css",
+      "rawBytes": 19788,
+      "gzipBytes": 4317,
+      "inputs": [
+        "src/activity/styles.css"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/turndown.browser.es-RREPHSYJ.js",
+      "rawBytes": 10917,
+      "gzipBytes": 4118,
+      "inputs": [
+        "node_modules/turndown/lib/turndown.browser.es.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/product-integration-DG3TGEPW.js",
+      "rawBytes": 11365,
+      "gzipBytes": 3842,
+      "inputs": [
+        "src/activity/ui/patterns.js",
+        "src/activity/product-integration.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/dist-XWW7ERMJ.js",
+      "rawBytes": 6898,
+      "gzipBytes": 2910,
+      "inputs": [
+        "node_modules/unpdf/dist/index.mjs"
+      ],
+      "lazyPdf": true,
+      "justification": "Parser PDF existente y lazy; no forma parte de Home, Kanban ni Planner inicial."
+    },
+    {
+      "file": "activity/chunks/migration-adapters-LVNL65UE.js",
+      "rawBytes": 6249,
+      "gzipBytes": 2483,
+      "inputs": [
+        "src/activity/ui/migration-adapters.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/planner-member-directory-LLZLEZJ4.js",
+      "rawBytes": 6077,
+      "gzipBytes": 2428,
+      "inputs": [
+        "src/activity/planner-member-directory.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/import-bootstrap-SGLWIA5N.js",
+      "rawBytes": 4537,
+      "gzipBytes": 2244,
+      "inputs": [
+        "src/activity/import-bootstrap.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/member-picker-remote-DPFGXGQM.js",
+      "rawBytes": 5186,
+      "gzipBytes": 2046,
+      "inputs": [
+        "src/activity/member-picker-remote.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-47YQ4K53.js",
+      "rawBytes": 5280,
+      "gzipBytes": 2000,
+      "inputs": [
+        "src/import-format.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/export-security-NRCIO3KH.js",
+      "rawBytes": 1908,
+      "gzipBytes": 1049,
+      "inputs": [
+        "src/activity/export-security.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/turndown-plugin-gfm.es-6F7OGQN5.js",
+      "rawBytes": 1935,
+      "gzipBytes": 901,
+      "inputs": [
+        "node_modules/turndown-plugin-gfm/lib/turndown-plugin-gfm.es.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-NLRERPBA.js",
+      "rawBytes": 884,
+      "gzipBytes": 494,
+      "inputs": [],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-FBAJU5PS.js",
+      "rawBytes": 259,
+      "gzipBytes": 189,
+      "inputs": [
+        "src/document-id.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    }
+  ]
+}

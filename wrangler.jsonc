@@ -25,12 +25,6 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "BACKUPS",
-      "bucket_name": "bardo-backups"
-    }
-  ],
   "triggers": {
     "crons": [
       "0 3 * * *",
@@ -52,12 +46,6 @@
           "migrations_dir": "migrations"
         }
       ],
-      "r2_buckets": [
-        {
-          "binding": "BACKUPS",
-          "bucket_name": "bardo-backups-staging"
-        }
-      ],
       "triggers": {
         "crons": []
       }
@@ -73,12 +61,6 @@
           "database_name": "bardo-db",
           "database_id": "db89af73-dc24-491e-bf57-975f7bd6c085",
           "migrations_dir": "migrations"
-        }
-      ],
-      "r2_buckets": [
-        {
-          "binding": "BACKUPS",
-          "bucket_name": "bardo-backups"
         }
       ],
       "triggers": {

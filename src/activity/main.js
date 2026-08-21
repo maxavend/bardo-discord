@@ -30,18 +30,18 @@ async function resolveContextMode() {
   const sdkMode = modeFromTarget(auth?.sdk?.customId);
   if (sdkMode) return sdkMode;
   const instanceId = auth?.instanceId || params.get('instance_id');
-  if (!instanceId) return 'document';
+  if (!instanceId) return 'home';
   try {
     const response = await fetch(`/api/activity-context/${encodeURIComponent(instanceId)}`, {
       cache: 'no-store',
       headers: { Accept: 'application/json' },
     });
-    if (!response.ok) return 'document';
+    if (!response.ok) return 'home';
     const context = await response.json();
     globalThis.__bardoResolvedActivityContext = context;
-    return modeFromTarget(context?.documentId) || 'document';
+    return modeFromTarget(context?.documentId) || 'home';
   } catch {
-    return 'document';
+    return 'home';
   }
 }
 

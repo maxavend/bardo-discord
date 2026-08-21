@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "axeCliVersion": "4.13.0",
+  "chromeVersion": "151.0.7922.138",
+  "chromeMajor": 151,
+  "generatedAt": "2026-08-21T17:07:27.380Z",
+  "tags": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22aa"
+  ],
+  "views": {
+    "docs": {
+      "url": "http://127.0.0.1:4174/test/visual/fixture.html?view=docs",
+      "counts": {
+        "violations": 0,
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0,
+        "unknown": 0
+      },
+      "violations": []
+    },
+    "kanban": {
+      "url": "http://127.0.0.1:4174/test/visual/fixture.html?view=kanban",
+      "counts": {
+        "violations": 0,
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0,
+        "unknown": 0
+      },
+      "violations": []
+    },
+    "planner": {
+      "url": "http://127.0.0.1:4174/test/visual/fixture.html?view=planner",
+      "counts": {
+        "violations": 0,
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0,
+        "unknown": 0
+      },
+      "violations": []
+    },
+    "home": {
+      "url": "http://127.0.0.1:4174/test/visual/fixture.html?view=home",
+      "counts": {
+        "violations": 0,
+        "critical": 0,
+        "serious": 0,
+        "moderate": 0,
+        "minor": 0,
+        "unknown": 0
+      },
+      "violations": []
+    }
+  },
+  "totals": {
+    "violations": 0,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "unknown": 0
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "entry": "src/p6-entry.js",
+  "production": {
+    "worker": "bardo-discord",
+    "database": "bardo-db",
+    "cronCount": 2
+  },
+  "staging": {
+    "worker": "bardo-discord-staging",
+    "database": "bardo-db-staging",
+    "cronCount": 0,
+    "resourceState": "provisioned"
+  }
+}

@@ -64,7 +64,9 @@ async function loadHomeSection(endpoint, view, mapItem) {
 
 async function installHome() {
   const context = await getContext();
-  const isHome = params.get('home') === '1' || String(context?.documentId || '').startsWith('bardo:home:');
+  const isHome = params.get('home') === '1'
+    || String(context?.documentId || '').startsWith('bardo:home:')
+    || document.documentElement.dataset.bardoBootMode === 'home';
   if (!isHome) return false;
   document.documentElement.dataset.bardoMode = 'home';
   document.title = 'Bardo · Inicio';
