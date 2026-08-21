@@ -15,13 +15,13 @@ function run(args){return new Promise((resolveRun,reject)=>{const child=spawn(ch
 function hash(buffer){return createHash('sha256').update(buffer).digest('hex').slice(0,16);}
 function diagnostics(dom){const body=dom.match(/<body[^>]*>/i)?.[0]||'<body unavailable>';return body.slice(0,1400);}
 function bodyAttribute(dom,name){return dom.match(new RegExp(`${name}="([^"]+)"`,'i'))?.[1]||null;}
+function assertBrowserContract(dom,label,{a11y=true}={}){if(!dom.includes('data-ui-check="pass"')||!dom.includes('data-visual-ready="true"'))throw new Error(`${label} layout contract failed: ${diagnostics(dom)}`);if(a11y&&!dom.includes('data-a11y-check="pass"'))throw new Error(`${label} accessibility contract failed: ${diagnostics(dom)}`);}
 const expectedPath=resolve('test/visual/baseline-signatures.json');
 const expected=existsSync(expectedPath)?JSON.parse(await readFile(expectedPath,'utf8')):{};
 const signatures={};
 const pngHashes={};
 const phase3Views=['docs','kanban','planner'];
 const phase4Views=['home'];
-// PNGs remain human-review evidence. Regression pass/fail uses deterministic DOM geometry/style signatures.
 const common=['--headless=new','--no-sandbox','--disable-gpu','--disable-lcd-text','--font-render-hinting=none','--virtual-time-budget=1000'];
 const contractViewport='--window-size=768,900';
 try{
@@ -32,9 +32,7 @@ try{
       const url=`http://127.0.0.1:4173/test/visual/fixture.html?view=${view}`;
       const viewport=`--window-size=${width},900`;
       const dom=await run([...common,viewport,'--dump-dom',url]);
-      if(!dom.includes('data-visual-ready="true"'))throw new Error(`Visual fixture did not settle for ${key}: ${diagnostics(dom)}`);
-      if(!dom.includes('data-ui-check="pass"'))throw new Error(`Layout contract did not pass for ${key}: ${diagnostics(dom)}`);
-      if(!dom.includes('data-a11y-check="pass"'))throw new Error(`Accessibility fixture contract failed for ${key}: ${diagnostics(dom)}`);
+      assertBrowserContract(dom,`Visual ${key}`);
       const signature=bodyAttribute(dom,'data-visual-signature');
       if(!signature)throw new Error(`Visual signature is missing for ${key}: ${diagnostics(dom)}`);
       signatures[key]=signature;
@@ -46,9 +44,20 @@ try{
     }
   }
   const reduced=await run([...common,contractViewport,'--force-prefers-reduced-motion','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=home']);
-  if(!reduced.includes('data-ui-check="pass"')||!reduced.includes('data-visual-ready="true"'))throw new Error(`Reduced-motion browser contract failed: ${diagnostics(reduced)}`);
+  assertBrowserContract(reduced,'Reduced-motion');
   const contrast=await run([...common,contractViewport,'--force-high-contrast','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=home']);
-  if(!contrast.includes('data-ui-check="pass"')||!contrast.includes('data-a11y-check="pass"')||!contrast.includes('data-visual-ready="true"'))throw new Error(`High-contrast browser contract failed: ${diagnostics(contrast)}`);
+  assertBrowserContract(contrast,'High-contrast');
+  const dark=await run([...common,contractViewport,'--force-dark-mode','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=home']);
+  assertBrowserContract(dark,'Dark-mode');
+  for(const view of [...phase3Views,...phase4Views]){
+    const scaled=await run([...common,'--window-size=390,900','--dump-dom',`http://127.0.0.1:4173/test/visual/fixture.html?view=${view}&textScale=2`]);
+    assertBrowserContract(scaled,`200% text scale ${view}`);
+    if(!scaled.includes('data-text-scale="200"'))throw new Error(`200% text scale did not activate for ${view}: ${diagnostics(scaled)}`);
+    console.log(`A11Y_TEXT_SCALE ${view} PASS`);
+  }
+  console.log('A11Y_DARK_MODE PASS');
+  console.log('A11Y_REDUCED_MOTION PASS');
+  console.log('A11Y_HIGH_CONTRAST PASS');
   await writeFile(join(outDir,'visual-signatures.json'),JSON.stringify(signatures,null,2));
   await writeFile(join(outDir,'png-hashes.json'),JSON.stringify(pngHashes,null,2));
 }finally{await new Promise((resolveClose)=>server.close(resolveClose));}
