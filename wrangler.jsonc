@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bardo-discord",
-  "main": "src/security-worker.js",
+  "main": "src/p2-worker.js",
   "compatibility_date": "2026-08-19",
   "compatibility_flags": [
     "nodejs_compat"
