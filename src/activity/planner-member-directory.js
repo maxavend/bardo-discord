@@ -37,9 +37,20 @@ function rowFor(list, userId) {
     .find((input) => String(input.value) === String(userId))?.closest('.ev-member') || null;
 }
 
+export function inferCheckboxName(list) {
+  const existing = list?.querySelector?.('input[type="checkbox"][name]');
+  if (existing?.name) return existing.name;
+  const fieldLabel = list?.closest?.('.ev-field')?.querySelector?.(':scope > label')?.textContent || '';
+  if (/lideran/i.test(fieldLabel)) return 'lead';
+  if (/protagonistas|presentan/i.test(fieldLabel)) return 'speaker';
+  const modalTitle = list?.closest?.('.ev-modal')?.querySelector?.('h2')?.textContent || '';
+  if (/participantes/i.test(modalTitle) || /participantes/i.test(fieldLabel)) return 'member';
+  return null;
+}
+
 function appendSelectedMember(list, checkboxName, member) {
   const userId = String(member?.userId || '').trim();
-  if (!userId) return;
+  if (!userId || !checkboxName) return;
   rememberMember(member);
 
   const existingRow = rowFor(list, userId);
@@ -71,8 +82,8 @@ function appendSelectedMember(list, checkboxName, member) {
 
 function enhancePlannerMemberList(list) {
   if (!(list instanceof HTMLElement) || list.dataset.bardoMemberSearch === 'true') return;
-  const firstCheckbox = list.querySelector('input[type="checkbox"][name]');
-  if (!firstCheckbox?.name) return;
+  const checkboxName = inferCheckboxName(list);
+  if (!checkboxName) return;
   list.dataset.bardoMemberSearch = 'true';
   list.dataset.bardoRemoteDirectory = 'true';
 
@@ -125,7 +136,7 @@ function enhancePlannerMemberList(list) {
   };
 
   const choose = (member) => {
-    appendSelectedMember(list, firstCheckbox.name, member);
+    appendSelectedMember(list, checkboxName, member);
     search.value = '';
     applyLocalFilter('');
     status.textContent = `${localRows().length} miembros referenciados · directorio remoto bajo demanda`;
