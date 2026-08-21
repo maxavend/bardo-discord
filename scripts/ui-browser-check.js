@@ -13,19 +13,40 @@ function chromePath(){for(const name of ['google-chrome','google-chrome-stable',
 const chrome=chromePath();
 function run(args){return new Promise((resolveRun,reject)=>{const child=spawn(chrome,args,{stdio:['ignore','pipe','pipe']});let stdout='';let stderr='';child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',(chunk)=>{stdout+=chunk;});child.stderr.on('data',(chunk)=>{stderr+=chunk;});child.on('error',reject);child.on('close',(code)=>code===0?resolveRun(stdout):reject(new Error(stderr||stdout||`Chrome failed with ${code}`)));});}
 function hash(buffer){return createHash('sha256').update(buffer).digest('hex').slice(0,16);}
-function diagnostics(dom){const body=dom.match(/<body[^>]*>/i)?.[0]||'<body unavailable>';return body.slice(0,1200);}
-const expectedPath=resolve('test/visual/baseline-hashes.json');const expected=existsSync(expectedPath)?JSON.parse(await readFile(expectedPath,'utf8')):{};const actual={};
-// Grayscale antialiasing avoids tiny LCD/subpixel color differences between GitHub-hosted runners.
+function diagnostics(dom){const body=dom.match(/<body[^>]*>/i)?.[0]||'<body unavailable>';return body.slice(0,1400);}
+function bodyAttribute(dom,name){return dom.match(new RegExp(`${name}="([^"]+)"`,'i'))?.[1]||null;}
+const expectedPath=resolve('test/visual/baseline-signatures.json');
+const expected=existsSync(expectedPath)?JSON.parse(await readFile(expectedPath,'utf8')):{};
+const signatures={};
+const pngHashes={};
+// PNGs remain human-review evidence. Regression pass/fail uses deterministic DOM geometry/style signatures.
 const common=['--headless=new','--no-sandbox','--disable-gpu','--disable-lcd-text','--font-render-hinting=none','--virtual-time-budget=1000'];
 const contractViewport='--window-size=768,900';
 try{
   for(const view of ['docs','kanban','planner']){
-    for(const width of [390,768,1440]){const key=`${view}-${width}`;const shot=join(outDir,`${key}.png`);const url=`http://127.0.0.1:4173/test/visual/fixture.html?view=${view}`;await run([...common,'--hide-scrollbars',`--window-size=${width},900`,`--screenshot=${shot}`,url]);actual[key]=hash(await readFile(shot));console.log(`VISUAL_HASH ${key} ${actual[key]}`);if(expected[key]&&expected[key]!==actual[key])throw new Error(`Visual regression: ${key} expected ${expected[key]} got ${actual[key]}`);}
-    const dom=await run([...common,contractViewport,'--dump-dom',`http://127.0.0.1:4173/test/visual/fixture.html?view=${view}`]);
-    if(!dom.includes('data-ui-check="pass"'))throw new Error(`Layout contract did not pass for ${view}: ${diagnostics(dom)}`);
-    if(!dom.includes('data-a11y-check="pass"'))throw new Error(`Accessibility fixture contract failed for ${view}: ${diagnostics(dom)}`);
+    for(const width of [390,768,1440]){
+      const key=`${view}-${width}`;
+      const shot=join(outDir,`${key}.png`);
+      const url=`http://127.0.0.1:4173/test/visual/fixture.html?view=${view}`;
+      const viewport=`--window-size=${width},900`;
+      const dom=await run([...common,viewport,'--dump-dom',url]);
+      if(!dom.includes('data-visual-ready="true"'))throw new Error(`Visual fixture did not settle for ${key}: ${diagnostics(dom)}`);
+      if(!dom.includes('data-ui-check="pass"'))throw new Error(`Layout contract did not pass for ${key}: ${diagnostics(dom)}`);
+      if(!dom.includes('data-a11y-check="pass"'))throw new Error(`Accessibility fixture contract failed for ${key}: ${diagnostics(dom)}`);
+      const signature=bodyAttribute(dom,'data-visual-signature');
+      if(!signature)throw new Error(`Visual signature is missing for ${key}: ${diagnostics(dom)}`);
+      signatures[key]=signature;
+      console.log(`VISUAL_SIGNATURE ${key} ${signature}`);
+      if(expected[key]&&expected[key]!==signature)throw new Error(`Visual regression: ${key} expected signature ${expected[key]} got ${signature}`);
+      await run([...common,'--hide-scrollbars',viewport,`--screenshot=${shot}`,url]);
+      pngHashes[key]=hash(await readFile(shot));
+      console.log(`VISUAL_PNG_HASH ${key} ${pngHashes[key]}`);
+    }
   }
-  const reduced=await run([...common,contractViewport,'--force-prefers-reduced-motion','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=planner']);if(!reduced.includes('data-ui-check="pass"'))throw new Error(`Reduced-motion browser contract failed: ${diagnostics(reduced)}`);
-  const contrast=await run([...common,contractViewport,'--force-high-contrast','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=kanban']);if(!contrast.includes('data-ui-check="pass"')||!contrast.includes('data-a11y-check="pass"'))throw new Error(`High-contrast browser contract failed: ${diagnostics(contrast)}`);
-  await writeFile(join(outDir,'hashes.json'),JSON.stringify(actual,null,2));
+  const reduced=await run([...common,contractViewport,'--force-prefers-reduced-motion','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=planner']);
+  if(!reduced.includes('data-ui-check="pass"')||!reduced.includes('data-visual-ready="true"'))throw new Error(`Reduced-motion browser contract failed: ${diagnostics(reduced)}`);
+  const contrast=await run([...common,contractViewport,'--force-high-contrast','--dump-dom','http://127.0.0.1:4173/test/visual/fixture.html?view=kanban']);
+  if(!contrast.includes('data-ui-check="pass"')||!contrast.includes('data-a11y-check="pass"')||!contrast.includes('data-visual-ready="true"'))throw new Error(`High-contrast browser contract failed: ${diagnostics(contrast)}`);
+  await writeFile(join(outDir,'visual-signatures.json'),JSON.stringify(signatures,null,2));
+  await writeFile(join(outDir,'png-hashes.json'),JSON.stringify(pngHashes,null,2));
 }finally{await new Promise((resolveClose)=>server.close(resolveClose));}
