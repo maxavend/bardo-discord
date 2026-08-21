@@ -98,7 +98,8 @@ export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch
   const code = typeof payload?.code === 'string' ? payload.code.trim() : '';
 
   if (!env.DISCORD_CLIENT_SECRET) {
-    const serverGuildId = context.guildId || requestedGuildId || null;
+    const targetGuild = parseHomeTarget(context.documentId);
+    const serverGuildId = context.guildId || requestedGuildId || targetGuild || env.DISCORD_GUILD_ID || null;
     const expiresIn = 3600;
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
     await updateActivityContextAuthorization(env.DB, instanceId, {
