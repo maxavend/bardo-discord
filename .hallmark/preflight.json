@@ -1,0 +1,9 @@
+{
+  "date": "2026-08-21",
+  "framework": "React 19 with Tailwind CSS v4 and Base UI",
+  "design_system": "Discord-native Bardo semantic tokens",
+  "palette": "src/activity/styles/theme.css",
+  "spacing": "Bardo named 2–48 px scale",
+  "motion": "Bardo CSS motion tokens with reduced-motion support",
+  "preserved": ["theme", "typography", "components", "navigation", "routes", "data sources"]
+}

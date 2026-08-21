@@ -10,9 +10,11 @@ test('Phase 4 browser evidence covers Bardo Home at mobile, tablet and desktop w
   assert.match(script, /--force-prefers-reduced-motion/);
   assert.match(script, /--force-high-contrast/);
   assert.match(fixture, /data-view="home"/);
-  assert.match(fixture, /Próximos eventos/);
-  assert.match(fixture, /Mis tareas activas/);
-  assert.match(fixture, /Documentos recientes/);
+  assert.match(fixture, />Ahora</);
+  assert.match(fixture, />Retomar</);
+  assert.match(fixture, />Actividad reciente</);
+  assert.match(fixture, />Explorar</);
+  assert.match(fixture, /bardo-home-timeline/);
 });
 
 test('Phase 4 cross-product flow is exercised by the runtime suite', async () => {

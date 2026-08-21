@@ -29,15 +29,26 @@ test('semantic theme exposes the complete Bardo surface, content, interaction an
   assert.match(theme, /prefers-reduced-motion: reduce/);
 });
 
-test('Home is an authoritative lazy React surface with explicit loading, empty, error and ready states', async () => {
+test('Home is an authoritative contextual React surface with coordinated loading, empty, error and ready states', async () => {
   const bootstrap = await read('src/activity/app/bootstrap.jsx');
   const home = await read('src/activity/features/home/home-page.jsx');
   const integration = await read('src/activity/product-integration.js');
   assert.match(bootstrap, /lazy\(\(\) => import\('\.\.\/features\/home\/home-page\.jsx'\)\)/);
   assert.match(home, /status: 'loading'/);
-  assert.match(home, /status: 'error'/);
-  assert.match(home, /Nada por aquí todavía/);
-  assert.match(home, /\/api\/home\/\$\{section\.key\}\?limit=5/);
+  assert.match(home, /failed\.length === SOURCES\.length \? 'error' : 'ready'/);
+  assert.match(home, /Promise\.allSettled/);
+  assert.match(home, /attentionSignals/);
+  assert.match(home, /continuationItems/);
+  assert.match(home, /activityItems/);
+  assert.match(home, /Todavía no hay trabajo reciente/);
+  assert.match(home, /No pudimos actualizar Inicio/);
+  assert.match(home, /Mostramos lo disponible mientras recuperamos parte del contexto/);
+  assert.match(home, /No pudimos comprobar todas las señales/);
+  assert.match(home, /\/api\/home\/\$\{key\}\?limit=\$\{limit\}/);
+  assert.match(home, /title="Ahora"/);
+  assert.match(home, /title="Retomar"/);
+  assert.match(home, /title="Actividad reciente"/);
+  assert.match(home, /title="Explorar"/);
   assert.doesNotMatch(integration, /createAppShell|loadHomeSection|bardo-home-hero/);
 });
 

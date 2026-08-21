@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T22:16:25.302Z",
-  "gitSha": "26ac7a499a4bef04714d0fbd8422e0fcc48e2874",
+  "generatedAt": "2026-08-21T23:26:13.220Z",
+  "gitSha": null,
   "workflowRunId": null,
   "state": "RELEASE_READY",
   "automatic": {
@@ -34,14 +34,7 @@
     }
   },
   "dependencyAudit": {
-    "counts": {
-      "info": 0,
-      "low": 0,
-      "moderate": 0,
-      "high": 0,
-      "critical": 0,
-      "total": 0
-    },
+    "counts": {},
     "packages": []
   },
   "note": "All automated and human-authorized release gates are evidenced."

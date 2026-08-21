@@ -1,19 +1,19 @@
-critical-shell: 67 KiB gzip
-home: 199.2 KiB gzip
-documents: 215.1 KiB gzip
-kanban: 211.5 KiB gzip
-planner: 198.6 KiB gzip
+critical-shell: 67.7 KiB gzip
+home: 202.1 KiB gzip
+documents: 215.9 KiB gzip
+kanban: 212.3 KiB gzip
+planner: 199.4 KiB gzip
 72x72 avatar: 6.7 KiB
 144x144 avatar: 23.1 KiB
 
 Largest gzip chunks:
 - activity/chunks/pdfjs-6ZRAGHZI.js: 486.3 KiB (lazy PDF)
 - activity/chunks/lib-7R7ECROH.js: 127.7 KiB
-- activity/chunks/bootstrap-JCNEQJWR.js: 71.9 KiB
+- activity/chunks/bootstrap-IYPMKTI6.js: 71.9 KiB
 - activity/chunks/chunk-7OSQWNIS.js: 44 KiB
-- activity/chunks/document-enhancements-WXBBBWL3.js: 36.3 KiB
-- activity/chunks/chunk-F5OFARHE.js: 35.2 KiB
+- activity/chunks/document-enhancements-AGL66CLP.js: 36.3 KiB
+- activity/chunks/chunk-RUHXKNEN.js: 35.2 KiB
 - activity/chunks/board-XOHWO726.js: 22.3 KiB
-- activity/bardo-tailwind-6HX6CISF.css: 16.2 KiB
-- activity/chunks/chunk-OCWVTBKX.js: 10.1 KiB
+- activity/bardo-tailwind-2WCC27Q6.css: 16.9 KiB
+- activity/chunks/chunk-KOZH6BAT.js: 10.1 KiB
 - activity/chunks/event-EM7SCTNT.js: 9 KiB
