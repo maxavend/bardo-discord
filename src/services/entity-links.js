@@ -14,13 +14,31 @@ async function directGuild(db, type, id) {
   return null;
 }
 
+export async function grantDocumentToGuild(db, documentId, guildId, grantedBy) {
+  const id = String(documentId || '').trim();
+  const guild = String(guildId || '').trim();
+  const actor = String(grantedBy || '').trim();
+  if (!id || !guild || !actor) throw new Error('Grant de documento inválido.');
+  const now = new Date().toISOString();
+  const result = await db.prepare(`INSERT INTO document_guild_access (document_id, guild_id, granted_by, created_at)
+    SELECT id, ?, ?, ? FROM documents WHERE id = ?
+    ON CONFLICT(document_id, guild_id) DO UPDATE SET granted_by = excluded.granted_by`)
+    .bind(guild, actor, now, id).run();
+  if (!result?.meta?.changes) {
+    const existing = await db.prepare('SELECT 1 AS ok FROM document_guild_access WHERE document_id = ? AND guild_id = ?').bind(id, guild).first();
+    if (!existing?.ok) throw new Error('Documento no encontrado.');
+  }
+  return { documentId: id, guildId: guild, grantedBy: actor };
+}
+
 export async function documentBelongsToGuild(db, documentId, guildId) {
   const row = await db.prepare(`SELECT 1 AS ok WHERE
-    EXISTS (SELECT 1 FROM activity_contexts WHERE document_id = ? AND guild_id = ?)
+    EXISTS (SELECT 1 FROM document_guild_access WHERE document_id = ? AND guild_id = ?)
+    OR EXISTS (SELECT 1 FROM activity_contexts WHERE document_id = ? AND guild_id = ?)
     OR EXISTS (SELECT 1 FROM events WHERE minute_document_id = ? AND guild_id = ?)
     OR EXISTS (SELECT 1 FROM entity_links WHERE guild_id = ? AND ((source_type = 'document' AND source_id = ?) OR (target_type = 'document' AND target_id = ?)))
     LIMIT 1`)
-    .bind(documentId, guildId, documentId, guildId, guildId, documentId, documentId).first();
+    .bind(documentId, guildId, documentId, guildId, documentId, guildId, guildId, documentId, documentId).first();
   return Boolean(row?.ok);
 }
 
