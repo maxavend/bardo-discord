@@ -71,3 +71,13 @@ test('open-code UI primitives cover dialogs, menus, popovers, selects, tabs and 
     'src/activity/components/ui/scroll-area.jsx',
   ]) assert.ok((await read(path)).length > 40, `${path} must be implemented`);
 });
+
+test('Discord authentication resolves instance and document targets from the SDK without query parameters', async () => {
+  const security = await read('src/activity/security-bootstrap.js');
+  const reader = await read('src/activity/app.js');
+  assert.match(security, /const instanceId = sdk\.instanceId \|\| queryInstanceId/);
+  assert.doesNotMatch(security, /!isEmbeddedActivity\(\) \|\| !instanceId/);
+  assert.match(reader, /window\.location\.hostname\.endsWith\('\.discordsays\.com'\)/);
+  assert.match(reader, /globalThis\.__bardoActivityAuth\?\.ready/);
+  assert.match(reader, /return sharedAuth\.sdk/);
+});

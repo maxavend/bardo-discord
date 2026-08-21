@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T22:11:23.959Z",
+  "generatedAt": "2026-08-21T22:20:30.200Z",
   "budgets": {
     "criticalShellGzipBytes": 81920,
     "initialRouteGzipBytes": 256000,
@@ -8,19 +8,19 @@
     "avatarBytes": 51200
   },
   "shell": {
-    "rawBytes": 266695,
-    "gzipBytes": 68182,
+    "rawBytes": 266789,
+    "gzipBytes": 68211,
     "files": [
       "activity/bardo-tailwind-6HX6CISF.css",
       "activity/chunks/chunk-7OSQWNIS.js",
       "activity/chunks/chunk-EPXOE4VI.js",
-      "activity/main-JLV43MGT.js"
+      "activity/main-R7D6TKRP.js"
     ]
   },
   "routes": {
     "home": {
-      "rawBytes": 674127,
-      "gzipBytes": 203216,
+      "rawBytes": 674221,
+      "gzipBytes": 203245,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
         "activity/chunks/bootstrap-H3MLJBIB.js",
@@ -33,15 +33,15 @@
         "activity/chunks/home-page-7P7BHJ6R.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-B2Q3Z7U5.js",
-        "activity/main-JLV43MGT.js"
+        "activity/main-R7D6TKRP.js"
       ]
     },
     "documents": {
-      "rawBytes": 717443,
-      "gzipBytes": 219467,
+      "rawBytes": 717648,
+      "gzipBytes": 219546,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
-        "activity/chunks/app-QB3TB7TB.js",
+        "activity/chunks/app-2S5B6BFD.js",
         "activity/chunks/bootstrap-H3MLJBIB.js",
         "activity/chunks/chunk-47YQ4K53.js",
         "activity/chunks/chunk-7OSQWNIS.js",
@@ -57,12 +57,12 @@
         "activity/chunks/import-bootstrap-CT2C23DV.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-B2Q3Z7U5.js",
-        "activity/main-JLV43MGT.js"
+        "activity/main-R7D6TKRP.js"
       ]
     },
     "kanban": {
-      "rawBytes": 748856,
-      "gzipBytes": 215809,
+      "rawBytes": 748950,
+      "gzipBytes": 215838,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
         "activity/chunks/board-3GJHUSSY.js",
@@ -75,12 +75,12 @@
         "activity/chunks/member-picker-remote-DPFGXGQM.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-B2Q3Z7U5.js",
-        "activity/main-JLV43MGT.js"
+        "activity/main-R7D6TKRP.js"
       ]
     },
     "planner": {
-      "rawBytes": 676041,
-      "gzipBytes": 202614,
+      "rawBytes": 676135,
+      "gzipBytes": 202643,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
         "activity/chunks/bootstrap-H3MLJBIB.js",
@@ -93,7 +93,7 @@
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/planner-member-directory-SDFEOQ46.js",
         "activity/chunks/product-integration-B2Q3Z7U5.js",
-        "activity/main-JLV43MGT.js"
+        "activity/main-R7D6TKRP.js"
       ]
     }
   },
@@ -299,9 +299,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/app-QB3TB7TB.js",
-      "rawBytes": 20571,
-      "gzipBytes": 7035,
+      "file": "activity/chunks/app-2S5B6BFD.js",
+      "rawBytes": 20682,
+      "gzipBytes": 7085,
       "inputs": [
         "src/activity/app.js"
       ],
@@ -309,9 +309,9 @@
       "justification": null
     },
     {
-      "file": "activity/main-JLV43MGT.js",
-      "rawBytes": 16217,
-      "gzipBytes": 5956,
+      "file": "activity/main-R7D6TKRP.js",
+      "rawBytes": 16311,
+      "gzipBytes": 5985,
       "inputs": [
         "src/activity/ui/primitives.js",
         "src/activity/ui/runtime.js",

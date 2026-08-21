@@ -1,6 +1,6 @@
 critical-shell: 66.6 KiB gzip
 home: 198.5 KiB gzip
-documents: 214.3 KiB gzip
+documents: 214.4 KiB gzip
 kanban: 210.8 KiB gzip
 planner: 197.9 KiB gzip
 72x72 avatar: 6.7 KiB

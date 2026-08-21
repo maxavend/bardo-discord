@@ -36,12 +36,14 @@ function showRetryNotice(message) {
 
 async function authenticateActivity() {
   const params = new URLSearchParams(window.location.search);
-  const instanceId = params.get('instance_id') || null;
-  if (!isEmbeddedActivity() || !instanceId) {
-    return { instanceId, guildId: null, sessionToken: null, accessToken: null, sdk: null };
+  const queryInstanceId = params.get('instance_id') || null;
+  if (!isEmbeddedActivity()) {
+    return { instanceId: queryInstanceId, guildId: null, sessionToken: null, accessToken: null, sdk: null };
   }
 
   const sdk = new DiscordSDK(resolveClientId());
+  const instanceId = sdk.instanceId || queryInstanceId;
+  if (!instanceId) throw new Error('Discord no entregó el identificador de la Activity.');
   await sdk.ready();
   const guildId = sdk.guildId || params.get('guild_id') || null;
   let authorization;
