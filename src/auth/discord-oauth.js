@@ -4,6 +4,7 @@ import { loadEvent } from '../event-db.js';
 import { parseBoardTarget } from '../kanban.js';
 import { parseEventTarget } from '../event.js';
 import { parseHomeTarget } from '../home-target.js';
+import { grantDocumentToGuild } from '../services/entity-links.js';
 import { createActivitySessionToken } from './session-token.js';
 import { readActivityInstanceId } from './activity-access.js';
 
@@ -56,7 +57,6 @@ async function resolveServerAuthorization(fetchImpl, env, context, userId, reque
   const document = await loadDocument(env.DB, context.documentId);
   if (!document) return null;
 
-  // Event minutes have an authoritative guild relationship on the event itself.
   const linkedEvent = await env.DB
     .prepare('SELECT guild_id FROM events WHERE minute_document_id = ? LIMIT 1')
     .bind(context.documentId)
@@ -70,14 +70,15 @@ async function resolveServerAuthorization(fetchImpl, env, context, userId, reque
 
   if (String(document.createdBy || '') !== String(userId)) return null;
 
-  // A normal document remains personal when no guild was requested. When it is
-  // opened inside a Discord guild, bind the session only after verifying real
-  // guild membership. This is what safely unlocks Phase 4 cross-product flows.
   if (requestedGuildId) {
     const member = await verifyGuildMember(fetchImpl, env, requestedGuildId, userId);
     return member ? { guildId: requestedGuildId } : null;
   }
   return { guildId: null };
+}
+
+function isDocumentTarget(target) {
+  return Boolean(target && !parseHomeTarget(target) && !parseBoardTarget(target) && !parseEventTarget(target));
 }
 
 export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch) {
@@ -137,6 +138,9 @@ export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch
     guildId: serverGuildId,
     expiresAt,
   });
+  if (serverGuildId && isDocumentTarget(context.documentId)) {
+    await grantDocumentToGuild(env.DB, context.documentId, serverGuildId, userId);
+  }
 
   const sessionToken = await createActivitySessionToken({
     secret: env.BARDO_SESSION_SECRET || env.DISCORD_CLIENT_SECRET,
