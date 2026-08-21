@@ -60,7 +60,7 @@ test('release gate cannot silently claim RELEASE_READY without remote and human 
 test('release runbook documents forward-only recovery and explicit abort conditions', () => {
   const runbook = read('docs/release-runbook.md');
   assert.match(runbook, /forward-only/i);
-  assert.match(runbook, /migraci[oó]n compensatoria/i);
+  assert.match(runbook, /compensating migration|migraci[oó]n compensatoria/i);
   assert.match(runbook, /backup/i);
   assert.match(runbook, /rollback/i);
   assert.match(runbook, /Discord/i);
