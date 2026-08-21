@@ -1,5 +1,6 @@
 import './ui/runtime.js';
 import './security-bootstrap.js';
+import './resource-polling.js';
 
 const params = new URLSearchParams(window.location.search);
 
