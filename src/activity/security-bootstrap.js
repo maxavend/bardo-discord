@@ -2,6 +2,7 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { getMemberRoleBadge } from './member-role.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
+const INSTANCE_STORAGE_KEY = 'bardo.discord.instance-id';
 const originalFetch = window.fetch.bind(window);
 
 function resolveClientId() {
@@ -12,6 +13,15 @@ function resolveClientId() {
 function isEmbeddedActivity() {
   const params = new URLSearchParams(window.location.search);
   return params.has('instance_id') || params.has('frame_id') || window.location.hostname.endsWith('.discordsays.com');
+}
+
+function storedInstanceId() {
+  try { return window.sessionStorage.getItem(INSTANCE_STORAGE_KEY); } catch { return null; }
+}
+
+function rememberInstanceId(instanceId) {
+  if (!instanceId) return;
+  try { window.sessionStorage.setItem(INSTANCE_STORAGE_KEY, instanceId); } catch {}
 }
 
 function showRetryNotice(message) {
@@ -36,7 +46,7 @@ function showRetryNotice(message) {
 
 async function authenticateActivity() {
   const params = new URLSearchParams(window.location.search);
-  const queryInstanceId = params.get('instance_id') || null;
+  const queryInstanceId = params.get('instance_id') || storedInstanceId() || null;
   if (!isEmbeddedActivity()) {
     return { instanceId: queryInstanceId, guildId: null, sessionToken: null, accessToken: null, sdk: null };
   }
@@ -44,6 +54,7 @@ async function authenticateActivity() {
   const sdk = new DiscordSDK(resolveClientId());
   const instanceId = sdk.instanceId || queryInstanceId;
   if (!instanceId) throw new Error('Discord no entregó el identificador de la Activity.');
+  rememberInstanceId(instanceId);
   await sdk.ready();
   const guildId = sdk.guildId || params.get('guild_id') || null;
   let authorization;

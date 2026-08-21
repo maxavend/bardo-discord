@@ -75,9 +75,14 @@ test('open-code UI primitives cover dialogs, menus, popovers, selects, tabs and 
 test('Discord authentication resolves instance and document targets from the SDK without query parameters', async () => {
   const security = await read('src/activity/security-bootstrap.js');
   const reader = await read('src/activity/app.js');
+  const navigation = await read('src/activity/product-integration.js');
   assert.match(security, /const instanceId = sdk\.instanceId \|\| queryInstanceId/);
   assert.doesNotMatch(security, /!isEmbeddedActivity\(\) \|\| !instanceId/);
+  assert.match(security, /sessionStorage\.setItem\(INSTANCE_STORAGE_KEY, instanceId\)/);
   assert.match(reader, /window\.location\.hostname\.endsWith\('\.discordsays\.com'\)/);
   assert.match(reader, /globalThis\.__bardoActivityAuth\?\.ready/);
   assert.match(reader, /return sharedAuth\.sdk/);
+  assert.match(navigation, /productParams = new Set/);
+  assert.match(navigation, /nextUrl\.searchParams\.set\('instance_id', instanceId\)/);
+  assert.match(navigation, /location\.assign\(nextUrl\.toString\(\)\)/);
 });

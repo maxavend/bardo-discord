@@ -19,7 +19,15 @@ async function navigateTo(type, id = null) {
   const response = await fetch('/api/navigation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id }) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const payload = await response.json();
-  location.assign(payload.route);
+  const nextUrl = new URL(payload.route, location.origin);
+  const currentUrl = new URL(location.href);
+  const productParams = new Set(['home', 'document', 'board', 'event', 'task', 'custom_id']);
+  for (const [key, value] of currentUrl.searchParams) {
+    if (!productParams.has(key) && !nextUrl.searchParams.has(key)) nextUrl.searchParams.set(key, value);
+  }
+  const instanceId = globalThis.__bardoActivityAuth?.state?.instanceId;
+  if (instanceId && !nextUrl.searchParams.has('instance_id')) nextUrl.searchParams.set('instance_id', instanceId);
+  location.assign(nextUrl.toString());
 }
 globalThis.__bardoNavigate = navigateTo;
 
