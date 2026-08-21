@@ -7,6 +7,10 @@ mkdirSync(artifactDir, { recursive: true });
 
 const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const wrangler = JSON.parse(readFileSync(resolve(root, 'wrangler.jsonc'), 'utf8'));
+const axePath = resolve(artifactDir, 'axe-results.json');
+const auditPath = resolve(artifactDir, 'npm-audit-summary.json');
+const axe = existsSync(axePath) ? JSON.parse(readFileSync(axePath, 'utf8')) : null;
+const audit = existsSync(auditPath) ? JSON.parse(readFileSync(auditPath, 'utf8')) : null;
 
 const automatic = {
   explicitDeployCommands:
@@ -25,6 +29,10 @@ const automatic = {
   phase7TestsWired:
     String(packageJson.scripts?.['test:unit'] || '').includes('test/phase7-release.test.js') &&
     String(packageJson.scripts?.['test:worker'] || '').includes('test/phase7-runtime.test.js'),
+  axeEvidenceCaptured:
+    Boolean(axe) && axe.axeCliVersion === '4.13.0' && Number(axe.totals?.critical || 0) === 0,
+  dependencyAuditCaptured:
+    Boolean(audit) && Number(audit.counts?.critical || 0) === 0,
 };
 
 const external = {
@@ -48,6 +56,8 @@ const report = {
   external,
   automaticFailures,
   externalPending,
+  accessibility: axe ? { axeCliVersion: axe.axeCliVersion, totals: axe.totals } : null,
+  dependencyAudit: audit ? { counts: audit.counts, packages: audit.vulnerabilities?.map((item) => ({ name: item.name, severity: item.severity, direct: item.direct, fixAvailable: item.fixAvailable })) || [] } : null,
   note: releaseReady
     ? 'All automated and human-authorized release gates are evidenced.'
     : 'Automated hardening may pass while remote staging, real Discord pilot and/or human approval remain explicit release gates.',
@@ -55,6 +65,8 @@ const report = {
 
 writeFileSync(resolve(artifactDir, 'release-readiness.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 console.log(`[release] automatic=${automaticFailures.length ? `FAIL:${automaticFailures.join(',')}` : 'PASS'}`);
+console.log(`[release] axe=${axe ? `critical=${axe.totals?.critical || 0} serious=${axe.totals?.serious || 0} total=${axe.totals?.violations || 0}` : 'missing'}`);
+console.log(`[release] audit=${audit ? `critical=${audit.counts?.critical || 0} high=${audit.counts?.high || 0} moderate=${audit.counts?.moderate || 0}` : 'missing'}`);
 console.log(`[release] external=${externalPending.length ? `PENDING:${externalPending.join(',')}` : 'PASS'}`);
 console.log(`[release] state=${report.state}`);
 
