@@ -17,10 +17,10 @@ function chromePath(){for(const name of ['google-chrome','google-chrome-stable',
 function run(chrome,args){return new Promise((resolveRun,reject)=>{const child=spawn(chrome,args,{stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',(chunk)=>{stdout+=chunk;});child.stderr.on('data',(chunk)=>{stderr+=chunk;});child.on('error',reject);child.on('close',(code)=>code===0?resolveRun(stdout):reject(new Error(stderr||stdout||`Chrome failed with ${code}`)));});}
 const chrome=chromePath();
 try{
-  for(const scenario of ['queue','conflict','retry']){
+  for(const scenario of ['queue','conflict','retry','ui-error','ui-conflict','exit-dirty']){
     const url=`http://127.0.0.1:4174/test/e2e/editor-reliability.html?scenario=${scenario}`;
-    const dom=await run(chrome,['--headless=new','--no-sandbox','--disable-gpu','--virtual-time-budget=1200','--dump-dom',url]);
-    if(!dom.includes('data-editor-check="pass"'))throw new Error(`Phase 5 editor browser scenario failed: ${scenario}\n${dom.slice(0,1800)}`);
+    const dom=await run(chrome,['--headless=new','--no-sandbox','--disable-gpu','--virtual-time-budget=2200','--dump-dom',url]);
+    if(!dom.includes('data-editor-check="pass"'))throw new Error(`Phase 5 editor browser scenario failed: ${scenario}\n${dom.slice(0,2400)}`);
     console.log(`EDITOR_BROWSER ${scenario} PASS`);
   }
 }finally{await new Promise((resolveClose)=>server.close(resolveClose));}
