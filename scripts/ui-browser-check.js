@@ -15,7 +15,8 @@ function run(args){return new Promise((resolveRun,reject)=>{const child=spawn(ch
 function hash(buffer){return createHash('sha256').update(buffer).digest('hex').slice(0,16);}
 function diagnostics(dom){const body=dom.match(/<body[^>]*>/i)?.[0]||'<body unavailable>';return body.slice(0,1200);}
 const expectedPath=resolve('test/visual/baseline-hashes.json');const expected=existsSync(expectedPath)?JSON.parse(await readFile(expectedPath,'utf8')):{};const actual={};
-const common=['--headless=new','--no-sandbox','--disable-gpu','--virtual-time-budget=1000'];
+// Grayscale antialiasing avoids tiny LCD/subpixel color differences between GitHub-hosted runners.
+const common=['--headless=new','--no-sandbox','--disable-gpu','--disable-lcd-text','--font-render-hinting=none','--virtual-time-budget=1000'];
 const contractViewport='--window-size=768,900';
 try{
   for(const view of ['docs','kanban','planner']){
