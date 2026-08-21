@@ -85,7 +85,7 @@ test('two editor sessions cannot silently overwrite the same base version', asyn
   assert.ok(historyData.revisions.some((item) => item.version === 1));
 }));
 
-test('PATCH requires an expected version and restore creates a new version without deleting history', async () => withRuntime(async (env) => {
+test('PATCH requires an expected version and restore always creates a new version without deleting history', async () => withRuntime(async (env) => {
   await fixture(env);
   const missing = await p5Entry.fetch(req(INSTANCE_A, `/api/documents/${DOC}`, {
     method: 'PATCH', body: { title: 'Sin versión', markdown: '# Sin versión' },
@@ -106,11 +106,11 @@ test('PATCH requires an expected version and restore creates a new version witho
   const original = history.revisions.find((item) => item.version === 1);
   assert.ok(original?.id);
 
-  const restored = await p5Entry.fetch(req(INSTANCE_A, `/api/documents/${DOC}/history/${original.id}/restore`, {
+  let restored = await p5Entry.fetch(req(INSTANCE_A, `/api/documents/${DOC}/history/${original.id}/restore`, {
     method: 'POST', version: 3, body: { expectedVersion: 3 },
   }), env, { waitUntil() {} });
   assert.equal(restored.status, 200);
-  const restoredDoc = (await restored.json()).document;
+  let restoredDoc = (await restored.json()).document;
   assert.equal(restoredDoc.version, 4);
   assert.equal(restoredDoc.title, 'Original');
 
@@ -120,6 +120,18 @@ test('PATCH requires an expected version and restore creates a new version witho
   assert.ok(afterHistory.revisions.some((item) => item.version === 3));
   assert.ok(afterHistory.revisions.some((item) => item.version === 2));
   assert.ok(afterHistory.revisions.some((item) => item.version === 1));
+
+  restored = await p5Entry.fetch(req(INSTANCE_A, `/api/documents/${DOC}/history/${original.id}/restore`, {
+    method: 'POST', version: 4, body: { expectedVersion: 4 },
+  }), env, { waitUntil() {} });
+  assert.equal(restored.status, 200);
+  restoredDoc = (await restored.json()).document;
+  assert.equal(restoredDoc.version, 5);
+  assert.equal(restoredDoc.title, 'Original');
+  const finalHistory = await p5Entry.fetch(req(INSTANCE_A, `/api/documents/${DOC}/history`), env, {});
+  const finalHistoryData = await finalHistory.json();
+  assert.equal(finalHistoryData.current.version, 5);
+  assert.ok(finalHistoryData.revisions.some((item) => item.version === 4));
 }));
 
 test('legacy/system document rewrites also advance version through the migration trigger', async () => withRuntime(async (env) => {
