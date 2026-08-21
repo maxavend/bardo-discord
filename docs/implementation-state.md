@@ -2,7 +2,7 @@
 
 Updated: 2026-08-20
 Plan: Plan maestro de implementación agéntica — Bardo para Discord v1.0
-Current phase: 2 — Domain, time, members, commands and notifications
+Current phase: 3 — Bardo UI design system and visual migration
 Phase status: PHASE_READY
 
 ## Repository state
@@ -12,9 +12,11 @@ Phase status: PHASE_READY
 - Integration branch: `feat/bardo-unified-experience`
 - Integration PR: #5 (draft)
 - Phase 1 certified SHA: `cac810e90f35c37acc3ba840bdcf369eb8addfd4`
-- Phase 2 branch: `codex/p2-domain-time-notifications`
-- Phase 2 PR: #9 (draft → `feat/bardo-unified-experience`)
-- Phase 2 code gate SHA: `057e1ddb324f56be228098f62dc1182416fb44a1`
+- Phase 2 certified SHA: `4a0855fbb40328687f3d582c213915989af2b59c`
+- Phase 3A foundations SHA: `7d0ea142e7d72430f64c8c5e72416a8d56c63001`
+- Phase 3B branch: `codex/p3-bardo-ui-migration`
+- Phase 3B PR: #11 (draft → `feat/bardo-unified-experience`)
+- Phase 3 stabilized visual code gate SHA: `63b514bf10a01d51f5928b43f03507522ea64d73`
 
 `main` is not a target of phase work. No production deploy, remote migration, Discord command registration or branch deletion is authorized by this state document.
 
@@ -55,7 +57,31 @@ Delivered:
 
 The Discord command definitions were updated in source only. `scripts/register-commands.js` was not executed.
 
-The `/bardo` Home command remains intentionally coupled to Phase 4, where the master plan defines the actual Bardo Home experience. Phase 2 does not invent a placeholder Home surface merely to satisfy command registration before its product destination exists.
+### Phase 3 — PHASE_READY
+
+Implementation and verification are documented in `docs/phase3-bardo-ui.md` and the audit in `docs/bardo-ui-audit.md`.
+
+Delivered:
+
+- one shared `src/activity/ui/` design-system authority for Documents, Kanban and Planner;
+- semantic tokens, spacing/radius/control contracts, light/dark, high contrast and reduced motion;
+- reusable primitives and product patterns;
+- unified `Inicio · Documentos · Tableros · Agenda` contextual navigation;
+- centralized dialog focus trap, focus restoration and dirty-form dismissal protection;
+- Documents migration to shared controls/navigation;
+- Kanban shell/cards/filter/overflow migration, terminal padding and controlled drag auto-scroll;
+- Planner Agenda/Calendario/Live migration, accessible tabs, scalable member selection and larger Live targets;
+- real headless-Chrome UI evidence at 390, 768 and 1440 px;
+- frozen deterministic visual baseline after disabling flaky LCD/subpixel rasterization.
+
+Certified visual gate:
+
+- CI #294 generated the stabilized browser baseline successfully;
+- CI #296 reproduced the exact frozen hashes and passed build, 63 unit tests, 41 Worker tests, E2E, accessibility, visual regression, reduced motion and forced/high contrast.
+
+The Phase 3 browser gate is representative Activity UI evidence, not a deployed Discord environment. No staging/production deployment was invented for certification.
+
+`Inicio` remains intentionally unavailable until Phase 4 implements the real Bardo Home surface.
 
 ## Migration history
 
@@ -83,6 +109,7 @@ No remote migration has been applied by this plan.
 - Worker entry: `src/p2-entry.js`.
 - Phase 2 orchestrator: `src/p2-worker.js`.
 - Legacy Workers remain behind the strangler layer for untouched routes.
+- Shared Activity UI authority: `src/activity/ui/`.
 - D1: `DB` → `bardo-db`.
 - R2: `BACKUPS` → `bardo-backups`.
 - Assets: `ASSETS`.
@@ -90,19 +117,20 @@ No remote migration has been applied by this plan.
 
 ## Quality gates
 
-Phase 2 has real unit and Worker/runtime coverage for:
+Current CI includes:
 
-- all required duration and clock formats;
-- invalid time/duration/date cases and leap years;
-- timezone precedence and DST spring/fall behavior;
-- authorized remote member lookup and bot filtering;
-- notification preference persistence and unique dedupe keys in local D1;
-- Discord DM privacy/transient error classification;
-- shared task-service wiring across the three task entry points;
-- Activity security regression tests from Phase 1;
-- all local D1 migrations through `0011`.
+- reproducible `npm ci`;
+- Activity build and syntax/static checks;
+- floating-promise regression characterization;
+- Wrangler binding type generation;
+- unit tests;
+- Worker/runtime + local D1 migration tests;
+- Phase 3 browser fixture E2E and accessibility gates;
+- headless-Chrome visual regression for Documents, Kanban and Planner at 390/768/1440;
+- reduced-motion and forced/high-contrast browser checks;
+- uploaded `phase3-ui-evidence` PNG artifact.
 
-The existing `test:e2e` and `test:a11y` commands are still Phase-0 TODO gates and must not be described as real browser/axe coverage. Browser, visual and full accessibility certification remains in the later UI/QA phases.
+Known characterized debt remains visible rather than silently hidden: legacy async-ownership/empty-catch warnings, package audit findings and large PDF/library bundle chunks.
 
 ## Guardrails
 
@@ -114,4 +142,4 @@ The existing `test:e2e` and `test:a11y` commands are still Phase-0 TODO gates an
 
 ## Next phase
 
-Phase 3 — Bardo UI: design system and visual migration — is unlocked after the Phase 2 closeout commit passes CI and is fast-forwarded into `feat/bardo-unified-experience`.
+Phase 4 — product integration: Bardo Home, linked entities, Documents → tasks, Events → tasks → minutes and cross-module deep links/backlinks — is unlocked after the Phase 3 closeout head passes CI and is fast-forwarded into `feat/bardo-unified-experience`.
