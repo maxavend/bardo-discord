@@ -16,8 +16,8 @@
     "types:generate": "node scripts/generate-worker-types.js",
     "check": "npm run build && npm run check:syntax && npm run check:promises && npm run types:generate",
     "test": "npm run build && node --test",
-    "test:unit": "node --test test/backup-r2.test.js test/components.test.js test/db.test.js test/event.test.js test/export-format.test.js test/import-db.test.js test/import-format.test.js test/pagination.test.js",
-    "test:worker": "node --test test/worker.test.js test/kanban.test.js test/security-phase1.test.js test/event-integrity.test.js test/kanban-phase1.test.js test/worker-runtime.test.js",
+    "test:unit": "node --test test/backup-r2.test.js test/components.test.js test/db.test.js test/event.test.js test/export-format.test.js test/import-db.test.js test/import-format.test.js test/pagination.test.js test/phase2.test.js",
+    "test:worker": "node --test test/worker.test.js test/kanban.test.js test/security-phase1.test.js test/event-integrity.test.js test/kanban-phase1.test.js test/phase2-runtime.test.js test/worker-runtime.test.js",
     "test:e2e": "node --test test/e2e/phase0.test.js",
     "test:a11y": "node --test test/a11y/phase0.test.js",
     "analyze": "wrangler check startup"
