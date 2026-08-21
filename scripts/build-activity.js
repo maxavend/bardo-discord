@@ -73,7 +73,10 @@ async function createBuildReport(metafile, avatarAssets) {
       'src/activity/export-security.js', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js',
     ],
     kanban: ['src/activity/board.js', 'src/activity/member-picker-remote.js', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js'],
-    planner: ['src/activity/event.js', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js'],
+    planner: [
+      'src/activity/event.js', 'src/activity/planner-member-directory.js',
+      'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js',
+    ],
   };
 
   const sum = (set, field) => [...set].reduce((total, key) => total + Number(sizes[key]?.[field] || 0), 0);
