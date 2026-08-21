@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T17:09:16.878Z",
+  "generatedAt": "2026-08-21T17:14:16.706Z",
   "budgets": {
     "criticalShellGzipBytes": 81920,
     "initialRouteGzipBytes": 256000,
@@ -8,33 +8,33 @@
     "avatarBytes": 51200
   },
   "shell": {
-    "rawBytes": 215331,
-    "gzipBytes": 61070,
+    "rawBytes": 215402,
+    "gzipBytes": 61102,
     "files": [
       "activity/bardo-ui-LWWMLHOM.css",
       "activity/chunks/chunk-NLRERPBA.js",
       "activity/chunks/chunk-SIUIQO43.js",
-      "activity/main-RP6VLKSF.js",
+      "activity/main-SSRCTBMG.js",
       "activity/styles-6NTVVYM2.css"
     ]
   },
   "routes": {
     "home": {
-      "rawBytes": 232945,
-      "gzipBytes": 67395,
+      "rawBytes": 233016,
+      "gzipBytes": 67427,
       "files": [
         "activity/bardo-ui-LWWMLHOM.css",
         "activity/chunks/chunk-NLRERPBA.js",
         "activity/chunks/chunk-SIUIQO43.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-RP6VLKSF.js",
+        "activity/main-SSRCTBMG.js",
         "activity/styles-6NTVVYM2.css"
       ]
     },
     "documents": {
-      "rawBytes": 279911,
-      "gzipBytes": 84854,
+      "rawBytes": 279982,
+      "gzipBytes": 84886,
       "files": [
         "activity/bardo-ui-LWWMLHOM.css",
         "activity/chunks/app-QL6FGLBR.js",
@@ -47,13 +47,13 @@
         "activity/chunks/import-bootstrap-SGLWIA5N.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-RP6VLKSF.js",
+        "activity/main-SSRCTBMG.js",
         "activity/styles-6NTVVYM2.css"
       ]
     },
     "kanban": {
-      "rawBytes": 343910,
-      "gzipBytes": 92246,
+      "rawBytes": 343981,
+      "gzipBytes": 92278,
       "files": [
         "activity/bardo-ui-LWWMLHOM.css",
         "activity/chunks/board-YAVIKXTB.js",
@@ -62,13 +62,13 @@
         "activity/chunks/member-picker-remote-DPFGXGQM.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-RP6VLKSF.js",
+        "activity/main-SSRCTBMG.js",
         "activity/styles-6NTVVYM2.css"
       ]
     },
     "planner": {
-      "rawBytes": 271095,
-      "gzipBytes": 79050,
+      "rawBytes": 271166,
+      "gzipBytes": 79082,
       "files": [
         "activity/bardo-ui-LWWMLHOM.css",
         "activity/chunks/chunk-NLRERPBA.js",
@@ -77,7 +77,7 @@
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/planner-member-directory-LLZLEZJ4.js",
         "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-RP6VLKSF.js",
+        "activity/main-SSRCTBMG.js",
         "activity/styles-6NTVVYM2.css"
       ]
     }
@@ -180,9 +180,9 @@
       "justification": null
     },
     {
-      "file": "activity/main-RP6VLKSF.js",
-      "rawBytes": 15735,
-      "gzipBytes": 5796,
+      "file": "activity/main-SSRCTBMG.js",
+      "rawBytes": 15806,
+      "gzipBytes": 5828,
       "inputs": [
         "src/activity/ui/primitives.js",
         "src/activity/ui/runtime.js",

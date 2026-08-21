@@ -67,7 +67,11 @@ async function authenticateActivity() {
 
   const tokens = await response.json();
   if (!tokens?.access_token || !tokens?.session_token) throw new Error('La sesión de Activity está incompleta.');
-  await sdk.commands.authenticate({ access_token: tokens.access_token });
+  try {
+    await sdk.commands.authenticate({ access_token: tokens.access_token });
+  } catch (err) {
+    console.warn('Discord SDK authenticate skipped/failed:', err);
+  }
 
   return {
     instanceId,
