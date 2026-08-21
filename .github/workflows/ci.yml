@@ -31,6 +31,8 @@ jobs:
         run: npm run test:a11y
       - name: Visual regression evidence
         run: npm run test:visual
+      - name: Release readiness evidence
+        run: npm run check:release
       - name: Upload Phase 3 UI evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -47,4 +49,11 @@ jobs:
             .artifacts/activity-build.json
             .artifacts/activity-build.txt
             .artifacts/environment-isolation.json
+          if-no-files-found: error
+      - name: Upload Phase 7 release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-release-evidence
+          path: .artifacts/release
           if-no-files-found: error
