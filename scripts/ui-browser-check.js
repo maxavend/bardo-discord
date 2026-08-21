@@ -123,6 +123,7 @@ const expected = existsSync(expectedPath) ? JSON.parse(await readFile(expectedPa
 const updateBaseline = process.env.UPDATE_VISUAL_BASELINE === '1';
 const signatures = {};
 const pngHashes = {};
+const visualMismatches = [];
 const phase3Views=['docs','kanban','planner'];
 const phase4Views=['home'];
 const requiredViewports=[390,768,1440];
@@ -142,11 +143,12 @@ try {
       if (!signature) throw new Error(`Visual signature is missing for ${key}: ${diagnostics(dom)}`);
       signatures[key] = signature;
       console.log(`VISUAL_SIGNATURE ${key} ${signature}`);
-      if (!updateBaseline && expected[key] && expected[key] !== signature) throw new Error(`Visual regression: ${key} expected signature ${expected[key]} got ${signature}`);
+      if (!updateBaseline && expected[key] && expected[key] !== signature) visualMismatches.push(`${key} expected signature ${expected[key]} got ${signature}`);
       pngHashes[key] = hash(await readFile(shot));
       console.log(`VISUAL_PNG_HASH ${key} ${pngHashes[key]}`);
     }
   }
+  if (visualMismatches.length) throw new Error(`Visual regression:\n${visualMismatches.join('\n')}`);
   const homeUrl = 'http://127.0.0.1:4173/test/visual/fixture.html?view=home';
   const reduced = await renderPage(client, { url: homeUrl, width: 768, reducedMotion: true });
   assertBrowserContract(reduced, 'Reduced-motion');
