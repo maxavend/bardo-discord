@@ -139,6 +139,12 @@ try {
         description: violation.description,
         help: violation.help,
         nodes: Array.isArray(violation.nodes) ? violation.nodes.length : 0,
+        nodeDetails: Array.isArray(violation.nodes) ? violation.nodes.map((node) => ({
+          target: node.target,
+          html: node.html,
+          failureSummary: node.failureSummary,
+          any: Array.isArray(node.any) ? node.any.map(({ id, impact, message, data }) => ({ id, impact, message, data })) : [],
+        })) : [],
       })),
     };
     console.log(`AXE ${view} violations=${counts.violations} critical=${counts.critical} serious=${counts.serious}`);
