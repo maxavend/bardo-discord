@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ['main', 'feat/bardo-unified-experience']
 
+permissions:
+  contents: write
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -19,6 +22,16 @@ jobs:
           cache: npm
       - name: Refresh lockfile security fixes
         run: npm audit fix --package-lock-only --ignore-scripts
+      - name: Persist lockfile security fixes
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/p7-release-hardening'
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -- package-lock.json
+            git commit -m 'chore(deps): persist audited lockfile'
+            git push origin HEAD:codex/p7-release-hardening
+          fi
       - name: Install dependencies
         run: npm ci
       - name: Build and static checks
@@ -37,13 +50,6 @@ jobs:
         run: npm run audit:release
       - name: Release readiness evidence
         run: npm run check:release
-      - name: Upload regenerated lockfile
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase7-regenerated-lockfile
-          path: package-lock.json
-          if-no-files-found: error
       - name: Upload Phase 3 UI evidence
         if: always()
         uses: actions/upload-artifact@v4
