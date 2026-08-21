@@ -38,3 +38,12 @@ jobs:
           name: phase3-ui-evidence
           path: .artifacts/ui
           if-no-files-found: warn
+      - name: Upload Phase 6 performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-performance-evidence
+          path: |
+            .artifacts/activity-build.json
+            .artifacts/activity-build.txt
+          if-no-files-found: error
