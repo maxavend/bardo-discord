@@ -2,7 +2,7 @@
 
 Updated: 2026-08-21
 Plan: Plan maestro de implementación agéntica — Bardo para Discord v1.0
-Current phase: 5 — Editor reliability and collaboration
+Current phase: 6 — Performance, observability and scalability
 Phase status: PHASE_READY
 
 ## Repository state
@@ -15,12 +15,13 @@ Phase status: PHASE_READY
 - Phase 2 certified SHA: `4a0855fbb40328687f3d582c213915989af2b59c`
 - Phase 3 certified integration SHA: `50351a19fcb0a0b0c27a9e9cbc10f35037925146`
 - Phase 4 implementation certified SHA: `974836ff1fa7d1b37541962e9597fb4682eed438`
-- Phase 5 code-gate SHA: `27a1911f92954a16e0053d1a9fafe277e5b240f1`
 - Phase 5 integrated functional SHA: `73394286dc93f6af80c9b919183c02953ad71f4f`
-- Phase 5 branch: `codex/p5-editor-reliability`
-- Phase 5 PR: #14 (merged by fast-forward into `feat/bardo-unified-experience`)
+- Phase 6 code-gate SHA: `8e7cfa59d742fe8debe837ff996de570a9c285f5`
+- Phase 6 code-gate CI: #470 / `32495874910`
+- Phase 6 branch: `codex/p6-performance-observability`
+- Phase 6 PR: #15 (ready for fast-forward into integration after final documentation CI)
 
-`main` is not a target of phase work. No production deploy, remote migration, Discord command registration or branch deletion is authorized by this state document.
+`main` is not a target of phase work. No production deploy, remote migration, remote staging provisioning, Discord command registration or branch deletion is authorized by this state document.
 
 ## Certified phases
 
@@ -64,24 +65,42 @@ Frozen Home signatures:
 
 Implementation and verification are documented in `docs/phase5-editor-reliability.md`.
 
+Delivered optimistic document versioning with ETag/required preconditions, server-confirmed save state, safe dirty exit, recoverable local drafts, bounded 30-revision history, restore-as-new-version semantics, legacy writer version advancement and full long-document pagination preservation.
+
+Phase 5 code gate CI #405 (`32486915409`) passed with 67/67 unit tests and 53/53 Worker/runtime tests. Final closeout CI #411 (`32487246451`) reproduced the complete gate on integrated functional SHA `73394286dc93f6af80c9b919183c02953ad71f4f`.
+
+### Phase 6 — PHASE_READY
+
+Implementation and verification are documented in `docs/phase6-performance-observability.md`.
+
 Delivered:
 
-- optimistic document versioning with ETag + required `If-Match`/`expectedVersion`;
-- `409 DOCUMENT_VERSION_CONFLICT` with minimal metadata rather than silent overwrite;
-- one-save-at-a-time/coalescing editor state machine: `clean → dirty → saving → saved`, plus `error` and `conflict`;
-- explicit safe-exit behavior that triggers the real Ctrl/Cmd+S editor path and waits for server confirmation;
-- document-scoped seven-day local drafts for recoverable failure/pagehide scenarios;
-- accessible conflict/error recovery surfaces with copy/retry/reload choices;
-- bounded 30-revision document history with author/time/reason where available;
-- restore-as-new-version semantics that preserve prior history;
-- legacy/system writer version advancement so concurrency cannot be bypassed;
-- full long-document pagination preservation after versioned edits.
+- route-aware lazy Activity boot and minified split bundles;
+- enforced gzip/image performance budgets and CI evidence;
+- generated 72/144px Bardo avatar assets instead of serving the 821 KB source;
+- ETag/`If-None-Match`/`304` resource revalidation for Kanban and Planner;
+- adaptive polling at ~5s / 12s / 30s with hidden-page suppression and failure backoff up to 60s;
+- Kanban polling without guild member/role directories;
+- Planner payloads with referenced people only plus remote member search on demand, including empty-list first-member support;
+- privacy-safe structured request/error/auth/editor/export/cron telemetry;
+- `sent`/`skipped`/`failed` notification-delivery telemetry without recipient/entity IDs;
+- `src/p6-entry.js` as the real Wrangler entry;
+- explicit isolated staging/production configuration and a CI environment-isolation contract.
 
-Phase 5 code gate SHA `27a1911f92954a16e0053d1a9fafe277e5b240f1` passed CI #405 (`32486915409`): build/static checks, 67/67 unit tests, 53/53 Worker/runtime tests with all 15 local migrations, browser E2E, accessibility and the existing deterministic visual regression suite. Final closeout CI #411 (`32487246451`) reproduced the complete gate on integrated functional SHA `73394286dc93f6af80c9b919183c02953ad71f4f`.
+Phase 6 code gate SHA `8e7cfa59d742fe8debe837ff996de570a9c285f5` passed CI #470 (`32495874910`): 72/72 unit tests, 55/55 Worker/runtime tests with all 15 local migrations, E2E, six real editor-browser scenarios, accessibility and the complete deterministic visual suite.
 
-The Phase 5 browser gate covers six scenarios: queue/coalescing, conflict, retry, real UI network failure, real UI conflict and dirty Guardar/Salir waiting for a confirmed save.
+Certified Phase 6 performance evidence:
 
-The adversarial closeout repaired three reliability defects that the earlier isolated save-machine gate did not catch: recursive error/conflict timers, Ctrl+S dispatched to the wrong DOM target during exit, and a dirty→save timing race. It also repaired a backend long-document regression where the versioned writer retained only the first generated `pages` chunk.
+- critical shell: 59.6 KiB gzip (budget <= 80 KiB);
+- Home: 65.8 KiB gzip;
+- Documents: 82.9 KiB gzip;
+- Kanban: 90.1 KiB gzip;
+- Planner: 77.2 KiB gzip;
+- initial-route budget: <= 250 KiB each;
+- avatar 72px: 6.7 KiB;
+- avatar 144px: 23.1 KiB.
+
+The lazy PDF parser remains ~486.3 KiB gzip as a justified non-initial-route chunk. Staging is configured but intentionally **unprovisioned and undeployed** until a separate remote action is explicitly authorized.
 
 ## Migration history
 
@@ -106,35 +125,38 @@ Forward-only plan migrations:
 14. `0014_document_guild_access.sql`
 15. `0015_document_version_history.sql`
 
-No remote migration has been applied by this plan.
+Phase 6 adds no D1 migration. No remote migration has been applied by this plan.
 
 ## Runtime
 
-- Worker entry: `src/p5-entry.js`.
-- Phase 5 editor/version layer delegates untouched behavior through the Phase 4 → Phase 2/security strangler stack.
+- Worker entry: `src/p6-entry.js`.
+- Phase 6 delegates product/domain behavior through the existing Phase 5 → Phase 4 → Phase 2/security strangler stack.
 - Shared Activity UI authority: `src/activity/ui/`.
-- Editor save coordination: `src/activity/editor-save-machine.js`.
-- Editor reliability/recovery UI: `src/activity/editor-reliability.js`.
-- Version/history service: `src/services/document-versioning.js`.
-- D1: `DB` → `bardo-db`.
-- R2: `BACKUPS` → `bardo-backups`.
+- Route-aware Activity boot: `src/activity/main.js`.
+- Adaptive polling/revalidation: `src/activity/resource-polling.js`.
+- Planner remote people search: `src/activity/planner-member-directory.js`.
+- Structured telemetry: `src/lib/observability.js`.
+- D1 production binding: `DB` → `bardo-db`.
+- R2 production binding: `BACKUPS` → `bardo-backups`.
 - Assets: `ASSETS`.
-- Cron: daily snapshot plus five-minute notification/reminder processing.
+- Production cron: daily snapshot plus five-minute notification/reminder processing.
+- Staging contract: `bardo-discord-staging` + `bardo-db-staging` + `bardo-backups-staging`, no crons, remote resources intentionally unprovisioned.
 
 ## Quality gates
 
-Current CI includes reproducible `npm ci`, Activity build/static checks, floating-promise regression characterization, Wrangler binding types, unit tests, Worker/runtime + all local D1 migrations, cross-product Phase 4 flow tests, Phase 5 concurrency/history/long-document tests, real-headless-Chrome editor scenarios, browser accessibility contracts, deterministic layout/style signatures for Documents/Kanban/Planner/Home at 390/768/1440, PNG human-review evidence, reduced motion and forced/high contrast.
+Current CI includes reproducible `npm ci`, Activity minified build, transitive gzip/image budgets, staging/production isolation checks, floating-promise regression characterization, Wrangler binding types, 72 unit tests, 55 Worker/runtime tests + all local D1 migrations, ETag/304 and lean-payload tests, cross-product flow tests, Phase 5 concurrency/history/long-document tests, real-headless-Chrome editor scenarios, browser accessibility contracts, deterministic layout/style signatures for Documents/Kanban/Planner/Home at 390/768/1440, PNG human-review evidence, reduced motion and forced/high contrast.
 
-Known characterized debt remains visible rather than silently hidden: legacy async-ownership/empty-catch warnings, package audit findings and large PDF/library bundle chunks. Phase 6 owns performance and observability rather than weakening the Phase 5 reliability guarantees.
+Known characterized debt remains visible rather than silently hidden: 22 legacy async-ownership/empty-catch warnings, a lazy ~486.3 KiB PDF parser, physically large legacy `board.js`/`event.js` modules contained by lazy loading, and two pre-existing npm audit findings (1 moderate, 1 high). Phase 7 owns release hardening rather than weakening the Phase 6 budgets or earlier reliability/security guarantees.
 
 ## Guardrails
 
 - Do not merge or deploy to `main`.
 - Do not apply remote migrations.
+- Do not create/provision remote staging resources without explicit authorization.
 - Do not execute Discord command registration without explicit authorization.
 - Do not delete historical branches.
 - Keep PR #5 draft until the human release gate.
 
 ## Next phase
 
-Phase 6 — performance and observability: establish measurable performance/cost budgets, reduce avoidable work and improve diagnostics while preserving the security, UI, product-integration and editor-reliability contracts already certified.
+Phase 7 — QA and release hardening. Run the complete cross-phase regression matrix, repeat authorization/security review, validate migrations in an explicitly authorized staging environment, perform the real Discord pilot/smoke matrix, document rollback/release procedures and reach `RELEASE_READY` only after the human release gate. No automatic production deployment.
