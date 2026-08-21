@@ -1,6 +1,7 @@
 import eventWorker from './event-worker.js';
 import {
   ColumnTasksRequireDestinationError,
+  findBoard,
   loadBoard,
   loadBoardWithTasks,
   loadTask,
@@ -45,6 +46,16 @@ function parsePathParts(pathname, prefix) {
 
 async function readJson(request) {
   try { return await request.json(); } catch { return null; }
+}
+
+function withJsonBody(request, payload) {
+  const headers = new Headers(request.headers);
+  headers.set('Content-Type', 'application/json');
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: JSON.stringify(payload),
+  });
 }
 
 function columnConflict(error) {
@@ -178,7 +189,6 @@ async function handleSecuredBoardMutation(request, env, result) {
   if (request.method === 'PATCH' && !result.subroute) {
     const payload = await readJson(request);
     if (!payload) return jsonResponse({ error: 'Invalid JSON payload' }, 400);
-
     const keys = Object.keys(payload);
     if (keys.length === 1 && keys[0] === 'members') {
       return jsonResponse({ ok: true, board: result.board, membershipMutationIgnored: true });
@@ -202,16 +212,13 @@ async function handleSecuredBoardMutation(request, env, result) {
     const payload = await readJson(request);
     if (!Array.isArray(payload?.columns)) return jsonResponse({ error: 'Se requiere un array de columnas' }, 400);
     try {
-      const updated = await updateBoardColumns(env.DB, result.boardId, payload.columns, {
-        moveTasksTo: confirmationDestination,
-      });
+      const updated = await updateBoardColumns(env.DB, result.boardId, payload.columns, { moveTasksTo: confirmationDestination });
       return jsonResponse({ ok: true, board: updated });
     } catch (error) {
       if (error instanceof ColumnTasksRequireDestinationError || error?.code === 'COLUMN_HAS_TASKS') return columnConflict(error);
       return jsonResponse({ error: error instanceof Error ? error.message : 'Column update failed' }, 400);
     }
   }
-
   return null;
 }
 
@@ -258,14 +265,29 @@ async function handleSecuredEventIntegrityMutation(request, env, result) {
       return jsonResponse({ error: 'Actualiza participantes mediante /participants para conservar atomicidad.' }, 400);
     }
   }
-
   return null;
+}
+
+async function withDefaultBoardColumn(request, board) {
+  if (request.method !== 'POST') return request;
+  const payload = await request.clone().json().catch(() => null);
+  if (!payload || payload.status) return request;
+  const firstColumnId = board?.columns?.[0]?.id;
+  return firstColumnId ? withJsonBody(request, { ...payload, status: firstColumnId }) : request;
+}
+
+async function withDefaultEventTaskColumn(request, env, event, parts) {
+  if (request.method !== 'POST' || parts?.[1] !== 'tasks') return request;
+  const payload = await request.clone().json().catch(() => null);
+  if (!payload || payload.status) return request;
+  const board = await findBoard(env.DB, event.guildId, payload.boardId || payload.board || '');
+  const firstColumnId = board?.columns?.[0]?.id;
+  return firstColumnId ? withJsonBody(request, { ...payload, status: firstColumnId }) : request;
 }
 
 export default {
   async fetch(request, env, ctx = { waitUntil: () => {} }) {
     const url = new URL(request.url);
-
     if (url.pathname === '/api/auth/token') return handleDiscordOAuthExchange(request, env);
 
     if (url.pathname.startsWith('/api/documents/')) {
@@ -283,16 +305,15 @@ export default {
     if (url.pathname.startsWith('/api/boards/')) {
       const result = await authorizeBoard(request, env, url);
       if (result.response) return result.response;
-
       if (request.method === 'GET' && !result.subroute) {
         const board = await loadBoardWithTasks(env.DB, result.boardId);
         if (!board) return jsonResponse({ error: 'Not found' }, 404);
         return jsonResponse({ ...board, guildId: board.guildId });
       }
-
       const mutation = await handleSecuredBoardMutation(request, env, result);
       if (mutation) return mutation;
-      return eventWorker.fetch(request, env, ctx);
+      const forwarded = result.subroute === 'tasks' ? await withDefaultBoardColumn(request, result.board) : request;
+      return eventWorker.fetch(forwarded, env, ctx);
     }
 
     if (url.pathname.startsWith('/api/tasks/')) {
@@ -306,7 +327,8 @@ export default {
       if (result.response) return result.response;
       const integrityMutation = await handleSecuredEventIntegrityMutation(request, env, result);
       if (integrityMutation) return integrityMutation;
-      return eventWorker.fetch(request, env, ctx);
+      const forwarded = await withDefaultEventTaskColumn(request, env, result.event, result.parts);
+      return eventWorker.fetch(forwarded, env, ctx);
     }
 
     if (url.pathname.startsWith('/api/')) return jsonResponse({ error: 'Not found' }, 404);
