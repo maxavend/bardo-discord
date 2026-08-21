@@ -22,19 +22,40 @@ async function withBlankRuntime(run) {
   }
 }
 
-function executableMigrationSql(file) {
-  return readFileSync(`migrations/${file}`, 'utf8')
+function migrationStatements(file) {
+  const lines = readFileSync(`migrations/${file}`, 'utf8')
     .split('\n')
-    .filter((line) => !line.trimStart().startsWith('--'))
-    .join('\n')
-    .trim();
+    .filter((line) => !line.trimStart().startsWith('--'));
+  const statements = [];
+  let buffer = '';
+  let trigger = false;
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (!line.trim()) continue;
+    buffer += `${buffer ? '\n' : ''}${line}`;
+    if (!trigger && /^\s*CREATE\s+TRIGGER\b/i.test(buffer)) trigger = true;
+    if (trigger) {
+      if (/\bEND;\s*$/i.test(line)) {
+        statements.push(buffer.trim());
+        buffer = '';
+        trigger = false;
+      }
+      continue;
+    }
+    if (/;\s*$/.test(line)) {
+      statements.push(buffer.trim());
+      buffer = '';
+    }
+  }
+  if (buffer.trim()) statements.push(buffer.trim());
+  return statements;
 }
 
 async function apply(db, files) {
   for (const file of files) {
-    const sql = executableMigrationSql(file);
-    assert.ok(sql, `${file} must contain executable SQL`);
-    await db.exec(sql);
+    const statements = migrationStatements(file);
+    assert.ok(statements.length, `${file} must contain executable SQL`);
+    for (const statement of statements) await db.prepare(statement).run();
   }
 }
 
