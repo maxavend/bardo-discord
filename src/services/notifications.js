@@ -11,6 +11,7 @@ import {
 } from '../repositories/notification-repository.js';
 import { DiscordDmError, sendDiscordDm } from './discord-dm.js';
 import { priorityLabel } from '../kanban.js';
+import { emitStructuredLog } from '../lib/observability.js';
 
 const DEFAULT_EVENT_REMINDER_OFFSETS = [1440, 60, 10];
 
@@ -20,6 +21,17 @@ function boardButton(boardId) {
 
 function eventButton(eventId) {
   return [{ type: 1, components: [{ type: 2, style: 1, label: 'Abrir evento', custom_id: `bardo:event:${eventId}` }] }];
+}
+
+async function deliveryLog(env, delivery, deliveryStatus, errorCode = null) {
+  if (!delivery) return;
+  await emitStructuredLog('notification.delivery', {
+    requestId: crypto.randomUUID(),
+    entityType: delivery.entityType || 'notification',
+    notificationType: delivery.eventType || 'unknown',
+    deliveryStatus,
+    errorCode,
+  }, env, deliveryStatus === 'failed' ? 'warn' : 'log');
 }
 
 async function taskMessage(db, delivery) {
@@ -82,7 +94,10 @@ export class NotificationService {
     });
     if (!created.delivery) return created;
     if (!preference.dmEnabled) {
-      if (created.created) await markNotificationSkipped(this.db, created.delivery.id, 'PREFERENCE_DISABLED');
+      if (created.created) {
+        await markNotificationSkipped(this.db, created.delivery.id, 'PREFERENCE_DISABLED');
+        await deliveryLog(this.env, created.delivery, 'skipped', 'PREFERENCE_DISABLED');
+      }
       return { ...created, skipped: true };
     }
 
@@ -101,20 +116,24 @@ export class NotificationService {
       const message = await buildMessage(this.db, delivery);
       if (!message) {
         await markNotificationSkipped(this.db, delivery.id, 'ENTITY_NOT_FOUND');
+        await deliveryLog(this.env, delivery, 'skipped', 'ENTITY_NOT_FOUND');
         return { sent: false, skipped: true };
       }
       await sendDiscordDm(this.env, { userId: delivery.userId, ...message });
       await markNotificationSent(this.db, delivery.id);
+      await deliveryLog(this.env, delivery, 'sent');
       return { sent: true };
     } catch (error) {
       if (error instanceof DiscordDmError && error.privacy) {
         await markNotificationSkipped(this.db, delivery.id, error.code);
+        await deliveryLog(this.env, delivery, 'skipped', error.code);
         return { sent: false, skipped: true, code: error.code };
       }
       const code = error?.code || 'DELIVERY_FAILED';
       const delayMinutes = Math.min(30, Math.max(5, delivery.attempts * 5));
       const retryAt = new Date(Date.now() + delayMinutes * 60_000).toISOString();
       await markNotificationFailed(this.db, delivery.id, code, retryAt);
+      await deliveryLog(this.env, delivery, 'failed', code);
       return { sent: false, failed: true, code };
     }
   }
