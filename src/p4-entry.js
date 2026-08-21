@@ -50,17 +50,46 @@ async function verifiedInteraction(request, env) {
 
 export async function launchBardoHome(request, env) {
   const interaction = await verifiedInteraction(request, env);
-  if (interaction?.type !== InteractionType.APPLICATION_COMMAND || interaction.data?.name !== 'bardo') return null;
-  const guildId = String(interaction.guild_id || '').trim();
-  if (!/^\d{17,20}$/.test(guildId) || !env.DB) return json({ type: 4, data: { content: 'Bardo Home se abre dentro de un servidor.', flags: 64 } });
-  const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
-  const callbackRes = await fetch(callbackUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 12 }) });
-  if (!callbackRes.ok) return new Response(null, { status: 202 });
-  const callbackData = await callbackRes.json().catch(() => null);
-  const target = homeTarget(guildId);
-  const ids = extractActivityInstanceIds(callbackData);
-  await Promise.all(ids.map((instanceId) => saveActivityContext(env.DB, instanceId, target, { guildId, permissions: HOME_PERMISSIONS })));
-  return new Response(null, { status: 202 });
+  if (!interaction) return null;
+
+  if (interaction.type === InteractionType.APPLICATION_COMMAND && interaction.data?.name === 'bardo') {
+    const guildId = String(interaction.guild_id || '').trim();
+    if (!/^\d{17,20}$/.test(guildId) || !env.DB) {
+      return json({ type: 4, data: { content: 'Bardo Home se abre dentro de un servidor.', flags: 64 } });
+    }
+    const homeButton = {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          style: 1,
+          label: '🏠 Abrir Bardo Home',
+          custom_id: `bardo:home:${guildId}`,
+        },
+      ],
+    };
+    return json({
+      type: 4,
+      data: {
+        content: '🏠 **Bardo Home** — Tu espacio de trabajo para documentos, tableros y agenda.',
+        components: [homeButton],
+      },
+    });
+  }
+
+  if (interaction.type === InteractionType.MESSAGE_COMPONENT && String(interaction.data?.custom_id || '').startsWith('bardo:home:')) {
+    const guildId = String(interaction.guild_id || '').trim();
+    const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
+    const callbackRes = await fetch(callbackUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 12 }) });
+    if (!callbackRes.ok) return new Response(null, { status: 202 });
+    const callbackData = await callbackRes.json().catch(() => null);
+    const target = homeTarget(guildId);
+    const ids = extractActivityInstanceIds(callbackData);
+    await Promise.all(ids.map((instanceId) => saveActivityContext(env.DB, instanceId, target, { guildId, permissions: HOME_PERMISSIONS })));
+    return new Response(null, { status: 202 });
+  }
+
+  return null;
 }
 
 function targetFor(type, id, guildId) {

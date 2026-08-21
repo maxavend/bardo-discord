@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T17:07:02.456Z",
+  "generatedAt": "2026-08-21T17:09:16.878Z",
   "budgets": {
     "criticalShellGzipBytes": 81920,
     "initialRouteGzipBytes": 256000,
