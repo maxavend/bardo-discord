@@ -34,6 +34,5 @@ function runChecks(){
   document.body.dataset.visualCount=String(snapshot.length);
   document.body.dataset.visualReady='true';
 }
-function scheduleChecks(){requestAnimationFrame(()=>requestAnimationFrame(runChecks));}
-if(document.readyState==='complete')scheduleChecks();else addEventListener('load',scheduleChecks,{once:true});
+if(document.readyState==='complete')runChecks();else addEventListener('load',runChecks,{once:true});
 </script></body></html>
