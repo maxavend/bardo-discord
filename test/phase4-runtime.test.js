@@ -131,7 +131,7 @@ test('Event → Task keeps point origin and minutes regenerate an idempotent liv
   assert.equal((await env.DB.prepare("SELECT relation_type FROM entity_links WHERE source_id='event-1' AND target_id=?").bind(task.id).first()).relation_type, 'event_has_task');
 
   response = await p4Entry.fetch(request('/api/events/event-1/minutes', { method:'POST', body:{} }), env, { waitUntil() {} });
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 201);
   const minuteId = (await response.json()).documentId;
   let minute = await loadDocument(env.DB, minuteId);
   assert.equal((minute.originalMarkdown.match(/<!-- bardo:linked-tasks -->/g) || []).length, 1);
@@ -141,7 +141,7 @@ test('Event → Task keeps point origin and minutes regenerate an idempotent liv
 
   await env.DB.prepare("UPDATE tasks SET column_id='done' WHERE id=?").bind(task.id).run();
   response = await p4Entry.fetch(request('/api/events/event-1/minutes', { method:'POST', body:{} }), env, { waitUntil() {} });
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 201);
   minute = await loadDocument(env.DB, minuteId);
   assert.equal((minute.originalMarkdown.match(/<!-- bardo:linked-tasks -->/g) || []).length, 1);
   assert.match(minute.originalMarkdown, /— done/);
