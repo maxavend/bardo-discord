@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
+const entrySource = readFileSync('src/conversation-entry.js', 'utf8');
 const staging = config.env?.staging;
 const production = config.env?.production;
 
@@ -18,8 +19,12 @@ const stagingR2 = staging?.r2_buckets?.find((entry) => entry.binding === 'BACKUP
 const productionDb = production?.d1_databases?.find((entry) => entry.binding === 'DB');
 const productionR2 = production?.r2_buckets?.find((entry) => entry.binding === 'BACKUPS');
 
-assert(config.main === 'src/p6-entry.js', 'wrangler must execute src/p6-entry.js');
+assert(config.main === 'src/conversation-entry.js', 'wrangler must execute src/conversation-entry.js');
+assert(entrySource.includes("from './p6-entry.js'"), 'conversation entry must preserve the certified Phase 6 runtime');
 assert(config.vars?.ENVIRONMENT === 'production', 'root environment must identify as production');
+assert(config.ai?.binding === 'AI', 'root environment must expose the Workers AI binding');
+assert(staging?.ai?.binding === 'AI', 'staging must expose the Workers AI binding');
+assert(production?.ai?.binding === 'AI', 'production must expose the Workers AI binding');
 assert(staging?.name === 'bardo-discord-staging', 'staging worker name must be isolated');
 assert(staging?.vars?.ENVIRONMENT === 'staging', 'staging must expose ENVIRONMENT=staging');
 assert(production?.vars?.ENVIRONMENT === 'production', 'production must expose ENVIRONMENT=production');
@@ -35,6 +40,7 @@ assert(staging?.vars?.BARDO_STAGING_RESOURCE_STATE === 'unprovisioned', 'staging
 
 const evidence = {
   entry: config.main,
+  aiBinding: config.ai?.binding || null,
   production: {
     worker: config.name,
     database: rootDb?.database_name,
