@@ -21,7 +21,7 @@ const automatic = {
   stagingIsolated:
     wrangler.env?.staging?.name === 'bardo-discord-staging' &&
     wrangler.env?.staging?.d1_databases?.[0]?.database_name === 'bardo-db-staging' &&
-    wrangler.env?.staging?.r2_buckets?.[0]?.bucket_name === 'bardo-backups-staging' &&
+    (!wrangler.env?.staging?.r2_buckets || wrangler.env?.staging?.r2_buckets?.[0]?.bucket_name === 'bardo-backups-staging') &&
     Array.isArray(wrangler.env?.staging?.triggers?.crons) &&
     wrangler.env.staging.triggers.crons.length === 0,
   productionEnvironmentExplicit: wrangler.env?.production?.name === 'bardo-discord',

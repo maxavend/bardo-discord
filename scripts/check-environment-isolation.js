@@ -26,12 +26,14 @@ assert(staging?.name === 'bardo-discord-staging', 'staging worker name must be i
 assert(staging?.vars?.ENVIRONMENT === 'staging', 'staging must expose ENVIRONMENT=staging');
 assert(production?.vars?.ENVIRONMENT === 'production', 'production must expose ENVIRONMENT=production');
 assert(Boolean(rootDb && stagingDb && productionDb), 'DB binding must exist for root, staging and production');
-assert(Boolean(rootR2 && stagingR2 && productionR2), 'BACKUPS binding must exist for root, staging and production');
 assert(stagingDb?.database_name !== rootDb?.database_name, 'staging D1 name must differ from production');
 assert(stagingDb?.database_id !== rootDb?.database_id, 'staging D1 id must never equal production');
-assert(stagingR2?.bucket_name !== rootR2?.bucket_name, 'staging R2 bucket must never equal production');
 assert(productionDb?.database_id === rootDb?.database_id, 'explicit production D1 must match the established production binding');
-assert(productionR2?.bucket_name === rootR2?.bucket_name, 'explicit production R2 must match the established production binding');
+if (rootR2 || stagingR2 || productionR2) {
+  assert(Boolean(rootR2 && stagingR2 && productionR2), 'BACKUPS binding must exist for root, staging and production when R2 is configured');
+  assert(stagingR2?.bucket_name !== rootR2?.bucket_name, 'staging R2 bucket must never equal production');
+  assert(productionR2?.bucket_name === rootR2?.bucket_name, 'explicit production R2 must match the established production binding');
+}
 assert(Array.isArray(staging?.triggers?.crons) && staging.triggers.crons.length === 0, 'staging must not send scheduled reminders by default');
 assert(['unprovisioned', 'provisioned'].includes(stagingResourceState), 'staging resource state must be explicitly unprovisioned or provisioned');
 if (stagingResourceState === 'unprovisioned') {

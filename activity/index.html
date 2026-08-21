@@ -7,13 +7,14 @@
     <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
     <title>Bardo · Documento</title>
-    <link rel="stylesheet" href="/styles-X6TX7NO5.css" />
+    <link rel="stylesheet" href="/styles-6NTVVYM2.css" />
+    <link rel="stylesheet" href="/bardo-ui-LWWMLHOM.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar" aria-label="Bardo">
         <div class="brand-mark" aria-hidden="true">
-          <img src="/bardo-avatar-99ADA4A0.png" alt="Bardo" class="brand-avatar" />
+          <img src="/bardo-avatar-72-21E0A1D9.png" srcset="/bardo-avatar-72-21E0A1D9.png 72w, /bardo-avatar-144-539929E3.png 144w" sizes="36px" width="36" height="36" alt="Bardo" class="brand-avatar" />
         </div>
         <div class="brand-copy">
           <strong>Bardo</strong>
@@ -86,7 +87,6 @@
           </div>
         </header>
 
-        <!-- Barra de formato estilo Notion (Sticky y flotante durante el scroll) -->
         <div id="editor-toolbar" class="editor-toolbar" style="display: none;" aria-label="Herramientas de formato">
           <div class="toolbar-group">
             <div class="custom-select-wrap tb-select-wrap">
@@ -148,10 +148,8 @@
           </div>
         </div>
 
-        <!-- Menú flotante Slash Command estilo Notion -->
         <div id="slash-command-menu" class="slash-command-menu" style="display: none;" role="menu"></div>
 
-        <!-- Menú flotante de selección de texto -->
         <div id="selection-bubble-menu" class="selection-bubble-menu" style="display: none;" role="toolbar" aria-label="Formato rápido">
           <button type="button" class="bubble-btn" data-format="bold" title="Negrita">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H6v-8Zm0 0h8a3.5 3.5 0 0 0 0-7H6v7Z"/></svg>
@@ -171,15 +169,13 @@
           <span class="bubble-divider"></span>
           <button type="button" class="bubble-btn" data-format="h1" title="Título 1">H1</button>
           <button type="button" class="bubble-btn" data-format="h2" title="Título 2">H2</button>
-          <button type="button" class="bubble-btn" data-format="blockquote" title="Cita">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/></svg>
-          </button>
+          <button type="button" class="bubble-btn" data-format="h3" title="Título 3">H3</button>
         </div>
 
-        <div id="document-body" class="markdown-body"></div>
+        <div id="document-body" class="document-body" tabindex="0"></div>
       </article>
     </main>
 
-    <script type="module" src="/main-RN3B2DUU.js"></script>
+    <script type="module" src="/main-WJ35LN2N.js"></script>
   </body>
 </html>

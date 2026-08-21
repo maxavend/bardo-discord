@@ -1,21 +1,21 @@
 # Phase 7 — QA, release hardening and launch gate
 
-Status: AUTOMATED_HARDENING_READY / RELEASE_BLOCKED
+Status: STAGING_AND_PILOT_VALIDATED / RELEASE_BLOCKED_PENDING_HUMAN_APPROVAL
 Automated code gate: CI #530 / `32502635682`
 Phase branch: `codex/p7-release-hardening`
 Integration target: `feat/bardo-unified-experience`
-Release PR: #16 (draft during hardening)
+Release PR: #16 (hardening & staging validation complete)
 
 ## Meaning of this status
 
-The repository-side and local/CI release-hardening work is complete. Bardo must **not** be labeled `RELEASE_READY` yet because the master plan requires four pieces of evidence that cannot be truthfully produced by local CI alone:
+Staging resources (`bardo-discord-staging`, `bardo-db-staging`) have been provisioned, migrations 0001–0015 validated remotely, and the Discord pilot matrix executed (evidenced in `docs/phase7-staging-evidence.md`). Bardo remains **blocked** from production release until explicit human release approval is granted:
 
-1. remote staging resources provisioned and isolated;
-2. migrations validated against that real staging environment;
-3. the real Discord pilot/smoke matrix completed and approved;
-4. explicit human release approval.
+1. remote staging resources provisioned and isolated: **DONE** (`bardo-db-staging: 7de1d3b4-d4e7-4b57-9da4-929005ac8711`);
+2. migrations validated against that real staging environment: **DONE** (0001–0015 applied);
+3. the real Discord pilot/smoke matrix completed and approved: **DONE** (`docs/phase7-staging-evidence.md`);
+4. explicit human release approval: **PENDING**.
 
-`npm run check:release` is intentionally fail-closed: without those evidence values it reports `RELEASE_BLOCKED`, even when every automatic gate passes.
+`npm run check:release` is intentionally fail-closed: without `humanReleaseApproved` it reports `RELEASE_BLOCKED`, even when staging and pilot evidence are supplied.
 
 ## Automated hardening delivered
 

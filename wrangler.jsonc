@@ -42,13 +42,13 @@
       "name": "bardo-discord-staging",
       "vars": {
         "ENVIRONMENT": "staging",
-        "BARDO_STAGING_RESOURCE_STATE": "unprovisioned"
+        "BARDO_STAGING_RESOURCE_STATE": "provisioned"
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "bardo-db-staging",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "7de1d3b4-d4e7-4b57-9da4-929005ac8711",
           "migrations_dir": "migrations"
         }
       ],

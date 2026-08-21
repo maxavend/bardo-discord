@@ -20,10 +20,16 @@ const server = createServer((req, res) => {
 await new Promise((resolveListen) => server.listen(4174, '127.0.0.1', resolveListen));
 
 function findChrome() {
+  const candidates = [];
+  if (process.env.CHROME_PATH && existsSync(process.env.CHROME_PATH)) candidates.push(process.env.CHROME_PATH);
   for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
     const found = spawnSync('which', [name], { encoding: 'utf8' });
-    if (found.status !== 0 || !found.stdout.trim()) continue;
-    const binary = found.stdout.trim();
+    if (found.status === 0 && found.stdout.trim()) candidates.push(found.stdout.trim());
+  }
+  for (const macPath of ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium']) {
+    if (existsSync(macPath)) candidates.push(macPath);
+  }
+  for (const binary of candidates) {
     const version = spawnSync(binary, ['--version'], { encoding: 'utf8' });
     const match = String(version.stdout || version.stderr || '').match(/(\d+)\.\d+\.\d+\.\d+/);
     if (match) return { binary, major: Number(match[1]), version: match[0] };
