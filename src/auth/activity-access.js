@@ -1,6 +1,7 @@
 import { loadActivityContext } from '../db.js';
 import { parseBoardTarget } from '../kanban.js';
 import { parseEventTarget } from '../event.js';
+import { parseHomeTarget } from '../home-target.js';
 import { readBearerToken, verifyActivitySessionToken } from './session-token.js';
 
 export const ACTIVITY_ACTIONS = Object.freeze({
@@ -20,6 +21,7 @@ export const ACTIVITY_ACTIONS = Object.freeze({
 });
 
 export function defaultPermissionsForTarget(target) {
+  if (parseHomeTarget(target)) return Object.values(ACTIVITY_ACTIONS);
   if (parseBoardTarget(target)) {
     return [
       ACTIVITY_ACTIONS.CONTEXT_READ,
