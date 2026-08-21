@@ -1,6 +1,6 @@
 # Phase 5 — Editor reliability and collaboration handoff
 
-Status: PHASE_READY pending final documentation-only CI
+Status: PHASE_READY
 Code gate SHA: `27a1911f92954a16e0053d1a9fafe277e5b240f1`
 Code gate CI: #405 / `32486915409`
 Phase branch: `codex/p5-editor-reliability`
