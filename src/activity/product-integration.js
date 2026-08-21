@@ -42,7 +42,7 @@ function resourceButton({ title, meta, type, id }) {
   const card = createResourceCard({ title, meta });
   const button = document.createElement('button'); button.type = 'button'; button.className = 'bardo-resource-button';
   while (card.firstChild) button.appendChild(card.firstChild);
-  button.addEventListener('click', () => navigateTo(type, id).catch(() => { button.dataset.error = 'true'; }));
+  button.addEventListener('click', () => { void navigateTo(type, id).catch(() => { button.dataset.error = 'true'; }); });
   return button;
 }
 
@@ -83,10 +83,10 @@ async function installHome() {
   const boards = section('Tableros', 'home-boards');
   shell.content.append(events.root, tasks.root, docs.root, boards.root);
   document.body.appendChild(shell.root);
-  loadHomeSection('events', events, (item) => resourceButton({ title:item.title, meta:[item.event_date,item.start_time].filter(Boolean).join(' · '), type:'event', id:item.id }));
-  loadHomeSection('tasks', tasks, (item) => resourceButton({ title:item.title, meta:[item.board_name,item.due_at?`vence ${item.due_at}`:null].filter(Boolean).join(' · '), type:'task', id:item.id }));
-  loadHomeSection('documents', docs, (item) => resourceButton({ title:item.title, meta:'Documento', type:'document', id:item.id }));
-  loadHomeSection('boards', boards, (item) => resourceButton({ title:item.name, meta:item.description || 'Tablero', type:'board', id:item.id }));
+  void loadHomeSection('events', events, (item) => resourceButton({ title:item.title, meta:[item.event_date,item.start_time].filter(Boolean).join(' · '), type:'event', id:item.id }));
+  void loadHomeSection('tasks', tasks, (item) => resourceButton({ title:item.title, meta:[item.board_name,item.due_at?`vence ${item.due_at}`:null].filter(Boolean).join(' · '), type:'task', id:item.id }));
+  void loadHomeSection('documents', docs, (item) => resourceButton({ title:item.title, meta:'Documento', type:'document', id:item.id }));
+  void loadHomeSection('boards', boards, (item) => resourceButton({ title:item.name, meta:item.description || 'Tablero', type:'board', id:item.id }));
   return true;
 }
 
@@ -122,7 +122,7 @@ async function openDocumentTaskModal(documentId) {
   const board = document.createElement('select'); board.className='bardo-input'; board.setAttribute('aria-label','Tablero'); boards.forEach((item)=>{ const o=document.createElement('option');o.value=item.id;o.textContent=item.name;board.appendChild(o); });
   const assignee = document.createElement('input'); assignee.className='bardo-input'; assignee.placeholder='Buscar responsable…'; assignee.setAttribute('aria-label','Responsable');
   const memberResults = document.createElement('div'); memberResults.className='bardo-entity-picker-list'; memberResults.hidden=true; const member={id:null,name:null}; let memberTimer;
-  assignee.addEventListener('input',()=>{ member.id=null; member.name=null; clearTimeout(memberTimer); memberTimer=setTimeout(()=>searchMember(assignee.value,memberResults,member),180); });
+  assignee.addEventListener('input',()=>{ member.id=null; member.name=null; clearTimeout(memberTimer); memberTimer=setTimeout(()=>{ void searchMember(assignee.value,memberResults,member); },180); });
   memberResults.addEventListener('click',(event)=>{ if(event.target instanceof HTMLButtonElement) assignee.value=event.target.textContent || ''; });
   const due = document.createElement('input'); due.type='date'; due.className='bardo-input'; due.setAttribute('aria-label','Fecha límite');
   const context = document.createElement('textarea'); context.className='bardo-input'; context.rows=3; context.value=selection; context.placeholder='Contexto breve (opcional)'; context.setAttribute('aria-label','Contexto del documento');
@@ -134,24 +134,24 @@ async function openDocumentTaskModal(documentId) {
 }
 
 function showTaskToast(documentId, task, board) {
-  const toast=document.createElement('div');toast.className='bardo-product-toast';toast.setAttribute('role','status'); const text=document.createElement('span');text.textContent=`Tarea creada en ${board?.name || 'el tablero'}.`; const view=document.createElement('button');view.type='button';view.textContent='Ver tarea';view.addEventListener('click',()=>navigateTo('task',task.id)); const undo=document.createElement('button');undo.type='button';undo.textContent='Deshacer';undo.addEventListener('click',async()=>{const r=await fetch(`/api/documents/${encodeURIComponent(documentId)}/tasks/${encodeURIComponent(task.id)}`,{method:'DELETE'});if(r.ok){toast.remove();renderDocumentBacklinks(documentId); }else{undo.disabled=true;undo.textContent='Ya no es seguro deshacer';}}); toast.append(text,view,undo);document.body.appendChild(toast);setTimeout(()=>toast.remove(),9000);
+  const toast=document.createElement('div');toast.className='bardo-product-toast';toast.setAttribute('role','status'); const text=document.createElement('span');text.textContent=`Tarea creada en ${board?.name || 'el tablero'}.`; const view=document.createElement('button');view.type='button';view.textContent='Ver tarea';view.addEventListener('click',()=>{ void navigateTo('task',task.id); }); const undo=document.createElement('button');undo.type='button';undo.textContent='Deshacer';undo.addEventListener('click',async()=>{const r=await fetch(`/api/documents/${encodeURIComponent(documentId)}/tasks/${encodeURIComponent(task.id)}`,{method:'DELETE'});if(r.ok){toast.remove();void renderDocumentBacklinks(documentId); }else{undo.disabled=true;undo.textContent='Ya no es seguro deshacer';}}); toast.append(text,view,undo);document.body.appendChild(toast);setTimeout(()=>toast.remove(),9000);
 }
 
 async function renderDocumentBacklinks(documentId) {
   const article=document.querySelector('#document'); if(!article)return;
-  let section=article.querySelector('.bardo-related-resources'); if(!section){section=document.createElement('section');section.className='bardo-related-resources';const h=document.createElement('h2');h.textContent='Relacionado';section.appendChild(h);article.appendChild(section);} const response=await fetch(`/api/entity-links?type=document&id=${encodeURIComponent(documentId)}`);if(!response.ok)return;const links=(await response.json()).links||[]; const resources=links.map((link)=>{const other=link.source_type==='document'?{type:link.target_type,id:link.target_id}:{type:link.source_type,id:link.source_id};return {title:other.type==='task'?'Tarea vinculada':other.type==='event'?'Evento vinculado':'Recurso vinculado',meta:link.relation_type,href:null,...other};}); const list=createBacklinkList(resources); list.querySelectorAll('.bardo-resource-card').forEach((card,index)=>{card.tabIndex=0;card.setAttribute('role','button');card.addEventListener('click',()=>navigateTo(resources[index].type,resources[index].id));card.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();navigateTo(resources[index].type,resources[index].id);}});}); section.querySelector('ul')?.remove(); section.appendChild(list);
+  let section=article.querySelector('.bardo-related-resources'); if(!section){section=document.createElement('section');section.className='bardo-related-resources';const h=document.createElement('h2');h.textContent='Relacionado';section.appendChild(h);article.appendChild(section);} const response=await fetch(`/api/entity-links?type=document&id=${encodeURIComponent(documentId)}`);if(!response.ok)return;const links=(await response.json()).links||[]; const resources=links.map((link)=>{const other=link.source_type==='document'?{type:link.target_type,id:link.target_id}:{type:link.source_type,id:link.source_id};return {title:other.type==='task'?'Tarea vinculada':other.type==='event'?'Evento vinculado':'Recurso vinculado',meta:link.relation_type,href:null,...other};}); const list=createBacklinkList(resources); list.querySelectorAll('.bardo-resource-card').forEach((card,index)=>{card.tabIndex=0;card.setAttribute('role','button');card.addEventListener('click',()=>{ void navigateTo(resources[index].type,resources[index].id); });card.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();void navigateTo(resources[index].type,resources[index].id);}});}); section.querySelector('ul')?.remove(); section.appendChild(list);
 }
 
 async function installDocumentTaskFlow() {
   const context=await getContext(); const documentId=String(context?.documentId||'');
   if (!documentId || documentId.startsWith('bardo:')) return;
   const actions=document.querySelector('.document-actions'); if(!actions || actions.querySelector('[data-bardo-create-task]'))return;
-  const button=document.createElement('button');button.type='button';button.className='action-button action-button-secondary';button.dataset.bardoCreateTask='true';button.textContent='Crear tarea';button.addEventListener('click',()=>openDocumentTaskModal(documentId).catch((error)=>{const status=document.querySelector('#action-status');if(status)status.textContent=error.message;}));actions.appendChild(button);renderDocumentBacklinks(documentId);
+  const button=document.createElement('button');button.type='button';button.className='action-button action-button-secondary';button.dataset.bardoCreateTask='true';button.textContent='Crear tarea';button.addEventListener('click',()=>{ void openDocumentTaskModal(documentId).catch((error)=>{const status=document.querySelector('#action-status');if(status)status.textContent=error.message;}); });actions.appendChild(button);void renderDocumentBacklinks(documentId);
 }
 
-async function installNavigationCapture() {
-  document.addEventListener('click',(event)=>{const target=event.target instanceof Element?event.target.closest('[data-bardo-nav]'):null;if(!target)return;const key=target.dataset.bardoNav;if(!key)return;if(key==='home'){event.preventDefault();navigateTo('home').catch(()=>{});} },true);
+function installNavigationCapture() {
+  document.addEventListener('click',(event)=>{const target=event.target instanceof Element?event.target.closest('[data-bardo-nav]'):null;if(!target)return;const key=target.dataset.bardoNav;if(!key)return;if(key==='home'){event.preventDefault();void navigateTo('home').catch(()=>{});} },true);
 }
 
 installNavigationCapture();
-getContext().then(async()=>{ if(!await installHome()) await installDocumentTaskFlow(); }).catch(()=>{});
+void getContext().then(async()=>{ if(!await installHome()) await installDocumentTaskFlow(); }).catch(()=>{});
