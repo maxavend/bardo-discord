@@ -1,3 +1,4 @@
+import './ui/runtime.js';
 import './security-bootstrap.js';
 import './import-bootstrap.js';
 import './app.js';

@@ -7,17 +7,13 @@ import { createHash } from 'node:crypto';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = resolve(__dirname, '..');
-
 const srcDir = resolve(rootDir, 'src/activity');
 const outDir = resolve(rootDir, 'activity');
 
 async function cleanOutDir() {
   await mkdir(outDir, { recursive: true });
   const entries = await readdir(outDir);
-  for (const entry of entries) {
-    const fullPath = join(outDir, entry);
-    await rm(fullPath, { recursive: true, force: true });
-  }
+  for (const entry of entries) await rm(join(outDir, entry), { recursive: true, force: true });
 }
 
 async function bundle() {
@@ -28,6 +24,7 @@ async function bundle() {
     entryPoints: [
       resolve(srcDir, 'main.js'),
       resolve(srcDir, 'styles.css'),
+      resolve(srcDir, 'ui/bardo-ui.css'),
     ],
     outdir: outDir,
     entryNames: '[name]-[hash]',
@@ -47,19 +44,14 @@ async function bundle() {
   const outputs = Object.keys(result.metafile.outputs);
   let appFile = '';
   let styleFile = '';
-
+  let uiStyleFile = '';
   for (const output of outputs) {
     const fileName = basename(output);
-    if (fileName.startsWith('main-') && fileName.endsWith('.js')) {
-      appFile = fileName;
-    } else if (fileName.startsWith('styles-') && fileName.endsWith('.css')) {
-      styleFile = fileName;
-    }
+    if (fileName.startsWith('main-') && fileName.endsWith('.js')) appFile = fileName;
+    else if (fileName.startsWith('styles-') && fileName.endsWith('.css')) styleFile = fileName;
+    else if (fileName.startsWith('bardo-ui-') && fileName.endsWith('.css')) uiStyleFile = fileName;
   }
-
-  if (!appFile || !styleFile) {
-    throw new Error(`No se generaron los bundles esperados. Salidas: ${outputs.join(', ')}`);
-  }
+  if (!appFile || !styleFile || !uiStyleFile) throw new Error(`No se generaron los bundles esperados. Salidas: ${outputs.join(', ')}`);
 
   const avatarPath = resolve(srcDir, 'bardo-avatar.png');
   const avatarBuffer = await readFile(avatarPath);
@@ -67,21 +59,16 @@ async function bundle() {
   const avatarFileName = `bardo-avatar-${avatarHash}.png`;
   await writeFile(resolve(outDir, avatarFileName), avatarBuffer);
 
-  console.log(`✨ Entry bundles: ${appFile}, ${styleFile}, ${avatarFileName}`);
+  console.log(`✨ Entry bundles: ${appFile}, ${styleFile}, ${uiStyleFile}, ${avatarFileName}`);
   console.log(`🧩 Chunks lazy generados: ${outputs.filter((output) => output.includes('/chunks/')).length}`);
 
   const templatePath = resolve(srcDir, 'index.html');
   let html = await readFile(templatePath, 'utf8');
-
-  html = html.replace('<!-- STYLES -->', `<link rel="stylesheet" href="/${styleFile}" />`);
+  html = html.replace('<!-- STYLES -->', `<link rel="stylesheet" href="/${styleFile}" />\n    <link rel="stylesheet" href="/${uiStyleFile}" />`);
   html = html.replace('<!-- SCRIPTS -->', `<script type="module" src="/${appFile}"></script>`);
   html = html.replace('<!-- AVATAR_SRC -->', `/${avatarFileName}`);
-
   await writeFile(resolve(outDir, 'index.html'), html, 'utf8');
   console.log('✅ activity/index.html actualizado con assets fingerprinted');
 }
 
-bundle().catch((err) => {
-  console.error('❌ Error empaquetando Activity:', err);
-  process.exit(1);
-});
+bundle().catch((err) => { console.error('❌ Error empaquetando Activity:', err); process.exit(1); });

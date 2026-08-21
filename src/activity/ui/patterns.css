@@ -1,0 +1,62 @@
+.bardo-context-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bardo-surface);
+  border: 1px solid var(--bardo-border);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bardo-context-nav::-webkit-scrollbar { display:none; }
+.bardo-context-nav a,
+.bardo-context-nav button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--bardo-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bardo-context-nav [aria-current="page"] { background: var(--bardo-surface-raised); color: var(--bardo-text); font-weight: 700; }
+.bardo-context-nav [aria-disabled="true"] { opacity: .45; cursor: default; }
+
+.bardo-save-status,
+.action-status-container {
+  min-height: 20px;
+  color: var(--bardo-text-muted);
+  font-size: 12px;
+}
+.bardo-save-status[data-state="saving"]::before { content: "Guardando…"; }
+.bardo-save-status[data-state="saved"]::before { content: "Guardado"; }
+.bardo-save-status[data-state="error"]::before { content: "No se pudo guardar · Reintentar"; color: var(--bardo-danger); }
+.bardo-save-status[data-state="dirty"]::before { content: "Cambios sin guardar"; color: var(--bardo-warning); }
+
+html[data-bardo-ui="3"] :where(.view-state, .kanban-state, .ev-empty) { color: var(--bardo-text-muted); }
+html[data-bardo-ui="3"] :where(.view-state strong, .view-state h1, .kanban-state strong) { color: var(--bardo-text); }
+html[data-bardo-ui="3"] [data-bardo-error="true"] { color: var(--bardo-danger); }
+
+html[data-bardo-ui="3"] :where(.discord-member-dropdown, .notion-chips-dropdown, .slash-command-menu, .selection-bubble-menu) {
+  background: var(--bardo-surface-raised) !important;
+  color: var(--bardo-text) !important;
+  border: 1px solid var(--bardo-border) !important;
+  border-radius: var(--bardo-radius-control) !important;
+  box-shadow: var(--bardo-shadow-surface) !important;
+}
+html[data-bardo-ui="3"] :where(.member-menu-item, .notion-menu-item, .slash-cmd-item) { min-height: 40px; border-radius: 7px; }
+html[data-bardo-ui="3"] :where(.member-menu-item:hover, .member-menu-item[aria-selected="true"], .notion-menu-item:hover, .slash-cmd-item.is-selected) { background: var(--bardo-surface-hover) !important; }
+
+.bardo-live-region { position: fixed; width:1px; height:1px; overflow:hidden; clip-path: inset(50%); white-space:nowrap; }
+
+@media (max-width: 720px) {
+  .bardo-context-nav { width: 100%; }
+  .bardo-context-nav a,
+  .bardo-context-nav button { flex: 1 0 auto; min-height: 40px; }
+  html[data-bardo-ui="3"] :where(.kanban-modal-backdrop, .ev-modal-bg) { place-items: end stretch !important; padding: 0 !important; }
+  html[data-bardo-ui="3"] :where(.kanban-modal, .ev-modal) { width:100% !important; max-width:none !important; max-height: min(88vh, 760px) !important; border-radius: 18px 18px 0 0 !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important; }
+}
