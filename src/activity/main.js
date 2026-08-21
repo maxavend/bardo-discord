@@ -7,3 +7,4 @@ import './board.js';
 import './event.js';
 import './member-picker-remote.js';
 import './ui/migration-adapters.js';
+import './product-integration.js';
