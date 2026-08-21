@@ -16,8 +16,9 @@ Phase status: PHASE_READY
 - Phase 3 certified integration SHA: `50351a19fcb0a0b0c27a9e9cbc10f35037925146`
 - Phase 4 implementation certified SHA: `974836ff1fa7d1b37541962e9597fb4682eed438`
 - Phase 5 code-gate SHA: `27a1911f92954a16e0053d1a9fafe277e5b240f1`
+- Phase 5 integrated functional SHA: `73394286dc93f6af80c9b919183c02953ad71f4f`
 - Phase 5 branch: `codex/p5-editor-reliability`
-- Phase 5 PR: #14 (draft → `feat/bardo-unified-experience`)
+- Phase 5 PR: #14 (merged by fast-forward into `feat/bardo-unified-experience`)
 
 `main` is not a target of phase work. No production deploy, remote migration, Discord command registration or branch deletion is authorized by this state document.
 
@@ -76,7 +77,7 @@ Delivered:
 - legacy/system writer version advancement so concurrency cannot be bypassed;
 - full long-document pagination preservation after versioned edits.
 
-Phase 5 code gate SHA `27a1911f92954a16e0053d1a9fafe277e5b240f1` passed CI #405 (`32486915409`): build/static checks, 67/67 unit tests, 53/53 Worker/runtime tests with all 15 local migrations, browser E2E, accessibility and the existing deterministic visual regression suite.
+Phase 5 code gate SHA `27a1911f92954a16e0053d1a9fafe277e5b240f1` passed CI #405 (`32486915409`): build/static checks, 67/67 unit tests, 53/53 Worker/runtime tests with all 15 local migrations, browser E2E, accessibility and the existing deterministic visual regression suite. Final closeout CI #411 (`32487246451`) reproduced the complete gate on integrated functional SHA `73394286dc93f6af80c9b919183c02953ad71f4f`.
 
 The Phase 5 browser gate covers six scenarios: queue/coalescing, conflict, retry, real UI network failure, real UI conflict and dirty Guardar/Salir waiting for a confirmed save.
 
