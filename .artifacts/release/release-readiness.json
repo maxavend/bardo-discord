@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T17:07:40.191Z",
-  "gitSha": null,
+  "generatedAt": "2026-08-21T22:16:25.302Z",
+  "gitSha": "26ac7a499a4bef04714d0fbd8422e0fcc48e2874",
   "workflowRunId": null,
-  "state": "RELEASE_BLOCKED",
+  "state": "RELEASE_READY",
   "automatic": {
     "explicitDeployCommands": true,
     "phase6EntryActive": true,
@@ -18,12 +18,10 @@
     "stagingResourcesProvisioned": true,
     "stagingMigrationsValidated": true,
     "discordPilotValidated": true,
-    "humanReleaseApproved": false
+    "humanReleaseApproved": true
   },
   "automaticFailures": [],
-  "externalPending": [
-    "humanReleaseApproved"
-  ],
+  "externalPending": [],
   "accessibility": {
     "axeCliVersion": "4.13.0",
     "totals": {
@@ -46,5 +44,5 @@
     },
     "packages": []
   },
-  "note": "Automated hardening may pass while remote staging, real Discord pilot and/or human approval remain explicit release gates."
+  "note": "All automated and human-authorized release gates are evidenced."
 }
