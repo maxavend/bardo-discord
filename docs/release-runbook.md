@@ -28,11 +28,16 @@ Before any remote action:
 
 The repository intentionally ships with staging marked `unprovisioned`. When explicitly authorized:
 
-1. Create `bardo-db-staging` and `bardo-backups-staging` in the same Cloudflare account used for the pilot.
-2. Replace only the staging placeholder D1 ID in `wrangler.jsonc`; never point staging to the production D1 ID or production R2 bucket.
-3. Store secrets with Cloudflare secret mechanisms, never in Git.
-4. Keep staging crons disabled during migration validation and destructive-smoke preparation.
-5. Verify `npm run check:env` before deploying.
+1. Authenticate Wrangler against the intended Cloudflare account and verify it before creating resources.
+2. Create the isolated resources:
+   - `npx wrangler d1 create bardo-db-staging`
+   - `npx wrangler r2 bucket create bardo-backups-staging`
+3. Copy the new D1 UUID into only `env.staging.d1_databases[0].database_id` in `wrangler.jsonc`; never reuse the production D1 ID.
+4. After both staging resources exist and the D1 UUID is in config, change `BARDO_STAGING_RESOURCE_STATE` from `unprovisioned` to `provisioned`. Never mark it provisioned while the zero D1 placeholder remains.
+5. Keep `bardo-backups-staging` private and separate from `bardo-backups`.
+6. Store secrets with Cloudflare secret mechanisms, never in Git.
+7. Keep staging crons disabled during migration validation and destructive-smoke preparation.
+8. Run `npm run check:env`; it must pass in the `provisioned` state before any staging deploy.
 
 ## Staging migration validation
 
@@ -41,7 +46,7 @@ The repository intentionally ships with staging marked `unprovisioned`. When exp
 3. Validate an upgrade path representing the pre-plan production schema (0001 through 0008) followed by 0009 through 0015.
 4. Compare counts for documents, boards, tasks and events before/after the upgrade.
 5. Verify task `column_id`, `due_at`, notification tables, entity links, document guild grants and document revision/version metadata.
-6. Only after the above passes, run the remote staging migration with an explicit staging environment.
+6. Only after the above passes, apply the remote staging migrations explicitly with `npx wrangler d1 migrations apply DB --env staging --remote`.
 7. Record the migration output and resulting schema evidence. Set the release-gate evidence only after inspection.
 
 ## Staging deploy
