@@ -8,7 +8,7 @@ Status: pre-release operational contract. This document does not authorize a dep
 - Staging and production use different Worker names, D1 databases and R2 buckets.
 - Every deploy names its environment explicitly.
 - Historical D1 migrations are immutable and forward-only.
-- A failed migration is recovered with a new compensating migration when schema/data correction is required; never rewrite an already-applied migration.
+- A failed migration is recovered with a new **migración compensatoria** (compensating migration) when schema/data correction is required; never rewrite an already-applied migration.
 - Discord command registration is a separate explicit operation.
 - No release gate may depend on document contents, DM bodies or private names appearing in logs.
 
@@ -106,8 +106,8 @@ D1 migrations in this project are forward-only. If a newly applied migration is 
 
 1. Preserve evidence and take/retain the latest usable backup.
 2. Decide whether code can be rolled back while leaving the additive schema in place.
-3. If schema/data repair is required, create a new compensating migration with a new sequence number.
-4. Validate that compensating migration in staging against a representative fixture.
+3. If schema/data repair is required, create a new **migración compensatoria** with a new sequence number.
+4. Validate that migración compensatoria in staging against a representative fixture.
 5. Apply remotely only after explicit approval.
 6. For catastrophic data loss, use the documented R2/D1 backup restoration path rather than ad-hoc destructive SQL.
 
