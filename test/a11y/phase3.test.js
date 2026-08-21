@@ -6,6 +6,6 @@ test('Phase 3 browser fixture asserts dialog semantics, accessible names and ove
   const fixture = await readFile(new URL('../visual/fixture.html', import.meta.url), 'utf8');
   assert.match(fixture, /aria-modal="true"/);
   assert.match(fixture, /aria-label=/);
-  assert.match(fixture, /data\.a11yCheck/);
+  assert.match(fixture, /dataset\.a11yCheck/);
   assert.match(fixture, /scrollWidth<=innerWidth\+1/);
 });
