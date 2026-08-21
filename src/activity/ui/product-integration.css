@@ -12,7 +12,7 @@ html[data-bardo-ui="3"][data-bardo-mode="home"] body { background:var(--bardo-bg
 .bardo-home-section { min-width:0; padding:18px; background:var(--bardo-surface); border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-card); }
 .bardo-home-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; }
 .bardo-home-section h2 { margin:0; font-size:16px; }
-.bardo-home-section-status { color:var(--bardo-text-dim); font-size:11px; }
+.bardo-home-section-status { color:var(--bardo-text-muted); font-size:11px; }
 .bardo-home-section-status[data-error="true"] { color:var(--bardo-danger); }
 .bardo-home-list { display:grid; gap:7px; }
 .bardo-resource-button { width:100%; display:grid; gap:3px; padding:12px; border:0; border-radius:var(--bardo-radius-control); background:var(--bardo-surface-raised); color:var(--bardo-text); text-align:left; cursor:pointer; }
