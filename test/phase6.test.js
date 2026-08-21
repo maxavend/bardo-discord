@@ -21,15 +21,22 @@ test('Phase 6 Activity boot keeps adaptive polling and product modules lazy', ()
   assert.match(polling, /__bardoPlannerData/);
 });
 
-test('Planner people are searched remotely instead of shipping the full directory', () => {
+test('Planner people are searched remotely, including the first person in an empty list', () => {
   const picker = read('src/activity/planner-member-directory.js');
   const p6 = read('src/p6-entry.js');
+  const build = read('scripts/build-activity.js');
   assert.match(picker, /\/api\/member-directory\?query=/);
   assert.match(picker, /RESULT_LIMIT = 25/);
   assert.match(picker, /rememberMember/);
+  assert.match(picker, /export function inferCheckboxName/);
+  assert.match(picker, /lideran/);
+  assert.match(picker, /protagonistas\|presentan/);
+  assert.match(picker, /participantes/);
+  assert.doesNotMatch(picker, /if \(!firstCheckbox\?\.name\) return/);
   assert.match(p6, /referencedEventPeople/);
   assert.match(p6, /guildMembers/);
   assert.doesNotMatch(p6, /fetchGuildMembers/);
+  assert.match(build, /src\/activity\/planner-member-directory\.js/);
 });
 
 test('structured logs drop titles, content, user ids and arbitrary fields', async () => {
