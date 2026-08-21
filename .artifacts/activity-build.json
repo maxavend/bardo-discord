@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T22:35:51.660Z",
+  "generatedAt": "2026-08-21T22:40:46.725Z",
   "budgets": {
     "criticalShellGzipBytes": 81920,
     "initialRouteGzipBytes": 256000,
@@ -9,18 +9,18 @@
   },
   "shell": {
     "rawBytes": 267976,
-    "gzipBytes": 68618,
+    "gzipBytes": 68617,
     "files": [
       "activity/bardo-tailwind-6HX6CISF.css",
       "activity/chunks/chunk-7OSQWNIS.js",
       "activity/chunks/chunk-EPXOE4VI.js",
-      "activity/main-SODYDQCZ.js"
+      "activity/main-SIMTQUPJ.js"
     ]
   },
   "routes": {
     "home": {
       "rawBytes": 675759,
-      "gzipBytes": 203765,
+      "gzipBytes": 203764,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
         "activity/chunks/bootstrap-H3MLJBIB.js",
@@ -33,12 +33,12 @@
         "activity/chunks/home-page-7P7BHJ6R.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-4TUS5OON.js",
-        "activity/main-SODYDQCZ.js"
+        "activity/main-SIMTQUPJ.js"
       ]
     },
     "documents": {
       "rawBytes": 719186,
-      "gzipBytes": 220066,
+      "gzipBytes": 220065,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
         "activity/chunks/app-2S5B6BFD.js",
@@ -57,15 +57,15 @@
         "activity/chunks/import-bootstrap-CT2C23DV.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-4TUS5OON.js",
-        "activity/main-SODYDQCZ.js"
+        "activity/main-SIMTQUPJ.js"
       ]
     },
     "kanban": {
-      "rawBytes": 750488,
-      "gzipBytes": 216358,
+      "rawBytes": 750609,
+      "gzipBytes": 216403,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
-        "activity/chunks/board-3GJHUSSY.js",
+        "activity/chunks/board-XOHWO726.js",
         "activity/chunks/bootstrap-H3MLJBIB.js",
         "activity/chunks/chunk-7OSQWNIS.js",
         "activity/chunks/chunk-EPXOE4VI.js",
@@ -75,12 +75,12 @@
         "activity/chunks/member-picker-remote-DPFGXGQM.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/product-integration-4TUS5OON.js",
-        "activity/main-SODYDQCZ.js"
+        "activity/main-SIMTQUPJ.js"
       ]
     },
     "planner": {
-      "rawBytes": 677673,
-      "gzipBytes": 203163,
+      "rawBytes": 677750,
+      "gzipBytes": 203199,
       "files": [
         "activity/bardo-tailwind-6HX6CISF.css",
         "activity/chunks/bootstrap-H3MLJBIB.js",
@@ -89,11 +89,11 @@
         "activity/chunks/chunk-F5OFARHE.js",
         "activity/chunks/chunk-MRUENS6H.js",
         "activity/chunks/chunk-N7KIPTD7.js",
-        "activity/chunks/event-2SGMTFMO.js",
+        "activity/chunks/event-EM7SCTNT.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
         "activity/chunks/planner-member-directory-SDFEOQ46.js",
         "activity/chunks/product-integration-4TUS5OON.js",
-        "activity/main-SODYDQCZ.js"
+        "activity/main-SIMTQUPJ.js"
       ]
     }
   },
@@ -226,9 +226,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/board-3GJHUSSY.js",
-      "rawBytes": 105779,
-      "gzipBytes": 22806,
+      "file": "activity/chunks/board-XOHWO726.js",
+      "rawBytes": 105900,
+      "gzipBytes": 22852,
       "inputs": [
         "src/kanban.js",
         "src/activity/board.js"
@@ -267,9 +267,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/event-2SGMTFMO.js",
-      "rawBytes": 32073,
-      "gzipBytes": 9227,
+      "file": "activity/chunks/event-EM7SCTNT.js",
+      "rawBytes": 32150,
+      "gzipBytes": 9264,
       "inputs": [
         "src/event.js",
         "src/activity/event.js"
@@ -309,9 +309,9 @@
       "justification": null
     },
     {
-      "file": "activity/main-SODYDQCZ.js",
+      "file": "activity/main-SIMTQUPJ.js",
       "rawBytes": 17498,
-      "gzipBytes": 6392,
+      "gzipBytes": 6391,
       "inputs": [
         "src/activity/ui/primitives.js",
         "src/activity/ui/runtime.js",

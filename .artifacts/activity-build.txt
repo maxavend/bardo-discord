@@ -13,7 +13,7 @@ Largest gzip chunks:
 - activity/chunks/chunk-7OSQWNIS.js: 44 KiB
 - activity/chunks/document-enhancements-WXBBBWL3.js: 36.3 KiB
 - activity/chunks/chunk-F5OFARHE.js: 35.2 KiB
-- activity/chunks/board-3GJHUSSY.js: 22.3 KiB
+- activity/chunks/board-XOHWO726.js: 22.3 KiB
 - activity/bardo-tailwind-6HX6CISF.css: 16.2 KiB
 - activity/chunks/chunk-OCWVTBKX.js: 10.1 KiB
-- activity/chunks/event-2SGMTFMO.js: 9 KiB
+- activity/chunks/event-EM7SCTNT.js: 9 KiB
