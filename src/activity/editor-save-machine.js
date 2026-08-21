@@ -110,10 +110,10 @@ export class EditorSaveCoordinator {
   }
 
   waitForSettled() {
-    if (!['dirty', 'saving'].includes(this.state)) return Promise.resolve(this.state);
+    if (this.state !== 'saving') return Promise.resolve(this.state);
     return new Promise((resolve) => {
       const unsubscribe = this.subscribe((state) => {
-        if (['saved', 'clean', 'error', 'conflict'].includes(state)) {
+        if (state !== 'saving') {
           unsubscribe(); resolve(state);
         }
       });
