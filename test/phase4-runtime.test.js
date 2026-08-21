@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestHarness } from 'wrangler';
 import { ACTIVITY_ACTIONS, defaultPermissionsForTarget } from '../src/auth/activity-access.js';
-import { saveActivityContext, saveDocument, loadActivityContext } from '../src/db.js';
+import { saveActivityContext, saveDocument, loadActivityContext, loadDocument } from '../src/db.js';
 import { createBoard, createTask, loadTask } from '../src/kanban-db.js';
-import { createEvent } from '../src/event-db.js';
+import { createBlock, createEvent, createItem, linkTaskToEvent } from '../src/event-db.js';
+import { eventTarget } from '../src/event.js';
 import { homeTarget } from '../src/home-target.js';
-import { EntityLinkService } from '../src/services/entity-links.js';
-import { handleDocumentTask, handleHomeSection, handleProductNavigation } from '../src/p4-entry.js';
+import { EntityLinkService, grantDocumentToGuild } from '../src/services/entity-links.js';
+import p4Entry, { handleDocumentTask, handleHomeSection, handleProductNavigation } from '../src/p4-entry.js';
 
 const GUILD = '123456789012345678';
 const OTHER_GUILD = '323456789012345678';
@@ -39,16 +40,19 @@ function request(path, { method = 'GET', body } = {}) {
 async function fixture(env) {
   const document = { title:'Documento fuente', originalMarkdown:'# Documento fuente\n\nDecidir el alcance.', pages:['Decidir el alcance.'], sourceName:'fuente.md', createdAt:new Date().toISOString(), createdBy:'test-user' };
   await saveDocument(env.DB, 'doc-1', document);
+  await grantDocumentToGuild(env.DB, 'doc-1', GUILD, 'test-user');
   await createBoard(env.DB, { id:'board-1', guildId:GUILD, name:'Producto', description:'', createdBy:'test-user' });
   await createBoard(env.DB, { id:'board-other', guildId:OTHER_GUILD, name:'Otro', description:'', createdBy:'other' });
   await createEvent(env.DB, { id:'event-1', guildId:GUILD, title:'Weekly', eventDate:'2026-08-28', startTime:'15:30', timezone:'America/Santiago', expectedDuration:60, createdBy:'test-user' });
   await saveActivityContext(env.DB, INSTANCE, 'doc-1', { guildId:GUILD, permissions:defaultPermissionsForTarget('doc-1') });
 }
 
-test('Phase 4 migrations create entity graph and task due date', async () => withRuntime(async (env) => {
+test('Phase 4 migrations create entity graph, durable document grants and task due date', async () => withRuntime(async (env) => {
   const links = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='entity_links'").first();
+  const grants = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='document_guild_access'").first();
   const due = await env.DB.prepare("SELECT name FROM pragma_table_info('tasks') WHERE name='due_at'").first();
   assert.equal(links?.name, 'entity_links');
+  assert.equal(grants?.name, 'document_guild_access');
   assert.equal(due?.name, 'due_at');
 }));
 
@@ -108,4 +112,39 @@ test('Home sections are scoped to the verified guild and current user', async ()
   assert.equal(response.status, 200);
   const titles = (await response.json()).items.map((item) => item.title);
   assert.deepEqual(titles, ['Mi tarea']);
+  const documents = await handleHomeSection(request('/api/home/documents?limit=5'), env, 'documents');
+  assert.deepEqual((await documents.json()).items.map((item) => item.id), ['doc-1']);
+}));
+
+test('Event → Task keeps point origin and minutes regenerate an idempotent live-task section', async () => withRuntime(async (env) => {
+  await fixture(env);
+  const block = await createBlock(env.DB, 'event-1', { title:'Decisiones', durationMinutes:20, type:'decision' });
+  const item = await createItem(env.DB, block.id, { title:'Definir owner' });
+  await saveActivityContext(env.DB, INSTANCE, eventTarget('event-1'), { guildId:GUILD, permissions:defaultPermissionsForTarget(eventTarget('event-1')) });
+
+  let response = await p4Entry.fetch(request('/api/events/event-1/tasks', { method:'POST', body:{ boardId:'board-1', title:'Asignar owner', blockId:block.id, itemId:item.id, assigneeId:'test-user', assigneeName:'Test' } }), env, { waitUntil() {} });
+  assert.equal(response.status, 201);
+  const task = (await response.json()).task;
+  const origin = await env.DB.prepare('SELECT block_id, item_id FROM event_task_links WHERE task_id = ?').bind(task.id).first();
+  assert.equal(origin.block_id, block.id);
+  assert.equal(origin.item_id, item.id);
+  assert.equal((await env.DB.prepare("SELECT relation_type FROM entity_links WHERE source_id='event-1' AND target_id=?").bind(task.id).first()).relation_type, 'event_has_task');
+
+  response = await p4Entry.fetch(request('/api/events/event-1/minutes', { method:'POST', body:{} }), env, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  const minuteId = (await response.json()).documentId;
+  let minute = await loadDocument(env.DB, minuteId);
+  assert.equal((minute.originalMarkdown.match(/<!-- bardo:linked-tasks -->/g) || []).length, 1);
+  assert.match(minute.originalMarkdown, /Asignar owner/);
+  assert.match(minute.originalMarkdown, /Bardo task:/);
+  assert.equal((await env.DB.prepare("SELECT relation_type FROM entity_links WHERE source_type='task' AND source_id=? AND target_id=?").bind(task.id, minuteId).first()).relation_type, 'task_references_document');
+
+  await env.DB.prepare("UPDATE tasks SET column_id='done' WHERE id=?").bind(task.id).run();
+  response = await p4Entry.fetch(request('/api/events/event-1/minutes', { method:'POST', body:{} }), env, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  minute = await loadDocument(env.DB, minuteId);
+  assert.equal((minute.originalMarkdown.match(/<!-- bardo:linked-tasks -->/g) || []).length, 1);
+  assert.match(minute.originalMarkdown, /— done/);
+  const linkCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM entity_links WHERE target_id=? AND relation_type='task_references_document'").bind(minuteId).first();
+  assert.equal(Number(linkCount.count), 1);
 }));
