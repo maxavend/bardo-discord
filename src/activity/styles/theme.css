@@ -1,0 +1,124 @@
+:root {
+  color-scheme: dark;
+
+  --bardo-neutral-1000: oklch(0.125 0.008 270);
+  --bardo-neutral-950: oklch(0.155 0.008 270);
+  --bardo-neutral-900: oklch(0.19 0.009 270);
+  --bardo-neutral-850: oklch(0.225 0.01 270);
+  --bardo-neutral-800: oklch(0.265 0.012 270);
+  --bardo-neutral-750: oklch(0.31 0.014 270);
+  --bardo-neutral-700: oklch(0.36 0.015 270);
+  --bardo-neutral-500: oklch(0.68 0.018 270);
+  --bardo-neutral-300: oklch(0.82 0.014 270);
+  --bardo-neutral-100: oklch(0.965 0.007 270);
+  --bardo-blurple-500: oklch(0.625 0.205 275);
+  --bardo-blurple-450: oklch(0.68 0.19 275);
+  --bardo-blurple-600: oklch(0.55 0.215 275);
+  --bardo-beret-500: oklch(0.59 0.205 20);
+  --bardo-green-500: oklch(0.7 0.16 150);
+  --bardo-amber-500: oklch(0.79 0.16 80);
+  --bardo-red-500: oklch(0.64 0.22 25);
+  --bardo-cyan-500: oklch(0.72 0.12 220);
+
+  --bardo-background: var(--bardo-neutral-1000);
+  --bardo-surface: var(--bardo-neutral-950);
+  --bardo-surface-raised: var(--bardo-neutral-900);
+  --bardo-surface-hover: var(--bardo-neutral-850);
+  --bardo-surface-active: var(--bardo-neutral-800);
+  --bardo-surface-selected: color-mix(in oklch, var(--bardo-blurple-500) 18%, var(--bardo-neutral-900));
+  --bardo-surface-overlay: color-mix(in oklch, var(--bardo-neutral-1000) 86%, transparent);
+  --bardo-text-primary: var(--bardo-neutral-100);
+  --bardo-text-secondary: var(--bardo-neutral-300);
+  --bardo-text-muted: var(--bardo-neutral-500);
+  --bardo-text-disabled: color-mix(in oklch, var(--bardo-neutral-500) 58%, transparent);
+  --bardo-border-subtle: color-mix(in oklch, var(--bardo-neutral-100) 7%, transparent);
+  --bardo-border-default: color-mix(in oklch, var(--bardo-neutral-100) 12%, transparent);
+  --bardo-border-strong: color-mix(in oklch, var(--bardo-neutral-100) 20%, transparent);
+  --bardo-interactive-primary: var(--bardo-blurple-500);
+  --bardo-interactive-primary-hover: var(--bardo-blurple-450);
+  --bardo-interactive-primary-active: var(--bardo-blurple-600);
+  --bardo-interactive-danger: var(--bardo-red-500);
+  --bardo-focus-ring: var(--bardo-blurple-450);
+  --bardo-status-success: var(--bardo-green-500);
+  --bardo-status-warning: var(--bardo-amber-500);
+  --bardo-status-danger: var(--bardo-red-500);
+  --bardo-status-info: var(--bardo-cyan-500);
+  --bardo-brand: var(--bardo-beret-500);
+
+  --bardo-space-0-5: 2px;
+  --bardo-space-1: 4px;
+  --bardo-space-1-5: 6px;
+  --bardo-space-2: 8px;
+  --bardo-space-2-5: 10px;
+  --bardo-space-3: 12px;
+  --bardo-space-4: 16px;
+  --bardo-space-5: 20px;
+  --bardo-space-6: 24px;
+  --bardo-space-8: 32px;
+  --bardo-space-10: 40px;
+  --bardo-space-12: 48px;
+
+  --bardo-radius-control: 7px;
+  --bardo-radius-card: 9px;
+  --bardo-radius-surface: 12px;
+  --bardo-radius-pill: 999px;
+  --bardo-control-compact: 30px;
+  --bardo-control: 36px;
+  --bardo-touch: 44px;
+  --bardo-shadow-overlay: 0 20px 56px rgb(0 0 0 / 0.46), 0 2px 8px rgb(0 0 0 / 0.28);
+  --bardo-shadow-float: 0 8px 24px rgb(0 0 0 / 0.32);
+  --bardo-motion-press: 100ms;
+  --bardo-motion-micro: 140ms;
+  --bardo-motion-standard: 200ms;
+  --bardo-motion-surface: 260ms;
+  --bardo-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --bardo-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --bardo-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --bardo-content: 980px;
+  --bardo-wide: 1480px;
+  --bardo-safe-inline: max(env(safe-area-inset-left, 0px), clamp(14px, 2.4cqi, 32px));
+
+  /* Compatibility aliases while legacy consumers are strangled. */
+  --bardo-bg: var(--bardo-background);
+  --bardo-overlay: rgb(0 0 0 / 0.64);
+  --bardo-text: var(--bardo-text-primary);
+  --bardo-text-dim: var(--bardo-text-muted);
+  --bardo-border: var(--bardo-border-default);
+  --bardo-accent: var(--bardo-interactive-primary);
+  --bardo-accent-hover: var(--bardo-interactive-primary-hover);
+  --bardo-success: var(--bardo-status-success);
+  --bardo-warning: var(--bardo-status-warning);
+  --bardo-danger: var(--bardo-status-danger);
+  --bardo-focus: var(--bardo-focus-ring);
+  --bardo-shadow-surface: var(--bardo-shadow-overlay);
+  --bardo-ease: var(--bardo-ease-out);
+}
+
+html[data-theme="light"],
+.theme-light {
+  color-scheme: light;
+  --bardo-background: oklch(0.95 0.008 270);
+  --bardo-surface: oklch(0.985 0.004 270);
+  --bardo-surface-raised: oklch(1 0 0);
+  --bardo-surface-hover: oklch(0.93 0.01 270);
+  --bardo-surface-active: oklch(0.89 0.013 270);
+  --bardo-surface-selected: color-mix(in oklch, var(--bardo-blurple-500) 14%, white);
+  --bardo-surface-overlay: rgb(255 255 255 / 0.92);
+  --bardo-text-primary: oklch(0.2 0.012 270);
+  --bardo-text-secondary: oklch(0.38 0.018 270);
+  --bardo-text-muted: oklch(0.5 0.018 270);
+  --bardo-text-disabled: oklch(0.67 0.012 270);
+  --bardo-border-subtle: rgb(20 22 30 / 0.08);
+  --bardo-border-default: rgb(20 22 30 / 0.13);
+  --bardo-border-strong: rgb(20 22 30 / 0.22);
+  --bardo-shadow-overlay: 0 20px 56px rgb(25 28 36 / 0.18), 0 2px 8px rgb(25 28 36 / 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --bardo-motion-press: 1ms;
+    --bardo-motion-micro: 1ms;
+    --bardo-motion-standard: 1ms;
+    --bardo-motion-surface: 1ms;
+  }
+}

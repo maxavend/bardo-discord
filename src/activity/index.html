@@ -10,6 +10,9 @@
     <!-- STYLES -->
   </head>
   <body>
+    <a class="bardo-skip-link" href="#bardo-main-content">Saltar al contenido</a>
+    <div id="bardo-app-chrome" data-avatar-src="<!-- AVATAR_SRC -->"></div>
+    <div id="bardo-react-surface"></div>
     <main class="shell">
       <header class="topbar" aria-label="Bardo">
         <div class="brand-mark" aria-hidden="true">
@@ -45,7 +48,7 @@
         </div>
       </section>
 
-      <article id="document" class="document" hidden>
+      <article id="document" class="document" hidden data-bardo-main-content>
         <header class="document-header">
           <p class="eyebrow">Documento</p>
           <h1 id="document-title"></h1>

@@ -1,0 +1,29 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../**/*.{html,js,jsx}";
+
+@import "../styles.css" layer(base);
+@import "../ui/bardo-ui.css" layer(base);
+@import "./theme.css" layer(theme);
+@import "./discord-native.css" layer(components);
+
+@theme inline {
+  --color-background: var(--bardo-background);
+  --color-surface: var(--bardo-surface);
+  --color-surface-raised: var(--bardo-surface-raised);
+  --color-surface-hover: var(--bardo-surface-hover);
+  --color-surface-active: var(--bardo-surface-active);
+  --color-surface-selected: var(--bardo-surface-selected);
+  --color-text-primary: var(--bardo-text-primary);
+  --color-text-secondary: var(--bardo-text-secondary);
+  --color-text-muted: var(--bardo-text-muted);
+  --color-border-subtle: var(--bardo-border-subtle);
+  --color-border-default: var(--bardo-border-default);
+  --color-interactive: var(--bardo-interactive-primary);
+  --color-danger: var(--bardo-status-danger);
+  --radius-control: var(--bardo-radius-control);
+  --radius-card: var(--bardo-radius-card);
+  --ease-bardo-out: var(--bardo-ease-out);
+  --ease-bardo-move: var(--bardo-ease-in-out);
+}

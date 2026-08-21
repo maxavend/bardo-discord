@@ -55,6 +55,10 @@ async function loadDocumentModule() {
 async function boot() {
   const mode = await resolveContextMode();
   document.documentElement.dataset.bardoBootMode = mode;
+  document.documentElement.dataset.bardoMode = mode;
+
+  const { mountBardoChrome } = await import('./app/bootstrap.jsx');
+  mountBardoChrome({ mode });
 
   if (mode === 'board') {
     await import('./board.js');

@@ -63,17 +63,21 @@ async function createBuildReport(metafile, avatarAssets) {
 
   const entry = (suffix) => Object.entries(outputs)
     .find(([, meta]) => slash(meta.entryPoint || '').endsWith(slash(suffix)))?.[0] || null;
-  const shellSeeds = [entry('src/activity/main.js'), entry('src/activity/styles.css'), entry('src/activity/ui/bardo-ui.css')];
+  const shellSeeds = [entry('src/activity/main.js'), entry('.artifacts/bardo-tailwind.css')];
   const shell = staticClosure(outputs, shellSeeds);
 
+  const chromeInputs = ['src/activity/app/bootstrap.jsx'];
   const routeInputs = {
-    home: ['src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js'],
+    home: [...chromeInputs, 'src/activity/features/home/home-page.jsx', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js'],
     documents: [
+      ...chromeInputs,
+      'src/activity/features/documents/document-trigger.jsx',
       'src/activity/editor-reliability.js', 'src/activity/import-bootstrap.js', 'src/activity/app.js',
       'src/activity/export-security.js', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js',
     ],
-    kanban: ['src/activity/board.js', 'src/activity/member-picker-remote.js', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js'],
+    kanban: [...chromeInputs, 'src/activity/board.js', 'src/activity/member-picker-remote.js', 'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js'],
     planner: [
+      ...chromeInputs,
       'src/activity/event.js', 'src/activity/planner-member-directory.js',
       'src/activity/product-integration.js', 'src/activity/ui/migration-adapters.js',
     ],
@@ -162,8 +166,7 @@ async function bundle() {
   const result = await build({
     entryPoints: [
       resolve(srcDir, 'main.js'),
-      resolve(srcDir, 'styles.css'),
-      resolve(srcDir, 'ui/bardo-ui.css'),
+      resolve(artifactDir, 'bardo-tailwind.css'),
     ],
     outdir: outDir,
     entryNames: '[name]-[hash]',
@@ -173,6 +176,7 @@ async function bundle() {
     splitting: true,
     format: 'esm',
     platform: 'browser',
+    jsx: 'automatic',
     target: ['es2022'],
     minify: true,
     sourcemap: false,
@@ -183,29 +187,27 @@ async function bundle() {
   const outputs = Object.keys(result.metafile.outputs);
   let appFile = '';
   let styleFile = '';
-  let uiStyleFile = '';
   for (const output of outputs) {
     const fileName = basename(output);
     if (fileName.startsWith('main-') && fileName.endsWith('.js')) appFile = fileName;
-    else if (fileName.startsWith('styles-') && fileName.endsWith('.css')) styleFile = fileName;
-    else if (fileName.startsWith('bardo-ui-') && fileName.endsWith('.css')) uiStyleFile = fileName;
+    else if (fileName.startsWith('bardo-tailwind-') && fileName.endsWith('.css')) styleFile = fileName;
   }
-  if (!appFile || !styleFile || !uiStyleFile) throw new Error(`No se generaron los bundles esperados. Salidas: ${outputs.join(', ')}`);
+  if (!appFile || !styleFile) throw new Error(`No se generaron los bundles esperados. Salidas: ${outputs.join(', ')}`);
 
   const avatarAssets = await emitAvatarAssets();
   const avatar72 = avatarAssets.find((asset) => asset.size === 72);
   const avatar144 = avatarAssets.find((asset) => asset.size === 144);
 
-  console.log(`✨ Entry bundles: ${appFile}, ${styleFile}, ${uiStyleFile}`);
+  console.log(`✨ Entry bundles: ${appFile}, ${styleFile}`);
   console.log(`🧩 Chunks lazy generados: ${outputs.filter((output) => output.includes('/chunks/')).length}`);
   console.log(`🖼️ Avatar servido: ${avatar72.bytes} B (72px), ${avatar144.bytes} B (144px); fuente 1024px queda solo en build.`);
 
   const templatePath = resolve(srcDir, 'index.html');
   let html = await readFile(templatePath, 'utf8');
-  html = html.replace('<!-- STYLES -->', `<link rel="stylesheet" href="/${styleFile}" />\n    <link rel="stylesheet" href="/${uiStyleFile}" />`);
+  html = html.replace('<!-- STYLES -->', `<link rel="stylesheet" href="/${styleFile}" />`);
   html = html.replace('<!-- SCRIPTS -->', `<script type="module" src="/${appFile}"></script>`);
-  html = html.replace('<!-- AVATAR_SRC -->', `/${avatar72.file}`);
-  html = html.replace('<!-- AVATAR_SRCSET -->', `srcset="/${avatar72.file} 72w, /${avatar144.file} 144w" sizes="36px"`);
+  html = html.replaceAll('<!-- AVATAR_SRC -->', `/${avatar72.file}`);
+  html = html.replaceAll('<!-- AVATAR_SRCSET -->', `srcset="/${avatar72.file} 72w, /${avatar144.file} 144w" sizes="36px"`);
   await writeFile(resolve(outDir, 'index.html'), html, 'utf8');
   await createBuildReport(result.metafile, avatarAssets);
   console.log('✅ activity/index.html y reporte de performance actualizados');
