@@ -1,15 +1,15 @@
 critical-shell: 67 KiB gzip
-home: 199 KiB gzip
-documents: 214.9 KiB gzip
-kanban: 211.3 KiB gzip
-planner: 198.4 KiB gzip
+home: 199.2 KiB gzip
+documents: 215.1 KiB gzip
+kanban: 211.5 KiB gzip
+planner: 198.6 KiB gzip
 72x72 avatar: 6.7 KiB
 144x144 avatar: 23.1 KiB
 
 Largest gzip chunks:
 - activity/chunks/pdfjs-6ZRAGHZI.js: 486.3 KiB (lazy PDF)
 - activity/chunks/lib-7R7ECROH.js: 127.7 KiB
-- activity/chunks/bootstrap-H3MLJBIB.js: 71.7 KiB
+- activity/chunks/bootstrap-JCNEQJWR.js: 71.9 KiB
 - activity/chunks/chunk-7OSQWNIS.js: 44 KiB
 - activity/chunks/document-enhancements-WXBBBWL3.js: 36.3 KiB
 - activity/chunks/chunk-F5OFARHE.js: 35.2 KiB

@@ -77,6 +77,7 @@ test('Discord authentication resolves instance and document targets from the SDK
   const reader = await read('src/activity/app.js');
   const board = await read('src/activity/board.js');
   const planner = await read('src/activity/event.js');
+  const chrome = await read('src/activity/components/bardo/app-chrome.jsx');
   const navigation = await read('src/activity/product-integration.js');
   assert.match(security, /const instanceId = sdk\.instanceId \|\| queryInstanceId/);
   assert.doesNotMatch(security, /!isEmbeddedActivity\(\) \|\| !instanceId/);
@@ -92,6 +93,9 @@ test('Discord authentication resolves instance and document targets from the SDK
   assert.match(board, /sharedAuth\?\.instanceId \|\| sdk\?\.instanceId/);
   assert.match(planner, /globalThis\.__bardoActivityAuth\?\.ready/);
   assert.match(planner, /sharedAuth\?\.instanceId \|\| client\.instanceId/);
+  assert.match(chrome, /NAV_SECTIONS = \{ documents: 'documents', boards: 'boards', agenda: 'events' \}/);
+  assert.match(chrome, /fetch\(`\/api\/home\/\$\{NAV_SECTIONS\[key\]\}\?limit=1`/);
+  assert.match(chrome, /globalThis\.__bardoNavigate\(NAV_TYPES\[key\], item\.id\)/);
   assert.match(navigation, /productParams = new Set/);
   assert.match(navigation, /nextUrl\.searchParams\.set\('instance_id', instanceId\)/);
   assert.match(navigation, /location\.assign\(nextUrl\.toString\(\)\)/);

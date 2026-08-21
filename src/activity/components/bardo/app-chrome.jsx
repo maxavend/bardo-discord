@@ -10,6 +10,8 @@ const NAV_ITEMS = [
 ];
 
 const MODE_TO_NAV = { home: 'home', document: 'documents', board: 'boards', event: 'agenda' };
+const NAV_SECTIONS = { documents: 'documents', boards: 'boards', agenda: 'events' };
+const NAV_TYPES = { documents: 'document', boards: 'board', agenda: 'event' };
 
 function hrefFor(key, activeKey) {
   const url = new URL(window.location.href);
@@ -34,6 +36,22 @@ export function AppChrome({ initialMode, avatarSrc }) {
   const activeKey = MODE_TO_NAV[mode] || 'documents';
   const links = useMemo(() => NAV_ITEMS.map((item) => ({ ...item, href: hrefFor(item.key, activeKey) })), [activeKey]);
 
+  const openNavigationTarget = async (key) => {
+    if (key === activeKey) return;
+    if (!globalThis.__bardoNavigate) return;
+    if (key === 'home') return globalThis.__bardoNavigate('home');
+
+    const response = await fetch(`/api/home/${NAV_SECTIONS[key]}?limit=1`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('No pudimos cargar ese espacio de Bardo.');
+    const payload = await response.json();
+    const item = Array.isArray(payload.items) ? payload.items[0] : null;
+    if (!item?.id) {
+      globalThis.__bardoToast?.error(key === 'boards' ? 'Todavía no hay tableros.' : key === 'agenda' ? 'Todavía no hay eventos.' : 'Todavía no hay documentos.');
+      return;
+    }
+    return globalThis.__bardoNavigate(NAV_TYPES[key], item.id);
+  };
+
   useEffect(() => {
     const observer = new MutationObserver(() => setMode(document.documentElement.dataset.bardoMode || initialMode));
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bardo-mode'] });
@@ -57,10 +75,14 @@ export function AppChrome({ initialMode, avatarSrc }) {
                 <span className="bardo-app-nav-label">{label}</span>
               </span>
             );
-            const item = href ? (
-              <a href={href} data-bardo-nav={key} aria-current={current ? 'page' : undefined} className="bardo-app-nav-item">{content}</a>
-            ) : (
-              <button type="button" data-bardo-nav={key} aria-disabled="true" className="bardo-app-nav-item" title={`Abre ${label.toLowerCase()} desde Bardo para conservar el contexto`}>{content}</button>
+            const item = (
+              <button
+                type="button"
+                data-bardo-nav={key}
+                aria-current={current ? 'page' : undefined}
+                className="bardo-app-nav-item"
+                onClick={() => { void openNavigationTarget(key).catch((error) => globalThis.__bardoToast?.error(error.message)); }}
+              >{content}</button>
             );
             return <Tooltip key={key} label={label}>{item}</Tooltip>;
           })}
