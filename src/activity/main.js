@@ -61,6 +61,7 @@ async function boot() {
     await import('./member-picker-remote.js');
   } else if (mode === 'event') {
     await import('./event.js');
+    await import('./planner-member-directory.js');
   } else if (mode === 'document') {
     await loadDocumentModule();
   }
