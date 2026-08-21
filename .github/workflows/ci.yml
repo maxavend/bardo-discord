@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Refresh lockfile security fixes
+        run: npm audit fix --package-lock-only --ignore-scripts
       - name: Install dependencies
         run: npm ci
       - name: Build and static checks
@@ -35,6 +37,13 @@ jobs:
         run: npm run audit:release
       - name: Release readiness evidence
         run: npm run check:release
+      - name: Upload regenerated lockfile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-regenerated-lockfile
+          path: package-lock.json
+          if-no-files-found: error
       - name: Upload Phase 3 UI evidence
         if: always()
         uses: actions/upload-artifact@v4
