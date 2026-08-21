@@ -1,4 +1,8 @@
-import { SlashCommandBuilder } from 'discord.js';
+import {
+  ApplicationCommandType,
+  ContextMenuCommandBuilder,
+  SlashCommandBuilder,
+} from 'discord.js';
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN?.trim();
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID?.trim();
@@ -10,7 +14,16 @@ if (!DISCORD_TOKEN || !DISCORD_GUILD_ID) {
 
 const homeCommand = new SlashCommandBuilder()
   .setName('bardo')
-  .setDescription('Abre Bardo Home para conectar documentos, tareas y agenda.');
+  .setDescription('Abre Bardo Home o conversa con Bardo.')
+  .addStringOption((option) => option
+    .setName('mensaje')
+    .setDescription('Pregunta, consulta o acción para Bardo.')
+    .setRequired(false)
+    .setMaxLength(1800));
+
+const summarizeMessageCommand = new ContextMenuCommandBuilder()
+  .setName('Resumir con Bardo')
+  .setType(ApplicationCommandType.Message);
 
 const legacyDocumentCommand = new SlashCommandBuilder()
   .setName('doc')
@@ -79,8 +92,16 @@ async function registerCommands() {
   });
   if (!appRes.ok) throw new Error(`Error obteniendo aplicación de Discord: ${appRes.status} ${await appRes.text()}`);
   const app = await appRes.json();
-  const commands = [homeCommand, legacyDocumentCommand, documentCommand, boardCommand, taskCommand, eventCommand].map((command) => command.toJSON());
-  console.log(`Preparando /bardo, /doc, /documento, /tablero, /tarea y /evento para ${DISCORD_GUILD_ID} (App ID: ${app.id})...`);
+  const commands = [
+    homeCommand,
+    summarizeMessageCommand,
+    legacyDocumentCommand,
+    documentCommand,
+    boardCommand,
+    taskCommand,
+    eventCommand,
+  ].map((command) => command.toJSON());
+  console.log(`Preparando conversación de Bardo y comandos de producto para ${DISCORD_GUILD_ID} (App ID: ${app.id})...`);
   const regRes = await fetch(`https://discord.com/api/v10/applications/${app.id}/guilds/${DISCORD_GUILD_ID}/commands`, {
     method: 'PUT',
     headers: { Authorization: `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
