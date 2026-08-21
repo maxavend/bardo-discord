@@ -145,7 +145,7 @@ test('versioned edits preserve every generated page for long documents', async (
   const stored = await env.DB.prepare('SELECT pages FROM documents WHERE id = ?').bind(DOC).first();
   const pages = JSON.parse(stored.pages);
   assert.ok(pages.length > 1, 'el editor debe conservar la paginación completa, no solo la primera página');
-  assert.match(pages.at(-1), /Sección 18/);
+  assert.match(pages.at(-1), /contenido-18/);
 }));
 
 test('legacy/system document rewrites also advance version through the migration trigger', async () => withRuntime(async (env) => {
