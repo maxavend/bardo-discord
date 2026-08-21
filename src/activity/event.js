@@ -38,10 +38,11 @@ async function initSdk() {
   const embedded = params.has('frame_id') || location.hostname.endsWith('.discordsays.com');
   if (!embedded) return null;
   try {
-    const client = new DiscordSDK(resolveClientId());
-    await client.ready();
+    const sharedAuth = await globalThis.__bardoActivityAuth?.ready;
+    const client = sharedAuth?.sdk || new DiscordSDK(resolveClientId());
+    if (!sharedAuth?.sdk) await client.ready();
     sdk = client;
-    instanceId = client.instanceId || params.get('instance_id');
+    instanceId = sharedAuth?.instanceId || client.instanceId || params.get('instance_id');
     return client;
   } catch (error) {
     console.warn('Event Planner: DiscordSDK no disponible', error);

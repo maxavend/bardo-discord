@@ -1,40 +1,13 @@
-html[data-bardo-ui="3"][data-bardo-mode="home"] body { background:var(--bardo-bg); color:var(--bardo-text); }
-.bardo-home { width:100%; max-width:var(--bardo-wide); margin:0 auto; padding:max(16px,env(safe-area-inset-top)) var(--bardo-safe-inline) max(32px,env(safe-area-inset-bottom)); }
-.bardo-home-topbar { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:56px; margin-bottom:24px; }
-.bardo-home-topbar > div:first-child strong { display:block; font-size:15px; }
-.bardo-home-topbar > div:first-child span { display:block; margin-top:2px; color:var(--bardo-text-muted); font-size:11px; }
-.bardo-home .bardo-app-content { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
-.bardo-home-hero { grid-column:1/-1; display:flex; justify-content:space-between; align-items:flex-end; gap:24px; padding:24px; background:var(--bardo-surface); border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-card); }
-.bardo-home-hero h1 { margin:2px 0 8px; font-size:clamp(28px,4vw,42px); line-height:1.05; letter-spacing:-.035em; }
-.bardo-home-hero p { margin:0; color:var(--bardo-text-muted); }
 .bardo-eyebrow { margin:0!important; color:var(--bardo-text-muted)!important; font-size:12px; font-weight:700; }
-.bardo-home-quick { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-.bardo-home-section { min-width:0; padding:18px; background:var(--bardo-surface); border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-card); }
-.bardo-home-section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; }
-.bardo-home-section h2 { margin:0; font-size:16px; }
-.bardo-home-section-status { color:var(--bardo-text-dim); font-size:11px; }
-.bardo-home-section-status[data-error="true"] { color:var(--bardo-danger); }
-.bardo-home-list { display:grid; gap:7px; }
-.bardo-resource-button { width:100%; display:grid; gap:3px; padding:12px; border:0; border-radius:var(--bardo-radius-control); background:var(--bardo-surface-raised); color:var(--bardo-text); text-align:left; cursor:pointer; }
-.bardo-resource-button:hover { background:var(--bardo-surface-hover); }
-.bardo-resource-button:focus-visible { outline:2px solid var(--bardo-focus); outline-offset:2px; }
-.bardo-resource-button strong { font-size:13px; }
-.bardo-resource-button span { color:var(--bardo-text-muted); font-size:11px; }
-.bardo-home-empty { margin:6px 0; color:var(--bardo-text-muted); font-size:13px; }
 .bardo-product-modal-backdrop { position:fixed; inset:0; z-index:10000; display:grid; place-items:center; padding:16px; background:rgba(0,0,0,.55); }
 .bardo-product-modal { width:min(520px,100%); max-height:min(760px,calc(100vh - 32px)); overflow:auto; padding:20px; background:var(--bardo-surface); color:var(--bardo-text); border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-card); box-shadow:0 24px 70px rgba(0,0,0,.38); }
 .bardo-product-modal h2 { margin:0 0 18px; font-size:20px; }
 .bardo-product-modal .bardo-field { position:relative; display:grid; gap:6px; margin-bottom:13px; }
 .bardo-product-modal textarea.bardo-input { min-height:82px; padding-block:10px; resize:vertical; }
 .bardo-product-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
-.bardo-picker-option { width:100%; min-height:38px; padding:8px 10px; border:0; background:transparent; color:var(--bardo-text); text-align:left; }
-.bardo-picker-option:hover,.bardo-picker-option:focus-visible { background:var(--bardo-surface-hover); }
-.bardo-product-toast { position:fixed; right:max(16px,env(safe-area-inset-right)); bottom:max(16px,env(safe-area-inset-bottom)); z-index:10020; display:flex; align-items:center; gap:8px; max-width:min(460px,calc(100vw - 32px)); padding:11px 12px; background:var(--bardo-surface-raised); color:var(--bardo-text); border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-card); box-shadow:0 16px 46px rgba(0,0,0,.32); font-size:12px; }
-.bardo-product-toast span { flex:1; }
-.bardo-product-toast button { min-height:32px; border:0; border-radius:8px; padding:0 9px; background:var(--bardo-surface-hover); color:var(--bardo-text); font-weight:650; }
 .bardo-related-resources { margin-top:32px; padding-top:20px; border-top:1px solid var(--bardo-border); }
 .bardo-related-resources h2 { margin:0 0 10px; font-size:14px; }
 .bardo-related-resources .bardo-backlink-list { margin:0; padding:0; list-style:none; display:grid; gap:7px; }
 .bardo-related-resources .bardo-resource-card { cursor:pointer; }
-@media(max-width:760px){ .bardo-home .bardo-app-content{grid-template-columns:1fr}.bardo-home-hero{flex-direction:column;align-items:flex-start}.bardo-home-quick{justify-content:flex-start}.bardo-home-topbar{align-items:flex-start;flex-wrap:wrap}.bardo-product-modal-backdrop{align-items:end;padding:0}.bardo-product-modal{width:100%;max-height:88vh;border-radius:18px 18px 0 0;padding-bottom:max(20px,env(safe-area-inset-bottom));}.bardo-product-toast{left:16px;right:16px;flex-wrap:wrap}.bardo-product-toast span{flex-basis:100%;}}
-@media(prefers-reduced-motion:reduce){ .bardo-resource-button,.bardo-product-modal,.bardo-product-toast{transition:none!important;scroll-behavior:auto!important;} }
+@media(max-width:760px){.bardo-product-modal-backdrop{align-items:end;padding:0}.bardo-product-modal{width:100%;max-height:88vh;border-radius:18px 18px 0 0;padding-bottom:max(20px,env(safe-area-inset-bottom));}}
+@media(prefers-reduced-motion:reduce){.bardo-product-modal{transition:none!important;scroll-behavior:auto!important;}}

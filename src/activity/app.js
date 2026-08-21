@@ -270,7 +270,7 @@ function initTheme(sdk) {
 
 async function initDiscordSdk() {
   const params = new URLSearchParams(window.location.search);
-  const isEmbedded = params.has('frame_id') && params.has('instance_id');
+  const isEmbedded = params.has('frame_id') || window.location.hostname.endsWith('.discordsays.com');
 
   initTheme(null);
 
@@ -279,6 +279,11 @@ async function initDiscordSdk() {
   }
 
   try {
+    const sharedAuth = await globalThis.__bardoActivityAuth?.ready;
+    if (sharedAuth?.sdk) {
+      initTheme(sharedAuth.sdk);
+      return sharedAuth.sdk;
+    }
     const clientId = resolveClientId();
     const discordSdk = new DiscordSDK(clientId);
     await discordSdk.ready();

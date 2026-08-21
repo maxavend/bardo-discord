@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-21T22:16:25.302Z",
+  "gitSha": "26ac7a499a4bef04714d0fbd8422e0fcc48e2874",
+  "workflowRunId": null,
+  "state": "RELEASE_READY",
+  "automatic": {
+    "explicitDeployCommands": true,
+    "phase6EntryActive": true,
+    "stagingIsolated": true,
+    "productionEnvironmentExplicit": true,
+    "rollbackRunbookPresent": true,
+    "phase7TestsWired": true,
+    "axeEvidenceCaptured": true,
+    "dependencyAuditCaptured": true
+  },
+  "external": {
+    "stagingResourcesProvisioned": true,
+    "stagingMigrationsValidated": true,
+    "discordPilotValidated": true,
+    "humanReleaseApproved": true
+  },
+  "automaticFailures": [],
+  "externalPending": [],
+  "accessibility": {
+    "axeCliVersion": "4.13.0",
+    "totals": {
+      "violations": 0,
+      "critical": 0,
+      "serious": 0,
+      "moderate": 0,
+      "minor": 0,
+      "unknown": 0
+    }
+  },
+  "dependencyAudit": {
+    "counts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "packages": []
+  },
+  "note": "All automated and human-authorized release gates are evidenced."
+}

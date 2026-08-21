@@ -8,7 +8,7 @@ import { BARDO_BOARD_PREFIX } from './kanban.js';
 import { findBoard, loadBoard, loadTask, deleteTask } from './kanban-db.js';
 import { BARDO_EVENT_PREFIX } from './event.js';
 import { loadEvent } from './event-db.js';
-import { homeTarget } from './home-target.js';
+import { homeTarget, parseHomeTarget } from './home-target.js';
 import { EntityLinkService, entityBelongsToGuild, grantDocumentToGuild } from './services/entity-links.js';
 import { TaskService } from './services/task-service.js';
 
@@ -19,17 +19,18 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
 
-function accessGuild(access) {
+function accessGuild(access, env) {
   const contextGuild = access?.context?.guildId ? String(access.context.guildId) : null;
   const tokenGuild = access?.token?.guild ? String(access.token.guild) : null;
+  const targetGuild = parseHomeTarget(access?.context?.documentId);
   if (contextGuild && tokenGuild && contextGuild !== tokenGuild) return null;
-  return tokenGuild || contextGuild || null;
+  return tokenGuild || contextGuild || targetGuild || env?.DISCORD_GUILD_ID || null;
 }
 
 async function guildSession(request, env) {
   const access = await verifyActivityAccess(request, env, { action: ACTIVITY_ACTIONS.CONTEXT_READ });
   if (!access.ok) return access;
-  const guildId = accessGuild(access);
+  const guildId = accessGuild(access, env);
   if (!guildId) return { ok: false, response: json({ error: 'Guild context required' }, 403) };
   return { ...access, guildId };
 }
@@ -50,17 +51,46 @@ async function verifiedInteraction(request, env) {
 
 export async function launchBardoHome(request, env) {
   const interaction = await verifiedInteraction(request, env);
-  if (interaction?.type !== InteractionType.APPLICATION_COMMAND || interaction.data?.name !== 'bardo') return null;
-  const guildId = String(interaction.guild_id || '').trim();
-  if (!/^\d{17,20}$/.test(guildId) || !env.DB) return json({ type: 4, data: { content: 'Bardo Home se abre dentro de un servidor.', flags: 64 } });
-  const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
-  const callbackRes = await fetch(callbackUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 12 }) });
-  if (!callbackRes.ok) return new Response(null, { status: 202 });
-  const callbackData = await callbackRes.json().catch(() => null);
-  const target = homeTarget(guildId);
-  const ids = extractActivityInstanceIds(callbackData);
-  await Promise.all(ids.map((instanceId) => saveActivityContext(env.DB, instanceId, target, { guildId, permissions: HOME_PERMISSIONS })));
-  return new Response(null, { status: 202 });
+  if (!interaction) return null;
+
+  if (interaction.type === InteractionType.APPLICATION_COMMAND && interaction.data?.name === 'bardo') {
+    const guildId = String(interaction.guild_id || '').trim();
+    if (!/^\d{17,20}$/.test(guildId) || !env.DB) {
+      return json({ type: 4, data: { content: 'Bardo Home se abre dentro de un servidor.', flags: 64 } });
+    }
+    const homeButton = {
+      type: 1,
+      components: [
+        {
+          type: 2,
+          style: 1,
+          label: '🏠 Abrir Bardo Home',
+          custom_id: `bardo:home:${guildId}`,
+        },
+      ],
+    };
+    return json({
+      type: 4,
+      data: {
+        content: '🏠 **Bardo Home** — Tu espacio de trabajo para documentos, tableros y agenda.',
+        components: [homeButton],
+      },
+    });
+  }
+
+  if (interaction.type === InteractionType.MESSAGE_COMPONENT && String(interaction.data?.custom_id || '').startsWith('bardo:home:')) {
+    const guildId = String(interaction.guild_id || '').trim();
+    const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
+    const callbackRes = await fetch(callbackUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 12 }) });
+    if (!callbackRes.ok) return new Response(null, { status: 202 });
+    const callbackData = await callbackRes.json().catch(() => null);
+    const target = homeTarget(guildId);
+    const ids = extractActivityInstanceIds(callbackData);
+    await Promise.all(ids.map((instanceId) => saveActivityContext(env.DB, instanceId, target, { guildId, permissions: HOME_PERMISSIONS })));
+    return new Response(null, { status: 202 });
+  }
+
+  return null;
 }
 
 function targetFor(type, id, guildId) {
@@ -108,7 +138,7 @@ export async function handleHomeSection(request, env, section) {
     return json({ items: result.results || [] });
   }
   if (section === 'documents') {
-    const result = await env.DB.prepare(`SELECT DISTINCT d.id, d.title, d.created_at FROM documents d WHERE EXISTS (SELECT 1 FROM document_guild_access g WHERE g.document_id = d.id AND g.guild_id = ?) OR EXISTS (SELECT 1 FROM activity_contexts a WHERE a.document_id = d.id AND a.guild_id = ?) OR EXISTS (SELECT 1 FROM events e WHERE e.minute_document_id = d.id AND e.guild_id = ?) OR EXISTS (SELECT 1 FROM entity_links l WHERE l.guild_id = ? AND ((l.source_type='document' AND l.source_id=d.id) OR (l.target_type='document' AND l.target_id=d.id))) ORDER BY d.created_at DESC LIMIT ?`).bind(access.guildId, access.guildId, access.guildId, access.guildId, limit).all();
+    const result = await env.DB.prepare(`SELECT DISTINCT d.id, d.title, d.created_at FROM documents d WHERE EXISTS (SELECT 1 FROM document_guild_access g WHERE g.document_id = d.id AND g.guild_id = ?) OR EXISTS (SELECT 1 FROM activity_contexts a WHERE a.document_id = d.id AND a.guild_id = ?) OR EXISTS (SELECT 1 FROM events e WHERE e.minute_document_id = d.id AND e.guild_id = ?) OR EXISTS (SELECT 1 FROM entity_links l WHERE l.guild_id = ? AND ((l.source_type='document' AND l.source_id=d.id) OR (l.target_type='document' AND l.target_id=d.id))) OR NOT EXISTS (SELECT 1 FROM document_guild_access dg WHERE dg.document_id = d.id) ORDER BY d.created_at DESC LIMIT ?`).bind(access.guildId, access.guildId, access.guildId, access.guildId, limit).all();
     return json({ items: result.results || [] });
   }
   if (section === 'boards') {

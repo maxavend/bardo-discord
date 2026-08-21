@@ -164,8 +164,9 @@ async function initDiscordSdk() {
   if (!embedded) return null;
 
   try {
-    const sdk = new DiscordSDK(resolveClientId());
-    await sdk.ready();
+    const sharedAuth = await globalThis.__bardoActivityAuth?.ready;
+    const sdk = sharedAuth?.sdk || new DiscordSDK(resolveClientId());
+    if (!sharedAuth?.sdk) await sdk.ready();
     activeDiscordSdk = sdk;
 
     initTheme(sdk);
@@ -211,7 +212,8 @@ async function fetchContext(instanceId, maxAttempts = 5) {
 async function resolveBoardTarget() {
   const params = new URLSearchParams(window.location.search);
   const sdk = await initDiscordSdk();
-  currentInstanceId = sdk?.instanceId || params.get('instance_id') || null;
+  const sharedAuth = await globalThis.__bardoActivityAuth?.ready;
+  currentInstanceId = sharedAuth?.instanceId || sdk?.instanceId || params.get('instance_id') || null;
 
   const direct = parseBoardId(sdk?.customId) || parseBoardId(params.get('custom_id')) || params.get('board');
   if (direct) return direct;

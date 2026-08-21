@@ -13,7 +13,7 @@ const server = createServer((req,res)=>{
   res.setHeader('Content-Type',types[extname(file)]||'application/octet-stream');createReadStream(file).pipe(res);
 });
 await new Promise((resolveListen)=>server.listen(4174,'127.0.0.1',resolveListen));
-function chromePath(){for(const name of ['google-chrome','google-chrome-stable','chromium','chromium-browser']){const found=spawnSync('which',[name],{encoding:'utf8'});if(found.status===0&&found.stdout.trim())return found.stdout.trim();}throw new Error('Chrome/Chromium is required for Phase 5 editor browser checks.');}
+function chromePath(){if(process.env.CHROME_PATH&&existsSync(process.env.CHROME_PATH))return process.env.CHROME_PATH;for(const name of ['google-chrome','google-chrome-stable','chromium','chromium-browser']){const found=spawnSync('which',[name],{encoding:'utf8'});if(found.status===0&&found.stdout.trim())return found.stdout.trim();}for(const macPath of ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/Applications/Chromium.app/Contents/MacOS/Chromium']){if(existsSync(macPath))return macPath;}throw new Error('Chrome/Chromium is required for Phase 5 editor browser checks.');}
 function run(chrome,args){return new Promise((resolveRun,reject)=>{const child=spawn(chrome,args,{stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');child.stdout.on('data',(chunk)=>{stdout+=chunk;});child.stderr.on('data',(chunk)=>{stderr+=chunk;});child.on('error',reject);child.on('close',(code)=>code===0?resolveRun(stdout):reject(new Error(stderr||stdout||`Chrome failed with ${code}`)));});}
 const chrome=chromePath();
 try{

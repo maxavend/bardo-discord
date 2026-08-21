@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es" data-bardo-ui="3">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="/src/activity/styles.css">
+  <link rel="stylesheet" href="/src/activity/ui/bardo-ui.css">
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-width:0;background:var(--bardo-color-bg,#111214);color:var(--bardo-color-text,#f5f5f5);font-family:Inter,ui-sans-serif,system-ui,sans-serif}.state-app{min-height:100vh;padding:24px}.state-shell{max-width:1080px;margin:0 auto;display:grid;gap:16px}.state-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}.state-head h1{margin:4px 0 0;font-size:clamp(1.5rem,4vw,2rem)}.state-kicker,.state-caption{color:var(--bardo-color-text-muted,#a7a9ae);margin:0}.state-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.state-card{min-width:0;border:1px solid var(--bardo-color-border,#34363b);background:var(--bardo-color-surface,#1a1b1e);border-radius:16px;padding:16px;display:grid;gap:12px}.state-card h2{font-size:1rem;margin:0}.state-list{display:grid;gap:8px}.state-item{border:1px solid var(--bardo-color-border,#34363b);border-radius:12px;padding:12px;background:var(--bardo-color-surface-raised,#202226)}.state-item strong,.state-item span{display:block}.state-item span{margin-top:4px;color:var(--bardo-color-text-muted,#a7a9ae);font-size:.875rem}.state-empty{text-align:center;padding:24px 12px;color:var(--bardo-color-text-muted,#a7a9ae)}.state-loading{display:grid;gap:8px}.state-skeleton{height:14px;border-radius:999px;background:linear-gradient(90deg,var(--bardo-color-surface-raised,#202226),var(--bardo-color-hover,#2a2d32),var(--bardo-color-surface-raised,#202226));width:100%}.state-skeleton.short{width:58%}.state-error{border-color:var(--bardo-color-danger,#f23f42);background:color-mix(in srgb,var(--bardo-color-danger,#f23f42) 10%,var(--bardo-color-surface,#1a1b1e));}.state-error p{margin:0}.state-actions{display:flex;gap:8px;flex-wrap:wrap}.state-modal-demo{position:relative;min-height:230px;overflow:hidden}.state-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px;border-radius:12px}.state-modal{width:min(420px,100%);border:1px solid var(--bardo-color-border,#34363b);border-radius:16px;background:var(--bardo-color-surface-raised,#202226);padding:16px;display:grid;gap:12px;box-shadow:0 18px 60px rgba(0,0,0,.35)}.state-modal h3{margin:0;font-size:1rem}.state-modal label{display:grid;gap:6px}.state-modal input{width:100%;min-width:0}.state-status{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:4px 8px;border-radius:999px;background:var(--bardo-color-surface-raised,#202226);color:var(--bardo-color-text-muted,#a7a9ae);font-size:.75rem}.state-module-note{padding:8px 12px;border-left:3px solid var(--bardo-color-accent,#5865f2);color:var(--bardo-color-text-muted,#a7a9ae);font-size:.875rem}.state-app[hidden]{display:none!important}@media(max-width:680px){.state-app{padding:16px}.state-grid{grid-template-columns:1fr}.state-card{padding:14px}}
+  </style>
+  <script>
+    const view=new URLSearchParams(location.search).get('view')||'docs';
+    document.documentElement.dataset.bardoMode=view==='kanban'?'board':view==='planner'?'event':view==='home'?'home':'document';
+  </script>
+</head>
+<body>
+  <main class="state-app" data-view="docs"><div class="state-shell"><header class="state-head"><div><p class="state-kicker">Documentos · matriz de estados</p><h1>Contenido y edición</h1></div><span class="state-status">Phase 7</span></header><p class="state-module-note">Mismo shell, feedback explícito y acciones recuperables.</p><div class="state-grid">
+    <section class="state-card" data-state="populated"><h2>Populated</h2><div class="state-list"><article class="state-item"><strong>Minuta de producto</strong><span>Actualizado hace 2 min · 4 páginas</span></article><article class="state-item"><strong>Decisiones Q3</strong><span>Actualizado ayer</span></article></div></section>
+    <section class="state-card" data-state="empty"><h2>Empty</h2><div class="state-empty">Todavía no hay documentos recientes.</div><div class="state-actions"><button class="bardo-button">Crear documento</button></div></section>
+    <section class="state-card" data-state="loading" aria-busy="true"><h2>Loading</h2><div class="state-loading"><div class="state-skeleton"></div><div class="state-skeleton short"></div><div class="state-skeleton"></div></div></section>
+    <section class="state-card state-error" data-state="error" role="alert"><h2>Error</h2><p>No pudimos cargar el documento. Tus cambios locales siguen disponibles.</p><div class="state-actions"><button class="bardo-button">Reintentar</button><button class="bardo-button">Copiar cambios</button></div></section>
+    <section class="state-card state-modal-demo" data-state="modal"><h2>Modal</h2><div class="state-backdrop"><div class="state-modal" role="dialog" aria-modal="true" aria-labelledby="docs-modal-title"><h3 id="docs-modal-title">Editar título</h3><label>Nombre<input class="bardo-input" value="Minuta de producto"></label><div class="state-actions"><button class="bardo-button">Cancelar</button><button class="bardo-button">Guardar</button></div></div></div></section>
+  </div></div></main>
+
+  <main class="state-app" data-view="kanban" hidden><div class="state-shell"><header class="state-head"><div><p class="state-kicker">Kanban · matriz de estados</p><h1>Tablero de producto</h1></div><span class="state-status">Phase 7</span></header><p class="state-module-note">Los estados conservan semántica de columna/tarea sin depender solo del color.</p><div class="state-grid">
+    <section class="state-card" data-state="populated"><h2>Populated</h2><div class="state-list"><article class="state-item"><strong>Auditar navegación</strong><span>En progreso · Max</span></article><article class="state-item"><strong>Revisar minuta</strong><span>Pendiente</span></article></div></section>
+    <section class="state-card" data-state="empty"><h2>Empty</h2><div class="state-empty">Esta columna no tiene tareas.</div><div class="state-actions"><button class="bardo-button">Añadir tarea</button></div></section>
+    <section class="state-card" data-state="loading" aria-busy="true"><h2>Loading</h2><div class="state-loading"><div class="state-skeleton"></div><div class="state-skeleton short"></div><div class="state-skeleton"></div></div></section>
+    <section class="state-card state-error" data-state="error" role="alert"><h2>Error</h2><p>No pudimos actualizar el tablero. La última versión visible sigue intacta.</p><div class="state-actions"><button class="bardo-button">Reintentar</button></div></section>
+    <section class="state-card state-modal-demo" data-state="modal"><h2>Modal</h2><div class="state-backdrop"><div class="state-modal" role="dialog" aria-modal="true" aria-labelledby="kanban-modal-title"><h3 id="kanban-modal-title">Mover tarea</h3><label>Columna<select class="bardo-input"><option>En progreso</option><option>Hecho</option></select></label><div class="state-actions"><button class="bardo-button">Cancelar</button><button class="bardo-button">Mover</button></div></div></div></section>
+  </div></div></main>
+
+  <main class="state-app" data-view="planner" hidden><div class="state-shell"><header class="state-head"><div><p class="state-kicker">Planner · matriz de estados</p><h1>Weekly de producto</h1></div><span class="state-status">Phase 7</span></header><p class="state-module-note">Agenda, participantes y Live comparten feedback y recuperación.</p><div class="state-grid">
+    <section class="state-card" data-state="populated"><h2>Populated</h2><div class="state-list"><article class="state-item"><strong>15:30 · Decisiones de diseño</strong><span>20 min · 3 participantes</span></article><article class="state-item"><strong>15:50 · Próximos pasos</strong><span>15 min</span></article></div></section>
+    <section class="state-card" data-state="empty"><h2>Empty</h2><div class="state-empty">La agenda todavía no tiene bloques.</div><div class="state-actions"><button class="bardo-button">Agregar bloque</button></div></section>
+    <section class="state-card" data-state="loading" aria-busy="true"><h2>Loading</h2><div class="state-loading"><div class="state-skeleton"></div><div class="state-skeleton short"></div><div class="state-skeleton"></div></div></section>
+    <section class="state-card state-error" data-state="error" role="alert"><h2>Error</h2><p>No pudimos sincronizar el evento. Puedes reintentar sin duplicar acciones.</p><div class="state-actions"><button class="bardo-button">Reintentar</button></div></section>
+    <section class="state-card state-modal-demo" data-state="modal"><h2>Modal</h2><div class="state-backdrop"><div class="state-modal" role="dialog" aria-modal="true" aria-labelledby="planner-modal-title"><h3 id="planner-modal-title">Nuevo bloque</h3><label>Título<input class="bardo-input" value="Próximos pasos"></label><div class="state-actions"><button class="bardo-button">Cancelar</button><button class="bardo-button">Guardar</button></div></div></div></section>
+  </div></div></main>
+
+  <main class="state-app" data-view="home" hidden><div class="state-shell"><header class="state-head"><div><p class="state-kicker">Home · matriz de estados</p><h1>Lo importante, sin ruido</h1></div><span class="state-status">Phase 7</span></header><p class="state-module-note">Las secciones pueden fallar o quedar vacías sin bloquear el resto del Home.</p><div class="state-grid">
+    <section class="state-card" data-state="populated"><h2>Populated</h2><div class="state-list"><article class="state-item"><strong>Weekly de producto</strong><span>Hoy · 15:30</span></article><article class="state-item"><strong>Auditar navegación</strong><span>Tarea activa</span></article></div></section>
+    <section class="state-card" data-state="empty"><h2>Empty</h2><div class="state-empty">No tienes tareas activas asignadas.</div><div class="state-actions"><button class="bardo-button">Ver tableros</button></div></section>
+    <section class="state-card" data-state="loading" aria-busy="true"><h2>Loading</h2><div class="state-loading"><div class="state-skeleton"></div><div class="state-skeleton short"></div><div class="state-skeleton"></div></div></section>
+    <section class="state-card state-error" data-state="error" role="alert"><h2>Error</h2><p>No pudimos cargar eventos próximos. Las otras secciones siguen disponibles.</p><div class="state-actions"><button class="bardo-button">Reintentar</button></div></section>
+    <section class="state-card state-modal-demo" data-state="modal"><h2>Modal</h2><div class="state-backdrop"><div class="state-modal" role="dialog" aria-modal="true" aria-labelledby="home-modal-title"><h3 id="home-modal-title">Abrir recurso</h3><p class="state-caption">Confirma el contexto antes de cambiar de módulo.</p><div class="state-actions"><button class="bardo-button">Cancelar</button><button class="bardo-button">Abrir</button></div></div></div></section>
+  </div></div></main>
+
+  <script>
+    const selected=new URLSearchParams(location.search).get('view')||'docs';
+    document.querySelectorAll('[data-view]').forEach((node)=>node.hidden=node.dataset.view!==selected);
+    const visible=document.querySelector(`[data-view="${selected}"]`);
+    const states=[...visible.querySelectorAll('[data-state]')];
+    const dialogs=[...visible.querySelectorAll('[role="dialog"]')];
+    const unnamed=[...visible.querySelectorAll('button,a')].filter((node)=>!(node.textContent.trim()||node.getAttribute('aria-label')||node.getAttribute('title')));
+    const layout=states.map((node)=>{const r=node.getBoundingClientRect();return [node.dataset.state,Math.round(r.x*2)/2,Math.round(r.y*2)/2,Math.round(r.width*2)/2,Math.round(r.height*2)/2];});
+    let hash=2166136261;const serialized=JSON.stringify(layout);for(let i=0;i<serialized.length;i++){hash^=serialized.charCodeAt(i);hash=Math.imul(hash,16777619);}const signature=(hash>>>0).toString(16).padStart(8,'0');
+    const statesPresent=['populated','empty','loading','error','modal'].every((state)=>visible.querySelector(`[data-state="${state}"]`));
+    const overflow=document.documentElement.scrollWidth<=innerWidth+1;
+    const dialogsOk=dialogs.every((dialog)=>dialog.getAttribute('aria-modal')==='true'&&(dialog.getAttribute('aria-labelledby')||dialog.querySelector('h1,h2,h3')));
+    document.body.dataset.releaseStateCheck=statesPresent&&overflow&&dialogsOk&&!unnamed.length?'pass':'fail';
+    document.body.dataset.releaseStateSignature=signature;
+    document.body.dataset.releaseStateCount=String(states.length);
+    document.body.dataset.releaseScrollWidth=String(document.documentElement.scrollWidth);
+    document.body.dataset.releaseInnerWidth=String(innerWidth);
+  </script>
+</body>
+</html>
