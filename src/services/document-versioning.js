@@ -83,7 +83,7 @@ export class DocumentVersionService {
     }
 
     const { body } = extractDocumentTitle(markdown, title);
-    const pages = paginateMarkdown(body).slice(0, 1);
+    const pages = paginateMarkdown(body);
     const actorUserId = String(context.actorUserId || '').trim() || null;
     const reason = String(context.reason || input.reason || 'edit').trim().slice(0, 80) || 'edit';
     const forceVersion = Boolean(context.forceVersion || input.forceVersion);
