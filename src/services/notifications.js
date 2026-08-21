@@ -12,6 +12,8 @@ import {
 import { DiscordDmError, sendDiscordDm } from './discord-dm.js';
 import { priorityLabel } from '../kanban.js';
 
+const DEFAULT_EVENT_REMINDER_OFFSETS = [1440, 60, 10];
+
 function boardButton(boardId) {
   return [{ type: 1, components: [{ type: 2, style: 1, label: 'Abrir tarea', custom_id: `bardo:board:${boardId}` }] }];
 }
@@ -124,6 +126,13 @@ export class NotificationService {
     return results;
   }
 
+  async reminderOffsetsFor(guildId, userId) {
+    const preference = await getNotificationPreference(this.db, guildId, userId, 'event.reminder');
+    if (!preference.dmEnabled) return [];
+    if (preference.updatedAt && preference.reminderOffsetMinutes !== null) return [preference.reminderOffsetMinutes];
+    return DEFAULT_EVENT_REMINDER_OFFSETS;
+  }
+
   async enqueueEventReminders(now = new Date()) {
     const windowStart = new Date(now.getTime() - 7 * 60_000);
     const windowEnd = new Date(now.getTime() + 24 * 60 * 60_000);
@@ -133,14 +142,14 @@ export class NotificationService {
     let queued = 0;
     for (const event of eventsResult.results || []) {
       const starts = Date.parse(event.starts_at);
-      for (const offset of [1440, 60, 10]) {
-        const trigger = starts - offset * 60_000;
-        if (trigger > now.getTime() || trigger < windowStart.getTime()) continue;
-        const participants = await this.db.prepare('SELECT user_id FROM event_participants WHERE event_id = ?').bind(event.id).all();
-        for (const person of participants.results || []) {
+      const participants = await this.db.prepare('SELECT user_id FROM event_participants WHERE event_id = ?').bind(event.id).all();
+      for (const person of participants.results || []) {
+        const offsets = await this.reminderOffsetsFor(event.guild_id, person.user_id);
+        for (const offset of offsets) {
+          const trigger = starts - offset * 60_000;
+          if (trigger > now.getTime() || trigger < windowStart.getTime()) continue;
           const result = await this.enqueue({
-            guildId: event.guild_id, userId: person.user_id, eventType: 'event.reminder',
-            entityType: 'event', entityId: event.id,
+            guildId: event.guild_id, userId: person.user_id, eventType: 'event.reminder', entityType: 'event', entityId: event.id,
             dedupeKey: `event.reminder:${event.id}:${person.user_id}:${offset}`,
             scheduledFor: now.toISOString(),
           });
