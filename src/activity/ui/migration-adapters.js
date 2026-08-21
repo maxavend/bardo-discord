@@ -142,7 +142,7 @@ function enhanceCycleControl(button) {
 
 function migrate(root=document) {
   root.querySelectorAll?.('.action-button,.btn-primary,.btn-secondary,.btn-icon,.ev-btn,.tb-btn').forEach((el)=>el.classList.add('bardo-button'));
-  root.querySelectorAll?.('.form-input,.form-textarea,.form-select,.ev-input,.form-textarea,.ev-select,.action-select').forEach((el)=>el.classList.add('bardo-input'));
+  root.querySelectorAll?.('.form-input,.form-textarea,.form-select,.ev-input,.ev-textarea,.ev-select,.action-select').forEach((el)=>el.classList.add('bardo-input'));
   root.querySelectorAll?.('.task-card').forEach((card)=>{ card.setAttribute('aria-keyshortcuts','Enter Space'); if(!card.getAttribute('title'))card.title='Enter para editar; cambia la columna desde el formulario para mover con teclado.'; });
   root.querySelectorAll?.('.kanban-scroll-container').forEach(enhanceKanbanScroll);
   root.querySelectorAll?.('.ev-tabs').forEach((tabs)=>tabs.setAttribute('role','tablist'));
