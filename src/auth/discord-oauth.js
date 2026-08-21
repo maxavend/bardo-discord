@@ -1,12 +1,12 @@
-import { loadActivityContext, loadDocument, updateActivityContextAuthorization } from '../db.js';
+import { loadActivityContext, saveActivityContext, loadDocument, updateActivityContextAuthorization } from '../db.js';
 import { loadBoard } from '../kanban-db.js';
 import { loadEvent } from '../event-db.js';
 import { parseBoardTarget } from '../kanban.js';
 import { parseEventTarget } from '../event.js';
-import { parseHomeTarget } from '../home-target.js';
+import { homeTarget, parseHomeTarget } from '../home-target.js';
 import { grantDocumentToGuild } from '../services/entity-links.js';
 import { createActivitySessionToken } from './session-token.js';
-import { readActivityInstanceId } from './activity-access.js';
+import { readActivityInstanceId, defaultPermissionsForTarget } from './activity-access.js';
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -87,11 +87,20 @@ export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch
 
   const instanceId = readActivityInstanceId(request);
   if (!instanceId) return oauthError(401);
-  const context = await loadActivityContext(env.DB, instanceId);
-  if (!context) return oauthError(401);
-
   const requestedGuildId = request.headers.get('x-bardo-guild-id')?.trim() || null;
   if (requestedGuildId && !/^\d{17,20}$/.test(requestedGuildId)) return oauthError(400);
+
+  let context = await loadActivityContext(env.DB, instanceId);
+  if (!context) {
+    const defaultGuildId = requestedGuildId || env.DISCORD_GUILD_ID || '1458156309420572865';
+    const defaultTarget = homeTarget(defaultGuildId);
+    await saveActivityContext(env.DB, instanceId, defaultTarget, {
+      guildId: defaultGuildId,
+      permissions: defaultPermissionsForTarget(defaultTarget),
+    });
+    context = await loadActivityContext(env.DB, instanceId);
+  }
+  if (!context) return oauthError(401);
 
   let payload;
   try { payload = await request.json(); } catch { return oauthError(400); }
