@@ -3,6 +3,7 @@ import { loadBoard } from '../kanban-db.js';
 import { loadEvent } from '../event-db.js';
 import { parseBoardTarget } from '../kanban.js';
 import { parseEventTarget } from '../event.js';
+import { parseHomeTarget } from '../home-target.js';
 import { createActivitySessionToken } from './session-token.js';
 import { readActivityInstanceId } from './activity-access.js';
 
@@ -29,11 +30,17 @@ async function verifyGuildMember(fetchImpl, env, guildId, userId) {
   return Boolean(response?.ok);
 }
 
-async function resolveServerAuthorization(fetchImpl, env, context, userId) {
+async function resolveServerAuthorization(fetchImpl, env, context, userId, requestedGuildId = null) {
+  const homeGuildId = parseHomeTarget(context.documentId);
+  if (homeGuildId) {
+    if (requestedGuildId && requestedGuildId !== homeGuildId) return null;
+    return await verifyGuildMember(fetchImpl, env, homeGuildId, userId) ? { guildId: homeGuildId } : null;
+  }
+
   const boardId = parseBoardTarget(context.documentId);
   if (boardId) {
     const board = await loadBoard(env.DB, boardId);
-    if (!board?.guildId) return null;
+    if (!board?.guildId || (requestedGuildId && requestedGuildId !== String(board.guildId))) return null;
     const member = await verifyGuildMember(fetchImpl, env, board.guildId, userId);
     return member ? { guildId: board.guildId } : null;
   }
@@ -41,24 +48,36 @@ async function resolveServerAuthorization(fetchImpl, env, context, userId) {
   const eventId = parseEventTarget(context.documentId);
   if (eventId) {
     const event = await loadEvent(env.DB, eventId);
-    if (!event?.guildId) return null;
+    if (!event?.guildId || (requestedGuildId && requestedGuildId !== String(event.guildId))) return null;
     const member = await verifyGuildMember(fetchImpl, env, event.guildId, userId);
     return member ? { guildId: event.guildId } : null;
   }
 
   const document = await loadDocument(env.DB, context.documentId);
   if (!document) return null;
-  if (String(document.createdBy || '') === String(userId)) return { guildId: null };
 
-  // Event minutes may have a synthetic createdBy while still belonging to a guild.
+  // Event minutes have an authoritative guild relationship on the event itself.
   const linkedEvent = await env.DB
     .prepare('SELECT guild_id FROM events WHERE minute_document_id = ? LIMIT 1')
     .bind(context.documentId)
     .first()
     .catch(() => null);
-  if (!linkedEvent?.guild_id) return null;
-  const member = await verifyGuildMember(fetchImpl, env, linkedEvent.guild_id, userId);
-  return member ? { guildId: String(linkedEvent.guild_id) } : null;
+  if (linkedEvent?.guild_id) {
+    const guildId = String(linkedEvent.guild_id);
+    if (requestedGuildId && requestedGuildId !== guildId) return null;
+    return await verifyGuildMember(fetchImpl, env, guildId, userId) ? { guildId } : null;
+  }
+
+  if (String(document.createdBy || '') !== String(userId)) return null;
+
+  // A normal document remains personal when no guild was requested. When it is
+  // opened inside a Discord guild, bind the session only after verifying real
+  // guild membership. This is what safely unlocks Phase 4 cross-product flows.
+  if (requestedGuildId) {
+    const member = await verifyGuildMember(fetchImpl, env, requestedGuildId, userId);
+    return member ? { guildId: requestedGuildId } : null;
+  }
+  return { guildId: null };
 }
 
 export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch) {
@@ -69,6 +88,9 @@ export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch
   if (!instanceId) return oauthError(401);
   const context = await loadActivityContext(env.DB, instanceId);
   if (!context) return oauthError(401);
+
+  const requestedGuildId = request.headers.get('x-bardo-guild-id')?.trim() || null;
+  if (requestedGuildId && !/^\d{17,20}$/.test(requestedGuildId)) return oauthError(400);
 
   let payload;
   try { payload = await request.json(); } catch { return oauthError(400); }
@@ -105,13 +127,9 @@ export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch
     : String(tokenData?.scope || '').split(/\s+/).filter(Boolean);
   if (!userId || applicationId !== env.DISCORD_APPLICATION_ID || !scopes.includes('identify')) return oauthError(403);
 
-  const serverAuthorization = await resolveServerAuthorization(fetchImpl, env, context, userId);
+  const serverAuthorization = await resolveServerAuthorization(fetchImpl, env, context, userId, requestedGuildId);
   if (!serverAuthorization) return oauthError(403);
   const serverGuildId = serverAuthorization.guildId;
-
-  const requestedGuildId = request.headers.get('x-bardo-guild-id')?.trim() || null;
-  if (requestedGuildId && !/^\d{17,20}$/.test(requestedGuildId)) return oauthError(400);
-  if (serverGuildId && requestedGuildId && requestedGuildId !== serverGuildId) return oauthError(403);
 
   const expiresIn = Math.max(60, Math.min(3600, Number(tokenData?.expires_in) || 3600));
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
