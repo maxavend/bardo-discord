@@ -46,6 +46,38 @@ function decodeResource(pathname, prefix) {
   try { return decodeURIComponent(rest); } catch { return null; }
 }
 
+function normalizedPerson(person) {
+  const userId = String(person?.userId || person?.id || '').trim();
+  if (!userId) return null;
+  return {
+    userId,
+    displayName: String(person.displayName || person.name || person.username || userId).slice(0, 120),
+    username: person.username ? String(person.username).slice(0, 80) : '',
+    avatarUrl: person.avatarUrl || null,
+    roleIds: Array.isArray(person.roleIds) ? person.roleIds.map(String) : [],
+    roleLabel: person.roleLabel || null,
+    isBot: Boolean(person.isBot),
+    source: person.source || 'event_reference',
+  };
+}
+
+function referencedEventPeople(event) {
+  const people = new Map();
+  const add = (person) => {
+    const normalized = normalizedPerson(person);
+    if (normalized && !people.has(normalized.userId)) people.set(normalized.userId, normalized);
+  };
+  for (const person of event.participants || []) add(person);
+  for (const block of event.blocks || []) {
+    for (const person of block.leads || []) add(person);
+    for (const item of block.items || []) for (const person of item.speakers || []) add(person);
+  }
+  for (const task of event.tasks || []) {
+    if (task.assigneeId) add({ userId: task.assigneeId, displayName: task.assigneeName || task.assigneeId });
+  }
+  return [...people.values()];
+}
+
 async function authorizeResource(request, env, action, resourceType, resourceId, guildId = null) {
   return verifyActivityAccess(request, env, { action, resourceType, resourceId, guildId });
 }
@@ -80,14 +112,16 @@ async function handleEventRead(request, url, env) {
   if (!access.ok) return access.response;
 
   const boards = event.guildId ? await listBoards(env.DB, event.guildId, 50) : [];
+  const guildMembers = referencedEventPeople(event);
   const etag = await resourceEtag('event', [
     event.updatedAt,
     event.blocks?.length || 0,
     event.tasks?.length || 0,
+    guildMembers.map((member) => member.userId).sort().join(','),
     ...boards.map((board) => `${board.id}:${board.updatedAt}`),
   ]);
   if (request.headers.get('if-none-match') === etag) return notModified(etag);
-  return json({ ...event, boards }, 200, { ETag: etag });
+  return json({ ...event, boards, guildMembers }, 200, { ETag: etag });
 }
 
 async function optimizedRead(request, env) {
