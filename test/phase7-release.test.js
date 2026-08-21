@@ -57,6 +57,12 @@ test('release gate cannot silently claim RELEASE_READY without remote and human 
   assert.match(source, /--require-release-ready/);
 });
 
+test('automated release evidence rejects serious accessibility and high dependency findings', () => {
+  const source = read('scripts/release-readiness.js');
+  assert.match(source, /axe\.totals\?\.serious/);
+  assert.match(source, /audit\.counts\?\.high/);
+});
+
 test('release runbook documents forward-only recovery and explicit abort conditions', () => {
   const runbook = read('docs/release-runbook.md');
   assert.match(runbook, /forward-only/i);
