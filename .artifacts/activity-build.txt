@@ -1,5 +1,5 @@
 critical-shell: 59.7 KiB gzip
-home: 65.8 KiB gzip
+home: 65.9 KiB gzip
 documents: 82.9 KiB gzip
 kanban: 90.1 KiB gzip
 planner: 77.2 KiB gzip
@@ -13,7 +13,7 @@ Largest gzip chunks:
 - activity/chunks/board-YAVIKXTB.js: 22.3 KiB
 - activity/chunks/event-JTIGEEOI.js: 9 KiB
 - activity/chunks/app-QL6FGLBR.js: 6.9 KiB
-- activity/main-SSRCTBMG.js: 5.7 KiB
+- activity/main-MII5HGY3.js: 5.7 KiB
 - activity/bardo-ui-LWWMLHOM.css: 5.3 KiB
 - activity/chunks/editor-reliability-IA5NS3TI.js: 4.8 KiB
 - activity/styles-6NTVVYM2.css: 4.2 KiB

@@ -44,14 +44,23 @@ async function authenticateActivity() {
   const sdk = new DiscordSDK(resolveClientId());
   await sdk.ready();
   const guildId = sdk.guildId || params.get('guild_id') || null;
-
-  const authorization = await sdk.commands.authorize({
-    client_id: resolveClientId(),
-    response_type: 'code',
-    state: '',
-    prompt: 'none',
-    scope: ['identify'],
-  });
+  let authorization;
+  try {
+    authorization = await sdk.commands.authorize({
+      client_id: resolveClientId(),
+      response_type: 'code',
+      state: '',
+      prompt: 'none',
+      scope: ['identify'],
+    });
+  } catch (promptErr) {
+    authorization = await sdk.commands.authorize({
+      client_id: resolveClientId(),
+      response_type: 'code',
+      state: '',
+      scope: ['identify'],
+    });
+  }
   if (!authorization?.code) throw new Error('Discord no devolvió un código de autorización.');
 
   const response = await originalFetch('/api/auth/token', {
