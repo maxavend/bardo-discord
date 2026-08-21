@@ -30,9 +30,14 @@ const automatic = {
     String(packageJson.scripts?.['test:unit'] || '').includes('test/phase7-release.test.js') &&
     String(packageJson.scripts?.['test:worker'] || '').includes('test/phase7-runtime.test.js'),
   axeEvidenceCaptured:
-    Boolean(axe) && axe.axeCliVersion === '4.13.0' && Number(axe.totals?.critical || 0) === 0,
+    Boolean(axe) &&
+    axe.axeCliVersion === '4.13.0' &&
+    Number(axe.totals?.critical || 0) === 0 &&
+    Number(axe.totals?.serious || 0) === 0,
   dependencyAuditCaptured:
-    Boolean(audit) && Number(audit.counts?.critical || 0) === 0,
+    Boolean(audit) &&
+    Number(audit.counts?.critical || 0) === 0 &&
+    Number(audit.counts?.high || 0) === 0,
 };
 
 const external = {
