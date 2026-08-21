@@ -74,6 +74,7 @@ export async function verifyActivitySessionToken(token, {
   let payload;
   try {
     signature = base64UrlToBytes(signaturePart);
+    if (bytesToBase64Url(signature) !== signaturePart) return null;
     payload = decodeJson(encoded);
   } catch {
     return null;
