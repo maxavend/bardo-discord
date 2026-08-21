@@ -22,9 +22,19 @@ async function withBlankRuntime(run) {
   }
 }
 
+function executableMigrationSql(file) {
+  return readFileSync(`migrations/${file}`, 'utf8')
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n')
+    .trim();
+}
+
 async function apply(db, files) {
   for (const file of files) {
-    await db.exec(readFileSync(`migrations/${file}`, 'utf8'));
+    const sql = executableMigrationSql(file);
+    assert.ok(sql, `${file} must contain executable SQL`);
+    await db.exec(sql);
   }
 }
 
