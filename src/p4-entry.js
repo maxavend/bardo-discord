@@ -6,7 +6,7 @@ import { BARDO_BOARD_PREFIX } from './kanban.js';
 import { findBoard, loadBoard, loadTask, deleteTask } from './kanban-db.js';
 import { BARDO_EVENT_PREFIX } from './event.js';
 import { loadEvent } from './event-db.js';
-import { homeTarget, parseHomeTarget } from './home-target.js';
+import { homeTarget } from './home-target.js';
 import { EntityLinkService, entityBelongsToGuild } from './services/entity-links.js';
 import { TaskService } from './services/task-service.js';
 
@@ -88,7 +88,7 @@ export async function handleProductNavigation(request, env) {
   const permissions = type === 'home' ? HOME_PERMISSIONS : defaultPermissionsForTarget(target);
   await env.DB.prepare('UPDATE activity_contexts SET document_id = ?, guild_id = ?, permissions = ? WHERE instance_id = ?')
     .bind(target, access.guildId, JSON.stringify(permissions), access.instanceId).run();
-  const route = type === 'home' ? '/bardo?home=1' : type === 'document' ? `/bardo?document=${encodeURIComponent(id)}` : type === 'board' ? `/bardo?board=${encodeURIComponent(id)}${taskId ? `&task=${encodeURIComponent(taskId)}` : ''}` : `/bardo?event=${encodeURIComponent(id)}`;
+  const route = type === 'home' ? '/?home=1' : type === 'document' ? `/?document=${encodeURIComponent(id)}` : type === 'board' ? `/?board=${encodeURIComponent(id)}${taskId ? `&task=${encodeURIComponent(taskId)}` : ''}` : `/?event=${encodeURIComponent(id)}`;
   return json({ ok: true, type, id, taskId, route });
 }
 
@@ -129,6 +129,13 @@ function cleanExcerpt(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
+function validDueAt(value) {
+  const dueAt = String(value || '').trim();
+  if (!dueAt) return null;
+  if (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(dueAt)) throw new Error('Fecha límite inválida.');
+  return dueAt;
+}
+
 export async function handleDocumentTask(request, env, ctx, documentId, taskId = null) {
   const access = await verifyActivityAccess(request, env, { action: ACTIVITY_ACTIONS.DOCUMENT_READ, resourceType: 'document', resourceId: documentId });
   if (!access.ok) return access.response;
@@ -147,27 +154,32 @@ export async function handleDocumentTask(request, env, ctx, documentId, taskId =
   const payload = await request.json().catch(() => null);
   const board = payload ? await findBoard(env.DB, guildId, payload.boardId || payload.board || '') : null;
   if (!payload || !board) return json({ error: 'Selecciona un tablero de este servidor.' }, 400);
+  let dueAt;
+  try { dueAt = validDueAt(payload.dueAt); } catch (error) { return json({ error: error.message }, 400); }
   const excerpt = cleanExcerpt(payload.excerpt);
   const description = [String(payload.description || '').trim(), excerpt ? `Contexto del documento: ${excerpt}` : ''].filter(Boolean).join('\n\n').slice(0, 1200);
+  let task = null;
   try {
-    let task = await new TaskService(env).create({ ...payload, boardId: board.id, description, createdBy: access.userId }, { guildId, actorUserId: access.userId, waitUntil: typeof ctx?.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : undefined });
-    const dueAt = String(payload.dueAt || '').trim();
+    task = await new TaskService(env).create({ ...payload, boardId: board.id, description, createdBy: access.userId }, { guildId, actorUserId: access.userId, waitUntil: typeof ctx?.waitUntil === 'function' ? ctx.waitUntil.bind(ctx) : undefined });
     if (dueAt) {
-      if (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(dueAt)) return json({ error: 'Fecha límite inválida.' }, 400);
       await env.DB.prepare('UPDATE tasks SET due_at = ? WHERE id = ?').bind(dueAt, task.id).run();
       task = { ...task, dueAt };
     }
     await links.create({ guildId, sourceType: 'document', sourceId: documentId, targetType: 'task', targetId: task.id, relationType: 'task_from_document', createdBy: access.userId });
     return json({ ok: true, task, board: { id: board.id, name: board.name } }, 201);
-  } catch (error) { return json({ error: error instanceof Error ? error.message : 'No pude crear la tarea.' }, 400); }
+  } catch (error) {
+    if (task?.id) await deleteTask(env.DB, task.id).catch(() => null);
+    return json({ error: error instanceof Error ? error.message : 'No pude crear la tarea.' }, 400);
+  }
 }
 
-async function enrichEventResponse(request, env, ctx, response, eventId, action) {
+async function enrichEventResponse(request, env, response, eventId, action) {
   if (!response.ok) return response;
   const payload = await response.clone().json().catch(() => null);
   const guildId = String((await loadEvent(env.DB, eventId))?.guildId || '');
   if (!guildId) return response;
-  const actor = (await verifyActivityAccess(request, env, { action: ACTIVITY_ACTIONS.CONTEXT_READ })).userId || 'activity';
+  const access = await verifyActivityAccess(request, env, { action: ACTIVITY_ACTIONS.CONTEXT_READ });
+  const actor = access.ok ? access.userId : 'activity';
   const links = new EntityLinkService(env);
   if (action === 'tasks' && payload?.task?.id) await links.create({ guildId, sourceType: 'event', sourceId: eventId, targetType: 'task', targetId: payload.task.id, relationType: 'event_has_task', createdBy: actor });
   if (action === 'minutes' && payload?.documentId) await links.create({ guildId, sourceType: 'event', sourceId: eventId, targetType: 'document', targetId: payload.documentId, relationType: 'event_has_minutes', createdBy: actor });
@@ -190,7 +202,7 @@ export default {
     const eventFlow = url.pathname.match(/^\/api\/events\/([^/]+)\/(tasks|minutes)$/);
     if (eventFlow && request.method === 'POST') {
       const response = await p2Entry.fetch(request, env, ctx);
-      return enrichEventResponse(request, env, ctx, response, decodeURIComponent(eventFlow[1]), eventFlow[2]);
+      return enrichEventResponse(request, env, response, decodeURIComponent(eventFlow[1]), eventFlow[2]);
     }
     return p2Entry.fetch(request, env, ctx);
   },
