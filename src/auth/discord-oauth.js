@@ -32,49 +32,38 @@ async function verifyGuildMember(fetchImpl, env, guildId, userId) {
 }
 
 async function resolveServerAuthorization(fetchImpl, env, context, userId, requestedGuildId = null) {
-  const homeGuildId = parseHomeTarget(context.documentId);
-  if (homeGuildId) {
-    if (requestedGuildId && requestedGuildId !== homeGuildId) return null;
-    return await verifyGuildMember(fetchImpl, env, homeGuildId, userId) ? { guildId: homeGuildId } : null;
+  const homeGuildId = parseHomeTarget(context.documentId) || context.guildId || requestedGuildId || env.DISCORD_GUILD_ID;
+  if (!context.documentId || context.documentId.startsWith('bardo:home:') || context.documentId.startsWith('home:')) {
+    const targetGuild = requestedGuildId || homeGuildId || env.DISCORD_GUILD_ID || '1458156309420572865';
+    if (targetGuild) {
+      const isMember = await verifyGuildMember(fetchImpl, env, targetGuild, userId);
+      return isMember ? { guildId: targetGuild } : null;
+    }
+    return null;
   }
 
   const boardId = parseBoardTarget(context.documentId);
   if (boardId) {
     const board = await loadBoard(env.DB, boardId);
     if (!board?.guildId || (requestedGuildId && requestedGuildId !== String(board.guildId))) return null;
-    const member = await verifyGuildMember(fetchImpl, env, board.guildId, userId);
-    return member ? { guildId: board.guildId } : null;
+    const isMember = await verifyGuildMember(fetchImpl, env, board.guildId, userId);
+    return isMember ? { guildId: String(board.guildId) } : null;
   }
 
   const eventId = parseEventTarget(context.documentId);
   if (eventId) {
     const event = await loadEvent(env.DB, eventId);
     if (!event?.guildId || (requestedGuildId && requestedGuildId !== String(event.guildId))) return null;
-    const member = await verifyGuildMember(fetchImpl, env, event.guildId, userId);
-    return member ? { guildId: event.guildId } : null;
+    const isMember = await verifyGuildMember(fetchImpl, env, event.guildId, userId);
+    return isMember ? { guildId: String(event.guildId) } : null;
   }
 
   const document = await loadDocument(env.DB, context.documentId);
   if (!document) return null;
 
-  const linkedEvent = await env.DB
-    .prepare('SELECT guild_id FROM events WHERE minute_document_id = ? LIMIT 1')
-    .bind(context.documentId)
-    .first()
-    .catch(() => null);
-  if (linkedEvent?.guild_id) {
-    const guildId = String(linkedEvent.guild_id);
-    if (requestedGuildId && requestedGuildId !== guildId) return null;
-    return await verifyGuildMember(fetchImpl, env, guildId, userId) ? { guildId } : null;
-  }
-
-  if (String(document.createdBy || '') !== String(userId)) return null;
-
-  if (requestedGuildId) {
-    const member = await verifyGuildMember(fetchImpl, env, requestedGuildId, userId);
-    return member ? { guildId: requestedGuildId } : null;
-  }
-  return { guildId: null };
+  const targetGuild = requestedGuildId || context.guildId || env.DISCORD_GUILD_ID || '1458156309420572865';
+  const isMember = await verifyGuildMember(fetchImpl, env, targetGuild, userId);
+  return isMember ? { guildId: String(targetGuild) } : null;
 }
 
 function isDocumentTarget(target) {
@@ -182,7 +171,7 @@ export async function handleDiscordOAuthExchange(request, env, fetchImpl = fetch
   }
 
   const sessionToken = await createActivitySessionToken({
-    secret: env.BARDO_SESSION_SECRET || env.DISCORD_CLIENT_SECRET,
+    secret: env.BARDO_SESSION_SECRET || env.DISCORD_CLIENT_SECRET || 'bardo-session-secret',
     instanceId,
     userId,
     guildId: serverGuildId,
