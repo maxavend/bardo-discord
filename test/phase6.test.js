@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { emitStructuredLog } from '../src/lib/observability.js';
 
 const read = (path) => readFileSync(path, 'utf8');
+const UNPROVISIONED_D1_ID = '00000000-0000-0000-0000-000000000000';
 
 test('Phase 6 Activity boot keeps adaptive polling and product modules lazy', () => {
   const main = read('src/activity/main.js');
@@ -88,11 +89,14 @@ test('Wrangler executes Phase 6 and keeps staging resources isolated and inert',
   const stagingDb = config.env.staging.d1_databases.find((entry) => entry.binding === 'DB');
   const productionR2 = config.r2_buckets.find((entry) => entry.binding === 'BACKUPS');
   const stagingR2 = config.env.staging.r2_buckets.find((entry) => entry.binding === 'BACKUPS');
+  const stagingState = config.env.staging.vars.BARDO_STAGING_RESOURCE_STATE;
   assert.equal(config.main, 'src/p6-entry.js');
   assert.equal(config.env.staging.name, 'bardo-discord-staging');
   assert.notEqual(stagingDb.database_id, productionDb.database_id);
   assert.notEqual(stagingDb.database_name, productionDb.database_name);
   assert.notEqual(stagingR2.bucket_name, productionR2.bucket_name);
   assert.deepEqual(config.env.staging.triggers.crons, []);
-  assert.equal(config.env.staging.vars.BARDO_STAGING_RESOURCE_STATE, 'unprovisioned');
+  assert.ok(['unprovisioned', 'provisioned'].includes(stagingState));
+  if (stagingState === 'unprovisioned') assert.equal(stagingDb.database_id, UNPROVISIONED_D1_ID);
+  if (stagingState === 'provisioned') assert.notEqual(stagingDb.database_id, UNPROVISIONED_D1_ID);
 });
