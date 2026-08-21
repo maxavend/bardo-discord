@@ -1,8 +1,9 @@
 import { createServer } from 'node:http';
 import { createReadStream, existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { extname, join, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { extname, isAbsolute, join, resolve } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
 
 const root = resolve('.');
 const artifactDir = resolve('.artifacts/release');
@@ -18,6 +19,44 @@ const server = createServer((req, res) => {
 });
 await new Promise((resolveListen) => server.listen(4174, '127.0.0.1', resolveListen));
 
+function findChrome() {
+  for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
+    const found = spawnSync('which', [name], { encoding: 'utf8' });
+    if (found.status !== 0 || !found.stdout.trim()) continue;
+    const binary = found.stdout.trim();
+    const version = spawnSync(binary, ['--version'], { encoding: 'utf8' });
+    const match = String(version.stdout || version.stderr || '').match(/(\d+)\.\d+\.\d+\.\d+/);
+    if (match) return { binary, major: Number(match[1]), version: match[0] };
+  }
+  throw new Error('Chrome/Chromium is required for the axe accessibility gate.');
+}
+
+async function matchingChromeDriver() {
+  const chrome = findChrome();
+  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  const installed = spawnSync(npx, ['--yes', 'browser-driver-manager@2.0.1', 'install', `chrome@${chrome.major}`], {
+    encoding: 'utf8',
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (installed.error) throw installed.error;
+  if (installed.status !== 0) throw new Error(`Could not install ChromeDriver for Chrome ${chrome.version}: ${installed.stderr || installed.stdout}`);
+
+  const envPath = resolve(homedir(), '.browser-driver-manager/.env');
+  const envFile = await readFile(envPath, 'utf8');
+  const raw = envFile.match(/^CHROMEDRIVER_TEST_PATH=(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, '');
+  if (!raw) throw new Error(`browser-driver-manager did not write CHROMEDRIVER_TEST_PATH to ${envPath}`);
+  const driverPath = isAbsolute(raw) ? raw : resolve(homedir(), raw);
+  if (!existsSync(driverPath)) throw new Error(`ChromeDriver path does not exist: ${driverPath}`);
+  const driverVersion = spawnSync(driverPath, ['--version'], { encoding: 'utf8' });
+  const driverMajor = Number(String(driverVersion.stdout || driverVersion.stderr || '').match(/ChromeDriver\s+(\d+)/)?.[1] || 0);
+  if (driverMajor !== chrome.major) throw new Error(`ChromeDriver major ${driverMajor} does not match Chrome ${chrome.major}`);
+  console.log(`AXE_DRIVER Chrome=${chrome.version} ChromeDriverMajor=${driverMajor}`);
+  return { chrome, driverPath };
+}
+
+const driver = await matchingChromeDriver();
+
 function runAxe(url) {
   const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const args = [
@@ -26,7 +65,8 @@ function runAxe(url) {
     '--load-delay=900',
     '--timeout=120',
     '--tags=wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa',
-    '--chrome-options=no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage',
+    `--chromedriver-path=${driver.driverPath}`,
+    '--chrome-options=headless=new,no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage',
     url,
   ];
   return new Promise((resolveRun, reject) => {
@@ -49,6 +89,8 @@ const views = ['docs', 'kanban', 'planner', 'home'];
 const evidence = {
   schemaVersion: 1,
   axeCliVersion: '4.13.0',
+  chromeVersion: driver.chrome.version,
+  chromeMajor: driver.chrome.major,
   generatedAt: new Date().toISOString(),
   tags: ['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa'],
   views: {},
