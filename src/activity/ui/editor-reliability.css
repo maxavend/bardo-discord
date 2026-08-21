@@ -1,0 +1,28 @@
+.bardo-editor-issue {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:14px;
+  padding:12px 14px;
+  border:1px solid var(--bardo-border);
+  border-radius:var(--bardo-radius-control);
+  background:var(--bardo-surface-raised);
+  color:var(--bardo-text);
+}
+.bardo-editor-issue-copy { display:grid; gap:3px; min-width:0; }
+.bardo-editor-issue-copy strong { font-size:13px; }
+.bardo-editor-issue-copy span { color:var(--bardo-text-muted); font-size:12px; line-height:1.45; }
+.bardo-editor-issue-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.bardo-history-modal { max-height:min(720px,calc(100vh - 32px)); overflow:auto; }
+.bardo-history-current { color:var(--bardo-text-muted); font-size:12px; }
+.bardo-history-list { display:grid; gap:8px; margin:14px 0; }
+.bardo-history-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 12px; border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-control); background:var(--bardo-surface-raised); }
+.bardo-history-row > div { display:grid; gap:3px; min-width:0; }
+.bardo-history-row strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.bardo-history-row span { color:var(--bardo-text-muted); font-size:11px; }
+@media (max-width: 620px) {
+  .bardo-editor-issue, .bardo-history-row { align-items:stretch; flex-direction:column; }
+  .bardo-editor-issue-actions { justify-content:stretch; }
+  .bardo-editor-issue-actions .bardo-button { flex:1 1 auto; }
+}

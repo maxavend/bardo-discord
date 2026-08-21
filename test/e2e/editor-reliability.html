@@ -1,0 +1,18 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Editor reliability fixture</title></head><body data-editor-check="pending"><main><h1>Editor reliability</h1><div id="state" role="status"></div><button id="retry">Reintentar</button></main><script type="module">
+import { EditorSaveCoordinator } from '/src/activity/editor-save-machine.js';
+const scenario=new URLSearchParams(location.search).get('scenario')||'queue';
+const state=document.querySelector('#state');
+let attempts=0; const versions=[];
+const coordinator=new EditorSaveCoordinator({version:1,fingerprint:(payload)=>payload.value,onState:(next)=>{state.textContent=next;document.body.dataset.editorState=next;},transport:async(payload,version)=>{attempts+=1;versions.push(version);if(scenario==='conflict'){const error=new Error('conflict');error.code='DOCUMENT_VERSION_CONFLICT';error.currentVersion=2;throw error;}if(scenario==='retry'&&attempts===1){const error=new Error('offline');error.code='DOCUMENT_SAVE_NETWORK_ERROR';throw error;}await new Promise(resolve=>setTimeout(resolve,scenario==='queue'?30:0));return {version:version+1,payload};}});
+async function run(){
+  coordinator.sync({version:1,payload:{value:'base'}});
+  if(scenario==='queue'){
+    coordinator.markDirty();const first=coordinator.enqueue({value:'a'});coordinator.markDirty();const second=coordinator.enqueue({value:'b'});coordinator.markDirty();const third=coordinator.enqueue({value:'c'});await Promise.all([first,second,third]);document.body.dataset.queueCalls=String(attempts);document.body.dataset.versions=versions.join(',');document.body.dataset.editorCheck=attempts===2&&versions.join(',')==='1,2'&&coordinator.version===3&&coordinator.state==='saved'?'pass':'fail';return;
+  }
+  coordinator.markDirty();
+  try{await coordinator.enqueue({value:'changed'});}catch{}
+  if(scenario==='conflict'){document.body.dataset.editorCheck=coordinator.state==='conflict'&&coordinator.version===1?'pass':'fail';return;}
+  if(scenario==='retry'){try{await coordinator.retry();}catch{}document.body.dataset.editorCheck=attempts===2&&coordinator.state==='saved'&&coordinator.version===2?'pass':'fail';}
+}
+run().catch(()=>{document.body.dataset.editorCheck='fail';});
+</script></body></html>
