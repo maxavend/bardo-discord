@@ -5,3 +5,4 @@ data/
 *.cpuprofile
 .DS_Store
 .wrangler/
+.artifacts/

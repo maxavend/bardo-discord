@@ -1,9 +1,60 @@
 {
-  "name":"bardo-discord","version":"0.4.0","private":true,"type":"module","description":"Bardo: documentos, tareas/Kanban y Event Planner colaborativo dentro de Discord.",
-  "scripts":{
-    "build:activity":"node scripts/build-activity.js","build":"npm run build:activity","predeploy":"npm run build:activity","dev":"npm run build:activity && wrangler dev","deploy":"node -e \"console.error('El deploy sin ambiente está bloqueado. Usa npm run deploy:staging o npm run deploy:production.'); process.exit(1)\"","deploy:staging":"npm run build:activity && wrangler deploy --env staging","deploy:production":"npm run build:activity && wrangler deploy --env production","register":"node --env-file=.env scripts/register-commands.js","check:bundles":"node scripts/check-activity-budgets.js","check:env":"node scripts/check-environment-isolation.js","check:release":"node scripts/release-readiness.js","audit:release":"node scripts/dependency-audit.js","check:syntax":"node scripts/check-syntax.js","check:promises":"node scripts/check-floating-promises.js","types:generate":"node scripts/generate-worker-types.js","check":"npm run build && npm run check:bundles && npm run check:env && npm run check:syntax && npm run check:promises && npm run types:generate","test":"npm run build && node --test","test:unit":"node --test test/backup-r2.test.js test/components.test.js test/db.test.js test/editor-save-machine.test.js test/event.test.js test/export-format.test.js test/import-db.test.js test/import-format.test.js test/pagination.test.js test/phase2.test.js test/phase2-notifications.test.js test/phase6.test.js test/phase7-release.test.js test/ui-contract.test.js","test:worker":"node --test test/worker.test.js test/kanban.test.js test/security-phase1.test.js test/event-integrity.test.js test/kanban-phase1.test.js test/phase2-runtime.test.js test/phase4-runtime.test.js test/phase5-runtime.test.js test/phase6-runtime.test.js test/phase7-runtime.test.js test/worker-runtime.test.js","test:e2e":"node --test test/e2e/phase3.test.js test/e2e/phase4.test.js && node scripts/editor-browser-check.js","test:a11y":"node --test test/a11y/phase3.test.js test/a11y/phase4.test.js test/a11y/phase5.test.js && node scripts/axe-browser-check.js","test:visual":"node scripts/ui-browser-check.js","analyze":"npm run build && npm run check:bundles && cat .artifacts/activity-build.txt"
+  "name": "bardo-discord",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Bardo: documentos, tareas/Kanban y Event Planner colaborativo dentro de Discord.",
+  "scripts": {
+    "build:styles": "tailwindcss -i ./src/activity/styles/index.css -o ./.artifacts/bardo-tailwind.css --minify",
+    "build:activity": "npm run build:styles && node scripts/build-activity.js",
+    "build": "npm run build:activity",
+    "predeploy": "npm run build:activity",
+    "dev": "npm run build:activity && wrangler dev",
+    "deploy": "node -e \"console.error('El deploy sin ambiente está bloqueado. Usa npm run deploy:staging o npm run deploy:production.'); process.exit(1)\"",
+    "deploy:staging": "npm run build:activity && wrangler deploy --env staging",
+    "deploy:production": "npm run build:activity && wrangler deploy --env production",
+    "register": "node --env-file=.env scripts/register-commands.js",
+    "check:bundles": "node scripts/check-activity-budgets.js",
+    "check:env": "node scripts/check-environment-isolation.js",
+    "check:release": "node scripts/release-readiness.js",
+    "audit:release": "node scripts/dependency-audit.js",
+    "check:syntax": "node scripts/check-syntax.js",
+    "check:promises": "node scripts/check-floating-promises.js",
+    "types:generate": "node scripts/generate-worker-types.js",
+    "check": "npm run build && npm run check:bundles && npm run check:env && npm run check:syntax && npm run check:promises && npm run types:generate",
+    "test": "npm run build && node --test",
+    "test:unit": "node --test test/backup-r2.test.js test/components.test.js test/db.test.js test/editor-save-machine.test.js test/event.test.js test/export-format.test.js test/import-db.test.js test/import-format.test.js test/pagination.test.js test/phase2.test.js test/phase2-notifications.test.js test/phase6.test.js test/phase7-release.test.js test/ui-contract.test.js test/ui-rebrand.test.js",
+    "test:worker": "node --test test/worker.test.js test/kanban.test.js test/security-phase1.test.js test/event-integrity.test.js test/kanban-phase1.test.js test/phase2-runtime.test.js test/phase4-runtime.test.js test/phase5-runtime.test.js test/phase6-runtime.test.js test/phase7-runtime.test.js test/worker-runtime.test.js",
+    "test:e2e": "node --test test/e2e/phase3.test.js test/e2e/phase4.test.js && node scripts/editor-browser-check.js",
+    "test:a11y": "node --test test/a11y/phase3.test.js test/a11y/phase4.test.js test/a11y/phase5.test.js && node scripts/axe-browser-check.js",
+    "test:visual": "npm run build:styles && node scripts/ui-browser-check.js",
+    "analyze": "npm run build && npm run check:bundles && cat .artifacts/activity-build.txt"
   },
-  "engines":{"node":">=22.12.0"},
-  "dependencies":{"@discord/embedded-app-sdk":"^2.5.0","discord-interactions":"^4.1.2","discord.js":"^14.18.0","mammoth":"^1.12.1","pdf-lib":"^1.17.1","turndown":"^7.2.4","turndown-plugin-gfm":"^1.0.2","unpdf":"^1.8.1"},
-  "devDependencies":{"esbuild":"^0.28.2","wrangler":"^4.124.0"}
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.7.0",
+    "@discord/embedded-app-sdk": "^2.5.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "discord-interactions": "^4.1.2",
+    "discord.js": "^14.18.0",
+    "lucide-react": "^1.33.0",
+    "mammoth": "^1.12.1",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.6.0",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "unpdf": "^1.8.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.3.3",
+    "wrangler": "^4.124.0"
+  }
 }

@@ -24,9 +24,10 @@ function buildNav() {
     if(key===currentMode())item.setAttribute('aria-current','page'); nav.appendChild(item); }
   return nav;
 }
-function installNavigation(){ const mode=document.documentElement.dataset.bardoMode; const host=mode==='home'?document.querySelector('.bardo-home-topbar'):mode==='board'?document.querySelector('.kanban-topbar'):mode==='event'?document.querySelector('.ev-top'):document.querySelector('.topbar'); if(!host||host.querySelector('.bardo-context-nav'))return; host.appendChild(buildNav()); }
+function installNavigation(){ if(document.querySelector('#bardo-app-chrome'))return; const mode=document.documentElement.dataset.bardoMode; const host=mode==='home'?document.querySelector('.bardo-home-topbar'):mode==='board'?document.querySelector('.kanban-topbar'):mode==='event'?document.querySelector('.ev-top'):document.querySelector('.topbar'); if(!host||host.querySelector('.bardo-context-nav'))return; host.appendChild(buildNav()); }
 
-function dialogFor(target){ return target instanceof Element ? target.closest('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]') : null; }
+function isHeadlessDialog(dialog){ return dialog?.classList?.contains('bardo-dialog-popup'); }
+function dialogFor(target){ const dialog=target instanceof Element ? target.closest('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]') : null; return isHeadlessDialog(dialog)?null:dialog; }
 function markDirty(event){ const dialog=dialogFor(event.target); if(!dialog) return; dirtyDialogs.add(dialog); dialog.dataset.bardoDirty='true'; }
 function wantsDiscard(target){ return target instanceof Element && Boolean(target.closest('[data-modal-cancel],#btn-modal-cancel,#btn-modal-close,#btn-board-modal-cancel,#btn-board-modal-close,#btn-col-modal-cancel,#btn-col-modal-close,.modal-close-btn')); }
 function warnDirty(dialog, button){
@@ -53,12 +54,12 @@ document.addEventListener('keydown',(event)=>{
 
 function enhanceNode(node){
   if(!(node instanceof HTMLElement))return;
-  if(node.matches('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]')) enhanceDialog(node);
-  node.querySelectorAll?.('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]').forEach(enhanceDialog);
+  if(node.matches('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]')&&!isHeadlessDialog(node)) enhanceDialog(node);
+  node.querySelectorAll?.('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]').forEach((dialog)=>{if(!isHeadlessDialog(dialog))enhanceDialog(dialog);});
   node.querySelectorAll?.('.kanban-toast,.ev-toast,.bardo-product-toast,.action-status,.action-status-container').forEach((el)=>{ el.setAttribute('role',/error|no se pudo/i.test(el.textContent||'')?'alert':'status'); el.setAttribute('aria-live',/error|no se pudo/i.test(el.textContent||'')?'assertive':'polite'); });
   node.querySelectorAll?.('.view-state,.kanban-state').forEach((state)=>{ if(/no pudimos|error/i.test(state.textContent||'')) state.dataset.bardoError='true'; });
 }
 const removedDialogs=new Set();
-const observer=new MutationObserver((records)=>{ for(const record of records){ record.addedNodes.forEach(enhanceNode); record.removedNodes.forEach((node)=>{ if(!(node instanceof HTMLElement))return; if(node.matches('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]'))removedDialogs.add(node); node.querySelectorAll?.('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]').forEach((d)=>removedDialogs.add(d)); }); } for(const dialog of removedDialogs){ restoreDialogFocus(dialog); removedDialogs.delete(dialog); } installNavigation(); });
+const observer=new MutationObserver((records)=>{ for(const record of records){ record.addedNodes.forEach(enhanceNode); record.removedNodes.forEach((node)=>{ if(!(node instanceof HTMLElement))return; if(node.matches('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]')&&!isHeadlessDialog(node))removedDialogs.add(node); node.querySelectorAll?.('.kanban-modal,.ev-modal,.bardo-product-modal,[role="dialog"]').forEach((dialog)=>{if(!isHeadlessDialog(dialog))removedDialogs.add(dialog);}); }); } for(const dialog of removedDialogs){ restoreDialogFocus(dialog); removedDialogs.delete(dialog); } installNavigation(); });
 function start(){ enhanceNode(document.body); observer.observe(document.body,{childList:true,subtree:true,characterData:true}); installNavigation(); new MutationObserver(installNavigation).observe(document.documentElement,{attributes:true,attributeFilter:['data-bardo-mode']}); window.addEventListener('bardo:save-error',()=>announce('No se pudo guardar. Reintenta.','assertive')); }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true}); else start();

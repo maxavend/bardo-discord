@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-21T18:39:35.433Z",
+  "generatedAt": "2026-08-21T22:11:23.959Z",
   "budgets": {
     "criticalShellGzipBytes": 81920,
     "initialRouteGzipBytes": 256000,
@@ -8,77 +8,92 @@
     "avatarBytes": 51200
   },
   "shell": {
-    "rawBytes": 215509,
-    "gzipBytes": 61113,
+    "rawBytes": 266695,
+    "gzipBytes": 68182,
     "files": [
-      "activity/bardo-ui-LWWMLHOM.css",
-      "activity/chunks/chunk-NLRERPBA.js",
-      "activity/chunks/chunk-SIUIQO43.js",
-      "activity/main-MII5HGY3.js",
-      "activity/styles-6NTVVYM2.css"
+      "activity/bardo-tailwind-6HX6CISF.css",
+      "activity/chunks/chunk-7OSQWNIS.js",
+      "activity/chunks/chunk-EPXOE4VI.js",
+      "activity/main-JLV43MGT.js"
     ]
   },
   "routes": {
     "home": {
-      "rawBytes": 233123,
-      "gzipBytes": 67438,
+      "rawBytes": 674127,
+      "gzipBytes": 203216,
       "files": [
-        "activity/bardo-ui-LWWMLHOM.css",
-        "activity/chunks/chunk-NLRERPBA.js",
-        "activity/chunks/chunk-SIUIQO43.js",
+        "activity/bardo-tailwind-6HX6CISF.css",
+        "activity/chunks/bootstrap-H3MLJBIB.js",
+        "activity/chunks/chunk-7OSQWNIS.js",
+        "activity/chunks/chunk-EPXOE4VI.js",
+        "activity/chunks/chunk-F5OFARHE.js",
+        "activity/chunks/chunk-MRUENS6H.js",
+        "activity/chunks/chunk-N7KIPTD7.js",
+        "activity/chunks/chunk-OCWVTBKX.js",
+        "activity/chunks/home-page-7P7BHJ6R.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
-        "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-MII5HGY3.js",
-        "activity/styles-6NTVVYM2.css"
+        "activity/chunks/product-integration-B2Q3Z7U5.js",
+        "activity/main-JLV43MGT.js"
       ]
     },
     "documents": {
-      "rawBytes": 280089,
-      "gzipBytes": 84897,
+      "rawBytes": 717443,
+      "gzipBytes": 219467,
       "files": [
-        "activity/bardo-ui-LWWMLHOM.css",
-        "activity/chunks/app-QL6FGLBR.js",
+        "activity/bardo-tailwind-6HX6CISF.css",
+        "activity/chunks/app-QB3TB7TB.js",
+        "activity/chunks/bootstrap-H3MLJBIB.js",
         "activity/chunks/chunk-47YQ4K53.js",
+        "activity/chunks/chunk-7OSQWNIS.js",
+        "activity/chunks/chunk-EPXOE4VI.js",
+        "activity/chunks/chunk-F5OFARHE.js",
         "activity/chunks/chunk-FBAJU5PS.js",
-        "activity/chunks/chunk-NLRERPBA.js",
-        "activity/chunks/chunk-SIUIQO43.js",
-        "activity/chunks/editor-reliability-IA5NS3TI.js",
-        "activity/chunks/export-security-NRCIO3KH.js",
-        "activity/chunks/import-bootstrap-SGLWIA5N.js",
+        "activity/chunks/chunk-MRUENS6H.js",
+        "activity/chunks/chunk-N7KIPTD7.js",
+        "activity/chunks/chunk-OCWVTBKX.js",
+        "activity/chunks/document-trigger-FE35UMEO.js",
+        "activity/chunks/editor-reliability-PAWKSB4A.js",
+        "activity/chunks/export-security-VFOCVP46.js",
+        "activity/chunks/import-bootstrap-CT2C23DV.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
-        "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-MII5HGY3.js",
-        "activity/styles-6NTVVYM2.css"
+        "activity/chunks/product-integration-B2Q3Z7U5.js",
+        "activity/main-JLV43MGT.js"
       ]
     },
     "kanban": {
-      "rawBytes": 344088,
-      "gzipBytes": 92289,
+      "rawBytes": 748856,
+      "gzipBytes": 215809,
       "files": [
-        "activity/bardo-ui-LWWMLHOM.css",
-        "activity/chunks/board-YAVIKXTB.js",
-        "activity/chunks/chunk-NLRERPBA.js",
-        "activity/chunks/chunk-SIUIQO43.js",
+        "activity/bardo-tailwind-6HX6CISF.css",
+        "activity/chunks/board-3GJHUSSY.js",
+        "activity/chunks/bootstrap-H3MLJBIB.js",
+        "activity/chunks/chunk-7OSQWNIS.js",
+        "activity/chunks/chunk-EPXOE4VI.js",
+        "activity/chunks/chunk-F5OFARHE.js",
+        "activity/chunks/chunk-MRUENS6H.js",
+        "activity/chunks/chunk-N7KIPTD7.js",
         "activity/chunks/member-picker-remote-DPFGXGQM.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
-        "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-MII5HGY3.js",
-        "activity/styles-6NTVVYM2.css"
+        "activity/chunks/product-integration-B2Q3Z7U5.js",
+        "activity/main-JLV43MGT.js"
       ]
     },
     "planner": {
-      "rawBytes": 271273,
-      "gzipBytes": 79093,
+      "rawBytes": 676041,
+      "gzipBytes": 202614,
       "files": [
-        "activity/bardo-ui-LWWMLHOM.css",
-        "activity/chunks/chunk-NLRERPBA.js",
-        "activity/chunks/chunk-SIUIQO43.js",
-        "activity/chunks/event-JTIGEEOI.js",
+        "activity/bardo-tailwind-6HX6CISF.css",
+        "activity/chunks/bootstrap-H3MLJBIB.js",
+        "activity/chunks/chunk-7OSQWNIS.js",
+        "activity/chunks/chunk-EPXOE4VI.js",
+        "activity/chunks/chunk-F5OFARHE.js",
+        "activity/chunks/chunk-MRUENS6H.js",
+        "activity/chunks/chunk-N7KIPTD7.js",
+        "activity/chunks/event-2SGMTFMO.js",
         "activity/chunks/migration-adapters-LVNL65UE.js",
-        "activity/chunks/planner-member-directory-LLZLEZJ4.js",
-        "activity/chunks/product-integration-DG3TGEPW.js",
-        "activity/main-MII5HGY3.js",
-        "activity/styles-6NTVVYM2.css"
+        "activity/chunks/planner-member-directory-SDFEOQ46.js",
+        "activity/chunks/product-integration-B2Q3Z7U5.js",
+        "activity/main-JLV43MGT.js"
       ]
     }
   },
@@ -96,7 +111,7 @@
   ],
   "chunks": [
     {
-      "file": "activity/chunks/pdfjs-PZGVVZHV.js",
+      "file": "activity/chunks/pdfjs-6ZRAGHZI.js",
       "rawBytes": 1607677,
       "gzipBytes": 497995,
       "inputs": [
@@ -106,7 +121,7 @@
       "justification": "Parser PDF existente y lazy; no forma parte de Home, Kanban ni Planner inicial."
     },
     {
-      "file": "activity/chunks/lib-F4TOGYSG.js",
+      "file": "activity/chunks/lib-7R7ECROH.js",
       "rawBytes": 514108,
       "gzipBytes": 130778,
       "inputs": [
@@ -127,9 +142,30 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/chunk-SIUIQO43.js",
+      "file": "activity/chunks/bootstrap-H3MLJBIB.js",
+      "rawBytes": 236293,
+      "gzipBytes": 73449,
+      "inputs": [
+        "node_modules/scheduler/cjs/scheduler.production.js",
+        "node_modules/scheduler/index.js",
+        "node_modules/react-dom/cjs/react-dom-client.production.js",
+        "node_modules/react-dom/client.js",
+        "src/activity/app/bootstrap.jsx",
+        "node_modules/sonner/dist/index.mjs",
+        "src/activity/components/bardo/app-chrome.jsx",
+        "node_modules/@base-ui/react/tooltip/index.parts.mjs",
+        "node_modules/@base-ui/react/tooltip/root/TooltipRoot.mjs",
+        "node_modules/@base-ui/react/tooltip/root/TooltipRootContext.mjs",
+        "node_modules/@base-ui/react/tooltip/store/TooltipStore.mjs",
+        "node_modules/@base-ui/react/tooltip/trigger/TooltipTrigger.mjs"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-7OSQWNIS.js",
       "rawBytes": 150759,
-      "gzipBytes": 45075,
+      "gzipBytes": 45076,
       "inputs": [
         "node_modules/@discord/embedded-app-sdk/output/_virtual/_commonjsHelpers.mjs",
         "node_modules/@discord/embedded-app-sdk/output/_virtual/index4.mjs",
@@ -148,9 +184,51 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/board-YAVIKXTB.js",
+      "file": "activity/chunks/document-enhancements-WXBBBWL3.js",
+      "rawBytes": 109552,
+      "gzipBytes": 37151,
+      "inputs": [
+        "src/activity/features/documents/document-enhancements.jsx",
+        "node_modules/@base-ui/react/dialog/index.parts.mjs",
+        "node_modules/@base-ui/react/dialog/backdrop/DialogBackdrop.mjs",
+        "node_modules/@base-ui/react/dialog/root/DialogRootContext.mjs",
+        "node_modules/@base-ui/react/dialog/close/DialogClose.mjs",
+        "node_modules/@base-ui/react/internals/use-button/index.mjs",
+        "node_modules/@base-ui/react/dialog/description/DialogDescription.mjs",
+        "node_modules/@base-ui/react/dialog/popup/DialogPopup.mjs",
+        "node_modules/@base-ui/react/dialog/portal/DialogPortalContext.mjs",
+        "node_modules/@base-ui/react/internals/composite/composite.mjs",
+        "node_modules/@base-ui/react/dialog/utils/stateAttributesMapping.mjs",
+        "node_modules/@base-ui/react/dialog/portal/DialogPortal.mjs"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-F5OFARHE.js",
+      "rawBytes": 100745,
+      "gzipBytes": 36003,
+      "inputs": [
+        "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim.production.js",
+        "node_modules/use-sync-external-store/shim/index.js",
+        "node_modules/use-sync-external-store/cjs/use-sync-external-store-shim/with-selector.production.js",
+        "node_modules/use-sync-external-store/shim/with-selector.js",
+        "node_modules/@base-ui/utils/useOnMount.mjs",
+        "node_modules/@base-ui/utils/useTimeout.mjs",
+        "node_modules/@base-ui/utils/platform/parts.mjs",
+        "node_modules/@base-ui/utils/platform/os.mjs",
+        "node_modules/@base-ui/utils/platform/shared.mjs",
+        "node_modules/@base-ui/utils/platform/engine.mjs",
+        "node_modules/@base-ui/utils/platform/screen-reader.mjs",
+        "node_modules/@base-ui/utils/platform/env.mjs"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/board-3GJHUSSY.js",
       "rawBytes": 105779,
-      "gzipBytes": 22805,
+      "gzipBytes": 22806,
       "inputs": [
         "src/kanban.js",
         "src/activity/board.js"
@@ -159,7 +237,37 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/event-JTIGEEOI.js",
+      "file": "activity/bardo-tailwind-6HX6CISF.css",
+      "rawBytes": 98683,
+      "gzipBytes": 16590,
+      "inputs": [
+        ".artifacts/bardo-tailwind.css"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-OCWVTBKX.js",
+      "rawBytes": 31359,
+      "gzipBytes": 10331,
+      "inputs": [
+        "node_modules/@base-ui/react/button/Button.mjs",
+        "node_modules/@base-ui/react/internals/use-button/useButton.mjs",
+        "node_modules/@base-ui/react/internals/composite/root/CompositeRootContext.mjs",
+        "node_modules/@base-ui/react/utils/useFocusableWhenDisabled.mjs",
+        "node_modules/@base-ui/react/utils/dispatchClickWithModifiers.mjs",
+        "node_modules/@base-ui/react/button/index.mjs",
+        "node_modules/clsx/dist/clsx.mjs",
+        "node_modules/class-variance-authority/dist/index.mjs",
+        "node_modules/tailwind-merge/dist/bundle-mjs.mjs",
+        "src/activity/lib/cn.js",
+        "src/activity/components/ui/button.jsx"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/event-2SGMTFMO.js",
       "rawBytes": 32073,
       "gzipBytes": 9227,
       "inputs": [
@@ -170,9 +278,30 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/app-QL6FGLBR.js",
+      "file": "activity/chunks/chunk-N7KIPTD7.js",
+      "rawBytes": 20875,
+      "gzipBytes": 7911,
+      "inputs": [
+        "node_modules/react/cjs/react.production.js",
+        "node_modules/react/index.js",
+        "node_modules/react/cjs/react-jsx-runtime.production.js",
+        "node_modules/react/jsx-runtime.js",
+        "node_modules/lucide-react/dist/esm/createLucideIcon.mjs",
+        "node_modules/lucide-react/dist/esm/shared/src/utils/mergeClasses.mjs",
+        "node_modules/lucide-react/dist/esm/shared/src/utils/toKebabCase.mjs",
+        "node_modules/lucide-react/dist/esm/shared/src/utils/toCamelCase.mjs",
+        "node_modules/lucide-react/dist/esm/shared/src/utils/toPascalCase.mjs",
+        "node_modules/lucide-react/dist/esm/Icon.mjs",
+        "node_modules/lucide-react/dist/esm/defaultAttributes.mjs",
+        "node_modules/lucide-react/dist/esm/shared/src/utils/hasA11yProp.mjs"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/app-QB3TB7TB.js",
       "rawBytes": 20571,
-      "gzipBytes": 7036,
+      "gzipBytes": 7035,
       "inputs": [
         "src/activity/app.js"
       ],
@@ -180,9 +309,9 @@
       "justification": null
     },
     {
-      "file": "activity/main-MII5HGY3.js",
-      "rawBytes": 15913,
-      "gzipBytes": 5839,
+      "file": "activity/main-JLV43MGT.js",
+      "rawBytes": 16217,
+      "gzipBytes": 5956,
       "inputs": [
         "src/activity/ui/primitives.js",
         "src/activity/ui/runtime.js",
@@ -195,26 +324,9 @@
       "justification": null
     },
     {
-      "file": "activity/bardo-ui-LWWMLHOM.css",
-      "rawBytes": 28165,
-      "gzipBytes": 5388,
-      "inputs": [
-        "src/activity/ui/tokens.css",
-        "src/activity/ui/foundations.css",
-        "src/activity/ui/primitives.css",
-        "src/activity/ui/patterns.css",
-        "src/activity/ui/modules.css",
-        "src/activity/ui/product-integration.css",
-        "src/activity/ui/editor-reliability.css",
-        "src/activity/ui/bardo-ui.css"
-      ],
-      "lazyPdf": false,
-      "justification": null
-    },
-    {
-      "file": "activity/chunks/editor-reliability-IA5NS3TI.js",
+      "file": "activity/chunks/editor-reliability-PAWKSB4A.js",
       "rawBytes": 14411,
-      "gzipBytes": 4941,
+      "gzipBytes": 4942,
       "inputs": [
         "src/activity/editor-save-machine.js",
         "src/activity/editor-reliability.js"
@@ -223,17 +335,7 @@
       "justification": null
     },
     {
-      "file": "activity/styles-6NTVVYM2.css",
-      "rawBytes": 19788,
-      "gzipBytes": 4317,
-      "inputs": [
-        "src/activity/styles.css"
-      ],
-      "lazyPdf": false,
-      "justification": null
-    },
-    {
-      "file": "activity/chunks/turndown.browser.es-RREPHSYJ.js",
+      "file": "activity/chunks/turndown.browser.es-PYA542HY.js",
       "rawBytes": 10917,
       "gzipBytes": 4118,
       "inputs": [
@@ -243,20 +345,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/product-integration-DG3TGEPW.js",
-      "rawBytes": 11365,
-      "gzipBytes": 3842,
-      "inputs": [
-        "src/activity/ui/patterns.js",
-        "src/activity/product-integration.js"
-      ],
-      "lazyPdf": false,
-      "justification": null
-    },
-    {
-      "file": "activity/chunks/dist-XWW7ERMJ.js",
+      "file": "activity/chunks/dist-QH7U6UTC.js",
       "rawBytes": 6898,
-      "gzipBytes": 2910,
+      "gzipBytes": 2908,
       "inputs": [
         "node_modules/unpdf/dist/index.mjs"
       ],
@@ -274,9 +365,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/planner-member-directory-LLZLEZJ4.js",
+      "file": "activity/chunks/planner-member-directory-SDFEOQ46.js",
       "rawBytes": 6077,
-      "gzipBytes": 2428,
+      "gzipBytes": 2430,
       "inputs": [
         "src/activity/planner-member-directory.js"
       ],
@@ -284,9 +375,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/import-bootstrap-SGLWIA5N.js",
+      "file": "activity/chunks/import-bootstrap-CT2C23DV.js",
       "rawBytes": 4537,
-      "gzipBytes": 2244,
+      "gzipBytes": 2245,
       "inputs": [
         "src/activity/import-bootstrap.js"
       ],
@@ -314,9 +405,42 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/export-security-NRCIO3KH.js",
+      "file": "activity/chunks/home-page-7P7BHJ6R.js",
+      "rawBytes": 4877,
+      "gzipBytes": 1928,
+      "inputs": [
+        "src/activity/features/home/home-page.jsx",
+        "src/activity/components/bardo/empty-state.jsx"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-MRUENS6H.js",
+      "rawBytes": 3953,
+      "gzipBytes": 1549,
+      "inputs": [
+        "node_modules/react-dom/cjs/react-dom.production.js",
+        "node_modules/react-dom/index.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/product-integration-B2Q3Z7U5.js",
+      "rawBytes": 3081,
+      "gzipBytes": 1380,
+      "inputs": [
+        "src/activity/ui/patterns.js",
+        "src/activity/product-integration.js"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/export-security-VFOCVP46.js",
       "rawBytes": 1908,
-      "gzipBytes": 1049,
+      "gzipBytes": 1050,
       "inputs": [
         "src/activity/export-security.js"
       ],
@@ -324,9 +448,9 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/turndown-plugin-gfm.es-6F7OGQN5.js",
+      "file": "activity/chunks/turndown-plugin-gfm.es-K242U3PL.js",
       "rawBytes": 1935,
-      "gzipBytes": 901,
+      "gzipBytes": 903,
       "inputs": [
         "node_modules/turndown-plugin-gfm/lib/turndown-plugin-gfm.es.js"
       ],
@@ -334,9 +458,19 @@
       "justification": null
     },
     {
-      "file": "activity/chunks/chunk-NLRERPBA.js",
-      "rawBytes": 884,
-      "gzipBytes": 494,
+      "file": "activity/chunks/document-trigger-FE35UMEO.js",
+      "rawBytes": 1227,
+      "gzipBytes": 718,
+      "inputs": [
+        "src/activity/features/documents/document-trigger.jsx"
+      ],
+      "lazyPdf": false,
+      "justification": null
+    },
+    {
+      "file": "activity/chunks/chunk-EPXOE4VI.js",
+      "rawBytes": 1036,
+      "gzipBytes": 560,
       "inputs": [],
       "lazyPdf": false,
       "justification": null
