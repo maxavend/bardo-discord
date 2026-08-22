@@ -1,0 +1,13 @@
+.bardo-eyebrow { margin:0!important; color:var(--bardo-text-muted)!important; font-size:12px; font-weight:700; }
+.bardo-product-modal-backdrop { position:fixed; inset:0; z-index:10000; display:grid; place-items:center; padding:16px; background:rgba(0,0,0,.55); }
+.bardo-product-modal { width:min(520px,100%); max-height:min(760px,calc(100vh - 32px)); overflow:auto; padding:20px; background:var(--bardo-surface); color:var(--bardo-text); border:1px solid var(--bardo-border); border-radius:var(--bardo-radius-card); box-shadow:0 24px 70px rgba(0,0,0,.38); }
+.bardo-product-modal h2 { margin:0 0 18px; font-size:20px; }
+.bardo-product-modal .bardo-field { position:relative; display:grid; gap:6px; margin-bottom:13px; }
+.bardo-product-modal textarea.bardo-input { min-height:82px; padding-block:10px; resize:vertical; }
+.bardo-product-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.bardo-related-resources { margin-top:32px; padding-top:20px; border-top:1px solid var(--bardo-border); }
+.bardo-related-resources h2 { margin:0 0 10px; font-size:14px; }
+.bardo-related-resources .bardo-backlink-list { margin:0; padding:0; list-style:none; display:grid; gap:7px; }
+.bardo-related-resources .bardo-resource-card { cursor:pointer; }
+@media(max-width:760px){.bardo-product-modal-backdrop{align-items:end;padding:0}.bardo-product-modal{width:100%;max-height:88vh;border-radius:18px 18px 0 0;padding-bottom:max(20px,env(safe-area-inset-bottom));}}
+@media(prefers-reduced-motion:reduce){.bardo-product-modal{transition:none!important;scroll-behavior:auto!important;}}

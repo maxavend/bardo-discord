@@ -18,6 +18,7 @@ import {
   saveDocument,
   saveDocumentSource,
 } from './db.js';
+import { saveOriginalToR2, saveNormalizedBackupToR2 } from './backup-r2.js';
 
 const MAX_STORED_DOCUMENT_BYTES = 1_800_000;
 const DOCUMENT_API_PREFIX = '/api/documents/';
@@ -124,14 +125,40 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 
     await saveDocument(env.DB, documentId, document);
 
+    const sourceMime = attachment.content_type || (sourceType === 'pdf'
+      ? 'application/pdf'
+      : sourceType === 'docx'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'text/plain; charset=utf-8');
+
     if (!isTextSourceType(sourceType)) {
       await saveDocumentSource(env.DB, documentId, {
         bytes: downloaded.bytes,
-        mime: attachment.content_type || (sourceType === 'pdf'
-          ? 'application/pdf'
-          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        mime: sourceMime,
         type: sourceType,
       });
+    }
+
+    // Guardado persistente en Cloudflare R2 (original + respaldo normalizado)
+    try {
+      await saveOriginalToR2(env, documentId, {
+        bytes: downloaded.bytes,
+        text: downloaded.text,
+        mime: sourceMime,
+        type: sourceType,
+        name: sourceName,
+        createdBy,
+        createdAt: document.createdAt,
+      });
+      await saveNormalizedBackupToR2(env, documentId, {
+        ...document,
+        sourceType,
+        sourceMime,
+        importStatus: isTextSourceType(sourceType) ? 'ready' : 'pending',
+        hasSource: true,
+      });
+    } catch (r2Error) {
+      console.warn('Advertencia al respaldar en R2:', r2Error);
     }
 
     const documentPayload = buildDocumentPayload(document, {
@@ -176,22 +203,68 @@ async function handleCommandInteraction(interaction, env, ctx) {
 
     const attachmentId = archivoOption?.value;
     const resolvedAttachment = interaction.data?.resolved?.attachments?.[attachmentId];
-    const explicitTitle = tituloOption?.value;
+    const explicitTitle = tituloOption?.value?.trim();
 
-    if (!resolvedAttachment) {
+    if (resolvedAttachment) {
+      ctx.waitUntil(processAndSaveDocument(env, interaction, resolvedAttachment, explicitTitle));
       return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'No se encontró el archivo adjunto.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
       });
     }
 
-    ctx.waitUntil(processAndSaveDocument(env, interaction, resolvedAttachment, explicitTitle));
+    if (explicitTitle) {
+      if (!env.DB) {
+        return jsonResponse({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { content: 'La base de datos de Bardo no está disponible.', flags: InteractionResponseFlags.EPHEMERAL },
+        });
+      }
+
+      const title = explicitTitle.slice(0, 200);
+      const createdBy = interaction.member?.user?.id || interaction.user?.id || 'unknown';
+      const documentId = crypto.randomUUID();
+      const originalMarkdown = `# ${title}\n\nDocumento creado con Bardo. Abre el lector completo para comenzar a escribir.`;
+      const pages = ['Documento creado con Bardo. Abre el lector completo para comenzar a escribir.'];
+
+      const document = {
+        id: documentId,
+        title,
+        originalMarkdown,
+        pages,
+        sourceName: `${title}.md`,
+        createdAt: new Date().toISOString(),
+        createdBy,
+      };
+
+      await saveDocument(env.DB, documentId, document);
+
+      try {
+        await saveNormalizedBackupToR2(env, documentId, {
+          ...document,
+          sourceType: 'markdown',
+          sourceMime: 'text/markdown; charset=utf-8',
+          importStatus: 'ready',
+          hasSource: false,
+        });
+      } catch (r2Error) {
+        console.warn('Advertencia al respaldar documento nuevo en R2:', r2Error);
+      }
+
+      const applicationId = interaction.application_id || env.DISCORD_APPLICATION_ID;
+      const documentPayload = buildDocumentPayload(document, { applicationId, documentId });
+
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: documentPayload,
+      });
+    }
 
     return jsonResponse({
-      type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        content: 'Adjunta un archivo (.md, .txt, .pdf, .docx) o indica un **título** para crear un documento nuevo (ej: `/doc titulo: Minuta`).',
+        flags: InteractionResponseFlags.EPHEMERAL,
+      },
     });
   }
 
@@ -260,7 +333,19 @@ async function handleComponentInteraction(interaction, env) {
     });
 
     if (!callbackRes.ok) {
-      console.error('Discord callback error:', callbackRes.status, await callbackRes.text().catch(() => ''));
+      const errText = await callbackRes.text().catch(() => '');
+      console.error('Discord callback error:', callbackRes.status, errText);
+      const appId = interaction.application_id || interaction.data?.application_id;
+      if (appId && interaction.token) {
+        await fetch(`https://discord.com/api/v10/webhooks/${appId}/${interaction.token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: '⚠️ No se pudo abrir el documento en este canal/hilo. Verifica que el hilo no esté archivado y que el bot y los miembros tengan activo el permiso **"Usar actividades"** y **"Enviar mensajes en hilos"** en los ajustes del servidor de Discord.',
+            flags: InteractionResponseFlags.EPHEMERAL,
+          }),
+        }).catch(() => {});
+      }
       return new Response(null, { status: 202 });
     }
 
@@ -468,7 +553,69 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
   }
 
   await cacheNormalizedDocument(env.DB, documentId, markdown, pages);
+
+  try {
+    await saveNormalizedBackupToR2(env, documentId, {
+      ...document,
+      originalMarkdown: markdown,
+      pages,
+      importStatus: 'ready',
+    });
+  } catch (r2Error) {
+    console.warn('Advertencia al actualizar respaldo R2 tras normalización:', r2Error);
+  }
+
   return jsonResponse({ ok: true });
+}
+
+async function handleDocumentEditApi(request, documentId, env) {
+  if (!env.DB) {
+    return jsonResponse({ error: 'Database unavailable' }, 503);
+  }
+
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) {
+    return jsonResponse({ error: 'Document not found' }, 404);
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON payload' }, 400);
+  }
+
+  const title = typeof payload?.title === 'string' ? payload.title.replace(/\s+/g, ' ').trim().slice(0, 200) : document.title;
+  const markdown = typeof payload?.markdown === 'string' ? payload.markdown.trim() : document.originalMarkdown;
+
+  if (!title) return jsonResponse({ error: 'El título es requerido' }, 400);
+  if (!markdown) return jsonResponse({ error: 'El contenido es requerido' }, 400);
+
+  const byteLength = new TextEncoder().encode(markdown).byteLength;
+  if (byteLength > MAX_STORED_DOCUMENT_BYTES) {
+    return jsonResponse({ error: 'El documento es demasiado grande' }, 413);
+  }
+
+  const { body } = extractDocumentTitle(markdown, title);
+  const pages = firstPreviewPage(body);
+
+  await env.DB
+    .prepare('UPDATE documents SET title = ?, original_markdown = ?, pages = ? WHERE id = ?')
+    .bind(title, markdown, JSON.stringify(pages), documentId)
+    .run();
+
+  try {
+    await saveNormalizedBackupToR2(env, documentId, {
+      ...document,
+      title,
+      originalMarkdown: markdown,
+      pages,
+    });
+  } catch (r2Error) {
+    console.warn('Advertencia al actualizar respaldo R2 tras edición:', r2Error);
+  }
+
+  return jsonResponse({ ok: true, document: { id: documentId, title, markdown, pages } });
 }
 
 async function handleActivityContextApi(url, env) {
@@ -566,6 +713,10 @@ export default {
 
       if (request.method === 'GET' && route.action === null) {
         return handleDocumentApi(route.documentId, env);
+      }
+
+      if (request.method === 'PATCH' && route.action === null) {
+        return handleDocumentEditApi(request, route.documentId, env);
       }
 
       if (request.method === 'GET' && (route.action === 'export' || route.action === 'download')) {

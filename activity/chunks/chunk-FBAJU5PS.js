@@ -1,0 +1,1 @@
+var n="bardo:open:",o=["bardo:home:","bardo:board:","board:","bardo:event:","event:"];function a(r){if(!r||typeof r!="string")return null;let t=r.trim();return t?t.startsWith(n)?t.slice(n.length).trim()||null:o.some(e=>t.startsWith(e))?null:t:null}export{a};

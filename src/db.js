@@ -12,6 +12,25 @@ function toArrayBuffer(value) {
   throw new TypeError('Bardo esperaba bytes binarios compatibles con ArrayBuffer.');
 }
 
+function defaultActivityPermissions(target) {
+  const value = String(target || '');
+  if (value.startsWith('board:') || value.startsWith('bardo:board:')) {
+    return ['context.read', 'board.read', 'board.write', 'member.read', 'role.read', 'task.write'];
+  }
+  if (value.startsWith('event:') || value.startsWith('bardo:event:')) {
+    return ['context.read', 'event.read', 'event.write', 'task.write'];
+  }
+  return ['context.read', 'document.read', 'document.edit', 'document.export', 'document.source', 'document.normalize'];
+}
+
+function parsePermissions(value, target) {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    if (Array.isArray(parsed) && parsed.length) return parsed.map(String);
+  } catch {}
+  return defaultActivityPermissions(target);
+}
+
 export async function saveDocument(db, messageId, document) {
   await db
     .prepare(
@@ -108,25 +127,57 @@ export async function cacheNormalizedDocument(db, documentId, markdown, pages) {
     .run();
 }
 
-export async function saveActivityContext(db, instanceId, documentId) {
+export async function saveActivityContext(db, instanceId, documentId, options = {}) {
   const createdAt = new Date().toISOString();
-  await db
-    .prepare(
-      `INSERT INTO activity_contexts (instance_id, document_id, created_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(instance_id) DO UPDATE SET
-         document_id = excluded.document_id,
-         created_at = excluded.created_at`,
-    )
-    .bind(instanceId, documentId, createdAt)
-    .run();
+  const expiresAt = options.expiresAt || new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+  const permissions = Array.isArray(options.permissions) && options.permissions.length
+    ? options.permissions.map(String)
+    : defaultActivityPermissions(documentId);
+  const guildId = options.guildId ? String(options.guildId) : null;
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO activity_contexts (instance_id, document_id, created_at, guild_id, expires_at, permissions)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(instance_id) DO UPDATE SET
+           document_id = excluded.document_id,
+           created_at = excluded.created_at,
+           guild_id = COALESCE(excluded.guild_id, activity_contexts.guild_id),
+           expires_at = excluded.expires_at,
+           permissions = excluded.permissions`,
+      )
+      .bind(instanceId, documentId, createdAt, guildId, expiresAt, JSON.stringify(permissions))
+      .run();
+  } catch (error) {
+    if (!/guild_id|expires_at|permissions|column/i.test(String(error?.message || error))) throw error;
+    await db
+      .prepare(
+        `INSERT INTO activity_contexts (instance_id, document_id, created_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(instance_id) DO UPDATE SET
+           document_id = excluded.document_id,
+           created_at = excluded.created_at`,
+      )
+      .bind(instanceId, documentId, createdAt)
+      .run();
+  }
 }
 
 export async function loadActivityContext(db, instanceId) {
-  const row = await db
-    .prepare('SELECT instance_id, document_id, created_at FROM activity_contexts WHERE instance_id = ?')
-    .bind(instanceId)
-    .first();
+  let row;
+  try {
+    row = await db
+      .prepare('SELECT instance_id, document_id, created_at, guild_id, expires_at, permissions FROM activity_contexts WHERE instance_id = ?')
+      .bind(instanceId)
+      .first();
+  } catch (error) {
+    if (!/guild_id|expires_at|permissions|column/i.test(String(error?.message || error))) throw error;
+    row = await db
+      .prepare('SELECT instance_id, document_id, created_at FROM activity_contexts WHERE instance_id = ?')
+      .bind(instanceId)
+      .first();
+  }
 
   if (!row) return null;
 
@@ -134,5 +185,23 @@ export async function loadActivityContext(db, instanceId) {
     instanceId: row.instance_id,
     documentId: row.document_id,
     createdAt: row.created_at,
+    guildId: row.guild_id || null,
+    expiresAt: row.expires_at || null,
+    permissions: parsePermissions(row.permissions, row.document_id),
   };
+}
+
+export async function updateActivityContextAuthorization(db, instanceId, { guildId, expiresAt } = {}) {
+  try {
+    await db
+      .prepare(
+        `UPDATE activity_contexts
+         SET guild_id = COALESCE(guild_id, ?), expires_at = COALESCE(?, expires_at)
+         WHERE instance_id = ?`,
+      )
+      .bind(guildId ? String(guildId) : null, expiresAt || null, instanceId)
+      .run();
+  } catch (error) {
+    if (!/guild_id|expires_at|column/i.test(String(error?.message || error))) throw error;
+  }
 }

@@ -1,0 +1,85 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Editor reliability fixture</title></head><body data-editor-check="pending"><main><h1>Editor reliability</h1><div id="state" role="status"></div><section class="document-header"><div class="document-actions"><button id="edit-document" type="button">Guardar</button></div><div id="action-status" role="status"></div></section><h2 id="document-title">Original</h2><article id="document-body"><p>Contenido inicial.</p></article><button id="retry" type="button">Reintentar</button></main><script type="module">
+const scenario=new URLSearchParams(location.search).get('scenario')||'queue';
+const state=document.querySelector('#state');
+const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
+
+async function runMachineScenario(){
+  const { EditorSaveCoordinator }=await import('/src/activity/editor-save-machine.js');
+  let attempts=0; const versions=[];
+  const coordinator=new EditorSaveCoordinator({version:1,fingerprint:(payload)=>payload.value,onState:(next)=>{state.textContent=next;document.body.dataset.editorState=next;},transport:async(payload,version)=>{attempts+=1;versions.push(version);if(scenario==='conflict'){const error=new Error('conflict');error.code='DOCUMENT_VERSION_CONFLICT';error.currentVersion=2;throw error;}if(scenario==='retry'&&attempts===1){const error=new Error('offline');error.code='DOCUMENT_SAVE_NETWORK_ERROR';throw error;}await sleep(scenario==='queue'?30:0);return {version:version+1,payload};}});
+  coordinator.sync({version:1,payload:{value:'base'}});
+  if(scenario==='queue'){
+    coordinator.markDirty();const first=coordinator.enqueue({value:'a'});coordinator.markDirty();const second=coordinator.enqueue({value:'b'});coordinator.markDirty();const third=coordinator.enqueue({value:'c'});await Promise.all([first,second,third]);document.body.dataset.queueCalls=String(attempts);document.body.dataset.versions=versions.join(',');document.body.dataset.editorCheck=attempts===2&&versions.join(',')==='1,2'&&coordinator.version===3&&coordinator.state==='saved'?'pass':'fail';return;
+  }
+  coordinator.markDirty();
+  try{await coordinator.enqueue({value:'changed'});}catch{}
+  if(scenario==='conflict'){document.body.dataset.editorCheck=coordinator.state==='conflict'&&coordinator.version===1?'pass':'fail';return;}
+  if(scenario==='retry'){try{await coordinator.retry();}catch{}document.body.dataset.editorCheck=attempts===2&&coordinator.state==='saved'&&coordinator.version===2?'pass':'fail';}
+}
+
+async function runUiScenario(){
+  const body=document.querySelector('#document-body');
+  const title=document.querySelector('#document-title');
+  const edit=document.querySelector('#edit-document');
+  let patchCalls=0;
+  let exitClicks=0;
+  let stateEvents=0;
+  window.addEventListener('bardo:editor-state',()=>{stateEvents+=1;});
+  const originalFetch=window.fetch.bind(window);
+  window.fetch=async(input,init={})=>{
+    const url=new URL(input instanceof Request?input.url:String(input),location.href);
+    const method=String(init.method||(input instanceof Request?input.method:'GET')).toUpperCase();
+    if(url.pathname==='/api/documents/ui-doc'&&method==='GET'){
+      return new Response(JSON.stringify({id:'ui-doc',title:'Original',markdown:'# Original\n\nContenido inicial.',version:1}),{status:200,headers:{'Content-Type':'application/json','ETag':'"bardo-doc-1"'}});
+    }
+    if(url.pathname==='/api/documents/ui-doc'&&method==='PATCH'){
+      patchCalls+=1;
+      if(scenario==='ui-error') throw new TypeError('offline');
+      if(scenario==='ui-conflict') return new Response(JSON.stringify({error:'El documento cambió.',code:'DOCUMENT_VERSION_CONFLICT',currentVersion:2,title:'Servidor'}),{status:409,headers:{'Content-Type':'application/json'}});
+      await sleep(35);
+      return new Response(JSON.stringify({ok:true,document:{id:'ui-doc',title:'Original',markdown:'# Original\n\nCambio local.',version:2}}),{status:200,headers:{'Content-Type':'application/json','ETag':'"bardo-doc-2"'}});
+    }
+    return originalFetch(input,init);
+  };
+  await import('/src/activity/editor-reliability.js');
+  await window.fetch('/api/documents/ui-doc',{cache:'no-store'});
+  body.contentEditable='true';
+
+  if(scenario==='exit-dirty'){
+    body.addEventListener('keydown',(event)=>{
+      if(!(event.ctrlKey||event.metaKey)||String(event.key).toLowerCase()!=='s')return;
+      event.preventDefault();
+      void window.fetch('/api/documents/ui-doc',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title.textContent,markdown:'# Original\n\nCambio local.'})}).catch(()=>{});
+    });
+    edit.addEventListener('click',()=>{exitClicks+=1;body.contentEditable='false';});
+    body.innerHTML='<p>Cambio local.</p>';
+    body.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'}));
+    edit.click();
+    await sleep(180);
+    const coordinator=globalThis.__bardoEditorSave;
+    document.body.dataset.patchCalls=String(patchCalls);
+    document.body.dataset.exitClicks=String(exitClicks);
+    document.body.dataset.editorCheck=patchCalls===1&&exitClicks===1&&body.getAttribute('contenteditable')==='false'&&coordinator.state==='saved'&&coordinator.version===2?'pass':'fail';
+    return;
+  }
+
+  body.innerHTML='<p>Cambio local.</p>';
+  body.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'}));
+  try{await window.fetch('/api/documents/ui-doc',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'Original',markdown:'# Original\n\nCambio local.'})});}catch{}
+  await sleep(90);
+  const coordinator=globalThis.__bardoEditorSave;
+  const panel=document.querySelector('#bardo-editor-issue');
+  const panelText=panel?.textContent||'';
+  document.body.dataset.stateEvents=String(stateEvents);
+  if(scenario==='ui-error'){
+    document.body.dataset.editorCheck=coordinator.state==='error'&&panelText.includes('No se pudo guardar')&&panelText.includes('Reintentar')&&stateEvents<10?'pass':'fail';
+    return;
+  }
+  if(scenario==='ui-conflict'){
+    document.body.dataset.editorCheck=coordinator.state==='conflict'&&panelText.includes('Hay una versión más reciente')&&panelText.includes('Recargar versión actual')&&stateEvents<10?'pass':'fail';
+  }
+}
+
+const uiScenarios=new Set(['ui-error','ui-conflict','exit-dirty']);
+(uiScenarios.has(scenario)?runUiScenario():runMachineScenario()).catch((error)=>{document.body.dataset.editorError=String(error?.message||error);document.body.dataset.editorCheck='fail';});
+</script></body></html>

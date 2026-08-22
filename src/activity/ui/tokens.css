@@ -1,0 +1,79 @@
+:root {
+  color-scheme: dark light;
+  --bardo-bg: #111214;
+  --bardo-surface: #1e1f22;
+  --bardo-surface-raised: #2b2d31;
+  --bardo-surface-hover: #35373c;
+  --bardo-overlay: rgba(0, 0, 0, .62);
+  --bardo-text: #f2f3f5;
+  --bardo-text-muted: #949ba4;
+  --bardo-text-dim: #72767d;
+  --bardo-border: rgba(255,255,255,.09);
+  --bardo-accent: #5865f2;
+  --bardo-accent-hover: #4752c4;
+  --bardo-success: #23a55a;
+  --bardo-warning: #f0b232;
+  --bardo-danger: #f23f43;
+  --bardo-focus: #9aacff;
+  --bardo-space-1: 4px;
+  --bardo-space-2: 8px;
+  --bardo-space-3: 12px;
+  --bardo-space-4: 16px;
+  --bardo-space-5: 20px;
+  --bardo-space-6: 24px;
+  --bardo-space-8: 32px;
+  --bardo-space-10: 40px;
+  --bardo-radius-control: 8px;
+  --bardo-radius-card: 12px;
+  --bardo-radius-surface: 16px;
+  --bardo-radius-pill: 999px;
+  --bardo-control-compact: 32px;
+  --bardo-control: 40px;
+  --bardo-touch: 44px;
+  --bardo-shadow-surface: 0 18px 50px rgba(0,0,0,.34);
+  --bardo-motion-press: 100ms;
+  --bardo-motion-micro: 140ms;
+  --bardo-motion-standard: 200ms;
+  --bardo-motion-surface: 260ms;
+  --bardo-ease: cubic-bezier(.2,.8,.2,1);
+  --bardo-content: 960px;
+  --bardo-wide: 1520px;
+  --bardo-safe-inline: max(env(safe-area-inset-left, 0px), clamp(16px, 3.5vw, 40px));
+}
+
+html[data-theme="light"],
+.theme-light {
+  --bardo-bg: #f5f5f6;
+  --bardo-surface: #ffffff;
+  --bardo-surface-raised: #e9eaec;
+  --bardo-surface-hover: #dcdee1;
+  --bardo-overlay: rgba(0,0,0,.38);
+  --bardo-text: #111214;
+  --bardo-text-muted: #5c5f66;
+  --bardo-text-dim: #80848e;
+  --bardo-border: rgba(0,0,0,.10);
+  --bardo-shadow-surface: 0 18px 50px rgba(0,0,0,.17);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bardo-bg: #f5f5f6;
+    --bardo-surface: #ffffff;
+    --bardo-surface-raised: #e9eaec;
+    --bardo-surface-hover: #dcdee1;
+    --bardo-overlay: rgba(0,0,0,.38);
+    --bardo-text: #111214;
+    --bardo-text-muted: #5c5f66;
+    --bardo-text-dim: #80848e;
+    --bardo-border: rgba(0,0,0,.10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --bardo-motion-press: 1ms;
+    --bardo-motion-micro: 1ms;
+    --bardo-motion-standard: 1ms;
+    --bardo-motion-surface: 1ms;
+  }
+}
