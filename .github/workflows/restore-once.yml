@@ -1,11 +1,9 @@
 name: One-shot Bardo restore
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/restore-once.yml
+  pull_request_target:
+    types:
+      - ready_for_review
 
 permissions:
   contents: read
@@ -13,6 +11,7 @@ permissions:
 
 jobs:
   restore:
+    if: github.event.pull_request.number == 3
     runs-on: ubuntu-latest
     steps:
       - name: Checkout restored Bardo commit
