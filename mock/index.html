@@ -1,0 +1,2997 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bardo · Mock Interactivo Completo</title>
+  <!-- Google Fonts: Outfit, Plus Jakarta Sans, JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
+  <style>
+    /* ==========================================================================
+       BARDO DESIGN SYSTEM & THEME TOKENS
+       ========================================================================== */
+    :root {
+      color-scheme: dark;
+      --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      /* Discord Dark Theme Colors */
+      --bardo-bg: #111214;
+      --bardo-surface: #1e1f22;
+      --bardo-surface-raised: #2b2d31;
+      --bardo-surface-hover: #35373c;
+      --bardo-surface-active: #3f4147;
+      --bardo-surface-card: #232428;
+      
+      --bardo-text-primary: #f2f3f5;
+      --bardo-text-secondary: #dbdee1;
+      --bardo-text-muted: #949ba4;
+      --bardo-text-dim: #6d737e;
+
+      --bardo-border-subtle: rgba(255, 255, 255, 0.07);
+      --bardo-border-default: rgba(255, 255, 255, 0.12);
+      --bardo-border-strong: rgba(255, 255, 255, 0.22);
+
+      --bardo-blurple: #5865F2;
+      --bardo-blurple-hover: #4752C4;
+      --bardo-blurple-light: rgba(88, 101, 242, 0.16);
+      
+      --bardo-green: #57F287;
+      --bardo-green-bg: rgba(87, 242, 135, 0.14);
+      --bardo-amber: #FEE75C;
+      --bardo-amber-bg: rgba(254, 231, 92, 0.14);
+      --bardo-red: #ED4245;
+      --bardo-red-bg: rgba(237, 66, 69, 0.15);
+      --bardo-cyan: #00D5FA;
+      --bardo-cyan-bg: rgba(0, 213, 250, 0.14);
+      --bardo-pink: #EB459E;
+
+      --bardo-radius-sm: 6px;
+      --bardo-radius-md: 10px;
+      --bardo-radius-lg: 14px;
+      --bardo-radius-xl: 18px;
+      --bardo-radius-pill: 9999px;
+
+      --bardo-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.25);
+      --bardo-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.38);
+      --bardo-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+      --bardo-shadow-glow: 0 0 20px rgba(88, 101, 242, 0.35);
+
+      --transition-snappy: 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      --transition-smooth: 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    [data-theme="midnight"] {
+      --bardo-bg: #07080a;
+      --bardo-surface: #0e1014;
+      --bardo-surface-raised: #16181f;
+      --bardo-surface-hover: #1f232b;
+      --bardo-surface-active: #292d38;
+      --bardo-surface-card: #13151b;
+      --bardo-border-subtle: rgba(255, 255, 255, 0.05);
+      --bardo-border-default: rgba(255, 255, 255, 0.1);
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bardo-bg: #f2f3f5;
+      --bardo-surface: #ffffff;
+      --bardo-surface-raised: #e9eaed;
+      --bardo-surface-hover: #dfe1e5;
+      --bardo-surface-active: #d2d5da;
+      --bardo-surface-card: #ffffff;
+      --bardo-text-primary: #060607;
+      --bardo-text-secondary: #2e3338;
+      --bardo-text-muted: #5c626b;
+      --bardo-text-dim: #8b929c;
+      --bardo-border-subtle: rgba(0, 0, 0, 0.08);
+      --bardo-border-default: rgba(0, 0, 0, 0.14);
+      --bardo-border-strong: rgba(0, 0, 0, 0.25);
+      --bardo-blurple-light: rgba(88, 101, 242, 0.1);
+      --bardo-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.06);
+      --bardo-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.1);
+      --bardo-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.14);
+    }
+
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bardo-bg);
+      color: var(--bardo-text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+
+    button, input, select, textarea {
+      font-family: inherit;
+      color: inherit;
+      border: none;
+      background: none;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    /* Top Preview Control Bar (Simulador & Herramientas) */
+    .mock-header-bar {
+      background: #090a0c;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12.5px;
+      z-index: 1000;
+      position: sticky;
+      top: 0;
+    }
+
+    .mock-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mock-badge {
+      background: var(--bardo-blurple);
+      color: #fff;
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .mock-title {
+      font-weight: 600;
+      color: #e0e2e6;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mock-header-center {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px;
+      border-radius: 8px;
+      gap: 2px;
+    }
+
+    .viewport-btn {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--bardo-text-muted);
+      transition: all var(--transition-snappy);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .viewport-btn:hover {
+      color: var(--bardo-text-primary);
+    }
+
+    .viewport-btn.active {
+      background: var(--bardo-surface-raised);
+      color: var(--bardo-text-primary);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    .mock-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mock-pill-btn {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 5px 11px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--bardo-text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background var(--transition-snappy);
+    }
+
+    .mock-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: var(--bardo-text-primary);
+    }
+
+    /* App Frame Container (Handles Responsive Viewports) */
+    .app-viewport-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 0;
+      transition: all 300ms cubic-bezier(0.2, 0.9, 0.2, 1);
+      width: 100%;
+    }
+
+    .app-viewport-wrapper[data-mode="tablet"] {
+      padding: 24px 16px;
+    }
+
+    .app-viewport-wrapper[data-mode="tablet"] .bardo-app-root {
+      max-width: 768px;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--bardo-border-default);
+      overflow: hidden;
+      min-height: 840px;
+    }
+
+    .app-viewport-wrapper[data-mode="mobile"] {
+      padding: 24px 16px;
+    }
+
+    .app-viewport-wrapper[data-mode="mobile"] .bardo-app-root {
+      max-width: 400px;
+      border-radius: 28px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7), 0 0 0 2px var(--bardo-border-strong);
+      overflow: hidden;
+      min-height: 820px;
+    }
+
+    /* Bardo App Root */
+    .bardo-app-root {
+      width: 100%;
+      min-height: calc(100vh - 45px);
+      background: var(--bardo-bg);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* ==========================================================================
+       DISCORD NATIVE ACTIVITY CHROME
+       ========================================================================== */
+    .discord-activity-topbar {
+      background: var(--bardo-surface);
+      border-bottom: 1px solid var(--bardo-border-subtle);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      backdrop-filter: blur(12px);
+    }
+
+    .discord-channel-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--bardo-text-muted);
+      font-weight: 500;
+    }
+
+    .discord-channel-info strong {
+      color: var(--bardo-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .discord-voice-cluster {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .avatar-stack {
+      display: flex;
+      align-items: center;
+      margin-right: 4px;
+    }
+
+    .avatar-stack-item {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--bardo-surface);
+      margin-left: -8px;
+      background: var(--bardo-surface-raised);
+      display: grid;
+      place-items: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--bardo-text-primary);
+      position: relative;
+    }
+    .avatar-stack-item:first-child { margin-left: 0; }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1.5px solid var(--bardo-surface);
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+    }
+    .status-online { background: var(--bardo-green); }
+    .status-dnd { background: var(--bardo-red); }
+    .status-idle { background: var(--bardo-amber); }
+
+    /* Bardo App Chrome (Brand & Navigation) */
+    .bardo-chrome {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: color-mix(in srgb, var(--bardo-bg) 88%, transparent);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--bardo-border-subtle);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .bardo-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .bardo-avatar-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #5865F2 0%, #3ba55d 100%);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+    }
+
+    .bardo-brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    .bardo-brand-text strong {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--bardo-text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .bardo-brand-text span {
+      font-size: 11px;
+      color: var(--bardo-text-muted);
+      font-weight: 500;
+    }
+
+    /* Main Tab Navigation */
+    .bardo-nav-tabs {
+      display: flex;
+      align-items: center;
+      background: var(--bardo-surface);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--bardo-border-subtle);
+      gap: 3px;
+    }
+
+    .bardo-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--bardo-text-muted);
+      transition: all var(--transition-snappy);
+      position: relative;
+    }
+
+    .bardo-tab-btn:hover {
+      color: var(--bardo-text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .bardo-tab-btn.active {
+      color: var(--bardo-text-primary);
+      background: var(--bardo-surface-raised);
+      box-shadow: var(--bardo-shadow-sm);
+    }
+
+    .bardo-tab-btn.active svg {
+      color: var(--bardo-blurple);
+    }
+
+    .tab-badge {
+      font-size: 10.5px;
+      padding: 1px 6px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--bardo-text-muted);
+    }
+
+    .bardo-tab-btn.active .tab-badge {
+      background: var(--bardo-blurple-light);
+      color: var(--bardo-blurple);
+      font-weight: 700;
+    }
+
+    .chrome-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search-trigger-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      color: var(--bardo-text-muted);
+      cursor: pointer;
+      transition: border var(--transition-snappy);
+    }
+
+    .search-trigger-btn:hover {
+      border-color: var(--bardo-border-default);
+      color: var(--bardo-text-secondary);
+    }
+
+    .kbd-shortcut {
+      background: rgba(255, 255, 255, 0.07);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--bardo-text-muted);
+    }
+
+    /* ==========================================================================
+       VIEW CONTAINER & ROUTING
+       ========================================================================== */
+    .bardo-content-shell {
+      flex: 1;
+      width: 100%;
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    .view-section {
+      display: none;
+      animation: fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .view-section.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ==========================================================================
+       VIEW 1: INICIO (HOME DASHBOARD)
+       ========================================================================== */
+    .home-hero-card {
+      background: linear-gradient(135deg, rgba(88, 101, 242, 0.12) 0%, rgba(87, 242, 135, 0.05) 100%), var(--bardo-surface);
+      border: 1px solid var(--bardo-border-default);
+      border-radius: var(--bardo-radius-xl);
+      padding: 28px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .home-hero-card::after {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(88, 101, 242, 0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .home-hero-copy .eyebrow {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--bardo-blurple);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+
+    .home-hero-copy h1 {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--bardo-text-primary);
+      line-height: 1.15;
+      margin-bottom: 8px;
+    }
+
+    .home-hero-copy p {
+      color: var(--bardo-text-muted);
+      font-size: 14.5px;
+      max-width: 480px;
+    }
+
+    .home-hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: var(--bardo-blurple);
+      color: white;
+      font-weight: 600;
+      font-size: 13.5px;
+      padding: 9px 18px;
+      border-radius: var(--bardo-radius-md);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background var(--transition-snappy), transform var(--transition-snappy);
+    }
+    .btn-primary:hover {
+      background: var(--bardo-blurple-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bardo-surface-raised);
+      border: 1px solid var(--bardo-border-default);
+      color: var(--bardo-text-primary);
+      font-weight: 600;
+      font-size: 13.5px;
+      padding: 9px 16px;
+      border-radius: var(--bardo-radius-md);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all var(--transition-snappy);
+    }
+    .btn-secondary:hover {
+      background: var(--bardo-surface-hover);
+      border-color: var(--bardo-border-strong);
+    }
+
+    /* Stats Quick Row */
+    .home-stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .stat-pill-card {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-lg);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .stat-icon-wrap {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+    }
+
+    .stat-copy strong {
+      font-size: 20px;
+      font-weight: 700;
+      font-family: var(--font-display);
+      color: var(--bardo-text-primary);
+      display: block;
+      line-height: 1.1;
+    }
+
+    .stat-copy span {
+      font-size: 12px;
+      color: var(--bardo-text-muted);
+      font-weight: 500;
+    }
+
+    /* 4-Section Dashboard Grid */
+    .home-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .home-dashboard-grid { grid-template-columns: 1fr; }
+    }
+
+    .home-panel {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .home-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--bardo-border-subtle);
+    }
+
+    .home-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: var(--font-display);
+      color: var(--bardo-text-primary);
+    }
+
+    .home-panel-title svg {
+      color: var(--bardo-blurple);
+    }
+
+    .home-panel-action {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--bardo-blurple);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .home-panel-action:hover { text-decoration: underline; }
+
+    .home-resource-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .home-resource-item {
+      background: var(--bardo-surface-card);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-md);
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      transition: all var(--transition-snappy);
+    }
+
+    .home-resource-item:hover {
+      background: var(--bardo-surface-raised);
+      border-color: var(--bardo-border-default);
+      transform: translateX(2px);
+    }
+
+    .res-item-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .res-item-icon {
+      color: var(--bardo-text-muted);
+      flex-shrink: 0;
+    }
+
+    .res-item-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .res-item-info strong {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--bardo-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .res-item-info small {
+      font-size: 11.5px;
+      color: var(--bardo-text-muted);
+    }
+
+    .res-item-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+
+    .badge-blurple { background: var(--bardo-blurple-light); color: var(--bardo-blurple); }
+    .badge-green { background: var(--bardo-green-bg); color: var(--bardo-green); }
+    .badge-amber { background: var(--bardo-amber-bg); color: var(--bardo-amber); }
+    .badge-red { background: var(--bardo-red-bg); color: var(--bardo-red); }
+
+    /* ==========================================================================
+       VIEW 2: DOCUMENTOS (COLLABORATIVE EDITOR & READER)
+       ========================================================================== */
+    .docs-layout-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    @media (max-width: 900px) {
+      .docs-layout-container { grid-template-columns: 1fr; }
+    }
+
+    /* Document Sidebar */
+    .docs-sidebar {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sidebar-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-header-row h3 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--bardo-text-muted);
+    }
+
+    .doc-nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .doc-nav-item {
+      padding: 8px 12px;
+      border-radius: var(--bardo-radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--bardo-text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: background var(--transition-snappy);
+    }
+
+    .doc-nav-item:hover {
+      background: var(--bardo-surface-raised);
+      color: var(--bardo-text-primary);
+    }
+
+    .doc-nav-item.active {
+      background: var(--bardo-blurple-light);
+      color: var(--bardo-blurple);
+      font-weight: 600;
+    }
+
+    /* Main Document Area */
+    .doc-editor-surface {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 32px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: 700px;
+      position: relative;
+    }
+
+    .doc-header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--bardo-border-subtle);
+      padding-bottom: 18px;
+    }
+
+    .doc-title-input {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--bardo-text-primary);
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      padding: 2px 0;
+    }
+    .doc-title-input:focus {
+      border-bottom: 1px dashed var(--bardo-blurple);
+    }
+
+    .doc-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12.5px;
+      color: var(--bardo-text-muted);
+      margin-top: 6px;
+    }
+
+    .doc-sync-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--bardo-green);
+      font-weight: 500;
+    }
+
+    .doc-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Rich Editor Toolbar */
+    .editor-toolbar {
+      background: var(--bardo-surface-raised);
+      border: 1px solid var(--bardo-border-default);
+      border-radius: var(--bardo-radius-lg);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .tb-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .tb-divider {
+      width: 1px;
+      height: 18px;
+      background: var(--bardo-border-default);
+      margin: 0 4px;
+    }
+
+    .tb-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: var(--bardo-radius-sm);
+      display: grid;
+      place-items: center;
+      color: var(--bardo-text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      transition: all var(--transition-snappy);
+    }
+
+    .tb-btn:hover {
+      background: var(--bardo-surface-hover);
+      color: var(--bardo-text-primary);
+    }
+
+    .tb-btn.active {
+      background: var(--bardo-blurple);
+      color: white;
+    }
+
+    .tb-select {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-default);
+      border-radius: var(--bardo-radius-sm);
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--bardo-text-primary);
+      outline: none;
+    }
+
+    /* Document Body Editable */
+    .doc-body-editable {
+      outline: none;
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--bardo-text-secondary);
+      min-height: 380px;
+    }
+
+    .doc-body-editable h2 {
+      font-family: var(--font-display);
+      color: var(--bardo-text-primary);
+      font-size: 20px;
+      font-weight: 700;
+      margin: 24px 0 10px;
+    }
+
+    .doc-body-editable p {
+      margin-bottom: 14px;
+    }
+
+    .doc-callout {
+      background: var(--bardo-blurple-light);
+      border-left: 3px solid var(--bardo-blurple);
+      border-radius: 0 var(--bardo-radius-md) var(--bardo-radius-md) 0;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: var(--bardo-text-primary);
+    }
+
+    .doc-checklist {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    .doc-checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .doc-code-block {
+      background: #090a0c;
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-md);
+      padding: 14px 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #79c0ff;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+
+    /* Floating Slash Menu Popup */
+    .slash-popup {
+      position: absolute;
+      top: 240px;
+      left: 180px;
+      background: var(--bardo-surface-raised);
+      border: 1px solid var(--bardo-border-strong);
+      border-radius: var(--bardo-radius-lg);
+      padding: 6px;
+      box-shadow: var(--bardo-shadow-lg);
+      width: 220px;
+      z-index: 50;
+      display: none;
+    }
+
+    .slash-popup.open {
+      display: block;
+    }
+
+    .slash-item {
+      padding: 8px 10px;
+      border-radius: var(--bardo-radius-sm);
+      font-size: 12.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: var(--bardo-text-secondary);
+    }
+    .slash-item:hover {
+      background: var(--bardo-blurple);
+      color: white;
+    }
+
+    /* ==========================================================================
+       VIEW 3: TABLEROS (KANBAN BOARD)
+       ========================================================================== */
+    .kanban-top-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .kanban-board-meta h2 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--bardo-text-primary);
+    }
+
+    .kanban-board-meta p {
+      font-size: 12.5px;
+      color: var(--bardo-text-muted);
+    }
+
+    .kanban-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .filter-chip {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-pill);
+      padding: 6px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--bardo-text-muted);
+      cursor: pointer;
+      transition: all var(--transition-snappy);
+    }
+    .filter-chip:hover { color: var(--bardo-text-primary); border-color: var(--bardo-border-default); }
+    .filter-chip.active { background: var(--bardo-blurple-light); border-color: var(--bardo-blurple); color: var(--bardo-blurple); }
+
+    /* Kanban Track */
+    .kanban-track {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      align-items: flex-start;
+      overflow-x: auto;
+      padding-bottom: 20px;
+    }
+
+    @media (max-width: 1100px) {
+      .kanban-track {
+        grid-template-columns: repeat(4, 290px);
+      }
+    }
+
+    .kanban-column {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 480px;
+    }
+
+    .kanban-column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 4px 8px;
+      border-bottom: 1px solid var(--bardo-border-subtle);
+    }
+
+    .col-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .col-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .dot-todo { background: var(--bardo-text-muted); }
+    .dot-progress { background: var(--bardo-blurple); }
+    .dot-review { background: var(--bardo-amber); }
+    .dot-done { background: var(--bardo-green); }
+
+    .col-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--bardo-text-primary);
+      font-family: var(--font-display);
+    }
+
+    .col-count {
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+      color: var(--bardo-text-muted);
+    }
+
+    .kanban-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Kanban Card */
+    .kanban-card {
+      background: var(--bardo-surface-card);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-lg);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      cursor: pointer;
+      transition: all var(--transition-snappy);
+      box-shadow: var(--bardo-shadow-sm);
+    }
+
+    .kanban-card:hover {
+      background: var(--bardo-surface-raised);
+      border-color: var(--bardo-border-strong);
+      transform: translateY(-2px);
+      box-shadow: var(--bardo-shadow-md);
+    }
+
+    .card-tags-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .card-tag {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.02em;
+    }
+
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--bardo-text-primary);
+      line-height: 1.35;
+    }
+
+    .card-progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .card-progress-fill {
+      height: 100%;
+      background: var(--bardo-blurple);
+      border-radius: 2px;
+    }
+
+    .card-footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: var(--bardo-text-muted);
+      padding-top: 4px;
+    }
+
+    .card-due-date {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .card-assignee {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--bardo-blurple);
+      display: grid;
+      place-items: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .add-card-btn {
+      padding: 8px;
+      border-radius: var(--bardo-radius-md);
+      border: 1px dashed var(--bardo-border-default);
+      color: var(--bardo-text-muted);
+      font-size: 12.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all var(--transition-snappy);
+    }
+    .add-card-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--bardo-blurple);
+      color: var(--bardo-blurple);
+    }
+
+    /* ==========================================================================
+       VIEW 4: AGENDA (PLANNER & LIVE MEETING HUB)
+       ========================================================================== */
+    .agenda-hero-card {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 24px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .agenda-event-info h2 {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--bardo-text-primary);
+    }
+
+    .agenda-meta-pills {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .agenda-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--bardo-text-secondary);
+      background: var(--bardo-surface-raised);
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .live-pulse-badge {
+      background: rgba(237, 66, 69, 0.18);
+      color: var(--bardo-red);
+      font-weight: 700;
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--bardo-red);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    .agenda-view-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+    }
+
+    @media (max-width: 950px) {
+      .agenda-view-layout { grid-template-columns: 1fr; }
+    }
+
+    /* Agenda Timeline Breakdown */
+    .agenda-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .timeline-block {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 18px 20px;
+      display: flex;
+      gap: 16px;
+      transition: all var(--transition-snappy);
+    }
+
+    .timeline-block.current {
+      border-color: var(--bardo-blurple);
+      box-shadow: 0 0 0 1px var(--bardo-blurple), var(--bardo-shadow-md);
+      background: linear-gradient(135deg, rgba(88, 101, 242, 0.08) 0%, transparent 100%), var(--bardo-surface);
+    }
+
+    .time-badge-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .time-badge-col strong {
+      font-size: 15px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--bardo-text-primary);
+    }
+
+    .time-badge-col small {
+      font-size: 11px;
+      color: var(--bardo-text-muted);
+    }
+
+    .timeline-content-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .timeline-content-col h3 {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--bardo-text-primary);
+    }
+
+    .timeline-content-col p {
+      font-size: 13.5px;
+      color: var(--bardo-text-secondary);
+    }
+
+    .live-tools-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .live-tool-btn {
+      background: var(--bardo-surface-raised);
+      border: 1px solid var(--bardo-border-default);
+      border-radius: var(--bardo-radius-md);
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--bardo-text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all var(--transition-snappy);
+    }
+    .live-tool-btn:hover { background: var(--bardo-surface-hover); color: var(--bardo-text-primary); }
+
+    /* Live Meeting Sidebar (Decisions & RSVPs) */
+    .agenda-side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .side-box {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-subtle);
+      border-radius: var(--bardo-radius-xl);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .side-box h3 {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--bardo-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .decision-entry {
+      background: var(--bardo-surface-card);
+      border-left: 3px solid var(--bardo-green);
+      border-radius: 0 var(--bardo-radius-md) var(--bardo-radius-md) 0;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      color: var(--bardo-text-primary);
+    }
+
+    .decision-entry small {
+      display: block;
+      color: var(--bardo-text-muted);
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .rsvp-user-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .rsvp-user-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+
+    .rsvp-user-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .rsvp-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--bardo-surface-raised);
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* ==========================================================================
+       MODALS & DRAWERS
+       ========================================================================== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: none;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open {
+      display: grid;
+    }
+
+    .modal-dialog {
+      background: var(--bardo-surface);
+      border: 1px solid var(--bardo-border-strong);
+      border-radius: var(--bardo-radius-xl);
+      width: 100%;
+      max-width: 520px;
+      box-shadow: var(--bardo-shadow-lg);
+      overflow: hidden;
+      animation: modalSlide 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalSlide {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--bardo-border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header h2 {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--bardo-text-primary);
+    }
+
+    .modal-close-btn {
+      color: var(--bardo-text-muted);
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .modal-close-btn:hover { color: var(--bardo-text-primary); }
+
+    .modal-body {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--bardo-text-secondary);
+    }
+
+    .form-input, .form-select, .form-textarea {
+      background: var(--bardo-surface-card);
+      border: 1px solid var(--bardo-border-default);
+      border-radius: var(--bardo-radius-md);
+      padding: 9px 12px;
+      font-size: 13.5px;
+      color: var(--bardo-text-primary);
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--bardo-blurple);
+      box-shadow: 0 0 0 2px var(--bardo-blurple-light);
+    }
+
+    .modal-footer {
+      padding: 14px 24px;
+      background: var(--bardo-surface-raised);
+      border-top: 1px solid var(--bardo-border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* Command Palette (Cmd + K) */
+    .command-palette {
+      max-width: 600px;
+    }
+
+    .palette-search-input {
+      width: 100%;
+      padding: 16px 20px;
+      font-size: 16px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--bardo-text-primary);
+      border-bottom: 1px solid var(--bardo-border-subtle);
+    }
+
+    .palette-results-list {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .palette-item {
+      padding: 10px 14px;
+      border-radius: var(--bardo-radius-md);
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--bardo-text-secondary);
+      cursor: pointer;
+    }
+
+    .palette-item:hover, .palette-item.active {
+      background: var(--bardo-blurple);
+      color: white;
+    }
+
+    /* Toasts */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast-item {
+      background: var(--bardo-surface-raised);
+      border: 1px solid var(--bardo-border-strong);
+      border-radius: var(--bardo-radius-pill);
+      padding: 10px 20px;
+      color: var(--bardo-text-primary);
+      font-size: 13.5px;
+      font-weight: 600;
+      box-shadow: var(--bardo-shadow-lg);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: toastIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       TOP CONTROL BAR (Simulador & Herramientas)
+       ========================================================================== -->
+  <header class="mock-header-bar">
+    <div class="mock-header-left">
+      <span class="mock-badge">Mock Interactivo</span>
+      <div class="mock-title">
+        <span>Bardo Discord Native UI</span>
+      </div>
+    </div>
+
+    <!-- Viewport Switcher -->
+    <div class="mock-header-center">
+      <button class="viewport-btn active" data-viewport="desktop" title="Vista Completa de Escritorio">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span>Desktop</span>
+      </button>
+      <button class="viewport-btn" data-viewport="tablet" title="Simular Tablet (768px)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span>Tablet</span>
+      </button>
+      <button class="viewport-btn" data-viewport="mobile" title="Simular Móvil (400px)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span>Móvil</span>
+      </button>
+    </div>
+
+    <!-- Theme & Quick Actions -->
+    <div class="mock-header-right">
+      <button id="btn-toggle-theme" class="mock-pill-btn" title="Alternar Tema">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <span id="theme-label">Tema: Dark</span>
+      </button>
+      <button id="btn-reset-demo" class="mock-pill-btn" title="Reiniciar datos de prueba">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        <span>Demo Data</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       APP VIEWPORT WRAPPER
+       ========================================================================== -->
+  <div class="app-viewport-wrapper" data-mode="desktop">
+    <div class="bardo-app-root">
+      
+      <!-- Discord Activity Topbar (Simula el entorno nativo de Discord) -->
+      <div class="discord-activity-topbar">
+        <div class="discord-channel-info">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+          <strong>bardo-workspace</strong>
+          <span>· Actividad de voz compartida</span>
+        </div>
+
+        <div class="discord-voice-cluster">
+          <div class="avatar-stack">
+            <div class="avatar-stack-item" title="Max (En línea)">
+              M
+              <span class="status-dot status-online"></span>
+            </div>
+            <div class="avatar-stack-item" style="background:#4752c4" title="Sofia (No molestar)">
+              S
+              <span class="status-dot status-dnd"></span>
+            </div>
+            <div class="avatar-stack-item" style="background:#e91e63" title="Lucas (Ausente)">
+              L
+              <span class="status-dot status-idle"></span>
+            </div>
+          </div>
+          <span style="font-size: 11.5px; color: var(--bardo-text-muted); font-weight: 500;">3 en llamada</span>
+        </div>
+      </div>
+
+      <!-- Bardo Sticky Chrome Header -->
+      <header class="bardo-chrome">
+        <a href="#home" class="bardo-brand" data-nav="home">
+          <div class="bardo-avatar-badge">B</div>
+          <div class="bardo-brand-text">
+            <strong>Bardo</strong>
+            <span>En Discord</span>
+          </div>
+        </a>
+
+        <!-- Principal Navigation Tabs -->
+        <nav class="bardo-nav-tabs" aria-label="Navegación principal">
+          <button class="bardo-tab-btn active" data-nav="home">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span>Inicio</span>
+          </button>
+          <button class="bardo-tab-btn" data-nav="documents">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+            <span>Documentos</span>
+            <span class="tab-badge">3</span>
+          </button>
+          <button class="bardo-tab-btn" data-nav="boards">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+            <span>Tableros</span>
+            <span class="tab-badge">11</span>
+          </button>
+          <button class="bardo-tab-btn" data-nav="agenda">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Agenda</span>
+            <span class="tab-badge" style="background:var(--bardo-red-bg);color:var(--bardo-red)">Live</span>
+          </button>
+        </nav>
+
+        <!-- Command Palette Trigger -->
+        <div class="chrome-actions">
+          <button id="btn-open-palette" class="search-trigger-btn" title="Buscar en todo Bardo">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Buscar…</span>
+            <span class="kbd-shortcut">⌘K</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- ======================================================================
+           MAIN CONTENT SHELL & SECTIONS
+           ====================================================================== -->
+      <main class="bardo-content-shell">
+        
+        <!-- --------------------------------------------------------------------
+             VIEW 1: INICIO (HOME)
+             -------------------------------------------------------------------- -->
+        <section id="view-home" class="view-section active">
+          
+          <!-- Hero Section -->
+          <div class="home-hero-card">
+            <div class="home-hero-copy">
+              <p class="eyebrow">Espacio de Trabajo</p>
+              <h1>Lo importante,<br/>sin ruido.</h1>
+              <p>Tu trabajo colaborativo en Discord: minutas sincronizadas, tableros Kanban interactivos y agenda de equipo.</p>
+            </div>
+            <div class="home-hero-actions">
+              <button class="btn-primary" onclick="switchTab('documents')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Nuevo Documento</span>
+              </button>
+              <button class="btn-secondary" onclick="openNewTaskModal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                <span>Nueva Tarea</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Stats Row -->
+          <div class="home-stats-row">
+            <div class="stat-pill-card">
+              <div class="stat-icon-wrap" style="background:var(--bardo-blurple-light); color:var(--bardo-blurple);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+              </div>
+              <div class="stat-copy">
+                <strong>3 Docs</strong>
+                <span>Minutas activas</span>
+              </div>
+            </div>
+
+            <div class="stat-pill-card">
+              <div class="stat-icon-wrap" style="background:var(--bardo-amber-bg); color:var(--bardo-amber);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+              </div>
+              <div class="stat-copy">
+                <strong>11 Tareas</strong>
+                <span>4 en progreso</span>
+              </div>
+            </div>
+
+            <div class="stat-pill-card">
+              <div class="stat-icon-wrap" style="background:var(--bardo-red-bg); color:var(--bardo-red);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div class="stat-copy">
+                <strong>Hoy 15:30</strong>
+                <span>Weekly de Producto</span>
+              </div>
+            </div>
+
+            <div class="stat-pill-card">
+              <div class="stat-icon-wrap" style="background:var(--bardo-green-bg); color:var(--bardo-green);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="stat-copy">
+                <strong>Sincronizado</strong>
+                <span>Cloudflare R2 + D1</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 Panels Dashboard Grid -->
+          <div class="home-dashboard-grid">
+            
+            <!-- Panel 1: Próximos Eventos -->
+            <div class="home-panel">
+              <div class="home-panel-header">
+                <div class="home-panel-title">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span>Próximos Eventos</span>
+                </div>
+                <span class="home-panel-action" onclick="switchTab('agenda')">Ver Agenda →</span>
+              </div>
+
+              <div class="home-resource-list">
+                <div class="home-resource-item" onclick="switchTab('agenda')">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Weekly de Producto & Arquitectura</strong>
+                      <small>Hoy · 15:30 (60 min) · Canal de Voz #bardo</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-red">En Vivo</span>
+                </div>
+
+                <div class="home-resource-item" onclick="switchTab('agenda')">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Review de Sprint Q3</strong>
+                      <small>Viernes 28 Ago · 11:00 · 4 confirmados</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-blurple">Programado</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 2: Mis Tareas Activas -->
+            <div class="home-panel">
+              <div class="home-panel-header">
+                <div class="home-panel-title">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                  <span>Mis Tareas Activas</span>
+                </div>
+                <span class="home-panel-action" onclick="switchTab('boards')">Ver Kanban →</span>
+              </div>
+
+              <div class="home-resource-list">
+                <div class="home-resource-item" onclick="openTaskDetails(1)">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Definir navegación Discord Native v2</strong>
+                      <small>Tablero Producto · Vence Hoy</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-amber">Urgente</span>
+                </div>
+
+                <div class="home-resource-item" onclick="openTaskDetails(2)">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Auditoría visual de contrastes y a11y</strong>
+                      <small>Tablero Frontend · En progreso</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-blurple">En curso</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 3: Documentos Recientes -->
+            <div class="home-panel">
+              <div class="home-panel-header">
+                <div class="home-panel-title">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+                  <span>Documentos Recientes</span>
+                </div>
+                <span class="home-panel-action" onclick="switchTab('documents')">Explorar →</span>
+              </div>
+
+              <div class="home-resource-list">
+                <div class="home-resource-item" onclick="switchTab('documents')">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Minuta de Arquitectura y Diseño UI</strong>
+                      <small>Editado hace 5 min por Max · 840 palabras</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-green">Activo</span>
+                </div>
+
+                <div class="home-resource-item" onclick="switchTab('documents')">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Especificación de Event Planner</strong>
+                      <small>Editado ayer por Sofia · 1,200 palabras</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-blurple">Minuta</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 4: Tableros de Equipo -->
+            <div class="home-panel">
+              <div class="home-panel-header">
+                <div class="home-panel-title">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+                  <span>Tableros de Equipo</span>
+                </div>
+                <span class="home-panel-action" onclick="switchTab('boards')">Abrir →</span>
+              </div>
+
+              <div class="home-resource-list">
+                <div class="home-resource-item" onclick="switchTab('boards')">
+                  <div class="res-item-left">
+                    <div class="res-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                    </div>
+                    <div class="res-item-info">
+                      <strong>Lanzamiento Bardo v1.0</strong>
+                      <small>11 tareas · 4 columnas · 75% completado</small>
+                    </div>
+                  </div>
+                  <span class="res-item-badge badge-green">75%</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- --------------------------------------------------------------------
+             VIEW 2: DOCUMENTOS (COLLABORATIVE EDITOR & READER)
+             -------------------------------------------------------------------- -->
+        <section id="view-documents" class="view-section">
+          <div class="docs-layout-container">
+            
+            <!-- Sidebar: Lista de Documentos -->
+            <aside class="docs-sidebar">
+              <div class="sidebar-header-row">
+                <h3>Documentos</h3>
+                <button class="btn-primary" style="padding: 4px 8px; font-size: 11px;" onclick="showToast('Nuevo documento creado')">+ Nuevo</button>
+              </div>
+
+              <div class="doc-nav-list">
+                <div class="doc-nav-item active">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+                  <span>Minuta de Arquitectura</span>
+                </div>
+                <div class="doc-nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+                  <span>Especificación Eventos</span>
+                </div>
+                <div class="doc-nav-item">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+                  <span>Guía de Despliegue D1</span>
+                </div>
+              </div>
+
+              <div class="sidebar-header-row" style="margin-top: 10px;">
+                <h3>Acciones</h3>
+              </div>
+              <button class="btn-secondary" style="width: 100%; justify-content: center; font-size: 12.5px;" onclick="openExportModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Exportar Documento</span>
+              </button>
+            </aside>
+
+            <!-- Surface del Editor Principal -->
+            <article class="doc-editor-surface">
+              
+              <!-- Document Header & Metadata -->
+              <div class="doc-header-top">
+                <div style="flex: 1;">
+                  <input type="text" class="doc-title-input" value="Minuta de Arquitectura y Diseño UI v2" />
+                  <div class="doc-meta-row">
+                    <span class="doc-sync-status">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span>Guardado en Cloudflare D1</span>
+                    </span>
+                    <span>·</span>
+                    <span>840 palabras</span>
+                    <span>·</span>
+                    <span>3 min de lectura</span>
+                  </div>
+                </div>
+
+                <div class="doc-actions-group">
+                  <button class="btn-secondary" onclick="showToast('Enlace copiado al portapapeles')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                  <button class="btn-primary" onclick="openExportModal()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Exportar</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Formatting Toolbar -->
+              <div class="editor-toolbar">
+                <div class="tb-group">
+                  <select class="tb-select">
+                    <option>Párrafo</option>
+                    <option>Título 1 (H1)</option>
+                    <option>Título 2 (H2)</option>
+                    <option>Cita destacada</option>
+                    <option>Bloque de código</option>
+                  </select>
+                </div>
+                
+                <div class="tb-divider"></div>
+
+                <div class="tb-group">
+                  <button class="tb-btn" title="Negrita (Ctrl+B)"><b>B</b></button>
+                  <button class="tb-btn" title="Cursiva (Ctrl+I)"><i>I</i></button>
+                  <button class="tb-btn" title="Tachado"><s>S</s></button>
+                  <button class="tb-btn" title="Código Inline"><code>&lt;&gt;</code></button>
+                  <button class="tb-btn" title="Enlace">🔗</button>
+                </div>
+
+                <div class="tb-divider"></div>
+
+                <div class="tb-group">
+                  <button class="tb-btn" title="Lista con viñetas">•=</button>
+                  <button class="tb-btn" title="Lista numerada">1=</button>
+                  <button class="tb-btn" title="Checklist">☑</button>
+                  <button class="tb-btn" title="Tabla">⊞</button>
+                </div>
+
+                <div class="tb-divider"></div>
+
+                <span style="font-size: 11px; color: var(--bardo-text-muted); margin-left: 4px;">Escribe <code>/</code> para comandos rápidos</span>
+              </div>
+
+              <!-- Editable Document Content -->
+              <div class="doc-body-editable" contenteditable="true">
+                <h2>1. Resumen Ejecutivo y Objetivos</h2>
+                <p>Bardo es una aplicación interactiva nativa para Discord construida con la arquitectura de <strong>Cloudflare Workers + Embedded App SDK</strong>. Permite a los miembros de una comunidad colaborar en tiempo real sobre notas, documentos enriquecidos, tableros Kanban y coordinación de reuniones.</p>
+                
+                <div class="doc-callout">
+                  <strong>💡 Decisión Clave de Diseño:</strong> Se adoptó la paleta cromática nativa de Discord con soporte para temas Oscuro y Medianoche, mejorando la ergonomía visual y reduciendo la fricción dentro del cliente de Discord.
+                </div>
+
+                <h2>2. Checklist de Entregables para el Sprint</h2>
+                <div class="doc-checklist">
+                  <label class="doc-checklist-item">
+                    <input type="checkbox" checked />
+                    <span>Migración de tokens CSS a Tailwind v4 y variables semánticas.</span>
+                  </label>
+                  <label class="doc-checklist-item">
+                    <input type="checkbox" checked />
+                    <span>Integración de navegación fluida con soporte de teclado y accesibilidad (a11y).</span>
+                  </label>
+                  <label class="doc-checklist-item">
+                    <input type="checkbox" />
+                    <span>Sincronización en vivo del estado del Event Planner con WebSocket / SSE.</span>
+                  </label>
+                  <label class="doc-checklist-item">
+                    <input type="checkbox" />
+                    <span>Exportación determinista a PDF (.pdf) y Word (.docx).</span>
+                  </label>
+                </div>
+
+                <h2>3. Fragmento de Configuración de Entorno</h2>
+                <pre class="doc-code-block">// wrangler.jsonc
+{
+  "name": "bardo-discord",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-21",
+  "d1_databases": [
+    { "binding": "DB", "database_name": "bardo-production" }
+  ]
+}</pre>
+              </div>
+
+            </article>
+
+          </div>
+        </section>
+
+        <!-- --------------------------------------------------------------------
+             VIEW 3: TABLEROS (KANBAN)
+             -------------------------------------------------------------------- -->
+        <section id="view-boards" class="view-section">
+          
+          <!-- Board Top Bar -->
+          <div class="kanban-top-toolbar">
+            <div class="kanban-board-meta">
+              <h2>Lanzamiento Bardo v1.0 · Sprint Q3</h2>
+              <p>Tablero principal de desarrollo y seguimiento del equipo.</p>
+            </div>
+
+            <div class="kanban-controls">
+              <button class="filter-chip active" id="filter-all" onclick="filterTasks('all')">Todas (11)</button>
+              <button class="filter-chip" id="filter-my" onclick="filterTasks('my')">Mis Tareas (4)</button>
+              <button class="filter-chip" id="filter-urgent" onclick="filterTasks('urgent')">Urgentes (2)</button>
+              <button class="btn-primary" onclick="openNewTaskModal()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Nueva Tarea</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Kanban Track -->
+          <div class="kanban-track" id="kanban-track">
+            
+            <!-- Columna 1: Por Hacer -->
+            <div class="kanban-column" data-col="todo">
+              <div class="kanban-column-header">
+                <div class="col-title-wrap">
+                  <span class="col-dot dot-todo"></span>
+                  <span class="col-title">Por Hacer</span>
+                </div>
+                <span class="col-count">3</span>
+              </div>
+
+              <div class="kanban-card-list" id="col-todo-list">
+                <article class="kanban-card" onclick="openTaskDetails(1)" data-id="1" data-my="true" data-urgent="true">
+                  <div class="card-tags-row">
+                    <span class="card-tag badge-red">Urgente</span>
+                    <span class="card-tag badge-blurple">Diseño UI</span>
+                  </div>
+                  <h3 class="card-title">Definir navegación Discord Native v2</h3>
+                  <div class="card-progress-bar"><div class="card-progress-fill" style="width: 40%"></div></div>
+                  <div class="card-footer-row">
+                    <span class="card-due-date">📅 Hoy</span>
+                    <div class="card-assignee" title="Asignado a Max">M</div>
+                  </div>
+                </article>
+
+                <article class="kanban-card" onclick="openTaskDetails(3)" data-id="3" data-my="false" data-urgent="false">
+                  <div class="card-tags-row">
+                    <span class="card-tag badge-green">Backend</span>
+                  </div>
+                  <h3 class="card-title">Optimizaciones en consultas D1 y caché R2</h3>
+                  <div class="card-progress-bar"><div class="card-progress-fill" style="width: 0%"></div></div>
+                  <div class="card-footer-row">
+                    <span class="card-due-date">📅 30 Ago</span>
+                    <div class="card-assignee" style="background:#e91e63" title="Asignado a Lucas">L</div>
+                  </div>
+                </article>
+              </div>
+
+              <button class="add-card-btn" onclick="openNewTaskModal('todo')">+ Añadir tarea</button>
+            </div>
+
+            <!-- Columna 2: En Progreso -->
+            <div class="kanban-column" data-col="progress">
+              <div class="kanban-column-header">
+                <div class="col-title-wrap">
+                  <span class="col-dot dot-progress"></span>
+                  <span class="col-title">En Progreso</span>
+                </div>
+                <span class="col-count">2</span>
+              </div>
+
+              <div class="kanban-card-list" id="col-progress-list">
+                <article class="kanban-card" onclick="openTaskDetails(2)" data-id="2" data-my="true" data-urgent="false">
+                  <div class="card-tags-row">
+                    <span class="card-tag badge-blurple">Frontend</span>
+                    <span class="card-tag badge-green">A11y</span>
+                  </div>
+                  <h3 class="card-title">Auditoría visual de contrastes y a11y</h3>
+                  <div class="card-progress-bar"><div class="card-progress-fill" style="width: 65%"></div></div>
+                  <div class="card-footer-row">
+                    <span class="card-due-date">📅 Mañana</span>
+                    <div class="card-assignee" title="Asignado a Max">M</div>
+                  </div>
+                </article>
+
+                <article class="kanban-card" onclick="openTaskDetails(4)" data-id="4" data-my="false" data-urgent="true">
+                  <div class="card-tags-row">
+                    <span class="card-tag badge-red">Urgente</span>
+                    <span class="card-tag badge-amber">Event Planner</span>
+                  </div>
+                  <h3 class="card-title">Sincronización en vivo de decisiones del Live Meeting</h3>
+                  <div class="card-progress-bar"><div class="card-progress-fill" style="width: 50%"></div></div>
+                  <div class="card-footer-row">
+                    <span class="card-due-date">📅 Hoy</span>
+                    <div class="card-assignee" style="background:#4752c4" title="Asignado a Sofia">S</div>
+                  </div>
+                </article>
+              </div>
+
+              <button class="add-card-btn" onclick="openNewTaskModal('progress')">+ Añadir tarea</button>
+            </div>
+
+            <!-- Columna 3: En Revisión -->
+            <div class="kanban-column" data-col="review">
+              <div class="kanban-column-header">
+                <div class="col-title-wrap">
+                  <span class="col-dot dot-review"></span>
+                  <span class="col-title">En Revisión</span>
+                </div>
+                <span class="col-count">2</span>
+              </div>
+
+              <div class="kanban-card-list" id="col-review-list">
+                <article class="kanban-card" onclick="openTaskDetails(5)" data-id="5" data-my="true" data-urgent="false">
+                  <div class="card-tags-row">
+                    <span class="card-tag badge-green">SDK</span>
+                  </div>
+                  <h3 class="card-title">Integrar autenticación Discord OAuth2 con Cookie segura</h3>
+                  <div class="card-progress-bar"><div class="card-progress-fill" style="width: 90%"></div></div>
+                  <div class="card-footer-row">
+                    <span class="card-due-date">📅 28 Ago</span>
+                    <div class="card-assignee" title="Asignado a Max">M</div>
+                  </div>
+                </article>
+              </div>
+
+              <button class="add-card-btn" onclick="openNewTaskModal('review')">+ Añadir tarea</button>
+            </div>
+
+            <!-- Columna 4: Hecho -->
+            <div class="kanban-column" data-col="done">
+              <div class="kanban-column-header">
+                <div class="col-title-wrap">
+                  <span class="col-dot dot-done"></span>
+                  <span class="col-title">Hecho</span>
+                </div>
+                <span class="col-count">4</span>
+              </div>
+
+              <div class="kanban-card-list" id="col-done-list">
+                <article class="kanban-card" onclick="openTaskDetails(6)" data-id="6" data-my="false" data-urgent="false">
+                  <div class="card-tags-row">
+                    <span class="card-tag badge-green">Completado</span>
+                  </div>
+                  <h3 class="card-title">Configuración inicial del CLI Impeccable</h3>
+                  <div class="card-progress-bar"><div class="card-progress-fill" style="width: 100%; background:var(--bardo-green)"></div></div>
+                  <div class="card-footer-row">
+                    <span class="card-due-date" style="color:var(--bardo-green)">✓ Listo</span>
+                    <div class="card-assignee" style="background:#57F287; color:#000">M</div>
+                  </div>
+                </article>
+              </div>
+
+              <button class="add-card-btn" onclick="openNewTaskModal('done')">+ Añadir tarea</button>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- --------------------------------------------------------------------
+             VIEW 4: AGENDA (PLANNER & LIVE MEETING HUB)
+             -------------------------------------------------------------------- -->
+        <section id="view-agenda" class="view-section">
+          
+          <!-- Event Hero Header -->
+          <div class="agenda-hero-card">
+            <div class="agenda-event-info">
+              <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 6px;">
+                <span class="live-pulse-badge">
+                  <span class="pulse-dot"></span>
+                  <span>EN VIVO AHORA</span>
+                </span>
+                <span style="font-size: 12px; color: var(--bardo-text-muted); font-weight: 500;">Sala de Voz #bardo</span>
+              </div>
+              <h2>Weekly de Producto & Arquitectura</h2>
+              <div class="agenda-meta-pills">
+                <span class="agenda-pill">📅 Hoy · 15:30 a 16:30 (60 min)</span>
+                <span class="agenda-pill">👥 4 participantes conectados</span>
+                <span class="agenda-pill">🎯 3 bloques de agenda</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button class="btn-primary" onclick="showToast('¡Modo Live activado!')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Panel Live</span>
+              </button>
+              <button class="btn-secondary" onclick="openNewDecisionModal()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                <span>Registrar Decisión</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Agenda Main Layout -->
+          <div class="agenda-view-layout">
+            
+            <!-- Timeline de Bloques -->
+            <div class="agenda-timeline">
+              
+              <!-- Bloque 1 (Completado) -->
+              <div class="timeline-block">
+                <div class="time-badge-col">
+                  <strong>15:30</strong>
+                  <small>15 min</small>
+                </div>
+                <div class="timeline-content-col">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <h3>1. Apertura y Revisión de Métricas</h3>
+                    <span class="res-item-badge badge-green">Completado</span>
+                  </div>
+                  <p>Repaso de las pruebas unitarias y e2e, estado del bundle en esbuild y tiempos de carga en Cloudflare Workers.</p>
+                </div>
+              </div>
+
+              <!-- Bloque 2 (En Vivo Ahora) -->
+              <div class="timeline-block current">
+                <div class="time-badge-col">
+                  <strong style="color:var(--bardo-blurple)">15:45</strong>
+                  <small style="color:var(--bardo-blurple); font-weight: 700;">30 min</small>
+                </div>
+                <div class="timeline-content-col">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <h3 style="color:var(--bardo-blurple)">2. Decisiones de Diseño & Mock Navegable</h3>
+                    <span class="live-pulse-badge"><span class="pulse-dot"></span> EN CURSO</span>
+                  </div>
+                  <p>Presentación del mock interactivo completo de Bardo para Discord, revisión de jerarquía de tokens y flujo de navegación.</p>
+
+                  <div class="live-tools-bar">
+                    <button class="live-tool-btn" onclick="openNewDecisionModal()">
+                      <span>✍️ Anotar Decisión</span>
+                    </button>
+                    <button class="live-tool-btn" onclick="openNewTaskModal('todo', 'Tarea derivada de reunión')">
+                      <span>⚡ Convertir en Tarea Kanban</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bloque 3 (Siguiente) -->
+              <div class="timeline-block">
+                <div class="time-badge-col">
+                  <strong>16:15</strong>
+                  <small>15 min</small>
+                </div>
+                <div class="timeline-content-col">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <h3>3. Asignación de Tareas y Cierre</h3>
+                    <span class="res-item-badge badge-blurple">Siguiente</span>
+                  </div>
+                  <p>Asignación final de responsables para el sprint y generación automática del resumen en Markdown para Discord.</p>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Side Panel: Registro de Decisiones y Asistentes -->
+            <div class="agenda-side-panel">
+              
+              <!-- Decisiones Aprobadas -->
+              <div class="side-box">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <h3>
+                    <span>📜 Decisiones de la Sesión</span>
+                  </h3>
+                  <button class="home-panel-action" style="font-size: 11px;" onclick="openNewDecisionModal()">+ Agregar</button>
+                </div>
+
+                <div id="decisions-container" style="display:flex; flex-direction:column; gap:8px;">
+                  <div class="decision-entry">
+                    <strong>Decisión · Aprobada</strong>
+                    <p>Usar arquitectura unificada de 4 vistas (Inicio, Docs, Tableros, Agenda) dentro del Discord Chrome.</p>
+                    <small>Registrada por Max a las 15:42</small>
+                  </div>
+                  <div class="decision-entry">
+                    <strong>Decisión · Aprobada</strong>
+                    <p>Exportación nativa sin dependencias pesadas mediante pdf-lib y turndown.</p>
+                    <small>Registrada por Sofia a las 15:51</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Asistentes RSVP -->
+              <div class="side-box">
+                <h3>
+                  <span>👥 Asistentes (4/5)</span>
+                </h3>
+
+                <div class="rsvp-user-list">
+                  <div class="rsvp-user-row">
+                    <div class="rsvp-user-left">
+                      <div class="rsvp-avatar" style="background:#5865F2; color:#fff">M</div>
+                      <div>
+                        <strong>Max</strong>
+                        <div style="font-size:11px; color:var(--bardo-text-muted)">Organizador · Presentando</div>
+                      </div>
+                    </div>
+                    <span class="res-item-badge badge-green">En sala</span>
+                  </div>
+
+                  <div class="rsvp-user-row">
+                    <div class="rsvp-user-left">
+                      <div class="rsvp-avatar" style="background:#4752c4; color:#fff">S</div>
+                      <div>
+                        <strong>Sofia</strong>
+                        <div style="font-size:11px; color:var(--bardo-text-muted)">Frontend Lead</div>
+                      </div>
+                    </div>
+                    <span class="res-item-badge badge-green">En sala</span>
+                  </div>
+
+                  <div class="rsvp-user-row">
+                    <div class="rsvp-user-left">
+                      <div class="rsvp-avatar" style="background:#e91e63; color:#fff">L</div>
+                      <div>
+                        <strong>Lucas</strong>
+                        <div style="font-size:11px; color:var(--bardo-text-muted)">Backend Engineer</div>
+                      </div>
+                    </div>
+                    <span class="res-item-badge badge-green">En sala</span>
+                  </div>
+
+                  <div class="rsvp-user-row">
+                    <div class="rsvp-user-left">
+                      <div class="rsvp-avatar" style="background:#2b2d31; color:var(--bardo-text-muted)">A</div>
+                      <div>
+                        <strong>Ana</strong>
+                        <div style="font-size:11px; color:var(--bardo-text-muted)">Product Owner</div>
+                      </div>
+                    </div>
+                    <span class="res-item-badge badge-amber">Quizás</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </section>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 1: NUEVA TAREA KANBAN
+       ========================================================================== -->
+  <div id="modal-new-task" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-new-task')">
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2>Nueva Tarea Kanban</h2>
+        <button class="modal-close-btn" onclick="closeModal('modal-new-task')">✕</button>
+      </div>
+      <form onsubmit="handleCreateTask(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Título de la tarea</label>
+            <input type="text" id="task-title-input" class="form-input" placeholder="Ej. Implementar selector de miembros" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Columna inicial</label>
+            <select id="task-col-select" class="form-select">
+              <option value="todo">Por Hacer</option>
+              <option value="progress">En Progreso</option>
+              <option value="review">En Revisión</option>
+              <option value="done">Hecho</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label class="form-label">Prioridad</label>
+              <select id="task-priority-select" class="form-select">
+                <option value="normal">Media 🟡</option>
+                <option value="urgent">Urgente 🔴</option>
+                <option value="high">Alta 🟠</option>
+                <option value="low">Baja 🟢</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Responsable</label>
+              <select id="task-assignee-select" class="form-select">
+                <option value="Max">Max (Tú)</option>
+                <option value="Sofia">Sofia</option>
+                <option value="Lucas">Lucas</option>
+                <option value="Ana">Ana</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Fecha límite</label>
+            <input type="date" class="form-input" value="2026-08-28" />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-new-task')">Cancelar</button>
+          <button type="submit" class="btn-primary">Crear Tarea</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 2: DETALLES DE TAREA
+       ========================================================================== -->
+  <div id="modal-task-details" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-task-details')">
+    <div class="modal-dialog" style="max-width: 600px;" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="res-item-badge badge-blurple" id="detail-badge">En Curso</span>
+          <h2 id="detail-title">Definir navegación Discord Native v2</h2>
+        </div>
+        <button class="modal-close-btn" onclick="closeModal('modal-task-details')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div style="display: flex; gap: 16px; font-size: 13px; color: var(--bardo-text-muted);">
+          <span>Responsable: <strong style="color:var(--bardo-text-primary)">Max</strong></span>
+          <span>·</span>
+          <span>Tablero: <strong style="color:var(--bardo-text-primary)">Lanzamiento v1.0</strong></span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Descripción</label>
+          <p style="font-size: 14px; color: var(--bardo-text-secondary); line-height: 1.6;">
+            Alinear los patrones de interacción del app chrome para ajustarse a las guías de diseño de Discord Native Activities.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Subtareas</label>
+          <div class="doc-checklist">
+            <label class="doc-checklist-item"><input type="checkbox" checked /><span>Audit de contraste WCAG AAA</span></label>
+            <label class="doc-checklist-item"><input type="checkbox" checked /><span>Mapeo de rutas con teclado</span></label>
+            <label class="doc-checklist-item"><input type="checkbox" /><span>Validación en clientes iOS / Android</span></label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Mover de Columna</label>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn-secondary" style="font-size: 12px;" onclick="moveCurrentTask('todo')">Por Hacer</button>
+            <button class="btn-secondary" style="font-size: 12px;" onclick="moveCurrentTask('progress')">En Progreso</button>
+            <button class="btn-secondary" style="font-size: 12px;" onclick="moveCurrentTask('review')">En Revisión</button>
+            <button class="btn-primary" style="font-size: 12px;" onclick="moveCurrentTask('done')">✓ Marcar Hecho</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-task-details')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 3: EXPORTAR DOCUMENTO
+       ========================================================================== -->
+  <div id="modal-export" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-export')">
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2>Exportar Documento</h2>
+        <button class="modal-close-btn" onclick="closeModal('modal-export')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size: 13.5px; color: var(--bardo-text-secondary);">Selecciona el formato para generar y descargar tu documento formateado:</p>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0;">
+          <button class="btn-secondary" style="flex-direction: column; padding: 16px 8px; text-align: center; gap: 8px;" onclick="handleExport('PDF')">
+            <span style="font-size: 24px;">📄</span>
+            <strong>PDF</strong>
+            <small style="color:var(--bardo-text-muted); font-size:11px;">.pdf listo para imprimir</small>
+          </button>
+
+          <button class="btn-secondary" style="flex-direction: column; padding: 16px 8px; text-align: center; gap: 8px;" onclick="handleExport('Markdown')">
+            <span style="font-size: 24px;">📝</span>
+            <strong>Markdown</strong>
+            <small style="color:var(--bardo-text-muted); font-size:11px;">.md con formato GitHub</small>
+          </button>
+
+          <button class="btn-secondary" style="flex-direction: column; padding: 16px 8px; text-align: center; gap: 8px;" onclick="handleExport('Word')">
+            <span style="font-size: 24px;">📘</span>
+            <strong>Word</strong>
+            <small style="color:var(--bardo-text-muted); font-size:11px;">.docx estructurado</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-export')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 4: REGISTRAR DECISIÓN (AGENDA)
+       ========================================================================== -->
+  <div id="modal-new-decision" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-new-decision')">
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2>Registrar Decisión en Minuta</h2>
+        <button class="modal-close-btn" onclick="closeModal('modal-new-decision')">✕</button>
+      </div>
+
+      <form onsubmit="handleCreateDecision(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Texto de la decisión</label>
+            <textarea id="decision-text-input" class="form-textarea" rows="3" placeholder="Ej. Se acuerda sincronizar las tareas del Kanban con el bot de Discord al finalizar cada reunión." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Registrado por</label>
+            <input type="text" class="form-input" value="Max" readonly />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-new-decision')">Cancelar</button>
+          <button type="submit" class="btn-primary">Guardar Decisión</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL 5: COMMAND PALETTE (CMD + K)
+       ========================================================================== -->
+  <div id="modal-palette" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-palette')">
+    <div class="modal-dialog command-palette" role="dialog" aria-modal="true">
+      <input type="text" id="palette-input" class="palette-search-input" placeholder="Escribe para buscar o navegar (ej. 'Kanban', 'Minuta', 'Weekly')…" />
+      
+      <div class="palette-results-list" id="palette-results">
+        <div class="palette-item" onclick="switchTab('home'); closeModal('modal-palette');">
+          <span>🏠 Ir a Inicio</span>
+          <span class="kbd-shortcut">1</span>
+        </div>
+        <div class="palette-item" onclick="switchTab('documents'); closeModal('modal-palette');">
+          <span>📄 Abrir Minuta de Arquitectura</span>
+          <span class="kbd-shortcut">2</span>
+        </div>
+        <div class="palette-item" onclick="switchTab('boards'); closeModal('modal-palette');">
+          <span>▥ Ver Tablero Kanban (Lanzamiento v1.0)</span>
+          <span class="kbd-shortcut">3</span>
+        </div>
+        <div class="palette-item" onclick="switchTab('agenda'); closeModal('modal-palette');">
+          <span>📅 Unirse a Weekly de Producto (Live)</span>
+          <span class="kbd-shortcut">4</span>
+        </div>
+        <div class="palette-item" onclick="openNewTaskModal(); closeModal('modal-palette');">
+          <span>⚡ Crear nueva tarea Kanban</span>
+          <span class="kbd-shortcut">N</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       TOAST CONTAINER
+       ========================================================================== -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ==========================================================================
+       CLIENT LOGIC & INTERACTIVITY
+       ========================================================================== -->
+  <script>
+    // --- State Management ---
+    let currentTab = 'home';
+    let currentTheme = 'dark';
+    let activeTaskDetailId = null;
+
+    // --- Tab Navigation ---
+    function switchTab(tabKey) {
+      currentTab = tabKey;
+      
+      // Update Tab Buttons
+      document.querySelectorAll('.bardo-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.nav === tabKey);
+      });
+
+      // Update Section Visibility
+      document.querySelectorAll('.view-section').forEach(sec => {
+        sec.classList.toggle('active', sec.id === `view-${tabKey}`);
+      });
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Attach Click Handlers to Tabs
+    document.querySelectorAll('[data-nav]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchTab(el.dataset.nav);
+      });
+    });
+
+    // --- Viewport Mode Switcher (Desktop, Tablet, Mobile) ---
+    document.querySelectorAll('.viewport-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.viewport-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mode = btn.dataset.viewport;
+        document.querySelector('.app-viewport-wrapper').dataset.mode = mode;
+        showToast(`Vista ajustada a modo ${mode.toUpperCase()}`);
+      });
+    });
+
+    // --- Theme Toggle (Dark, Midnight, Light) ---
+    const themes = ['dark', 'midnight', 'light'];
+    document.getElementById('btn-toggle-theme').addEventListener('click', () => {
+      const nextIdx = (themes.indexOf(currentTheme) + 1) % themes.length;
+      currentTheme = themes[nextIdx];
+      document.documentElement.dataset.theme = currentTheme;
+      document.getElementById('theme-label').textContent = `Tema: ${currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1)}`;
+      showToast(`Tema cambiado a ${currentTheme.toUpperCase()}`);
+    });
+
+    // --- Modal Helpers ---
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add('open');
+        const input = el.querySelector('input, textarea');
+        if (input) setTimeout(() => input.focus(), 100);
+      }
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('open');
+    }
+
+    function closeModalOnBg(e, id) {
+      if (e.target.id === id) closeModal(id);
+    }
+
+    // --- Toasts Helper ---
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast-item';
+      toast.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--bardo-green)"><polyline points="20 6 9 17 4 12"/></svg>
+        <span>${msg}</span>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        toast.style.transition = 'all 200ms ease';
+        setTimeout(() => toast.remove(), 200);
+      }, 2600);
+    }
+
+    // --- Modals Triggers ---
+    function openNewTaskModal(col = 'todo', defaultTitle = '') {
+      document.getElementById('task-col-select').value = col;
+      if (defaultTitle) {
+        document.getElementById('task-title-input').value = defaultTitle;
+      }
+      openModal('modal-new-task');
+    }
+
+    function openExportModal() {
+      openModal('modal-export');
+    }
+
+    function openNewDecisionModal() {
+      openModal('modal-new-decision');
+    }
+
+    function handleExport(format) {
+      closeModal('modal-export');
+      showToast(`Generando y exportando en formato ${format}…`);
+      setTimeout(() => {
+        showToast(`✓ Documento descargado exitosamente como .${format.toLowerCase()}`);
+      }, 1000);
+    }
+
+    // --- Kanban Task Creation ---
+    function handleCreateTask(e) {
+      e.preventDefault();
+      const title = document.getElementById('task-title-input').value.trim();
+      const col = document.getElementById('task-col-select').value;
+      const priority = document.getElementById('task-priority-select').value;
+      const assignee = document.getElementById('task-assignee-select').value;
+
+      if (!title) return;
+
+      const priorityBadge = priority === 'urgent' 
+        ? '<span class="card-tag badge-red">Urgente</span>' 
+        : priority === 'high' 
+        ? '<span class="card-tag badge-amber">Alta</span>'
+        : '<span class="card-tag badge-blurple">General</span>';
+
+      const targetList = document.getElementById(`col-${col}-list`);
+      const newCard = document.createElement('article');
+      const taskId = Date.now();
+      newCard.className = 'kanban-card';
+      newCard.dataset.id = taskId;
+      newCard.dataset.my = assignee === 'Max' ? 'true' : 'false';
+      newCard.dataset.urgent = priority === 'urgent' ? 'true' : 'false';
+      newCard.onclick = () => openTaskDetails(taskId, title);
+
+      newCard.innerHTML = `
+        <div class="card-tags-row">${priorityBadge}</div>
+        <h3 class="card-title">${escapeHtml(title)}</h3>
+        <div class="card-progress-bar"><div class="card-progress-fill" style="width: 20%"></div></div>
+        <div class="card-footer-row">
+          <span class="card-due-date">📅 Próx. semana</span>
+          <div class="card-assignee" title="Asignado a ${assignee}">${assignee.charAt(0)}</div>
+        </div>
+      `;
+
+      targetList.appendChild(newCard);
+      closeModal('modal-new-task');
+      document.getElementById('task-title-input').value = '';
+      showToast(`Tarea "${title}" añadida a ${col.toUpperCase()}`);
+    }
+
+    // --- Task Details Drawer ---
+    function openTaskDetails(id, fallbackTitle = '') {
+      activeTaskDetailId = id;
+      const card = document.querySelector(`.kanban-card[data-id="${id}"]`);
+      const title = card ? card.querySelector('.card-title').textContent : (fallbackTitle || 'Tarea Kanban');
+      document.getElementById('detail-title').textContent = title;
+      openModal('modal-task-details');
+    }
+
+    function moveCurrentTask(targetCol) {
+      if (activeTaskDetailId) {
+        const card = document.querySelector(`.kanban-card[data-id="${activeTaskDetailId}"]`);
+        if (card) {
+          const targetList = document.getElementById(`col-${targetCol}-list`);
+          if (targetList) {
+            targetList.appendChild(card);
+            showToast(`Tarea movida a ${targetCol.toUpperCase()}`);
+          }
+        }
+      }
+      closeModal('modal-task-details');
+    }
+
+    // --- Filter Tasks ---
+    function filterTasks(type) {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      const chip = document.getElementById(`filter-${type}`);
+      if (chip) chip.classList.add('active');
+
+      document.querySelectorAll('.kanban-card').forEach(card => {
+        if (type === 'all') {
+          card.style.display = 'flex';
+        } else if (type === 'my') {
+          card.style.display = card.dataset.my === 'true' ? 'flex' : 'none';
+        } else if (type === 'urgent') {
+          card.style.display = card.dataset.urgent === 'true' ? 'flex' : 'none';
+        }
+      });
+    }
+
+    // --- Decision Logging ---
+    function handleCreateDecision(e) {
+      e.preventDefault();
+      const text = document.getElementById('decision-text-input').value.trim();
+      if (!text) return;
+
+      const container = document.getElementById('decisions-container');
+      const entry = document.createElement('div');
+      entry.className = 'decision-entry';
+      entry.innerHTML = `
+        <strong>Decisión · Aprobada</strong>
+        <p>${escapeHtml(text)}</p>
+        <small>Registrada por Max ahora mismo</small>
+      `;
+      container.prepend(entry);
+      closeModal('modal-new-decision');
+      document.getElementById('decision-text-input').value = '';
+      showToast('Decisión guardada en la minuta de la reunión');
+    }
+
+    // --- Command Palette (Cmd + K) ---
+    document.getElementById('btn-open-palette').addEventListener('click', () => openModal('modal-palette'));
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openModal('modal-palette');
+      }
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
+      }
+      // Quick Switchers 1, 2, 3, 4 when no modal or input is active
+      if (!document.querySelector('.modal-overlay.open') && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        if (e.key === '1') switchTab('home');
+        if (e.key === '2') switchTab('documents');
+        if (e.key === '3') switchTab('boards');
+        if (e.key === '4') switchTab('agenda');
+      }
+    });
+
+    // Helper: Escape HTML
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // Reset Demo Data
+    document.getElementById('btn-reset-demo').addEventListener('click', () => {
+      showToast('Datos de demostración reiniciados');
+      setTimeout(() => location.reload(), 400);
+    });
+  </script>
+</body>
+</html>
