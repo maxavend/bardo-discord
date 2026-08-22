@@ -42,18 +42,34 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
         run: |
-          missing=""
-          [ -z "$CLOUDFLARE_API_TOKEN" ] && missing="$missing CLOUDFLARE_API_TOKEN"
-          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
-          [ -z "$DISCORD_TOKEN" ] && missing="$missing DISCORD_TOKEN"
-          [ -z "$DISCORD_GUILD_ID" ] && missing="$missing DISCORD_GUILD_ID"
-          if [ -n "$missing" ]; then
-            desc="Missing:${missing}"
+          missing=0
+          post_secret_status() {
+            name="$1"
+            value="$2"
+            if [ -n "$value" ]; then
+              state=success
+              desc="$name is present"
+            else
+              state=failure
+              desc="$name is missing"
+              missing=1
+            fi
             curl -fsS -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${REPORT_SHA}" \
-              -d "$(jq -nc --arg d "$desc" '{state:"failure",context:"restore/credentials",description:$d}')"
+              -d "$(jq -nc --arg s "$state" --arg c "restore/secret/$name" --arg d "$desc" '{state:$s,context:$c,description:$d}')"
+          }
+          post_secret_status CLOUDFLARE_API_TOKEN "$CLOUDFLARE_API_TOKEN"
+          post_secret_status CLOUDFLARE_ACCOUNT_ID "$CLOUDFLARE_ACCOUNT_ID"
+          post_secret_status DISCORD_TOKEN "$DISCORD_TOKEN"
+          post_secret_status DISCORD_GUILD_ID "$DISCORD_GUILD_ID"
+          if [ "$missing" -ne 0 ]; then
+            curl -fsS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${REPORT_SHA}" \
+              -d '{"state":"failure","context":"restore/credentials","description":"One or more deployment secrets are missing"}'
             exit 1
           fi
           curl -fsS -X POST \
