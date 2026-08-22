@@ -15,12 +15,79 @@ const documentCommand = new SlashCommandBuilder()
     option
       .setName('archivo')
       .setDescription('Markdown, TXT, PDF o Word (.docx)')
-      .setRequired(true),
+      .setRequired(false),
   )
   .addStringOption((option) =>
     option
       .setName('titulo')
-      .setDescription('Título opcional para el documento.'),
+      .setDescription('Título del documento o nombre de un nuevo documento.'),
+  );
+
+const boardCommand = new SlashCommandBuilder()
+  .setName('tablero')
+  .setDescription('Crea y abre tableros Kanban de Bardo.')
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('crear')
+      .setDescription('Crea un tablero nuevo.')
+      .addStringOption((option) =>
+        option.setName('nombre').setDescription('Nombre del tablero.').setRequired(true),
+      )
+      .addStringOption((option) =>
+        option.setName('descripcion').setDescription('Descripción opcional del tablero.'),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('abrir')
+      .setDescription('Abre un tablero existente.')
+      .addStringOption((option) =>
+        option.setName('tablero').setDescription('Nombre del tablero.').setRequired(true),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand.setName('listar').setDescription('Lista los tableros del servidor.'),
+  );
+
+const taskCommand = new SlashCommandBuilder()
+  .setName('tarea')
+  .setDescription('Crea una tarea en un tablero de Bardo.')
+  .addStringOption((option) =>
+    option.setName('tablero').setDescription('Nombre del tablero.').setRequired(true),
+  )
+  .addStringOption((option) =>
+    option.setName('titulo').setDescription('Título de la tarea.').setRequired(true),
+  )
+  .addStringOption((option) =>
+    option.setName('descripcion').setDescription('Descripción opcional de la tarea.'),
+  )
+  .addUserOption((option) =>
+    option.setName('responsable').setDescription('Persona responsable dentro del servidor.'),
+  )
+  .addStringOption((option) =>
+    option.setName('chips').setDescription('Etiquetas separadas por coma, por ejemplo: UX, urgente.'),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('estado')
+      .setDescription('Columna inicial del Kanban.')
+      .addChoices(
+        { name: 'Backlog', value: 'backlog' },
+        { name: 'Por hacer', value: 'todo' },
+        { name: 'En curso', value: 'doing' },
+        { name: 'Hecho', value: 'done' },
+      ),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('prioridad')
+      .setDescription('Nivel de prioridad de la tarea.')
+      .addChoices(
+        { name: 'Baja', value: 'low' },
+        { name: 'Media', value: 'medium' },
+        { name: 'Alta', value: 'high' },
+        { name: 'Urgente', value: 'urgent' },
+      ),
   );
 
 async function registerCommands() {
@@ -36,8 +103,9 @@ async function registerCommands() {
 
   const app = await appRes.json();
   const applicationId = app.id;
+  const commands = [documentCommand, boardCommand, taskCommand].map((command) => command.toJSON());
 
-  console.log(`Registrando comando /doc en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
+  console.log(`Registrando /doc, /tablero y /tarea en ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
 
   const regRes = await fetch(
     `https://discord.com/api/v10/applications/${applicationId}/guilds/${DISCORD_GUILD_ID}/commands`,
@@ -47,7 +115,7 @@ async function registerCommands() {
         Authorization: `Bot ${DISCORD_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify([documentCommand.toJSON()]),
+      body: JSON.stringify(commands),
     },
   );
 
@@ -57,7 +125,7 @@ async function registerCommands() {
   }
 
   const registered = await regRes.json();
-  console.log(`✅ Comando /doc registrado exitosamente (${registered.length} comandos activos en guild).`);
+  console.log(`✅ ${registered.length} comandos de Bardo registrados exitosamente.`);
 }
 
 registerCommands().catch((err) => {
