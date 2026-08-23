@@ -52,3 +52,15 @@ La pasada actual fija una escala geométrica única para spacing, alturas de con
 `npm run audit` ejecuta lint visual, typecheck, build y E2E. El build también incluye el lint visual para impedir un deploy con reglas que compitan accidentalmente con HeroUI.
 
 <!-- qa-trigger -->
+
+
+## Responsive overlay architecture
+
+Bardo delegates overlay behavior to HeroUI instead of rewriting its geometry:
+
+- desktop/tablet: HeroUI `Modal` with centered placement and native Modal focus/scroll behavior;
+- mobile: HeroUI `Drawer` with `placement="bottom"`, `Drawer.Handle`, native body scrolling and drag-to-dismiss;
+- shared product content: one adaptive compound wrapper (`src/AdaptiveModal.tsx`) maps Backdrop, Dialog, Header, Body, Footer and CloseTrigger to the correct HeroUI primitive;
+- no global `[role="dialog"]`, transformed-ancestor or `position: fixed !important` patches.
+
+This follows HeroUI v3's composition-over-configuration, accessibility-first, predictable-behavior and separation-of-styles-and-logic principles.

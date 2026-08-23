@@ -6,16 +6,17 @@ const files = {
   mobile: new URL('../src/MobileKanban.tsx', import.meta.url),
   native: new URL('../src/NativeControls.tsx', import.meta.url),
   taskDetail: new URL('../src/TaskDetailModal.tsx', import.meta.url),
+  adaptive: new URL('../src/AdaptiveModal.tsx', import.meta.url),
   main: new URL('../src/main.tsx', import.meta.url),
   index: new URL('../index.html', import.meta.url),
   styles: new URL('../src/styles.css', import.meta.url),
   theme: new URL('../src/theme.css', import.meta.url),
 };
 
-const [app, mobile, native, taskDetail, main, index, styles, theme] = await Promise.all(
+const [app, mobile, native, taskDetail, adaptive, main, index, styles, theme] = await Promise.all(
   Object.values(files).map((url) => readFile(url, 'utf8')),
 );
-const uiSource = `${app}\n${mobile}\n${native}\n${taskDetail}`;
+const uiSource = `${app}\n${mobile}\n${native}\n${taskDetail}\n${adaptive}`;
 const failures = [];
 const fail = (message) => failures.push(message);
 
@@ -24,7 +25,7 @@ if (JSON.stringify(styles.split(/\r?\n/).slice(0, 3)) !== JSON.stringify(importO
   fail('styles.css must load Tailwind → @heroui/styles → theme.css in that exact order.');
 }
 
-if (main.includes('interaction.css') || main.includes('audit-fixes.css')) {
+if (main.includes('interaction.css') || main.includes('audit-fixes.css') || main.includes('modal-sheet.css')) {
   fail('Runtime must use one canonical layout/composition stylesheet only.');
 }
 
@@ -48,7 +49,7 @@ if (/<input(?![^>]*type=["'](?:date|time|datetime-local)["'])[^>]*>/.test(uiSour
   fail('Native input is only allowed for intentional OS date/time pickers.');
 }
 
-for (const required of ['SearchField', 'Modal', 'TagGroup', 'ToggleButtonGroup', 'Button']) {
+for (const required of ['SearchField', 'Modal', 'Drawer', 'TagGroup', 'ToggleButtonGroup', 'Button']) {
   if (!uiSource.includes(required)) fail(`Expected HeroUI primitive ${required} is missing.`);
 }
 for (const forbidden of ['Dropdown', '<Select', 'Select.Trigger', 'DatePicker', '<Calendar', '<TimeField', '<DateField']) {
@@ -104,6 +105,16 @@ for (const token of ['--background:', '--foreground:', '--surface:', '--surface-
 if (!theme.includes('--field-border: transparent;')) fail('Theme Builder field border contract changed unexpectedly.');
 if (!index.includes('data-theme="default"')) fail('The app must use HeroUI default theme.');
 if (index.includes('data-theme="dark"') || index.includes('content="dark"')) fail('Dark mode must not be forced.');
+
+if (!adaptive.includes("import { Drawer, Modal } from '@heroui/react';")) fail('AdaptiveModal must compose HeroUI Modal and Drawer directly.');
+if (!adaptive.includes('<Drawer.Content placement="bottom"')) fail('Mobile presentation must use HeroUI Drawer.Content placement="bottom".');
+if (!adaptive.includes('<Drawer.Handle />')) fail('Mobile bottom sheet must expose the HeroUI drag handle.');
+if (!adaptive.includes("data-bardo-presentation="sheet"")) fail('AdaptiveModal must expose the sheet presentation for runtime QA.');
+if (!adaptive.includes("data-bardo-presentation="modal"")) fail('AdaptiveModal must expose the modal presentation for runtime QA.');
+if (styles.includes('[role="dialog"]')) fail('Product CSS must not globally reinterpret role=dialog geometry.');
+if (styles.includes(':has(> [role="dialog"])')) fail('Product CSS must not patch HeroUI overlay ancestors.');
+if (uiSource.includes('max-md:w-screen') || uiSource.includes('max-md:max-h-[calc(100dvh')) fail('Overlay geometry must belong to HeroUI primitives, not responsive utility patches.');
+if (main.includes('modal-sheet.css')) fail('Legacy modal-sheet.css must not be loaded.');
 
 if (failures.length) {
   console.error(`Visual system lint failed (${failures.length}):`);

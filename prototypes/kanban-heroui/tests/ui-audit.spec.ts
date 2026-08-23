@@ -196,3 +196,29 @@ test('mobile audit: native select uses one OS focus treatment, not a doubled cus
   expect(focus.selectOutline).toBe('none');
   expect(focus.shellShadow).not.toContain('0px 0px 0px 2px');
 });
+
+test('responsive overlay uses Modal on web and Drawer bottom sheet on mobile', async ({ page }, testInfo) => {
+  await openApp(page);
+  await page.getByLabel('Nueva tarea').click();
+  const dialog = page.getByRole('dialog', { name: 'Nueva tarea' });
+  await expect(dialog).toBeVisible();
+
+  const contract = await dialog.evaluate((element) => ({
+    presentation: element.getAttribute('data-bardo-presentation'),
+    inModalContainer: Boolean(element.closest('.modal__container')),
+    inBottomDrawer: Boolean(element.closest('.drawer__content--bottom')),
+    hasDrawerHandle: Boolean(element.querySelector('.drawer__handle')),
+  }));
+
+  if (testInfo.project.name === 'mobile-chromium') {
+    expect(contract.presentation).toBe('sheet');
+    expect(contract.inBottomDrawer).toBe(true);
+    expect(contract.inModalContainer).toBe(false);
+    expect(contract.hasDrawerHandle).toBe(true);
+  } else {
+    expect(contract.presentation).toBe('modal');
+    expect(contract.inModalContainer).toBe(true);
+    expect(contract.inBottomDrawer).toBe(false);
+    expect(contract.hasDrawerHandle).toBe(false);
+  }
+});

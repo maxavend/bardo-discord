@@ -6,7 +6,6 @@ import {
   Chip,
   Input,
   Label,
-  Modal,
   Separator,
   Tag,
   TagGroup,
@@ -16,6 +15,7 @@ import {
 } from '@heroui/react';
 import { useEffect, useMemo, useState } from 'react';
 import type { Key } from '@heroui/react';
+import { AdaptiveModal as Modal } from './AdaptiveModal';
 import { NativeSelect } from './NativeControls';
 import {
   MAX_COMMENTS,
@@ -187,20 +187,20 @@ export function TaskDetailModal({
   return (
     <Modal>
       <Modal.Backdrop variant="opaque" isOpen={isOpen} onOpenChange={onOpenChange}>
-        <Modal.Container placement="auto" size="lg" scroll="inside">
-          <Modal.Dialog className="bardo-task-dialog max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none">
-            <Modal.CloseTrigger className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none" />
+        <Modal.Container placement="center" size="lg" scroll="inside">
+          <Modal.Dialog className="bardo-task-dialog">
+            <Modal.CloseTrigger />
 
             {!isEditing ? (
               <>
-                <Modal.Header className="bardo-detail-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
+                <Modal.Header className="bardo-detail-header">
                   <div className="bardo-detail-heading-copy">
                     <Modal.Heading className="bardo-detail-title max-md:text-lg max-md:leading-6">{task.title}</Modal.Heading>
                     <p className="bardo-detail-updated">Editada {formatTimestamp(task.updated)}</p>
                   </div>
                 </Modal.Header>
 
-                <Modal.Body key="task-read" className="bardo-detail-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="task-read-view">
+                <Modal.Body key="task-read" className="bardo-detail-body" data-testid="task-read-view">
                   {task.description ? (
                     <p className="bardo-detail-description">{task.description}</p>
                   ) : (
@@ -304,7 +304,7 @@ export function TaskDetailModal({
                   </section>
                 </Modal.Body>
 
-                <Modal.Footer className="bardo-detail-footer max-md:px-4 max-md:py-3">
+                <Modal.Footer className="bardo-detail-footer">
                   <Button variant="secondary" size="sm" onPress={onDuplicateTask}>Duplicar</Button>
                   <Button variant="primary" size="sm" onPress={startEditing}>
                     <Pencil className={ICON_CLASS} aria-hidden="true" />
@@ -314,14 +314,14 @@ export function TaskDetailModal({
               </>
             ) : (
               <>
-                <Modal.Header className="bardo-detail-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
+                <Modal.Header className="bardo-detail-header">
                   <div className="bardo-detail-heading-copy">
                     <Modal.Heading className="text-base font-semibold">Editar tarea</Modal.Heading>
                     <p className="bardo-detail-updated">Los cambios se aplican al guardar.</p>
                   </div>
                 </Modal.Header>
 
-                <Modal.Body key="task-edit" className="bardo-edit-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="task-edit-view">
+                <Modal.Body key="task-edit" className="bardo-edit-body" data-testid="task-edit-view">
                   <TextField variant="secondary">
                     <Label>Título</Label>
                     <Input
@@ -418,7 +418,7 @@ export function TaskDetailModal({
                   </section>
                 </Modal.Body>
 
-                <Modal.Footer className="bardo-detail-footer bardo-detail-footer-edit max-md:flex-nowrap max-md:gap-2 max-md:px-4 max-md:py-3">
+                <Modal.Footer className="bardo-detail-footer bardo-detail-footer-edit">
                   <Button variant="danger" size="sm" onPress={onDeleteTask}>Eliminar</Button>
                   <Toolbar aria-label="Edición de tarea" className="ml-auto">
                     <Button variant="secondary" size="sm" onPress={cancelEditing}>Cancelar</Button>

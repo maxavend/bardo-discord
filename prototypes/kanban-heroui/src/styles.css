@@ -448,14 +448,12 @@
     text-align: center;
   }
 
-  [role="dialog"] {
+  .bardo-overlay-dialog {
     --field-background: var(--surface-secondary);
     min-width: 0;
-    max-width: min(100%, 42rem);
     overflow: clip;
     isolation: isolate;
-    background: var(--surface);
-    color: var(--surface-foreground);
+    padding: 0;
   }
 
   .bardo-modal-header,
@@ -796,11 +794,6 @@
   }
 
   @media (max-width: 47.999rem) {
-    [role="dialog"] {
-      width: calc(100vw - 1.5rem);
-      max-width: calc(100vw - 1.5rem);
-      max-height: calc(100dvh - 2rem);
-    }
 
     .bardo-modal-header,
     .bardo-detail-header {

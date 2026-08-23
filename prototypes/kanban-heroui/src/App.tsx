@@ -13,7 +13,6 @@ import {
   Chip,
   Input,
   Label,
-  Modal,
   SearchField,
   Separator,
   Tag,
@@ -28,6 +27,7 @@ import {
 import { cardVariants } from '@heroui/styles';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Key } from '@heroui/react';
+import { AdaptiveModal as Modal } from './AdaptiveModal';
 import { MobileKanban } from './MobileKanban';
 import { NativeActionSelect, NativeOverlaySelect, NativeSelect } from './NativeControls';
 import { TaskDetailModal } from './TaskDetailModal';
@@ -664,13 +664,13 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="opaque" isOpen={quickOpen} onOpenChange={setQuickOpen}>
-          <Modal.Container placement="auto" size="sm">
-            <Modal.Dialog className="max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none">
-              <Modal.CloseTrigger className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none" />
-              <Modal.Header className="bardo-modal-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
+          <Modal.Container placement="center" size="sm">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header className="bardo-modal-header">
                 <Modal.Heading className="text-base font-semibold">Nueva tarea</Modal.Heading>
               </Modal.Header>
-              <Modal.Body className="bardo-modal-stack max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="quick-body">
+              <Modal.Body className="bardo-modal-stack" data-testid="quick-body">
                 <TextField variant="secondary">
                   <Label>Título</Label>
                   <Input
@@ -690,7 +690,7 @@ function App() {
                   options={statusItems}
                 />
               </Modal.Body>
-              <Modal.Footer className="bardo-modal-footer max-md:px-4 max-md:py-3">
+              <Modal.Footer className="bardo-modal-footer">
                 <Button variant="secondary" size="sm" onPress={() => setQuickOpen(false)}>Cancelar</Button>
                 <Button variant="primary" size="sm" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button>
               </Modal.Footer>
@@ -715,13 +715,13 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="opaque" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
-          <Modal.Container placement="auto" size="lg" scroll="inside">
-            <Modal.Dialog className="max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none">
-              <Modal.CloseTrigger className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none" />
-              <Modal.Header className="bardo-modal-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
+          <Modal.Container placement="center" size="lg" scroll="inside">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header className="bardo-modal-header">
                 <Modal.Heading className="text-base font-semibold">Tablero</Modal.Heading>
               </Modal.Header>
-              <Modal.Body className="bardo-settings-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="settings-body">
+              <Modal.Body className="bardo-settings-body" data-testid="settings-body">
                 <TextField variant="secondary">
                   <Label>Nombre</Label>
                   <Input
@@ -828,7 +828,7 @@ function App() {
                   </div>
                 </details>
               </Modal.Body>
-              <Modal.Footer className="bardo-modal-footer bardo-settings-footer max-md:flex-nowrap max-md:gap-2 max-md:px-4 max-md:py-3">
+              <Modal.Footer className="bardo-modal-footer bardo-settings-footer">
                 <Button variant="danger" size="sm" onPress={deleteBoard}>Eliminar</Button>
                 <Toolbar aria-label="Acciones del tablero" className="ml-auto">
                   <Button variant="secondary" size="sm" onPress={duplicateBoard}>Duplicar</Button>
