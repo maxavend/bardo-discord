@@ -5,6 +5,7 @@ import '@fontsource-variable/inter';
 import './styles.css';
 import './theme.css';
 import './layout-audit.css';
+import './editor-focus.css';
 
 const rootElement = document.documentElement;
 rootElement.classList.add('dark');
