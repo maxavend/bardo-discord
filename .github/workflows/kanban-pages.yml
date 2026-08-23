@@ -1,6 +1,11 @@
 name: Kanban Pages QA
 
 on:
+  push:
+    branches: ['module/kanban']
+    paths:
+      - 'prototypes/kanban/**'
+      - '.github/workflows/kanban-pages.yml'
   pull_request:
     branches: [main]
     paths:
