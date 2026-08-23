@@ -14,22 +14,26 @@ test('mobile audit: sticky app header is full-bleed and opaque above carousel co
   test.skip(testInfo.project.name !== 'mobile-chromium');
   await openApp(page);
 
-  const metrics = await page.locator('.bardo-topbar').evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
+  const metrics = await page.evaluate(() => {
+    const topbar = document.querySelector<HTMLElement>('.bardo-topbar')!;
+    const rail = document.querySelector<HTMLElement>('.bardo-column-pill-viewport')!;
+    const rect = topbar.getBoundingClientRect();
+    const style = getComputedStyle(topbar);
     return {
       left: rect.left,
       right: rect.right,
       viewport: window.innerWidth,
       background: style.backgroundColor,
       zIndex: Number.parseInt(style.zIndex, 10),
+      railZIndex: Number.parseInt(getComputedStyle(rail).zIndex, 10),
     };
   });
 
   expect(metrics.left).toBeLessThanOrEqual(1);
   expect(metrics.right).toBeGreaterThanOrEqual(metrics.viewport - 1);
   expect(metrics.background).not.toBe('rgba(0, 0, 0, 0)');
-  expect(metrics.zIndex).toBeGreaterThan(30);
+  expect(metrics.zIndex).toBeGreaterThan(metrics.railZIndex);
+  expect(metrics.zIndex).toBeGreaterThanOrEqual(20);
 });
 
 test('mobile audit: modal chrome is opaque and fields visibly separate from modal surface', async ({ page }, testInfo) => {
