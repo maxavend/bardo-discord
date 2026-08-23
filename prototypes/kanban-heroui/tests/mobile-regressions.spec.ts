@@ -41,7 +41,7 @@ test('mobile: task edit also avoids automatic keyboard focus', async ({ page }, 
   await page.getByRole('button', { name: 'Editar', exact: true }).click();
 
   const edit = page.getByTestId('task-edit-view');
-  const title = edit.getByLabel('Título de la tarea');
+  const title = edit.locator('input').first();
   await expect(edit).toBeVisible();
   await expect(title).toBeVisible();
 
