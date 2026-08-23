@@ -1,10 +1,11 @@
+import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
-import { normalizeDocumentId } from './document-id.js';
 import {
   archiveDocument,
   listDocuments,
   loadActivityContext,
   loadDocument,
+  saveActivityContext,
   saveDocument,
   updateDocumentContent,
 } from './db.js';
@@ -42,15 +43,34 @@ function serialize(document) {
   };
 }
 
+function launchDocumentId(request) {
+  const customId = request.headers.get('x-bardo-custom-id')?.trim() || '';
+  if (!customId.startsWith(BARDO_OPEN_PREFIX)) return null;
+  return normalizeDocumentId(customId);
+}
+
 async function verifyActivitySession(request, env) {
   if (!env.DB) return { error: json({ error: 'Database unavailable' }, 503) };
 
   const instanceId = request.headers.get('x-bardo-instance-id')?.trim();
   if (!instanceId) return { error: json({ error: 'Activity instance required' }, 401) };
 
-  const context = await loadActivityContext(env.DB, instanceId);
-  if (!context) return { error: json({ error: 'Activity session not recognized' }, 403) };
+  let context = await loadActivityContext(env.DB, instanceId);
+  if (context) return { instanceId, context };
 
+  // LAUNCH_ACTIVITY can open the iframe before Discord exposes the new
+  // activity_instance_id back to the interaction callback. The Activity itself,
+  // however, receives the server-generated message component custom_id in its
+  // launch URL. Use that capability to repair the missing instance -> document
+  // mapping exactly once. Existing mappings are never overwritten here.
+  const documentId = launchDocumentId(request);
+  if (!documentId) return { error: json({ error: 'Activity session not recognized' }, 403) };
+
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) return { error: json({ error: 'Launch document not found' }, 404) };
+
+  await saveActivityContext(env.DB, instanceId, documentId);
+  context = { instanceId, documentId };
   return { instanceId, context };
 }
 
