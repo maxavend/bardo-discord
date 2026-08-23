@@ -1,0 +1,87 @@
+name: Kanban Pages QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'prototypes/kanban/**'
+      - '.github/workflows/kanban-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    if: github.head_ref == 'module/kanban' || github.ref_name == 'module/kanban'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout module/kanban
+        uses: actions/checkout@v6
+
+      - name: Validate Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 1; }
+
+      - name: Detect Bardo Pages project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages project list --json > /tmp/pages-projects.json
+          exact=$(jq -r '[.[] | select(.name == "bardo-discord")][0].name // empty' /tmp/pages-projects.json)
+          if [ -n "$exact" ]; then
+            project="$exact"
+          else
+            matches=$(jq -r '[.[] | select(.name | test("bardo"; "i")) | .name] | .[]' /tmp/pages-projects.json)
+            count=$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')
+            if [ "$count" = "1" ]; then
+              project=$(printf '%s\n' "$matches" | sed '/^$/d')
+            else
+              echo 'Could not safely infer a unique Bardo Pages project.'
+              jq -r '.[].name' /tmp/pages-projects.json
+              exit 1
+            fi
+          fi
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+          echo "Using Pages project: $project"
+
+      - name: Deploy Kanban preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deploy prototypes/kanban \
+            --project-name='${{ steps.project.outputs.project }}' \
+            --branch='module-kanban' \
+            --commit-hash='${{ github.event.pull_request.head.sha || github.sha }}' \
+            --commit-message='Bardo Kanban QA preview'
+
+      - name: Resolve and verify preview URL
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@latest pages deployment list \
+            --project-name='${{ steps.project.outputs.project }}' \
+            --environment=preview --json > /tmp/deployments.json
+          url=$(jq -r '.[0].url // .[0].aliases[0] // empty' /tmp/deployments.json)
+          test -n "$url" || { echo 'Preview URL not found'; cat /tmp/deployments.json; exit 1; }
+          case "$url" in http*) ;; *) url="https://$url" ;; esac
+          curl --fail --silent --show-error --location --head "$url" >/dev/null
+          echo "$url" | tee deployment-url.txt
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Kanban QA Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$url]($url)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload deployment URL
+        uses: actions/upload-artifact@v4
+        with:
+          name: kanban-pages-url
+          path: deployment-url.txt
+          retention-days: 7
