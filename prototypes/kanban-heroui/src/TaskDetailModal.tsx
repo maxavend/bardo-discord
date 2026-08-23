@@ -188,7 +188,7 @@ export function TaskDetailModal({
     <Modal>
       <Modal.Backdrop variant="blur" isOpen={isOpen} onOpenChange={onOpenChange}>
         <Modal.Container placement="center" size="lg" scroll="inside">
-          <Modal.Dialog>
+          <Modal.Dialog className="bardo-task-dialog">
             <Modal.CloseTrigger />
 
             {!isEditing ? (
@@ -200,7 +200,7 @@ export function TaskDetailModal({
                   </div>
                 </Modal.Header>
 
-                <Modal.Body className="bardo-detail-body" data-testid="task-read-view">
+                <Modal.Body key="task-read" className="bardo-detail-body" data-testid="task-read-view">
                   {task.description ? (
                     <p className="bardo-detail-description">{task.description}</p>
                   ) : (
@@ -321,7 +321,7 @@ export function TaskDetailModal({
                   </div>
                 </Modal.Header>
 
-                <Modal.Body className="bardo-edit-body" data-testid="task-edit-view">
+                <Modal.Body key="task-edit" className="bardo-edit-body" data-testid="task-edit-view">
                   <TextField variant="secondary">
                     <Label>Título</Label>
                     <Input
