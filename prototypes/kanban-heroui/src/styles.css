@@ -193,7 +193,7 @@
 
   .bardo-mobile-tabs .tabs__list-container__scroll-prev,
   .bardo-mobile-tabs .tabs__list-container__scroll-next {
-    display: none;
+    display: none !important;
   }
 
   .bardo-mobile-tabs .tabs__list {
