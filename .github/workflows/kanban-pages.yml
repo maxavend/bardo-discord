@@ -35,18 +35,6 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 1; }
 
-      - name: Ensure dedicated Kanban Pages project
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes wrangler@latest pages project list --json > /tmp/pages-projects.json
-          exists=$(jq -r --arg project "$PAGES_PROJECT" '[.[] | select(."Project Name" == $project)] | length' /tmp/pages-projects.json)
-          if [ "$exists" = "0" ]; then
-            npx --yes wrangler@latest pages project create "$PAGES_PROJECT" --production-branch='module-kanban'
-          else
-            echo "Using existing dedicated Pages project: $PAGES_PROJECT"
-          fi
-
       - name: Deploy Kanban QA
         id: deploy
         shell: bash
