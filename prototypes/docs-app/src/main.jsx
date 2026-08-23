@@ -4,6 +4,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.jsx';
 import {prepareBardoProduction} from './production-bridge.js';
 import {waitForBardoActivityContext} from './production-context-ready.js';
+import {installBardoLaunchAuth} from './production-launch-auth.js';
 import {activateBardoDocumentOnlyMode} from './production-document-only.js';
 import '@fontsource-variable/inter';
 import './styles.css';
@@ -43,6 +44,12 @@ if (activityContext.embedded && !activityContext.ready) {
     message:'No pudimos identificar el documento de este mensaje. Cierra esta vista y vuelve a abrirlo desde Discord.',
   };
 } else {
+  if (activityContext.embedded) {
+    window.__BARDO_INSTANCE_ID__ = activityContext.instanceId;
+    window.__BARDO_DOCUMENT_ID__ = activityContext.documentId;
+    installBardoLaunchAuth(activityContext.customId);
+  }
+
   await prepareBardoProduction();
   productionState = await activateBardoDocumentOnlyMode();
 }
