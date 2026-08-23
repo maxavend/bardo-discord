@@ -26,18 +26,20 @@ export function NativeSelect({
   return (
     <label className={`bardo-native-field ${className}`.trim()}>
       {!hideLabel && <span className="bardo-native-label">{label}</span>}
-      <select
-        className="bardo-native-select"
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.id} value={option.id} disabled={option.disabled}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <span className="bardo-native-select-shell">
+        <select
+          className="bardo-native-select"
+          aria-label={label}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option.id} value={option.id} disabled={option.disabled}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </span>
     </label>
   );
 }
