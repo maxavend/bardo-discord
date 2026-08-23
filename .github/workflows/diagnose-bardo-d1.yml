@@ -1,0 +1,60 @@
+name: Diagnose Bardo production D1 access
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/diagnose-bardo-d1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Wrangler identity
+        id: whoami
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.124.0 whoami 2>&1 | tee /tmp/whoami.log
+      - name: Read D1 document count
+        id: d1
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.124.0 d1 execute db89af73-dc24-491e-bf57-975f7bd6c085 --remote --command "SELECT COUNT(*) AS count FROM documents;" --json 2>&1 | tee /tmp/d1.log
+      - name: Record diagnostics
+        if: always()
+        shell: bash
+        env:
+          WHOAMI: ${{ steps.whoami.outcome }}
+          D1: ${{ steps.d1.outcome }}
+        run: |
+          mkdir -p .deploy
+          {
+            echo "whoami=$WHOAMI"
+            echo "d1=$D1"
+            echo "--- whoami ---"
+            cat /tmp/whoami.log 2>/dev/null || true
+            echo "--- d1 ---"
+            cat /tmp/d1.log 2>/dev/null || true
+          } > .deploy/bardo-d1-diagnostic.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-d1-diagnostic.txt
+          git commit -m "chore(docs): record D1 diagnostic [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
+          test "$D1" = "success"
