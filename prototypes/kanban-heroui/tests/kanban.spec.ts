@@ -330,7 +330,7 @@ test('mobile: task detail is read-first and edit uses native OS selects', async 
   expect(errors).toEqual([]);
 });
 
-test('mobile: native action trigger matches HeroUI icon geometry and modal is contained', async ({ page }, testInfo) => {
+test('mobile: native action trigger matches HeroUI icon geometry and bottom sheet settles inside viewport', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   const errors = await openApp(page);
   const geometry = await page.evaluate(() => {
@@ -356,12 +356,15 @@ test('mobile: native action trigger matches HeroUI icon geometry and modal is co
 
   await page.getByLabel('Nueva tarea').click();
   const dialog = page.getByRole('dialog', { name: 'Nueva tarea' });
-  const dialogBox = await dialog.boundingBox();
-  expect(dialogBox).not.toBeNull();
-  expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
-  expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
-  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual((await page.viewportSize())!.width);
-  expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual((await page.viewportSize())!.height);
+  const viewport = (await page.viewportSize())!;
+  await expect.poll(async () => {
+    const box = await dialog.boundingBox();
+    if (!box) return false;
+    return box.x >= -1
+      && box.y >= -1
+      && box.x + box.width <= viewport.width + 1
+      && box.y + box.height <= viewport.height + 1;
+  }).toBe(true);
 
   const quickBody = page.getByTestId('quick-body');
   const select = quickBody.locator('select[aria-label="Columna"]');
