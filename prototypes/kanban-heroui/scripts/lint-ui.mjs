@@ -3,12 +3,14 @@ import process from 'node:process';
 
 const files = {
   app: new URL('../src/App.tsx', import.meta.url),
+  index: new URL('../index.html', import.meta.url),
   styles: new URL('../src/styles.css', import.meta.url),
   theme: new URL('../src/theme.css', import.meta.url),
 };
 
-const [app, styles, theme] = await Promise.all([
+const [app, index, styles, theme] = await Promise.all([
   readFile(files.app, 'utf8'),
+  readFile(files.index, 'utf8'),
   readFile(files.styles, 'utf8'),
   readFile(files.theme, 'utf8'),
 ]);
@@ -63,9 +65,26 @@ if (/<input(?:\s|>)/.test(app)) fail('App.tsx contains a native <input>; use Her
 if (/<textarea(?:\s|>)/.test(app)) fail('App.tsx contains a native <textarea>; use HeroUI TextArea.');
 if (/<select(?:\s|>)/.test(app)) fail('App.tsx contains a native <select>; use HeroUI Select.');
 
+const forbiddenHeroUiOverrides = [
+  '.button--',
+  '.modal__',
+  '.menu-item',
+  '.dropdown__',
+  '.input--',
+  '.select__',
+  '.text-field__',
+  '.tag-group__',
+];
+for (const selector of forbiddenHeroUiOverrides) {
+  if (styles.includes(selector)) {
+    fail(`styles.css overrides HeroUI internal selector ${selector}; primitive geometry must remain owned by HeroUI.`);
+  }
+}
+
 const requiredHeroUi = [
   'SearchField',
   'Select',
+  'Surface',
   'Modal',
   'Tabs',
   'Dropdown',
@@ -76,10 +95,24 @@ for (const name of requiredHeroUi) {
   if (!app.includes(name)) fail(`Expected HeroUI primitive ${name} is missing from App.tsx.`);
 }
 
+if (!app.includes("from '@gravity-ui/icons'")) {
+  fail('App.tsx must use the normalized SVG icon set used by HeroUI examples.');
+}
+for (const glyph of ['•••', '＋', '⌕', '>×<', '>←<', '>→<']) {
+  if (app.includes(glyph)) fail(`App.tsx still contains typography-as-icon glyph ${glyph}.`);
+}
+if (!app.includes('EllipsisVertical')) fail('Board actions must use a real vertical kebab SVG icon.');
+if (!app.includes("const ICON_CLASS = 'size-4 shrink-0'")) fail('Interactive SVG icons must share one normalized 16px size contract.');
+
+if (!app.includes('<Surface variant="default"') || !app.includes('variant="secondary"')) {
+  fail('Modal forms must follow HeroUI Surface + secondary-field composition.');
+}
+
 const requiredThemeTokens = [
   '--background:',
   '--foreground:',
   '--surface:',
+  '--overlay:',
   '--accent:',
   '--border:',
   '--field-background:',
@@ -92,20 +125,14 @@ for (const token of requiredThemeTokens) {
 }
 
 if (!theme.includes('--field-border: transparent;')) {
-  fail('Exact HeroUI theme contract requires transparent --field-border; do not patch fields with manual borders.');
+  fail('Exact HeroUI Theme Builder contract requires transparent --field-border; do not patch fields with manual borders.');
 }
 
-if (!styles.includes('.tabs__list-container__scroll-prev') || !styles.includes('.tabs__list-container__scroll-next')) {
-  fail('Mobile tabs must explicitly normalize HeroUI overflow controls.');
+if (!index.includes('data-theme="default"')) {
+  fail('The QA app must use the HeroUI default theme instead of forcing dark mode.');
 }
-if (!styles.includes('.modal__header') || !styles.includes('.modal__body') || !styles.includes('.modal__footer')) {
-  fail('Modal geometry must be normalized through HeroUI official BEM slots.');
-}
-if (!styles.includes('.menu-item')) {
-  fail('Dropdown menu item geometry must be normalized consistently.');
-}
-if (!styles.includes('content: "⋮"')) {
-  fail('Board actions menu must render a vertical kebab icon.');
+if (index.includes('data-theme="dark"') || index.includes('content="dark"')) {
+  fail('index.html still forces dark mode.');
 }
 
 if (failures.length) {
@@ -114,4 +141,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Visual system lint passed.');
+console.log('HeroUI ownership lint passed.');
