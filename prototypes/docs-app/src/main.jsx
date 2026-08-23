@@ -3,6 +3,7 @@ import {useTheme} from '@heroui/react';
 import {createRoot} from 'react-dom/client';
 import App from './App.jsx';
 import {prepareBardoProduction} from './production-bridge.js';
+import {waitForBardoActivityContext} from './production-context-ready.js';
 import {activateBardoDocumentOnlyMode} from './production-document-only.js';
 import '@fontsource-variable/inter';
 import './styles.css';
@@ -29,8 +30,22 @@ function ThemedApp({productionState}) {
   return <App />;
 }
 
-await prepareBardoProduction();
-const productionState = await activateBardoDocumentOnlyMode();
+const activityContext = await waitForBardoActivityContext();
+let productionState;
+
+if (activityContext.embedded && !activityContext.ready) {
+  window.__BARDO_PRODUCTION__ = true;
+  window.__BARDO_INSTANCE_ID__ = activityContext.instanceId;
+  productionState = {
+    active:true,
+    ready:false,
+    documentId:null,
+    message:'No pudimos identificar el documento de este mensaje. Cierra esta vista y vuelve a abrirlo desde Discord.',
+  };
+} else {
+  await prepareBardoProduction();
+  productionState = await activateBardoDocumentOnlyMode();
+}
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
