@@ -7,20 +7,28 @@
     --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   html,
   body,
   #root {
     min-height: 100%;
   }
 
-  html {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
     background: var(--background);
   }
 
   body {
     margin: 0;
     overflow-x: hidden;
-    background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -42,26 +50,35 @@
 }
 
 @layer components {
+  /* One layout contract owns every page gutter and full-bleed scroller. */
   .bardo-app {
     min-height: 100dvh;
     padding-bottom: max(5rem, calc(env(safe-area-inset-bottom) + 4rem));
   }
 
   .bardo-shell {
+    --bardo-gutter: 1rem;
     width: 100%;
-    padding-inline: 1rem;
+    min-width: 0;
+    padding-inline: var(--bardo-gutter);
   }
 
   .bardo-topbar {
     position: sticky;
     top: 0;
-    z-index: 40;
+    z-index: 20;
     display: flex;
-    min-height: 4rem;
+    width: calc(100% + var(--bardo-gutter) + var(--bardo-gutter));
+    min-width: 0;
+    min-height: 4.5rem;
+    margin-inline: calc(var(--bardo-gutter) * -1);
+    padding-inline: var(--bardo-gutter);
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+    isolation: isolate;
     background: var(--background);
+    box-shadow: 0 1px 0 var(--separator);
   }
 
   .bardo-board-title {
@@ -74,64 +91,48 @@
     line-height: 1.25rem;
   }
 
-  .bardo-search-panel {
-    padding-bottom: 0.5rem;
-  }
-
-  .bardo-search-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 0.5rem;
-  }
-
-  .bardo-sort-control {
-    width: 9rem;
-  }
-
-  .bardo-filter-scroll {
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-block: 0.5rem 0.25rem;
-    scrollbar-width: none;
-    overscroll-behavior-x: contain;
-  }
-
-  .bardo-filter-scroll::-webkit-scrollbar,
-  .bardo-column-pill-rail::-webkit-scrollbar,
-  .bardo-mobile-carousel::-webkit-scrollbar {
-    display: none;
-  }
-
-  .bardo-filter-group {
-    min-width: max-content;
-  }
-
+  /* Native OS controls keep native appearance, but share one field wrapper. */
   .bardo-native-field {
     display: grid;
+    width: 100%;
     min-width: 0;
-    gap: 0.375rem;
+    gap: 0.5rem;
   }
 
   .bardo-native-label {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 500;
     line-height: 1rem;
+  }
+
+  .bardo-native-select-shell {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.75rem;
+    align-items: center;
+    overflow: hidden;
+    border-radius: var(--field-radius);
+    background: var(--field-background);
+    box-shadow: inset 0 0 0 1px var(--separator);
   }
 
   .bardo-native-select {
     width: 100%;
     min-width: 0;
-    min-height: 2.5rem;
-    border: 1px solid var(--field-border);
-    border-radius: var(--field-radius);
-    background: var(--field-background);
+    min-height: 2.75rem;
+    margin: 0;
+    border: 1px solid transparent;
+    border-radius: inherit;
+    background: transparent;
     color: var(--field-foreground);
-    padding-inline: 0.75rem;
+    padding-inline: 0.875rem;
     font-size: 1rem;
     line-height: 1.25rem;
     accent-color: var(--accent);
+    -webkit-appearance: auto;
+    appearance: auto;
   }
 
   .bardo-native-select:focus-visible,
@@ -145,6 +146,7 @@
     display: inline-flex;
     min-width: 0;
     height: 2.25rem;
+    flex: 0 0 auto;
     align-items: center;
     border-radius: var(--radius);
   }
@@ -171,6 +173,7 @@
 
   .bardo-board-picker {
     width: min(62vw, 20rem);
+    min-width: 0;
     padding-inline: 0.5rem;
   }
 
@@ -180,34 +183,84 @@
 
   .bardo-native-icon-picker {
     width: 2.25rem;
-    flex: 0 0 2.25rem;
+    flex-basis: 2.25rem;
   }
 
+  /* Search */
+  .bardo-search-panel {
+    min-width: 0;
+    padding-block: 0.75rem 0.5rem;
+  }
+
+  .bardo-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-width: 0;
+    align-items: start;
+    gap: 0.5rem;
+  }
+
+  .bardo-sort-control {
+    width: 9rem;
+    min-width: 0;
+  }
+
+  .bardo-filter-scroll {
+    width: calc(100% + var(--bardo-gutter) + var(--bardo-gutter));
+    margin-inline: calc(var(--bardo-gutter) * -1);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem var(--bardo-gutter) 0.25rem;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bardo-filter-scroll::-webkit-scrollbar,
+  .bardo-column-pill-rail::-webkit-scrollbar,
+  .bardo-mobile-carousel::-webkit-scrollbar,
+  .bardo-desktop-board::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bardo-filter-group {
+    min-width: max-content;
+  }
+
+  /* Mobile state rail */
   .bardo-mobile-kanban {
     display: block;
+    width: 100%;
     min-width: 0;
   }
 
   .bardo-column-pill-viewport {
     position: sticky;
-    top: 4rem;
-    z-index: 30;
-    margin-inline: -1rem;
+    top: 4.5rem;
+    z-index: 15;
+    width: calc(100% + var(--bardo-gutter) + var(--bardo-gutter));
+    min-width: 0;
+    margin-inline: calc(var(--bardo-gutter) * -1);
     overflow: hidden;
+    isolation: isolate;
     background: var(--background);
-    padding: 0.25rem 1rem 0.625rem;
+    padding: 0.375rem var(--bardo-gutter) 0.625rem;
+    box-shadow: 0 1px 0 var(--separator);
   }
 
   .bardo-column-pill-rail {
     display: flex;
     width: 100%;
     min-width: 0;
+    align-items: center;
     gap: 0.5rem;
     overflow-x: auto;
     overflow-y: hidden;
+    padding-inline: 0.125rem 0.75rem;
+    scroll-padding-inline: 0.125rem;
     scrollbar-width: none;
     overscroll-behavior-x: contain;
-    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
   }
 
   .bardo-column-pill {
@@ -228,6 +281,7 @@
     color: var(--muted);
     font-size: 0.6875rem;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
   }
 
   .bardo-column-pill[data-active="true"] .bardo-column-pill-count {
@@ -235,8 +289,13 @@
     opacity: 0.72;
   }
 
+  /* Full-bleed carousel: viewport reaches BOTH screen edges, content keeps gutter. */
   .bardo-mobile-carousel-bleed {
-    margin-inline-end: -1rem;
+    position: relative;
+    z-index: 0;
+    width: calc(100% + var(--bardo-gutter) + var(--bardo-gutter));
+    min-width: 0;
+    margin-inline: calc(var(--bardo-gutter) * -1);
     overflow: visible;
   }
 
@@ -248,10 +307,9 @@
     gap: 0.75rem;
     overflow-x: auto;
     overflow-y: hidden;
-    padding-block: 0.25rem 1rem;
-    padding-inline-end: 1rem;
+    padding: 0.25rem var(--bardo-gutter) 1rem;
     scroll-snap-type: x mandatory;
-    scroll-padding-inline-start: 0;
+    scroll-padding-inline: var(--bardo-gutter);
     scrollbar-width: none;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
@@ -271,7 +329,7 @@
 
   .bardo-mobile-drag-ghost {
     position: fixed;
-    z-index: 120;
+    z-index: 70;
     display: grid;
     width: min(72vw, 20rem);
     gap: 0.25rem;
@@ -299,11 +357,15 @@
     line-height: 1rem;
   }
 
+  /* Kanban columns/cards */
   .bardo-desktop-board {
     display: none;
   }
 
-  .bardo-column {
+  .bardo-column,
+  .bardo-column > *,
+  .bardo-task-list,
+  .bardo-task-card {
     min-width: 0;
   }
 
@@ -327,20 +389,32 @@
   }
 
   .bardo-task-list {
+    position: relative;
     display: grid;
     min-height: 6rem;
     align-content: start;
     gap: 0.5rem;
     padding-bottom: 1rem;
+    border-radius: var(--field-radius);
   }
 
   .bardo-task-list[data-over="true"] {
-    outline: 1px dashed var(--focus);
-    outline-offset: 0.25rem;
+    outline: 0;
+  }
+
+  .bardo-task-list[data-over="true"]::after {
+    content: "";
+    position: absolute;
+    inset: -0.25rem;
+    z-index: 2;
+    pointer-events: none;
+    border: 1px dashed var(--focus);
+    border-radius: var(--field-radius);
   }
 
   .bardo-task-card {
     width: 100%;
+    max-width: 100%;
     padding: 0.75rem;
     cursor: pointer;
     text-align: left;
@@ -367,17 +441,9 @@
     background: var(--muted);
   }
 
-  .bardo-priority[data-priority="urgent"] {
-    background: var(--danger);
-  }
-
-  .bardo-priority[data-priority="high"] {
-    background: var(--warning);
-  }
-
-  .bardo-priority[data-priority="low"] {
-    opacity: 0.5;
-  }
+  .bardo-priority[data-priority="urgent"] { background: var(--danger); }
+  .bardo-priority[data-priority="high"] { background: var(--warning); }
+  .bardo-priority[data-priority="low"] { opacity: 0.5; }
 
   .bardo-empty {
     display: grid;
@@ -388,50 +454,89 @@
     text-align: center;
   }
 
+  /* Modal composition. HeroUI owns the primitive; this owns only our content geometry. */
+  [role="dialog"] {
+    --field-background: var(--surface-secondary);
+    min-width: 0;
+    max-width: min(100%, 42rem);
+    overflow: clip;
+    isolation: isolate;
+    background: var(--surface);
+    color: var(--surface-foreground);
+  }
+
   .bardo-modal-header,
   .bardo-detail-header {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 1.25rem 1.25rem 1rem;
     align-items: flex-start;
+    background: var(--surface);
+    box-shadow: 0 1px 0 var(--separator);
   }
 
   .bardo-modal-stack,
   .bardo-settings-body,
-  .bardo-edit-body {
+  .bardo-edit-body,
+  .bardo-detail-body {
     display: grid;
-    gap: 1.25rem;
+    width: 100%;
+    min-width: 0;
+    gap: 1.125rem;
+    padding: 1rem 1.25rem 1.25rem;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bardo-modal-stack > *,
+  .bardo-settings-body > *,
+  .bardo-edit-body > *,
+  .bardo-detail-body > * {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .bardo-modal-footer,
   .bardo-detail-footer {
+    position: relative;
+    z-index: 2;
     display: flex;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 1rem 1.25rem;
     align-items: center;
     justify-content: flex-end;
     gap: 0.5rem;
+    background: var(--surface);
+    box-shadow: 0 -1px 0 var(--separator);
   }
 
   .bardo-detail-heading-copy {
     display: grid;
     min-width: 0;
-    gap: 0.375rem;
-    padding-inline-end: 2.5rem;
+    gap: 0.25rem;
+    padding-inline-end: 2.75rem;
   }
 
   .bardo-detail-title {
-    max-width: 34rem;
-    font-size: 1.25rem;
+    max-width: 36rem;
+    font-size: 1.375rem;
     font-weight: 650;
-    line-height: 1.65rem;
-    letter-spacing: -0.0125em;
+    line-height: 1.75rem;
+    letter-spacing: -0.015em;
   }
 
   .bardo-detail-updated {
+    margin: 0;
     color: var(--muted);
     font-size: 0.75rem;
     line-height: 1rem;
-  }
-
-  .bardo-detail-body {
-    display: grid;
-    gap: 1.25rem;
   }
 
   .bardo-detail-description {
@@ -455,6 +560,7 @@
 
   .bardo-detail-property {
     display: grid;
+    width: 100%;
     min-width: 0;
     align-content: start;
     gap: 0.25rem;
@@ -483,17 +589,24 @@
     gap: 0.5rem;
   }
 
-  .bardo-detail-section {
+  .bardo-detail-section,
+  .bardo-section {
     display: grid;
+    width: 100%;
+    min-width: 0;
     gap: 0.75rem;
   }
 
-  .bardo-detail-section-heading {
+  .bardo-detail-section-heading,
+  .bardo-section-heading {
     display: flex;
-    min-height: 1.5rem;
-    align-items: baseline;
+    width: 100%;
+    min-width: 0;
+    min-height: 1.75rem;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
   .bardo-detail-section-heading h3 {
@@ -511,19 +624,17 @@
   }
 
   .bardo-detail-subtasks,
-  .bardo-edit-subtasks {
-    display: grid;
-    gap: 0.375rem;
-  }
-
+  .bardo-edit-subtasks,
   .bardo-detail-comments {
     display: grid;
-    gap: 0.25rem;
+    min-width: 0;
+    gap: 0.375rem;
   }
 
   .bardo-detail-comment {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
     align-items: start;
     gap: 0.625rem;
     padding-block: 0.625rem;
@@ -545,9 +656,7 @@
     line-height: 1rem;
   }
 
-  .bardo-detail-comment-meta span {
-    color: var(--muted);
-  }
+  .bardo-detail-comment-meta span { color: var(--muted); }
 
   .bardo-detail-comment-copy p {
     margin: 0;
@@ -558,6 +667,8 @@
 
   .bardo-comment-composer {
     display: grid;
+    width: 100%;
+    min-width: 0;
     gap: 0.5rem;
     justify-items: end;
     padding-top: 0.25rem;
@@ -566,12 +677,15 @@
   .bardo-edit-properties {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    gap: 1rem;
   }
 
   .bardo-edit-subtask {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
+    min-width: 0;
     align-items: center;
     gap: 0.5rem;
   }
@@ -580,8 +694,15 @@
   .bardo-inline-form {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
     align-items: end;
     gap: 0.5rem;
+  }
+
+  .bardo-edit-subtask-add > *,
+  .bardo-inline-form > * {
+    min-width: 0;
   }
 
   .bardo-detail-footer {
@@ -592,26 +713,17 @@
   .bardo-settings-footer {
     flex-wrap: wrap;
     justify-content: space-between;
-  }
-
-  .bardo-section {
-    display: grid;
     gap: 0.75rem;
   }
 
-  .bardo-section-heading {
-    display: flex;
-    min-height: 2rem;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
+  /* Settings grids */
   .bardo-column-setting {
     display: grid;
-    grid-template-columns: repeat(3, auto);
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 2.5rem);
     align-items: center;
-    justify-content: end;
+    justify-content: stretch;
     gap: 0.5rem;
   }
 
@@ -621,11 +733,18 @@
     min-width: 0;
   }
 
+  .bardo-column-setting > button {
+    width: 2.5rem;
+    min-width: 2.5rem;
+    justify-self: stretch;
+  }
+
   .toolbar[aria-label="Herramientas QA"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.5rem;
     width: 100%;
+    min-width: 0;
+    gap: 0.5rem;
   }
 
   .toolbar[aria-label="Herramientas QA"] > * {
@@ -637,6 +756,7 @@
   }
 
   .bardo-qa-result {
+    max-width: 100%;
     max-height: 10rem;
     overflow: auto;
     border-radius: var(--radius);
@@ -646,6 +766,12 @@
     font-size: 0.75rem;
     line-height: 1.25rem;
     white-space: pre-wrap;
+  }
+
+  @media (pointer: coarse) {
+    .bardo-native-select:focus-visible {
+      outline: none;
+    }
   }
 
   @media (max-width: 29.999rem) {
@@ -672,6 +798,36 @@
     }
   }
 
+  @media (max-width: 47.999rem) {
+    [role="dialog"] {
+      width: calc(100vw - 1.5rem);
+      max-width: calc(100vw - 1.5rem);
+      max-height: calc(100dvh - 2rem);
+    }
+
+    .bardo-modal-header,
+    .bardo-detail-header {
+      padding: 1.125rem 1.125rem 0.875rem;
+    }
+
+    .bardo-modal-stack,
+    .bardo-settings-body,
+    .bardo-edit-body,
+    .bardo-detail-body {
+      padding: 1rem 1.125rem 1.125rem;
+    }
+
+    .bardo-modal-footer,
+    .bardo-detail-footer {
+      padding: 0.875rem 1.125rem max(0.875rem, env(safe-area-inset-bottom));
+    }
+
+    .bardo-detail-footer-edit > :first-child,
+    .bardo-settings-footer > :first-child {
+      margin-inline-end: auto;
+    }
+  }
+
   @media (min-width: 40rem) {
     .bardo-detail-properties {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -690,7 +846,7 @@
     }
 
     .bardo-shell {
-      padding-inline: 1.5rem;
+      --bardo-gutter: 1.5rem;
     }
 
     .bardo-mobile-kanban {
@@ -699,12 +855,18 @@
 
     .bardo-desktop-board {
       display: block;
+      width: calc(100% + var(--bardo-gutter) + var(--bardo-gutter));
+      margin-inline: calc(var(--bardo-gutter) * -1);
       overflow-x: auto;
-      padding-bottom: 1rem;
+      padding: 0 var(--bardo-gutter) 1rem;
+      scrollbar-width: none;
+      overscroll-behavior-x: contain;
     }
 
     .bardo-columns {
       display: grid;
+      width: max-content;
+      min-width: 100%;
       grid-auto-flow: column;
       grid-auto-columns: minmax(16rem, 1fr);
       gap: 1rem;
@@ -712,8 +874,8 @@
 
     .bardo-column-head {
       position: sticky;
-      top: 4rem;
-      z-index: 20;
+      top: 4.5rem;
+      z-index: 10;
       background: var(--background);
     }
 
@@ -726,8 +888,7 @@
     }
 
     .bardo-column-setting {
-      grid-template-columns: minmax(0, 1fr) repeat(3, auto);
-      justify-content: stretch;
+      grid-template-columns: minmax(0, 1fr) repeat(3, 2.5rem);
     }
 
     .bardo-column-setting > :first-child {
@@ -746,7 +907,7 @@
 
   @media (min-width: 80rem) {
     .bardo-shell {
-      padding-inline: 2rem;
+      --bardo-gutter: 2rem;
     }
   }
 
