@@ -23,7 +23,6 @@ import {
   Surface,
   Tag,
   TagGroup,
-  Tabs,
   TextArea,
   TextField,
   Toast,
@@ -35,6 +34,7 @@ import {
 import { cardVariants } from '@heroui/styles';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Key } from '@heroui/react';
+import { MobileKanban } from './MobileKanban';
 import {
   cloneState,
   createBoard,
@@ -594,7 +594,7 @@ function App() {
                 <div className="flex gap-3">
                   <span className="bardo-priority" data-priority={item.priority} aria-label={`Prioridad ${priorityLabel[item.priority]}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium leading-5">{item.title}</div>
+                    <div data-task-title className="text-sm font-medium leading-5">{item.title}</div>
                     {item.description && <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.description}</div>}
                     <div className="mt-3 flex items-end justify-between gap-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -773,30 +773,15 @@ function App() {
           </div>
         )}
 
-        <Tabs
-          className="bardo-mobile-tabs"
-          variant="secondary"
-          selectedKey={state.activeColumnId}
-          onSelectionChange={(key) => setState((previous) => ({ ...previous, activeColumnId: String(key) }))}
-        >
-          <Tabs.ListContainer>
-            <Tabs.List aria-label="Columnas del tablero">
-              {board.columns.map((column, index) => (
-                <Tabs.Tab id={column.id} key={column.id}>
-                  {index > 0 && <Tabs.Separator />}
-                  <span>{column.title}</span>
-                  <span className="text-xs text-muted tabular-nums">{filteredTasks.get(column.id)?.length ?? 0}</span>
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
-          {board.columns.map((column) => (
-            <Tabs.Panel id={column.id} key={column.id} className="bardo-mobile-panel">
-              {renderColumn(column)}
-            </Tabs.Panel>
-          ))}
-        </Tabs>
+        <MobileKanban
+          key={board.id}
+          columns={board.columns}
+          activeColumnId={state.activeColumnId}
+          tasksByColumn={filteredTasks}
+          renderColumn={renderColumn}
+          onActiveColumnChange={(columnId) => setState((previous) => ({ ...previous, activeColumnId: columnId }))}
+          onMoveTask={moveTask}
+        />
 
         <main className="bardo-desktop-board" aria-label="Tablero Kanban">
           <div className="bardo-columns">{board.columns.map(renderColumn)}</div>
