@@ -9,6 +9,10 @@ on:
       - '.github/workflows/deploy-bardo-docs-pages.yml'
   workflow_dispatch:
 
+concurrency:
+  group: bardo-docs-pages
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
