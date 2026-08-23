@@ -6,6 +6,11 @@ on:
     paths:
       - 'prototypes/kanban-heroui/**'
       - '.github/workflows/kanban-pages.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'prototypes/kanban-heroui/**'
+      - '.github/workflows/kanban-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +18,7 @@ permissions:
 
 jobs:
   build-and-deploy:
-    if: github.ref_name == 'module/kanban'
+    if: github.head_ref == 'module/kanban' || github.ref_name == 'module/kanban'
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -55,7 +60,7 @@ jobs:
           npx --yes wrangler@4.125.0 pages deploy prototypes/kanban-heroui/dist \
             --project-name="$PAGES_PROJECT" \
             --branch='module-kanban' \
-            --commit-hash='${{ github.sha }}' \
+            --commit-hash='${{ github.event.pull_request.head.sha || github.sha }}' \
             --commit-message='Bardo Kanban HeroUI QA' 2>&1 | tee /tmp/deploy.log
           url=$(grep -Eo 'https://[^[:space:]]+\.pages\.dev' /tmp/deploy.log | tail -1)
           test -n "$url" || { echo 'Deployment succeeded but URL was not found in Wrangler output'; cat /tmp/deploy.log; exit 1; }
