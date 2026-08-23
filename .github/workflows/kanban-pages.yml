@@ -52,6 +52,14 @@ jobs:
         working-directory: prototypes/kanban-heroui
         run: npm run build
 
+      - name: Install Chromium for E2E
+        working-directory: prototypes/kanban-heroui
+        run: npx playwright install --with-deps chromium
+
+      - name: HeroUI E2E parity gate
+        working-directory: prototypes/kanban-heroui
+        run: npm run test:e2e
+
       - name: Deploy Kanban QA
         id: deploy
         shell: bash
