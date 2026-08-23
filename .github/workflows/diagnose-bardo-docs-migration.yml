@@ -31,6 +31,9 @@ jobs:
             echo '--- migrations list ---'
             npx --yes wrangler@4.124.0 d1 migrations list bardo-db --remote 2>&1
             echo
+            echo '--- document counts ---'
+            npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT COUNT(*) AS total, SUM(CASE WHEN archived_at IS NULL THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN archived_at IS NOT NULL THEN 1 ELSE 0 END) AS archived FROM documents;" --json 2>&1
+            echo
             echo '--- documents schema ---'
             npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "PRAGMA table_info(documents);" --json 2>&1
             echo
@@ -48,5 +51,3 @@ jobs:
           git add .deploy/bardo-migration-diagnostic.txt
           git commit -m "chore(docs): record D1 migration diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
-
-# Rechecked after adapting 0004 to the existing production updated_at column.
