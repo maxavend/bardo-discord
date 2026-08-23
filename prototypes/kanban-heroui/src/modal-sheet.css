@@ -1,0 +1,19 @@
+@media (max-width: 47.999rem) {
+  /* Mobile dialogs are viewport-anchored sheets, not centered desktop cards. */
+  [role="dialog"] {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: calc(100dvh - 0.75rem) !important;
+    margin: 0 !important;
+    transform: none !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+
+  .bardo-modal-footer,
+  .bardo-detail-footer {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom)) !important;
+  }
+}
