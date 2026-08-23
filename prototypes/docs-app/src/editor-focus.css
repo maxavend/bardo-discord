@@ -1,0 +1,9 @@
+/* The editable document canvas should remain visually continuous while typing.
+   Individual interactive controls retain their own focus-visible treatment. */
+.doc-body:focus,
+.doc-body:focus-visible,
+.editable-body:focus,
+.editable-body:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
