@@ -1,0 +1,47 @@
+name: Diagnose live Bardo Activity origin
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/diagnose-live-bardo-origin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect public Worker origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          URL="https://bardo-discord.bardo-discord.workers.dev/?diagnostic=$(date +%s)"
+          HTTP=$(curl -sS -L -o /tmp/live.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$URL" || true)
+          MARKER=missing
+          if grep -q 'docs-current-document-only-v1' /tmp/live.html 2>/dev/null; then MARKER=present; fi
+          TITLE=$(grep -o '<title>[^<]*</title>' /tmp/live.html 2>/dev/null | head -1 || true)
+          SCRIPT=$(grep -o '<script[^>]*src="[^"]*"[^>]*>' /tmp/live.html 2>/dev/null | head -1 || true)
+          {
+            echo "http=$HTTP"
+            echo "expected_marker=docs-current-document-only-v1"
+            echo "marker=$MARKER"
+            echo "title=$TITLE"
+            echo "script=$SCRIPT"
+            echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo '--- html-head ---'
+            sed -n '1,40p' /tmp/live.html 2>/dev/null || true
+          } > .deploy/bardo-live-origin.txt
+      - name: Persist diagnostic
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-live-origin.txt
+          git commit -m "chore(docs): record live Activity origin diagnostic [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
