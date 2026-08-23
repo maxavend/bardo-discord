@@ -2,7 +2,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['dist/**', 'src/App.jsx', 'src/styles.css'],
+    ignores: ['dist/**'],
   },
   {
     files: ['src/**/*.{js,jsx}', 'scripts/**/*.mjs', 'tests/**/*.js', '*.js'],
@@ -17,7 +17,7 @@ export default [
       'no-unused-vars': ['error', {argsIgnorePattern: '^_', varsIgnorePattern: '^_'}],
       'no-unreachable': 'error',
       'no-dupe-keys': 'error',
-      'no-constant-binary-expression': 'error',
-    },
-  },
+      'no-constant-binary-expression': 'error'
+    }
+  }
 ];
