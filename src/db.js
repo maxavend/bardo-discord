@@ -218,6 +218,43 @@ export async function documentHasGuildAccess(db, documentId, guildId) {
   return Boolean(row?.allowed);
 }
 
+export async function saveDocsLaunchIntent(db, userId, guildId, documentId) {
+  if (!userId || !guildId || !documentId) return;
+  const createdAt = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO docs_launch_intents (user_id, guild_id, document_id, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, guild_id) DO UPDATE SET
+         document_id = excluded.document_id,
+         created_at = excluded.created_at`,
+    )
+    .bind(userId, guildId, documentId, createdAt)
+    .run();
+}
+
+export async function loadRecentDocsLaunchIntent(db, userId, guildId, maxAgeMs = 10 * 60 * 1000) {
+  if (!userId || !guildId) return null;
+  const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
+  const row = await db
+    .prepare(
+      `SELECT user_id, guild_id, document_id, created_at
+       FROM docs_launch_intents
+       WHERE user_id = ? AND guild_id = ? AND created_at >= ?
+       LIMIT 1`,
+    )
+    .bind(userId, guildId, cutoff)
+    .first();
+
+  if (!row) return null;
+  return {
+    userId: row.user_id,
+    guildId: row.guild_id,
+    documentId: row.document_id,
+    createdAt: row.created_at,
+  };
+}
+
 export async function saveDocsSession(db, tokenHash, session) {
   await db
     .prepare(
