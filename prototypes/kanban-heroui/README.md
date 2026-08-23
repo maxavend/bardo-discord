@@ -45,6 +45,7 @@ La pasada actual fija una escala geométrica única para spacing, alturas de con
 - configuración de columnas y tags sin overflow horizontal.
 - herramientas QA adaptadas a mobile sin comprimir acciones.
 - cards y encabezados de columna con una cadencia de spacing común.
+- gate E2E específico para topbar, tabs, modal y overflow horizontal.
 
 ## Gates
 
