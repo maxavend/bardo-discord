@@ -247,9 +247,9 @@ export function MobileKanban({
   };
 
   return (
-    <section className="bardo-mobile-kanban" aria-label="Columnas del tablero">
-      <nav className="bardo-column-pill-viewport" aria-label="Navegar columnas">
-        <div ref={pillRailRef} className="bardo-column-pill-rail" aria-label="Columnas">
+    <section className="bardo-mobile-kanban" aria-label="Flujo del tablero">
+      <nav className="bardo-column-pill-viewport" aria-label="Navegar estados">
+        <div ref={pillRailRef} className="bardo-column-pill-rail" aria-label="Estados">
           {columns.map((column) => {
             const active = column.id === activeColumnId;
             const count = tasksByColumn.get(column.id)?.length ?? 0;
@@ -259,7 +259,7 @@ export function MobileKanban({
                 size="sm"
                 variant={active ? 'secondary' : 'ghost'}
                 className="bardo-column-pill rounded-full"
-                aria-label={`${column.title}, ${count} tareas${active ? ', columna actual' : ''}`}
+                aria-label={`${column.title}, ${count} tareas${active ? ', estado actual' : ''}`}
                 data-active={String(active)}
                 data-drop-column-id={column.id}
                 onPress={() => selectColumn(column.id)}
@@ -313,7 +313,7 @@ export function MobileKanban({
         >
           <span className="bardo-mobile-drag-title">{drag.title}</span>
           <span className="bardo-mobile-drag-target">
-            Mover a {columns.find((column) => column.id === drag.targetColumnId)?.title ?? 'columna'}
+            Mover a {columns.find((column) => column.id === drag.targetColumnId)?.title ?? 'estado'}
           </span>
         </div>
       )}
