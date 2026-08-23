@@ -28,24 +28,29 @@ jobs:
           node-version: '22'
 
       - name: Verify Cloudflare credentials
+        id: creds
+        continue-on-error: true
         shell: bash
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"
-            exit 1
-          fi
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"
-            exit 1
-          fi
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
 
       - name: Install React prototype dependencies
+        id: deps
+        if: steps.creds.outcome == 'success'
+        continue-on-error: true
         run: npm install --prefix prototypes/docs-app --no-audit --no-fund
 
       - name: Build React + HeroUI prototype
+        id: build
+        if: steps.deps.outcome == 'success'
+        continue-on-error: true
         run: npm run build --prefix prototypes/docs-app
 
       - name: Verify build output
+        id: verify
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           test -f prototypes/docs-app/dist/index.html
@@ -53,17 +58,37 @@ jobs:
           test -f prototypes/docs-app/dist/_headers
 
       - name: Install Chromium for E2E
-        run: npx --prefix prototypes/docs-app playwright install --with-deps chromium
+        id: browser
+        if: steps.verify.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          cd prototypes/docs-app
+          npx playwright install --with-deps chromium
 
       - name: Mobile E2E regression gate
-        run: npm run test:e2e --prefix prototypes/docs-app
+        id: e2e
+        if: steps.browser.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ../../.deploy
+          cd prototypes/docs-app
+          npm run test:e2e 2>&1 | tee ../../.deploy/bardo-docs-e2e.log
 
       - name: Ensure Pages project exists
+        id: pages
+        if: steps.e2e.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           npx --yes wrangler@4.124.0 pages project create bardo-docs --production-branch module/bardo-docs || true
 
       - name: Deploy React prototype
+        id: deploy
+        if: steps.e2e.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           npx --yes wrangler@4.124.0 pages deploy prototypes/docs-app/dist \
@@ -76,20 +101,37 @@ jobs:
         if: always()
         shell: bash
         env:
-          JOB_STATUS: ${{ job.status }}
+          CREDS_OUTCOME: ${{ steps.creds.outcome }}
+          DEPS_OUTCOME: ${{ steps.deps.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+          E2E_OUTCOME: ${{ steps.e2e.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
         run: |
           mkdir -p .deploy
+          STATUS=failure
+          if [ "$DEPLOY_OUTCOME" = "success" ]; then STATUS=success; fi
           cat > .deploy/bardo-docs-status.txt <<EOF
-          status=$JOB_STATUS
+          status=$STATUS
           url=https://bardo-docs.pages.dev
           branch=module/bardo-docs
           stack=react-vite-heroui
           qa=playwright-mobile
+          creds=$CREDS_OUTCOME
+          deps=$DEPS_OUTCOME
+          build=$BUILD_OUTCOME
+          verify=$VERIFY_OUTCOME
+          browser=$BROWSER_OUTCOME
+          e2e=$E2E_OUTCOME
+          deploy=$DEPLOY_OUTCOME
           source_commit=$GITHUB_SHA
           deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-docs-status.txt
-          git commit -m "chore(docs): record Pages deployment result" || exit 0
-          git push origin HEAD:module/bardo-docs
+          if [ -f .deploy/bardo-docs-e2e.log ]; then git add .deploy/bardo-docs-e2e.log; fi
+          git commit -m "chore(docs): record Pages deployment diagnostics" || true
+          git push origin HEAD:module/bardo-docs || true
+          test "$STATUS" = "success"
