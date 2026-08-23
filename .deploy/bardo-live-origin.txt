@@ -1,22 +1,68 @@
-http=200
 expected_marker=docs-current-document-only-v1
+checked_at=2026-08-23T20:51:09Z
+
+--- worker-origin ---
+url=https://bardo-discord.bardo-discord.workers.dev/?diagnostic=1787518268
+http=200
 marker=present
 title=<title>Bardo · Docs</title>
 script=<script type="module" crossorigin src="/assets/index-DqyvxJKA.js">
-checked_at=2026-08-23T20:50:25Z
---- html-head ---
+
+--- discord-proxy ---
+url=https://1539704001535156254.discordsays.com/?diagnostic=1787518268
+http=200
+marker=missing
+title=<title>Bardo · Documento</title>
+script=<script type="module" src="/main-3ZF2Z7VL.js">
+
+--- discord-html-head ---
 <!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="bardo-build" content="docs-current-document-only-v1" />
-    <title>Bardo · Docs</title>
-    <script type="module" crossorigin src="/assets/index-DqyvxJKA.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-KjslWaX7.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
+    <title>Bardo · Documento</title>
+    <link rel="stylesheet" href="/bardo-tailwind-6HX6CISF.css" />
   </head>
-  <body class="bg-background text-foreground">
-    <div id="root"></div>
-  </body>
-</html>
+  <body>
+    <a class="bardo-skip-link" href="#bardo-main-content">Saltar al contenido</a>
+    <div id="bardo-app-chrome" data-avatar-src="/bardo-avatar-72-21E0A1D9.png"></div>
+    <div id="bardo-react-surface"></div>
+    <main class="shell">
+      <header class="topbar" aria-label="Bardo">
+        <div class="brand-mark" aria-hidden="true">
+          <img src="/bardo-avatar-72-21E0A1D9.png" srcset="/bardo-avatar-72-21E0A1D9.png 72w, /bardo-avatar-144-539929E3.png 144w" sizes="36px" width="36" height="36" alt="Bardo" class="brand-avatar" />
+        </div>
+        <div class="brand-copy">
+          <strong>Bardo</strong>
+          <span>Lector de documentos</span>
+        </div>
+      </header>
+
+      <section id="loading" class="view-state" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <div>
+          <strong>Abriendo documento</strong>
+          <p>Un momento…</p>
+        </div>
+      </section>
+
+      <section id="empty" class="view-state" hidden>
+        <div class="state-symbol" aria-hidden="true">B</div>
+        <div>
+          <h1>No hay un documento abierto</h1>
+          <p>Abre <strong>Mostrar más</strong> desde un mensaje publicado por Bardo.</p>
+        </div>
+      </section>
+
+      <section id="error" class="view-state" hidden>
+        <div class="state-symbol" aria-hidden="true">!</div>
+        <div>
+          <h1>No pudimos cargar el documento</h1>
+          <p id="error-message">Cierra esta vista y vuelve a abrir el documento desde el mensaje de Bardo.</p>
+        </div>
+      </section>
+
