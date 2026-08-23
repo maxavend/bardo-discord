@@ -1,0 +1,30 @@
+whoami=failure
+d1=failure
+--- whoami ---
+
+ ⛅️ wrangler 4.124.0
+────────────────────
+Getting User settings...
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mFailed to automatically retrieve account IDs for the logged in user.[0m
+
+  You may have incorrect permissions on your API token, or your authentication may have expired. Try running `wrangler login` to re-authenticate. You can also skip this account check by adding an `account_id` in your Wrangler configuration file, or by setting the value of CLOUDFLARE_ACCOUNT_ID
+
+
+🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-2026-08-23_20-07-13_784.log"
+--- d1 ---
+
+{
+  "error": {
+    "text": "A request to the Cloudflare API (/accounts/b69830a234e871da410ffb176f1bdba7/d1/database/db89af73-dc24-491e-bf57-975f7bd6c085) failed.",
+    "notes": [
+      {
+        "text": "Authentication error [code: 10000]"
+      }
+    ],
+    "kind": "error",
+    "name": "APIError",
+    "code": 10000,
+    "accountTag": "b69830a234e871da410ffb176f1bdba7"
+  }
+}
