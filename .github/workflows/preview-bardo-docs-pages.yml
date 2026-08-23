@@ -89,3 +89,5 @@ jobs:
           git commit -m "chore(docs): record preview Pages result [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$STATUS" = "success"
+
+# Triggered after the library spacing/icon audit on 2026-08-23.
