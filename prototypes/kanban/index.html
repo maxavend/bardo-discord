@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111214">
+<title>Bardo · Kanban QA Lab</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div><strong>Bardo</strong><span class="crumb">/ Kanban QA</span></div>
+    <div class="top-actions">
+      <button type="button" class="btn ghost desktop-only" id="new-task-top">+ Tarea</button>
+      <button type="button" class="icon-btn" id="open-settings" aria-label="Configurar tablero">⚙</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <button type="button" class="board-title-btn" id="board-picker-btn" aria-haspopup="dialog">
+          <span id="board-title">Tablero</span><span aria-hidden="true">⌄</span>
+        </button>
+        <p id="board-description"></p>
+        <div class="stats" id="board-stats"></div>
+      </div>
+      <button type="button" class="btn primary desktop-only" id="new-task-hero">+ Nueva tarea</button>
+    </section>
+
+    <section class="toolbar" aria-label="Buscar, filtrar y ordenar">
+      <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Buscar tareas, etiquetas, comentarios…" autocomplete="off"></label>
+      <select id="sort" class="select compact" aria-label="Ordenar tareas">
+        <option value="manual">Orden manual</option>
+        <option value="priority">Prioridad</option>
+        <option value="due">Fecha límite</option>
+        <option value="updated">Última edición</option>
+        <option value="title">Título</option>
+      </select>
+    </section>
+
+    <section class="filters" aria-label="Filtros">
+      <button class="chip active" type="button" data-filter="all">Todas</button>
+      <button class="chip" type="button" data-filter="mine">Mías</button>
+      <button class="chip" type="button" data-filter="urgent">Urgentes</button>
+      <button class="chip" type="button" data-filter="overdue">Vencidas</button>
+      <button class="chip" type="button" data-filter="soon">Próximas</button>
+      <button class="chip" type="button" data-filter="unassigned">Sin responsable</button>
+    </section>
+
+    <nav class="mobile-tabs" id="mobile-tabs" aria-label="Columnas"></nav>
+    <section class="board" id="board" aria-live="polite"></section>
+  </main>
+
+  <button type="button" class="fab mobile-only" id="new-task-fab">+ Tarea</button>
+</div>
+
+<div class="toast" id="toast" hidden><span id="toast-text"></span><button type="button" id="toast-undo" hidden>Deshacer</button></div>
+
+<dialog id="board-picker-dialog">
+  <div class="sheet narrow">
+    <header class="sheet-head"><h2>Tableros</h2><button class="icon-btn close" type="button" aria-label="Cerrar">×</button></header>
+    <div id="board-list" class="board-list"></div>
+    <div class="sheet-actions"><button type="button" class="btn primary" id="create-board">+ Nuevo tablero</button></div>
+  </div>
+</dialog>
+
+<dialog id="quick-dialog">
+  <form class="sheet narrow" id="quick-form">
+    <header class="sheet-head"><h2>Nueva tarea</h2><button class="icon-btn close" type="button" aria-label="Cerrar">×</button></header>
+    <label class="field"><span>Título</span><input id="quick-title" maxlength="180" required placeholder="¿Qué hay que hacer?"></label>
+    <label class="field"><span>Columna</span><select id="quick-status"></select></label>
+    <label class="field"><span>Prioridad</span><select id="quick-priority"><option value="low">Baja</option><option value="normal" selected>Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
+    <div class="sheet-actions"><button class="btn ghost close" type="button">Cancelar</button><button class="btn primary" type="submit">Crear tarea</button></div>
+  </form>
+</dialog>
+
+<dialog id="task-dialog">
+  <form class="sheet task-sheet" id="task-form">
+    <header class="sheet-head sticky"><div><small id="task-id"></small><h2>Detalle de tarea</h2></div><button class="icon-btn close" type="button" aria-label="Cerrar">×</button></header>
+    <label class="field"><span>Título</span><input id="task-title" maxlength="180" required></label>
+    <label class="field"><span>Descripción</span><textarea id="task-description" maxlength="3000" rows="5"></textarea></label>
+    <div class="grid-2">
+      <label class="field"><span>Estado</span><select id="task-status"></select></label>
+      <label class="field"><span>Responsable</span><select id="task-assignee"></select></label>
+      <label class="field"><span>Prioridad</span><select id="task-priority"><option value="low">Baja</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
+      <label class="field"><span>Fecha límite</span><input id="task-due" type="date"></label>
+      <label class="field"><span>Estimación</span><input id="task-estimate" type="number" min="0" max="100" step="0.5"></label>
+      <label class="field"><span>Origen</span><select id="task-source"><option>Manual</option><option>Discord</option><option>Docs</option><option>Planner</option><option>Reunión</option></select></label>
+    </div>
+    <label class="field"><span>Etiquetas · separadas por coma</span><input id="task-labels" maxlength="240"></label>
+
+    <section class="detail-section">
+      <div class="section-title"><h3>Subtareas</h3><span id="subtask-progress"></span></div>
+      <div id="subtasks" class="subtasks"></div>
+      <div class="inline-form"><input id="subtask-input" maxlength="120" placeholder="Añadir subtarea"><button class="btn ghost" id="add-subtask" type="button">Añadir</button></div>
+    </section>
+
+    <section class="detail-section">
+      <div class="section-title"><h3>Comentarios</h3><span id="comment-count"></span></div>
+      <div id="comments" class="comments"></div>
+      <div class="inline-form"><textarea id="comment-input" maxlength="500" rows="2" placeholder="Escribe un comentario"></textarea><button class="btn ghost" id="add-comment" type="button">Comentar</button></div>
+    </section>
+
+    <footer class="task-footer">
+      <span id="save-state">Guardado</span>
+      <div class="task-footer-actions">
+        <button type="button" class="btn ghost" id="duplicate-task">Duplicar</button>
+        <button type="button" class="btn danger" id="delete-task">Eliminar</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="settings-dialog">
+  <div class="sheet settings-sheet">
+    <header class="sheet-head sticky"><h2>Configurar tablero</h2><button class="icon-btn close" type="button" aria-label="Cerrar">×</button></header>
+    <label class="field"><span>Nombre</span><input id="settings-title" maxlength="48"></label>
+    <label class="field"><span>Descripción</span><textarea id="settings-description" maxlength="180" rows="3"></textarea></label>
+
+    <section class="detail-section">
+      <div class="section-title"><h3>Columnas</h3><button type="button" class="btn ghost" id="add-column">+ Columna</button></div>
+      <div id="columns-settings"></div>
+    </section>
+
+    <section class="detail-section qa-panel">
+      <div class="section-title"><h3>Herramientas QA</h3><span>solo mock</span></div>
+      <div id="qa-kpis" class="qa-kpis"></div>
+      <div class="qa-actions">
+        <button type="button" class="btn ghost" id="stress-250">+250 tareas</button>
+        <button type="button" class="btn ghost" id="stress-1000">+1000 tareas</button>
+        <button type="button" class="btn ghost" id="self-test">Autoprueba</button>
+        <button type="button" class="btn ghost" id="clear-board">Vaciar tablero</button>
+        <button type="button" class="btn danger" id="reset-all">Restablecer mocks</button>
+      </div>
+      <pre id="self-test-output" hidden></pre>
+    </section>
+
+    <footer class="settings-footer">
+      <button class="btn ghost" type="button" id="duplicate-board">Duplicar tablero</button>
+      <button class="btn danger" type="button" id="delete-board">Eliminar tablero</button>
+      <span class="spacer"></span>
+      <button class="btn primary" type="button" id="save-settings">Guardar</button>
+    </footer>
+  </div>
+</dialog>
+
+<script src="./app.js" defer></script>
+</body>
+</html>
