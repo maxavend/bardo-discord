@@ -111,6 +111,26 @@ export async function listDocuments(db, limit = 100) {
   return (result?.results || []).map(mapDocumentRow).filter(Boolean);
 }
 
+export async function listDocumentsForGuild(db, guildId, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 250));
+  const result = await db
+    .prepare(
+      `SELECT d.id, d.title, d.description, d.original_markdown, d.pages, d.source_name,
+              d.created_at, d.updated_at, d.archived_at, d.created_by, d.source_mime,
+              d.source_type, d.import_status,
+              CASE WHEN d.source_blob IS NULL THEN 0 ELSE 1 END AS has_source
+       FROM documents d
+       INNER JOIN document_guild_access a ON a.document_id = d.id
+       WHERE a.guild_id = ? AND d.archived_at IS NULL
+       ORDER BY COALESCE(d.updated_at, d.created_at) DESC
+       LIMIT ?`,
+    )
+    .bind(guildId, safeLimit)
+    .all();
+
+  return (result?.results || []).map(mapDocumentRow).filter(Boolean);
+}
+
 export async function updateDocumentContent(db, documentId, document) {
   const updatedAt = document.updatedAt || new Date().toISOString();
   await db
@@ -174,6 +194,82 @@ export async function cacheNormalizedDocument(db, documentId, markdown, pages) {
     )
     .bind(markdown, JSON.stringify(pages), documentId)
     .run();
+}
+
+export async function grantDocumentGuildAccess(db, documentId, guildId, addedBy = null) {
+  if (!documentId || !guildId) return;
+  const addedAt = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(document_id, guild_id) DO NOTHING`,
+    )
+    .bind(documentId, guildId, addedAt, addedBy || null)
+    .run();
+}
+
+export async function documentHasGuildAccess(db, documentId, guildId) {
+  if (!documentId || !guildId) return false;
+  const row = await db
+    .prepare('SELECT 1 AS allowed FROM document_guild_access WHERE document_id = ? AND guild_id = ? LIMIT 1')
+    .bind(documentId, guildId)
+    .first();
+  return Boolean(row?.allowed);
+}
+
+export async function saveDocsSession(db, tokenHash, session) {
+  await db
+    .prepare(
+      `INSERT INTO docs_sessions (token_hash, user_id, guild_id, username, avatar, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(token_hash) DO UPDATE SET
+         user_id = excluded.user_id,
+         guild_id = excluded.guild_id,
+         username = excluded.username,
+         avatar = excluded.avatar,
+         created_at = excluded.created_at,
+         expires_at = excluded.expires_at`,
+    )
+    .bind(
+      tokenHash,
+      session.userId,
+      session.guildId,
+      session.username || null,
+      session.avatar || null,
+      session.createdAt,
+      session.expiresAt,
+    )
+    .run();
+}
+
+export async function loadDocsSession(db, tokenHash) {
+  const row = await db
+    .prepare(
+      `SELECT token_hash, user_id, guild_id, username, avatar, created_at, expires_at
+       FROM docs_sessions WHERE token_hash = ?`,
+    )
+    .bind(tokenHash)
+    .first();
+
+  if (!row) return null;
+  return {
+    tokenHash: row.token_hash,
+    userId: row.user_id,
+    guildId: row.guild_id,
+    username: row.username || null,
+    avatar: row.avatar || null,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+export async function deleteDocsSession(db, tokenHash) {
+  await db.prepare('DELETE FROM docs_sessions WHERE token_hash = ?').bind(tokenHash).run();
+}
+
+export async function deleteExpiredDocsSessions(db, now = new Date().toISOString()) {
+  await db.prepare('DELETE FROM docs_sessions WHERE expires_at <= ?').bind(now).run();
 }
 
 export async function saveActivityContext(db, instanceId, documentId) {
