@@ -15,6 +15,11 @@ if (!source.includes('  grantDocumentGuildAccess,\n')) {
   if (!source.includes(dbAnchor)) throw new Error('No encontré el import de DB');
   source = source.replace(dbAnchor, `${dbAnchor}  grantDocumentGuildAccess,\n`);
 }
+if (!source.includes('  saveDocsLaunchIntent,\n')) {
+  const dbAnchor = '  saveActivityContext,\n';
+  if (!source.includes(dbAnchor)) throw new Error('No encontré saveActivityContext import');
+  source = source.replace(dbAnchor, `${dbAnchor}  saveDocsLaunchIntent,\n`);
+}
 
 const uploadGrant = `\n    if (interaction.guild_id) {\n      await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, createdBy);\n    }\n`;
 const uploadAnchor = '    await saveDocument(env.DB, documentId, document);\n';
@@ -23,11 +28,17 @@ if (!source.includes(uploadGrant.trim())) {
   source = source.replace(uploadAnchor, `${uploadAnchor}${uploadGrant}`);
 }
 
-const clickGrant = `\n  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;\n  if (interaction.guild_id) {\n    await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);\n  }\n\n`;
+const clickGrant = `\n  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;\n  if (interaction.guild_id) {\n    await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);\n    await saveDocsLaunchIntent(env.DB, invokingUserId, interaction.guild_id, documentId);\n  }\n\n`;
 const callbackAnchor = '  const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;\n';
-if (!source.includes('const invokingUserId = interaction.member?.user?.id')) {
-  if (!source.includes(callbackAnchor)) throw new Error('No encontré callback de component interaction');
-  source = source.replace(callbackAnchor, `${clickGrant}${callbackAnchor}`);
+if (!source.includes('await saveDocsLaunchIntent(env.DB, invokingUserId')) {
+  if (source.includes('const invokingUserId = interaction.member?.user?.id')) {
+    const oldClickGrant = `\n  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;\n  if (interaction.guild_id) {\n    await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);\n  }\n\n`;
+    if (!source.includes(oldClickGrant)) throw new Error('No encontré bloque guild anterior');
+    source = source.replace(oldClickGrant, clickGrant);
+  } else {
+    if (!source.includes(callbackAnchor)) throw new Error('No encontré callback de component interaction');
+    source = source.replace(callbackAnchor, `${clickGrant}${callbackAnchor}`);
+  }
 }
 
 const routeBlock = `\n    const authApiResponse = await handleDiscordAuthApi(request, url, env);\n    if (authApiResponse) return authApiResponse;\n\n    const docsApiResponse = await handleDocsApi(request, url, env);\n    if (docsApiResponse) return docsApiResponse;\n`;
