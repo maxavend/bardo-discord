@@ -137,11 +137,12 @@ function AdaptiveCloseTrigger(props: SlotProps) {
     : <Modal.CloseTrigger {...props} />;
 }
 
-function AdaptiveHeader(props: SlotProps) {
+function AdaptiveHeader({ className, ...props }: SlotProps) {
   const presentation = useContext(PresentationContext);
+  const classes = joinClassNames('bg-overlay', className);
   return presentation === 'sheet'
-    ? <Drawer.Header {...props} />
-    : <Modal.Header {...props} />;
+    ? <Drawer.Header {...props} className={classes} />
+    : <Modal.Header {...props} className={classes} />;
 }
 
 function AdaptiveHeading(props: SlotProps) {
@@ -158,11 +159,12 @@ function AdaptiveBody(props: SlotProps) {
     : <Modal.Body {...props} />;
 }
 
-function AdaptiveFooter(props: SlotProps) {
+function AdaptiveFooter({ className, ...props }: SlotProps) {
   const presentation = useContext(PresentationContext);
+  const classes = joinClassNames('bg-overlay', className);
   return presentation === 'sheet'
-    ? <Drawer.Footer {...props} />
-    : <Modal.Footer {...props} />;
+    ? <Drawer.Footer {...props} className={classes} />
+    : <Modal.Footer {...props} className={classes} />;
 }
 
 export const AdaptiveModal = Object.assign(AdaptiveModalRoot, {
