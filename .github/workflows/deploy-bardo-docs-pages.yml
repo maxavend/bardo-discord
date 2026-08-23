@@ -5,7 +5,7 @@ on:
     branches:
       - module/bardo-docs
     paths:
-      - 'prototypes/docs/**'
+      - 'prototypes/docs-app/**'
       - '.github/workflows/deploy-bardo-docs-pages.yml'
   workflow_dispatch:
 
@@ -39,33 +39,50 @@ jobs:
             exit 1
           fi
 
+      - name: Install React prototype dependencies
+        run: npm install --prefix prototypes/docs-app --no-audit --no-fund
+
+      - name: Build React + HeroUI prototype
+        run: npm run build --prefix prototypes/docs-app
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          test -f prototypes/docs-app/dist/index.html
+          grep -q '<div id="root"></div>' prototypes/docs-app/dist/index.html
+          test -f prototypes/docs-app/dist/_headers
+
       - name: Ensure Pages project exists
         shell: bash
         run: |
           npx --yes wrangler@4.124.0 pages project create bardo-docs --production-branch module/bardo-docs || true
 
-      - name: Deploy prototype
+      - name: Deploy React prototype
         shell: bash
         run: |
-          npx --yes wrangler@4.124.0 pages deploy prototypes/docs \
+          npx --yes wrangler@4.124.0 pages deploy prototypes/docs-app/dist \
             --project-name bardo-docs \
             --branch module/bardo-docs \
             --commit-hash "$GITHUB_SHA" \
-            --commit-message "Bardo Docs functional prototype"
+            --commit-message "Bardo Docs React + HeroUI prototype"
 
-      - name: Record successful deployment
+      - name: Record deployment result
+        if: always()
         shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
         run: |
           mkdir -p .deploy
           cat > .deploy/bardo-docs-status.txt <<EOF
-          status=success
+          status=$JOB_STATUS
           url=https://bardo-docs.pages.dev
           branch=module/bardo-docs
+          stack=react-vite-heroui
           source_commit=$GITHUB_SHA
           deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-docs-status.txt
-          git commit -m "chore(docs): record Cloudflare Pages deployment" || exit 0
+          git commit -m "chore(docs): record Pages deployment result" || exit 0
           git push origin HEAD:module/bardo-docs
