@@ -8,6 +8,8 @@
     max-height: calc(100dvh - 0.75rem) !important;
     margin: 0 !important;
     transform: none !important;
+    translate: 0 0 !important;
+    scale: 1 !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
   }
