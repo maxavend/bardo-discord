@@ -1,0 +1,949 @@
+import {
+  Avatar,
+  Button,
+  Chip,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Popover,
+  Select,
+  TextArea,
+} from '@heroui/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import type { Key } from '@heroui/react';
+import {
+  cloneState,
+  createBoard,
+  createTask,
+  loadState,
+  makeId,
+  makeSeed,
+  MAX_COLUMNS,
+  MAX_COMMENTS,
+  MAX_SUBTASKS,
+  MAX_TAGS,
+  ME,
+  normalizeOrders,
+  PAGE_SIZE,
+  people,
+  personById,
+  priorities,
+  priorityLabel,
+  priorityRank,
+  saveState,
+  selfTest,
+  stressTasks,
+  type AppState,
+  type Priority,
+  type Task,
+} from './model';
+
+type Filter = 'all' | 'mine' | 'urgent' | 'unassigned' | 'comments';
+type Sort = 'manual' | 'priority' | 'title';
+
+type ToastState = {
+  text: string;
+  canUndo?: boolean;
+} | null;
+
+function HeroSelect({
+  label,
+  value,
+  onChange,
+  items,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  items: Array<{ id: string; label: string }>;
+}) {
+  const selectValue = value === '' ? '__none__' : value;
+  return (
+    <Select aria-label={label} value={selectValue || null} onChange={(key: Key | Key[] | null) => {
+      const next = String(key ?? '');
+      onChange(next === '__none__' ? '' : next);
+    }}>
+      <Label className="text-xs text-muted">{label}</Label>
+      <Select.Trigger className="w-full">
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox>
+          {items.map((item) => (
+            <ListBox.Item id={item.id} key={item.id} textValue={item.label}>
+              {item.label}
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+    </Select>
+  );
+}
+
+function PersonAvatar({ assignee, size = 'sm' }: { assignee: string; size?: 'sm' | 'md' | 'lg' }) {
+  const person = personById(assignee);
+  return (
+    <Avatar size={size} variant="soft" color="default" aria-label={person?.name ?? 'Sin responsable'}>
+      <Avatar.Fallback>{person?.initials ?? '—'}</Avatar.Fallback>
+    </Avatar>
+  );
+}
+
+function App() {
+  const [state, setState] = useState<AppState>(() => loadState());
+  const [undoState, setUndoState] = useState<AppState | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+  const [sort, setSort] = useState<Sort>('manual');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickStatus, setQuickStatus] = useState('');
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [subtaskDraft, setSubtaskDraft] = useState('');
+  const [commentDraft, setCommentDraft] = useState('');
+  const [tagDraft, setTagDraft] = useState('');
+  const [selfTestText, setSelfTestText] = useState('');
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [renderLimits, setRenderLimits] = useState<Record<string, number>>({});
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const toastTimer = useRef<number | null>(null);
+
+  const board = state.boards.find((item) => item.id === state.activeBoardId) ?? state.boards[0];
+  const task = activeTaskId ? board.tasks.find((item) => item.id === activeTaskId) ?? null : null;
+
+  useEffect(() => {
+    saveState(state);
+  }, [state]);
+
+  useEffect(() => {
+    if (!board.columns.some((column) => column.id === state.activeColumnId)) {
+      setState((previous) => ({ ...previous, activeColumnId: board.columns[0].id }));
+    }
+  }, [board.columns, state.activeColumnId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+        event.preventDefault();
+        setSearchOpen(true);
+        requestAnimationFrame(() => searchRef.current?.focus());
+      }
+      if (event.key.toLowerCase() === 'n' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+        event.preventDefault();
+        openQuick();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  const showToast = (text: string, canUndo = false) => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    setToast({ text, canUndo });
+    toastTimer.current = window.setTimeout(() => setToast(null), 4200);
+  };
+
+  const changeState = (mutator: (draft: AppState) => void, options?: { undo?: boolean; toast?: string }) => {
+    setState((previous) => {
+      if (options?.undo) setUndoState(cloneState(previous));
+      const draft = cloneState(previous);
+      mutator(draft);
+      for (const item of draft.boards) normalizeOrders(item);
+      return draft;
+    });
+    if (options?.toast) showToast(options.toast, Boolean(options.undo));
+  };
+
+  const undo = () => {
+    if (!undoState) return;
+    setState(undoState);
+    setUndoState(null);
+    showToast('Cambio deshecho');
+  };
+
+  const switchBoard = (boardId: string) => {
+    const nextBoard = state.boards.find((item) => item.id === boardId);
+    if (!nextBoard) return;
+    setState((previous) => ({ ...previous, activeBoardId: boardId, activeColumnId: nextBoard.columns[0].id }));
+    setQuery('');
+    setFilter('all');
+    setRenderLimits({});
+  };
+
+  const openQuick = (status = state.activeColumnId) => {
+    setQuickTitle('');
+    setQuickStatus(status || board.columns[0].id);
+    setQuickOpen(true);
+  };
+
+  const submitQuick = () => {
+    const title = quickTitle.trim();
+    if (!title) return;
+    const status = board.columns.some((column) => column.id === quickStatus) ? quickStatus : board.columns[0].id;
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const next = createTask(target, status, title);
+        target.tasks.push(next);
+      },
+      { undo: true, toast: 'Tarea creada' },
+    );
+    setQuickOpen(false);
+    setQuickTitle('');
+  };
+
+  const openTask = (taskId: string) => {
+    if (dragTaskId) return;
+    setActiveTaskId(taskId);
+    setSubtaskDraft('');
+    setCommentDraft('');
+    setTaskOpen(true);
+  };
+
+  const updateTask = (taskId: string, patch: Partial<Task>) => {
+    changeState((draft) => {
+      const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      const targetTask = targetBoard.tasks.find((item) => item.id === taskId);
+      if (!targetTask) return;
+      Object.assign(targetTask, patch, { updated: new Date().toISOString() });
+    });
+  };
+
+  const duplicateTask = () => {
+    if (!task) return;
+    changeState(
+      (draft) => {
+        const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const source = targetBoard.tasks.find((item) => item.id === task.id)!;
+        const copy = cloneState(source);
+        copy.id = makeId('task');
+        copy.title = `${copy.title} copia`;
+        copy.order = targetBoard.tasks.filter((item) => item.status === copy.status).length;
+        copy.created = new Date().toISOString();
+        copy.updated = copy.created;
+        copy.subtasks = copy.subtasks.map((item) => ({ ...item, id: makeId('subtask') }));
+        copy.comments = copy.comments.map((item) => ({ ...item, id: makeId('comment') }));
+        targetBoard.tasks.push(copy);
+      },
+      { undo: true, toast: 'Tarea duplicada' },
+    );
+  };
+
+  const deleteTask = () => {
+    if (!task) return;
+    changeState(
+      (draft) => {
+        const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        targetBoard.tasks = targetBoard.tasks.filter((item) => item.id !== task.id);
+      },
+      { undo: true, toast: 'Tarea eliminada' },
+    );
+    setTaskOpen(false);
+    setActiveTaskId(null);
+  };
+
+  const addSubtask = () => {
+    if (!task || !subtaskDraft.trim()) return;
+    if (task.subtasks.length >= MAX_SUBTASKS) return showToast(`Máximo ${MAX_SUBTASKS} subtareas`);
+    updateTask(task.id, {
+      subtasks: [...task.subtasks, { id: makeId('subtask'), text: subtaskDraft.trim().slice(0, 140), done: false }],
+    });
+    setSubtaskDraft('');
+  };
+
+  const toggleSubtask = (subtaskId: string) => {
+    if (!task) return;
+    updateTask(task.id, {
+      subtasks: task.subtasks.map((item) => (item.id === subtaskId ? { ...item, done: !item.done } : item)),
+    });
+  };
+
+  const removeSubtask = (subtaskId: string) => {
+    if (!task) return;
+    updateTask(task.id, { subtasks: task.subtasks.filter((item) => item.id !== subtaskId) });
+  };
+
+  const addComment = () => {
+    if (!task || !commentDraft.trim()) return;
+    if (task.comments.length >= MAX_COMMENTS) return showToast(`Máximo ${MAX_COMMENTS} comentarios`);
+    updateTask(task.id, {
+      comments: [
+        ...task.comments,
+        { id: makeId('comment'), author: ME, text: commentDraft.trim().slice(0, 800), created: new Date().toISOString() },
+      ],
+    });
+    setCommentDraft('');
+  };
+
+  const toggleTaskTag = (tag: string) => {
+    if (!task) return;
+    const tags = task.tags.includes(tag) ? task.tags.filter((item) => item !== tag) : [...task.tags, tag];
+    updateTask(task.id, { tags });
+  };
+
+  const moveTask = (taskId: string, status: string) => {
+    const current = board.tasks.find((item) => item.id === taskId);
+    if (!current || current.status === status) return;
+    changeState(
+      (draft) => {
+        const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const targetTask = targetBoard.tasks.find((item) => item.id === taskId)!;
+        targetTask.status = status;
+        targetTask.order = targetBoard.tasks.filter((item) => item.status === status).length;
+        targetTask.updated = new Date().toISOString();
+      },
+      { undo: true, toast: 'Tarea movida' },
+    );
+  };
+
+  const addColumn = () => {
+    if (board.columns.length >= MAX_COLUMNS) return showToast(`Máximo ${MAX_COLUMNS} columnas`);
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.columns.push({ id: makeId('column'), title: 'Nueva columna' });
+      },
+      { undo: true, toast: 'Columna creada' },
+    );
+  };
+
+  const renameColumn = (columnId: string, title: string) => {
+    changeState((draft) => {
+      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      const column = target.columns.find((item) => item.id === columnId);
+      if (column) column.title = title.slice(0, 32);
+    });
+  };
+
+  const moveColumn = (columnId: string, direction: -1 | 1) => {
+    changeState((draft) => {
+      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      const index = target.columns.findIndex((item) => item.id === columnId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= target.columns.length) return;
+      const [column] = target.columns.splice(index, 1);
+      target.columns.splice(nextIndex, 0, column);
+    });
+  };
+
+  const deleteColumn = (columnId: string) => {
+    if (board.columns.length <= 2) return showToast('El tablero necesita al menos 2 columnas');
+    if (board.tasks.some((item) => item.status === columnId)) return showToast('Mueve las tareas antes de eliminar la columna');
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.columns = target.columns.filter((item) => item.id !== columnId);
+        if (draft.activeColumnId === columnId) draft.activeColumnId = target.columns[0].id;
+      },
+      { undo: true, toast: 'Columna eliminada' },
+    );
+  };
+
+  const addTag = () => {
+    const tag = tagDraft.trim().replace(/\s+/g, ' ').slice(0, 24);
+    if (!tag) return;
+    if (board.tags.some((item) => item.toLowerCase() === tag.toLowerCase())) return showToast('Ese tag ya existe');
+    if (board.tags.length >= MAX_TAGS) return showToast(`Máximo ${MAX_TAGS} tags por tablero`);
+    changeState((draft) => {
+      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      target.tags.push(tag);
+    });
+    setTagDraft('');
+  };
+
+  const deleteTag = (tag: string) => {
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.tags = target.tags.filter((item) => item !== tag);
+        target.tasks.forEach((item) => {
+          item.tags = item.tags.filter((taskTag) => taskTag !== tag);
+        });
+      },
+      { undo: true, toast: 'Tag eliminado' },
+    );
+  };
+
+  const createNewBoard = () => {
+    const next = createBoard();
+    changeState(
+      (draft) => {
+        draft.boards.push(next);
+        draft.activeBoardId = next.id;
+        draft.activeColumnId = next.columns[0].id;
+      },
+      { undo: true, toast: 'Tablero creado' },
+    );
+  };
+
+  const duplicateBoard = () => {
+    changeState(
+      (draft) => {
+        const source = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const copy = cloneState(source);
+        const nextId = makeId('board');
+        const columnMap = new Map<string, string>();
+        copy.id = nextId;
+        copy.title = `${copy.title} copia`.slice(0, 48);
+        copy.columns = copy.columns.map((column) => {
+          const id = makeId('column');
+          columnMap.set(column.id, id);
+          return { ...column, id };
+        });
+        copy.tasks = copy.tasks.map((item) => ({
+          ...item,
+          id: makeId('task'),
+          status: columnMap.get(item.status)!,
+          subtasks: item.subtasks.map((subtask) => ({ ...subtask, id: makeId('subtask') })),
+          comments: item.comments.map((comment) => ({ ...comment, id: makeId('comment') })),
+        }));
+        draft.boards.push(copy);
+        draft.activeBoardId = copy.id;
+        draft.activeColumnId = copy.columns[0].id;
+      },
+      { undo: true, toast: 'Tablero duplicado' },
+    );
+    setSettingsOpen(false);
+  };
+
+  const deleteBoard = () => {
+    if (state.boards.length <= 1) return showToast('Debe quedar al menos un tablero');
+    changeState(
+      (draft) => {
+        const currentIndex = draft.boards.findIndex((item) => item.id === draft.activeBoardId);
+        draft.boards.splice(currentIndex, 1);
+        const next = draft.boards[Math.max(0, currentIndex - 1)] ?? draft.boards[0];
+        draft.activeBoardId = next.id;
+        draft.activeColumnId = next.columns[0].id;
+      },
+      { undo: true, toast: 'Tablero eliminado' },
+    );
+    setSettingsOpen(false);
+  };
+
+  const clearBoard = () => {
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.tasks = [];
+      },
+      { undo: true, toast: 'Tablero vaciado' },
+    );
+  };
+
+  const resetMocks = () => {
+    setUndoState(cloneState(state));
+    setState(makeSeed());
+    setQuery('');
+    setFilter('all');
+    setRenderLimits({});
+    setSettingsOpen(false);
+    showToast('Mocks restablecidos', true);
+  };
+
+  const addStress = (count: number) => {
+    const started = performance.now();
+    changeState((draft) => {
+      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      stressTasks(target, count);
+    });
+    showToast(`+${count.toLocaleString('es-CL')} tareas · ${Math.round(performance.now() - started)} ms`);
+  };
+
+  const runSelfTest = () => {
+    const failures = selfTest(state);
+    setSelfTestText(failures.length ? `FAIL · ${failures.join('\n')}` : `PASS · ${state.boards.length} tableros · ${state.boards.reduce((total, item) => total + item.tasks.length, 0)} tareas`);
+  };
+
+  const filteredTasks = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('es');
+    const map = new Map<string, Task[]>();
+    for (const column of board.columns) {
+      const list = board.tasks.filter((item) => {
+        if (item.status !== column.id) return false;
+        if (normalizedQuery) {
+          const haystack = [
+            item.title,
+            item.description,
+            personById(item.assignee)?.name ?? '',
+            ...item.tags,
+            ...item.subtasks.map((subtask) => subtask.text),
+            ...item.comments.map((comment) => comment.text),
+          ].join(' ').toLocaleLowerCase('es');
+          if (!haystack.includes(normalizedQuery)) return false;
+        }
+        if (filter === 'mine' && item.assignee !== ME) return false;
+        if (filter === 'urgent' && item.priority !== 'urgent') return false;
+        if (filter === 'unassigned' && item.assignee) return false;
+        if (filter === 'comments' && item.comments.length === 0) return false;
+        return true;
+      });
+      if (sort === 'priority') list.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.order - b.order);
+      else if (sort === 'title') list.sort((a, b) => a.title.localeCompare(b.title, 'es'));
+      else list.sort((a, b) => a.order - b.order);
+      map.set(column.id, list);
+    }
+    return map;
+  }, [board, filter, query, sort]);
+
+  const priorityItems = priorities.map((item) => ({ id: item, label: priorityLabel[item] }));
+  const assigneeItems = [{ id: '__none__', label: 'Sin responsable' }, ...people.map((item) => ({ id: item.id, label: item.name }))];
+  const statusItems = board.columns.map((column) => ({ id: column.id, label: column.title }));
+
+  return (
+    <div className="bardo-app">
+      <div className="bardo-shell">
+        <header className="bardo-topbar">
+          <Popover>
+            <Button variant="ghost" size="sm" className="min-w-0 max-w-[65vw] justify-start px-2">
+              <span className="bardo-board-title">{board.title}</span>
+              <span aria-hidden="true" className="text-muted">⌄</span>
+            </Button>
+            <Popover.Content placement="bottom start" className="min-w-64">
+              <Popover.Dialog className="p-2">
+                <div className="grid gap-1">
+                  {state.boards.map((item) => (
+                    <Button
+                      key={item.id}
+                      variant={item.id === board.id ? 'secondary' : 'ghost'}
+                      size="sm"
+                      fullWidth
+                      className="justify-between"
+                      onPress={() => switchBoard(item.id)}
+                    >
+                      <span>{item.title}</span>
+                      <span className="text-xs text-muted">{item.tasks.length}</span>
+                    </Button>
+                  ))}
+                  <div className="mt-1 border-t border-border pt-1">
+                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={createNewBoard}>＋ Nuevo tablero</Button>
+                  </div>
+                </div>
+              </Popover.Dialog>
+            </Popover.Content>
+          </Popover>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              isIconOnly
+              aria-label="Buscar"
+              onPress={() => {
+                setSearchOpen((open) => !open);
+                requestAnimationFrame(() => searchRef.current?.focus());
+              }}
+            >⌕</Button>
+            <Popover>
+              <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones">•••</Button>
+              <Popover.Content placement="bottom end" className="min-w-56">
+                <Popover.Dialog className="p-2">
+                  <div className="grid gap-1">
+                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={() => setSettingsOpen(true)}>Configurar tablero</Button>
+                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={() => addStress(250)}>+250 tareas mock</Button>
+                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={() => addStress(1000)}>+1000 tareas mock</Button>
+                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={runSelfTest}>Autoprueba</Button>
+                  </div>
+                </Popover.Dialog>
+              </Popover.Content>
+            </Popover>
+            <Button variant="primary" size="sm" className="hidden sm:inline-flex" onPress={() => openQuick()}>＋</Button>
+          </div>
+        </header>
+
+        {searchOpen && (
+          <div className="border-b border-border pb-2">
+            <div className="bardo-search-row">
+              <Input
+                ref={searchRef}
+                variant="secondary"
+                fullWidth
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar tareas…"
+                aria-label="Buscar tareas"
+              />
+              <HeroSelect
+                label="Orden"
+                value={sort}
+                onChange={(value) => setSort(value as Sort)}
+                items={[
+                  { id: 'manual', label: 'Manual' },
+                  { id: 'priority', label: 'Prioridad' },
+                  { id: 'title', label: 'Título' },
+                ]}
+              />
+            </div>
+            <div className="bardo-filter-row">
+              {([
+                ['all', 'Todas'],
+                ['mine', 'Mías'],
+                ['urgent', 'Urgentes'],
+                ['unassigned', 'Sin responsable'],
+                ['comments', 'Con comentarios'],
+              ] as Array<[Filter, string]>).map(([id, label]) => (
+                <Button key={id} variant={filter === id ? 'secondary' : 'ghost'} size="sm" onPress={() => setFilter(id)}>{label}</Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <nav className="bardo-tabs" aria-label="Columnas">
+          {board.columns.map((column) => (
+            <Button
+              key={column.id}
+              variant={state.activeColumnId === column.id ? 'secondary' : 'ghost'}
+              size="sm"
+              onPress={() => setState((previous) => ({ ...previous, activeColumnId: column.id }))}
+            >
+              {column.title}
+              <span className="text-xs text-muted">{filteredTasks.get(column.id)?.length ?? 0}</span>
+            </Button>
+          ))}
+        </nav>
+
+        <main className="bardo-board" style={{ '--column-count': board.columns.length } as CSSProperties}>
+          <div className="bardo-columns">
+            {board.columns.map((column) => {
+              const all = filteredTasks.get(column.id) ?? [];
+              const limitKey = `${board.id}:${column.id}`;
+              const limit = renderLimits[limitKey] ?? PAGE_SIZE;
+              const visible = all.slice(0, limit);
+              return (
+                <section key={column.id} className="bardo-column" data-active={String(column.id === state.activeColumnId)}>
+                  <header className="bardo-column-head">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h2 className="truncate text-sm font-semibold">{column.title}</h2>
+                      <span className="text-xs text-muted">{all.length}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" isIconOnly aria-label={`Crear tarea en ${column.title}`} onPress={() => openQuick(column.id)}>＋</Button>
+                  </header>
+                  <div
+                    className="bardo-dropzone grid min-h-24 gap-2"
+                    data-over={String(dragOverColumn === column.id)}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragOverColumn(column.id);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverColumn(null);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const id = event.dataTransfer.getData('text/plain') || dragTaskId;
+                      if (id) moveTask(id, column.id);
+                      setDragTaskId(null);
+                      setDragOverColumn(null);
+                    }}
+                  >
+                    {visible.length === 0 ? (
+                      <div className="bardo-empty">No hay tareas aquí.</div>
+                    ) : visible.map((item) => {
+                      const person = personById(item.assignee);
+                      const doneSubtasks = item.subtasks.filter((subtask) => subtask.done).length;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="bardo-card"
+                          draggable
+                          data-dragging={String(dragTaskId === item.id)}
+                          onDragStart={(event) => {
+                            setDragTaskId(item.id);
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', item.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragTaskId(null);
+                            setDragOverColumn(null);
+                          }}
+                          onClick={() => openTask(item.id)}
+                        >
+                          <div className="flex gap-2.5">
+                            <span className="bardo-priority" data-priority={item.priority} aria-label={`Prioridad ${priorityLabel[item.priority]}`} />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium leading-5">{item.title}</div>
+                              {item.description && <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.description}</div>}
+                              <div className="mt-2.5 flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                                  {item.tags.slice(0, 2).map((tag) => <Chip key={tag} size="sm" variant="tertiary">{tag}</Chip>)}
+                                  {item.tags.length > 2 && <span className="text-xs text-muted">+{item.tags.length - 2}</span>}
+                                  {item.subtasks.length > 0 && <span className="text-xs text-muted">☑ {doneSubtasks}/{item.subtasks.length}</span>}
+                                  {item.comments.length > 0 && <span className="text-xs text-muted">◌ {item.comments.length}</span>}
+                                </div>
+                                <Avatar size="sm" variant="soft" aria-label={person?.name ?? 'Sin responsable'}>
+                                  <Avatar.Fallback>{person?.initials ?? '—'}</Avatar.Fallback>
+                                </Avatar>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {all.length > limit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        fullWidth
+                        onPress={() => setRenderLimits((previous) => ({ ...previous, [limitKey]: limit + PAGE_SIZE }))}
+                      >Mostrar {Math.min(PAGE_SIZE, all.length - limit)} más</Button>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </main>
+      </div>
+
+      <div className="bardo-fab sm:hidden">
+        <Button variant="primary" size="lg" isIconOnly aria-label="Nueva tarea" onPress={() => openQuick()}>＋</Button>
+      </div>
+
+      <Modal>
+        <Modal.Backdrop variant="blur" isOpen={quickOpen} onOpenChange={setQuickOpen}>
+          <Modal.Container placement="center" size="sm">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header><Modal.Heading>Nueva tarea</Modal.Heading></Modal.Header>
+              <Modal.Body className="grid gap-4">
+                <Input autoFocus value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="¿Qué hay que hacer?" maxLength={180} aria-label="Título" />
+                <HeroSelect label="Columna" value={quickStatus || board.columns[0].id} onChange={setQuickStatus} items={statusItems} />
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="ghost" onPress={() => setQuickOpen(false)}>Cancelar</Button>
+                <Button variant="primary" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal>
+        <Modal.Backdrop variant="blur" isOpen={taskOpen} onOpenChange={(open) => {
+          setTaskOpen(open);
+          if (!open) setActiveTaskId(null);
+        }}>
+          <Modal.Container placement="center" size="lg" scroll="inside">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              {task && (
+                <>
+                  <Modal.Header className="pr-12">
+                    <input
+                      className="bardo-modal-title-input"
+                      value={task.title}
+                      onChange={(event) => updateTask(task.id, { title: event.target.value.slice(0, 180) })}
+                      placeholder="Título"
+                      aria-label="Título de la tarea"
+                    />
+                  </Modal.Header>
+                  <Modal.Body>
+                    <div className="grid gap-4">
+                      <TextArea
+                        variant="secondary"
+                        rows={4}
+                        value={task.description}
+                        onChange={(event) => updateTask(task.id, { description: event.target.value.slice(0, 3000) })}
+                        placeholder="Añade una descripción…"
+                        aria-label="Descripción"
+                      />
+
+                      <div className="bardo-prop-grid">
+                        <HeroSelect label="Columna" value={task.status} onChange={(value) => moveTask(task.id, value)} items={statusItems} />
+                        <HeroSelect label="Responsable" value={task.assignee} onChange={(value) => updateTask(task.id, { assignee: value })} items={assigneeItems} />
+                        <HeroSelect label="Prioridad" value={task.priority} onChange={(value) => updateTask(task.id, { priority: value as Priority })} items={priorityItems} />
+                      </div>
+
+                      <section className="bardo-section">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold">Tags</h3>
+                          <span className="text-xs text-muted">{task.tags.length}/{board.tags.length}</span>
+                        </div>
+                        {board.tags.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {board.tags.map((tag) => (
+                              <Button key={tag} variant={task.tags.includes(tag) ? 'secondary' : 'ghost'} size="sm" className="rounded-full" onPress={() => toggleTaskTag(tag)}>{tag}</Button>
+                            ))}
+                          </div>
+                        ) : <p className="text-sm text-muted">Este tablero todavía no tiene tags.</p>}
+                      </section>
+
+                      <section className="bardo-section">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold">Subtareas</h3>
+                          <span className="text-xs text-muted">{task.subtasks.filter((item) => item.done).length}/{task.subtasks.length}</span>
+                        </div>
+                        <div className="grid gap-1">
+                          {task.subtasks.map((item) => (
+                            <div key={item.id} className="flex items-center gap-2 rounded-lg px-1 py-1">
+                              <Button variant="ghost" size="sm" isIconOnly aria-label={item.done ? 'Marcar pendiente' : 'Marcar lista'} onPress={() => toggleSubtask(item.id)}>{item.done ? '✓' : '○'}</Button>
+                              <span className={`min-w-0 flex-1 text-sm ${item.done ? 'text-muted line-through' : ''}`}>{item.text}</span>
+                              <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar subtarea" onPress={() => removeSubtask(item.id)}>×</Button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <Input variant="secondary" fullWidth value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Añadir subtarea" maxLength={140} aria-label="Nueva subtarea" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSubtask(); } }} />
+                          <Button variant="secondary" isDisabled={!subtaskDraft.trim()} onPress={addSubtask}>Añadir</Button>
+                        </div>
+                      </section>
+
+                      <section className="bardo-section">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold">Comentarios</h3>
+                          <span className="text-xs text-muted">{task.comments.length}</span>
+                        </div>
+                        <div>
+                          {task.comments.map((comment) => {
+                            const author = personById(comment.author);
+                            return (
+                              <article key={comment.id} className="bardo-comment">
+                                <div className="flex items-start gap-2.5">
+                                  <PersonAvatar assignee={comment.author} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <strong>{author?.name ?? 'Persona'}</strong>
+                                      <span className="text-muted">{new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' }).format(new Date(comment.created))}</span>
+                                    </div>
+                                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{comment.text}</p>
+                                  </div>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-2 grid gap-2">
+                          <TextArea variant="secondary" rows={2} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Escribe un comentario…" maxLength={800} aria-label="Nuevo comentario" />
+                          <div className="flex justify-end"><Button variant="secondary" size="sm" isDisabled={!commentDraft.trim()} onPress={addComment}>Comentar</Button></div>
+                        </div>
+                      </section>
+                    </div>
+                  </Modal.Body>
+                  <Modal.Footer className="justify-between">
+                    <Button variant="danger" onPress={deleteTask}>Eliminar</Button>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" onPress={duplicateTask}>Duplicar</Button>
+                      <Button variant="primary" onPress={() => setTaskOpen(false)}>Listo</Button>
+                    </div>
+                  </Modal.Footer>
+                </>
+              )}
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal>
+        <Modal.Backdrop variant="blur" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
+          <Modal.Container placement="center" size="lg" scroll="inside">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header><Modal.Heading>Tablero</Modal.Heading></Modal.Header>
+              <Modal.Body>
+                <div className="grid gap-5">
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted">Nombre</Label>
+                    <Input
+                      variant="secondary"
+                      value={board.title}
+                      onChange={(event) => changeState((draft) => {
+                        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+                        target.title = event.target.value.slice(0, 48);
+                      })}
+                      maxLength={48}
+                    />
+                  </div>
+
+                  <section className="bardo-section">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">Columnas</h3>
+                        <p className="text-xs text-muted">{board.columns.length}/{MAX_COLUMNS} · 4 por defecto</p>
+                      </div>
+                      <Button variant="secondary" size="sm" isDisabled={board.columns.length >= MAX_COLUMNS} onPress={addColumn}>＋ Columna</Button>
+                    </div>
+                    <div className="grid gap-2">
+                      {board.columns.map((column, index) => (
+                        <div key={column.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-1">
+                          <Input variant="secondary" value={column.title} onChange={(event) => renameColumn(column.id, event.target.value)} maxLength={32} aria-label={`Nombre columna ${index + 1}`} />
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la izquierda" isDisabled={index === 0} onPress={() => moveColumn(column.id, -1)}>←</Button>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la derecha" isDisabled={index === board.columns.length - 1} onPress={() => moveColumn(column.id, 1)}>→</Button>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar columna" onPress={() => deleteColumn(column.id)}>×</Button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="bardo-section">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-semibold">Tags</h3>
+                        <p className="text-xs text-muted">{board.tags.length}/{MAX_TAGS} máximo por tablero</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {board.tags.map((tag) => (
+                        <Chip key={tag} size="sm" variant="tertiary">
+                          {tag}
+                          <button type="button" className="ml-1 text-muted" aria-label={`Eliminar ${tag}`} onClick={() => deleteTag(tag)}>×</button>
+                        </Chip>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <Input variant="secondary" fullWidth value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={24} placeholder="Nuevo tag" aria-label="Nuevo tag" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTag(); } }} />
+                      <Button variant="secondary" isDisabled={!tagDraft.trim() || board.tags.length >= MAX_TAGS} onPress={addTag}>Añadir</Button>
+                    </div>
+                  </section>
+
+                  <section className="bardo-section">
+                    <h3 className="text-sm font-semibold">QA mock</h3>
+                    <p className="mt-1 text-xs text-muted">{board.tasks.length.toLocaleString('es-CL')} tareas en este tablero.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button variant="ghost" size="sm" onPress={() => addStress(250)}>+250 tareas</Button>
+                      <Button variant="ghost" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button>
+                      <Button variant="ghost" size="sm" onPress={runSelfTest}>Autoprueba</Button>
+                      <Button variant="ghost" size="sm" onPress={clearBoard}>Vaciar</Button>
+                      <Button variant="danger" size="sm" onPress={resetMocks}>Restablecer mocks</Button>
+                    </div>
+                    {selfTestText && <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-border p-3 text-xs text-muted">{selfTestText}</pre>}
+                  </section>
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="flex-wrap justify-between">
+                <Button variant="danger" onPress={deleteBoard}>Eliminar tablero</Button>
+                <div className="flex gap-2">
+                  <Button variant="ghost" onPress={duplicateBoard}>Duplicar</Button>
+                  <Button variant="primary" onPress={() => setSettingsOpen(false)}>Listo</Button>
+                </div>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {toast && (
+        <div className="fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom)+.75rem))] left-1/2 z-[80] flex max-w-[92vw] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm shadow-lg">
+          <span>{toast.text}</span>
+          {toast.canUndo && <Button variant="ghost" size="sm" onPress={undo}>Deshacer</Button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
