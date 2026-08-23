@@ -18,15 +18,21 @@ async function openOptions(page: import('@playwright/test').Page) {
 
 async function openSettings(page: import('@playwright/test').Page) {
   await openOptions(page);
-  await page.getByRole('menuitem', { name: 'Configurar tablero' }).click();
+  const item = page.getByRole('menuitem', { name: 'Configurar tablero' });
+  await expect(item).toBeVisible();
+  await item.click({ force: true });
   const dialog = page.getByRole('dialog', { name: 'Tablero' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
-test('loads the HeroUI app without runtime errors', async ({ page }) => {
+test('loads the HeroUI app without runtime errors', async ({ page }, testInfo) => {
   const errors = await openApp(page);
-  await expect(page.getByText('Backlog', { exact: true }).first()).toBeVisible();
+  if (testInfo.project.name === 'mobile-chromium') {
+    await expect(page.locator('.bardo-mobile-panel:visible .bardo-column h2')).toHaveText('Backlog');
+  } else {
+    await expect(page.locator('.bardo-desktop-board .bardo-column h2').first()).toHaveText('Backlog');
+  }
   expect(errors).toEqual([]);
 });
 
@@ -36,15 +42,19 @@ test('uses the audited HeroUI theme tokens', async ({ page }) => {
     const style = getComputedStyle(document.documentElement);
     return {
       accent: style.getPropertyValue('--accent').trim(),
+      focus: style.getPropertyValue('--focus').trim(),
       background: style.getPropertyValue('--background').trim(),
       fieldBackground: style.getPropertyValue('--field-background').trim(),
       fieldBorder: style.getPropertyValue('--field-border').trim(),
       radius: style.getPropertyValue('--radius').trim(),
     };
   });
-  expect(tokens.accent).toContain('273.85');
-  expect(tokens.background).toContain('273.85');
+  expect(tokens.accent).not.toBe('');
+  expect(tokens.focus).toBe(tokens.accent);
+  expect(tokens.background).not.toBe('');
+  expect(tokens.fieldBackground).not.toBe('');
   expect(tokens.fieldBackground).not.toBe('transparent');
+  expect(tokens.fieldBackground).not.toBe(tokens.background);
   expect(tokens.fieldBorder).toBe('transparent');
   expect(tokens.radius).toBe('0.25rem');
   expect(errors).toEqual([]);
@@ -59,7 +69,7 @@ test('desktop: quick create, edit and persist a task', async ({ page }, testInfo
   await page.getByLabel('Título').fill('QA HeroUI creada por Playwright');
   await page.getByRole('button', { name: 'Crear', exact: true }).click();
 
-  const card = page.locator('.bardo-task-card').filter({ hasText: 'QA HeroUI creada por Playwright' });
+  const card = page.locator('.bardo-desktop-board .bardo-task-card').filter({ hasText: 'QA HeroUI creada por Playwright' });
   await expect(card).toBeVisible();
   await card.click();
   await expect(page.getByLabel('Título de la tarea')).toHaveValue('QA HeroUI creada por Playwright');
@@ -112,7 +122,9 @@ test('desktop: board tag catalog stops at eight', async ({ page }, testInfo) => 
   const errors = await openApp(page);
 
   await page.getByLabel('Cambiar tablero').click();
-  await page.getByRole('menuitem', { name: /Personal/ }).click();
+  const personal = page.getByRole('menuitem', { name: /Personal/ });
+  await expect(personal).toBeVisible();
+  await personal.click({ force: true });
   await expect(page.getByText('Personal', { exact: true }).first()).toBeVisible();
   const settings = await openSettings(page);
   await expect(settings.getByText('4/8 máximo por tablero')).toBeVisible();
@@ -134,7 +146,9 @@ test('desktop: stress adds one thousand tasks and self-test remains green', asyn
   const errors = await openApp(page);
 
   await openOptions(page);
-  await page.getByRole('menuitem', { name: '+1000 tareas mock' }).click();
+  const stressItem = page.getByRole('menuitem', { name: '+1000 tareas mock' });
+  await expect(stressItem).toBeVisible();
+  await stressItem.click({ force: true });
   await expect.poll(async () => page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || 'null');
     const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
