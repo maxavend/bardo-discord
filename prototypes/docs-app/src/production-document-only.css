@@ -1,0 +1,5 @@
+html[data-bardo-mode='document-only'] .back-button,
+html[data-bardo-mode='document-only'] .library,
+html[data-bardo-mode='document-only'] .new-button {
+  display: none !important;
+}
