@@ -98,9 +98,19 @@ export async function handleDocsApi(request, url, env) {
 
   if (route.collection && request.method === 'GET') {
     const documents = await listDocuments(env.DB, 150);
+    const contextDocumentId = session.context.documentId || null;
+
+    // The Discord message is the source of truth for production. A document can
+    // be archived from the library and must still open forever from its old
+    // Discord message, so always hydrate the context document explicitly.
+    if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
+      const contextDocument = await loadDocument(env.DB, contextDocumentId);
+      if (contextDocument) documents.unshift(contextDocument);
+    }
+
     return json({
       documents: documents.map(serialize),
-      contextDocumentId: session.context.documentId || null,
+      contextDocumentId,
     });
   }
 
