@@ -1,0 +1,9 @@
+status=success
+architecture=discord-guild-auth-v1
+oauth=compiled
+guild_acl=compiled
+signed_launch_intent=compiled
+tests=success
+docs_build=success
+source_commit=84874a9e7e9870d47b2baf6b705f9dd944d19b16
+checked_at=2026-08-23T21:42:53Z
