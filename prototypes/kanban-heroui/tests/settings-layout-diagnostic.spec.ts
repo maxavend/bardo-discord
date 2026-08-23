@@ -1,30 +1,43 @@
 import { expect, test } from '@playwright/test';
 
-test('mobile: settings direct children have zero intrinsic overflow', async ({ page }, testInfo) => {
+test('mobile: settings descendants have zero intrinsic overflow', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   await page.goto('/');
   await page.getByLabel('Más opciones').selectOption('settings');
   const body = page.getByTestId('settings-body');
   await expect(body).toBeVisible();
 
-  const metrics = await body.evaluate((element) => Array.from(element.children).map((node) => {
-    const child = node as HTMLElement;
-    const rect = child.getBoundingClientRect();
-    const style = getComputedStyle(child);
-    return {
-      tag: child.tagName,
-      className: child.className,
-      role: child.getAttribute('role'),
-      width: rect.width,
-      clientWidth: child.clientWidth,
-      scrollWidth: child.scrollWidth,
-      overflow: child.scrollWidth - child.clientWidth,
-      display: style.display,
-      minWidth: style.minWidth,
-      widthStyle: style.width,
-    };
-  }));
+  const offenders = await body.evaluate((element) => {
+    const bodyRect = element.getBoundingClientRect();
+    const nodes = [element, ...Array.from(element.querySelectorAll<HTMLElement>('*'))] as HTMLElement[];
+    return nodes.flatMap((node) => {
+      const rect = node.getBoundingClientRect();
+      const overflow = node.scrollWidth - node.clientWidth;
+      const escapesBody = rect.left < bodyRect.left - 1 || rect.right > bodyRect.right + 1;
+      if (overflow <= 1 && !escapesBody) return [];
+      const section = node.closest<HTMLElement>('.bardo-section');
+      const heading = section?.querySelector('h3')?.textContent?.trim() ?? null;
+      const style = getComputedStyle(node);
+      return [{
+        tag: node.tagName,
+        className: typeof node.className === 'string' ? node.className : '',
+        role: node.getAttribute('role'),
+        ariaLabel: node.getAttribute('aria-label'),
+        section: heading,
+        text: (node.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 100),
+        width: rect.width,
+        clientWidth: node.clientWidth,
+        scrollWidth: node.scrollWidth,
+        overflow,
+        leftEscape: bodyRect.left - rect.left,
+        rightEscape: rect.right - bodyRect.right,
+        display: style.display,
+        minWidth: style.minWidth,
+        widthStyle: style.width,
+        whiteSpace: style.whiteSpace,
+      }];
+    });
+  });
 
-  const offenders = metrics.filter((item) => item.overflow > 1);
   expect(offenders, JSON.stringify(offenders, null, 2)).toEqual([]);
 });
