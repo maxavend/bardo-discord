@@ -48,3 +48,5 @@ jobs:
           git add .deploy/bardo-migration-diagnostic.txt
           git commit -m "chore(docs): record D1 migration diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
+
+# Rechecked after adapting 0004 to the existing production updated_at column.
