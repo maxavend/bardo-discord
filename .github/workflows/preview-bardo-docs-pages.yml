@@ -94,3 +94,4 @@ jobs:
 # Triggered after the iOS visual-viewport keyboard sticky fix on 2026-08-23.
 # Triggered after replacing the animated viewport chase with stable keyboard mode.
 # Triggered after HeroUI runtime normalization; native OS pickers intentionally preserved.
+# Triggered after removing the final text-era kebab offsets.
