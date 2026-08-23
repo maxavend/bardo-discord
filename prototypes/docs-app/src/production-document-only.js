@@ -10,12 +10,6 @@ function readStore() {
   }
 }
 
-function writeStore(store) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
-  } catch {}
-}
-
 function forceDocumentRoute(documentId) {
   if (!documentId) return;
   const encoded = encodeURIComponent(documentId);
@@ -83,16 +77,14 @@ export async function activateBardoDocumentOnlyMode() {
     return {active:true, ready:false, documentId:null, message:'No pudimos identificar el documento de este mensaje.'};
   }
 
+  // Never prune or rewrite the production document collection here. The
+  // production bridge owns D1 synchronization; document-only mode only
+  // controls which route/UI is reachable.
   const store = readStore();
   const current = store?.docs?.find(doc => doc.id === documentId) || null;
   if (!current) {
     return {active:true, ready:false, documentId, message:'No pudimos cargar este documento. Cierra esta vista y vuelve a abrirlo desde el mensaje.'};
   }
-
-  writeStore({
-    ...store,
-    docs:[current],
-  });
 
   try {
     localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:documentId, offset:0, at:Date.now()}));
