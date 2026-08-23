@@ -1,47 +1,51 @@
-# Bardo Kanban · HeroUI QA
+# Bardo · Kanban HeroUI QA
 
-Implementación React del contrato UX validado en `../kanban/`.
+Implementación React + HeroUI v3 del laboratorio Kanban de Bardo. Esta app conserva el contrato funcional validado en el prototipo HTML y sirve como implementación de referencia antes de integrarse al producto.
 
 ## Stack
 
-- React 19.2.8
-- Vite 8.2.1
-- TypeScript 7.0.2
-- Tailwind CSS 4.3.3
-- HeroUI 3.2.4
-- HeroUI built-in dark theme (`data-theme="dark"`), sin custom theme
+- React 19
+- Vite 8
+- TypeScript
+- Tailwind CSS v4
+- HeroUI v3
 
-## Contrato Jira Light
+## Contrato funcional
 
 - 4 columnas por defecto.
-- Máximo 5 columnas por tablero.
-- Máximo 8 tags en el catálogo de cada tablero.
-- Una tarea solo expone: título, descripción, columna, responsable, prioridad, tags, subtareas y comentarios.
-- Creación rápida: título + columna.
-- Mobile: una columna visible a la vez.
-- Desktop: todas las columnas + drag and drop.
-- localStorage, undo, búsqueda, filtros progresivos, CRUD de tableros, stress mock y autoprueba.
+- máximo 5 columnas por tablero.
+- máximo 8 tags por tablero.
+- tarea: título, descripción, columna, responsable, prioridad, tags, subtareas y comentarios.
+- drag & drop desktop.
+- una columna visible a la vez en mobile.
+- búsqueda, filtros y orden.
+- CRUD de tableros y columnas.
+- persistencia local.
+- stress QA +250 / +1000.
 
-## Datos QA
+## Fuente visual
 
-El seed inicial genera 4 tableros y 470 tareas mock determinísticas. Desde `•••` o Configurar tablero se pueden añadir +250 o +1000 tareas.
+La aplicación usa el theme exacto generado por HeroUI Theme Builder para:
 
-## Desarrollo
+- lightness `0.5774`
+- chroma `0.2091`
+- hue `273.85`
+- base `0.01`
+- radius `small`
 
-```bash
-npm install
-npm run typecheck
-npm run dev
-```
+`src/theme.css` contiene únicamente tokens authored por el Theme Builder. `src/styles.css` conserva la carga `tailwindcss → @heroui/styles → theme.css` y solo añade composición, geometría, responsive y layout propios del Kanban.
 
-## Build
+## Normalización visual mobile
 
-```bash
-npm run build
-```
+La pasada actual fija una escala geométrica única para spacing, alturas de controles, tipografía e icon buttons. Usa los BEM oficiales de HeroUI para normalizar `Tabs`, `Modal`, `Dropdown`, `TagGroup` y `Button` sin crear una capa visual paralela al theme.
 
-Cloudflare Pages publica `dist/` desde la branch `module/kanban`.
+- topbar con cajas de acción equivalentes y kebab vertical.
+- tabs mobile de una línea con scroll táctil nativo y sin chevrons flotantes.
+- modales con header/body/footer, safe-area y paddings consistentes.
+- configuración de columnas y tags sin overflow horizontal.
+- herramientas QA adaptadas a mobile sin comprimir acciones.
+- cards y encabezados de columna con una cadencia de spacing común.
 
-## Referencia
+## Gates
 
-`../kanban/` queda congelado como laboratorio HTML aprobado. La migración HeroUI no debe rediseñar el contrato, solo llevarlo a la implementación definitiva del módulo.
+`npm run audit` ejecuta lint visual, typecheck, build y E2E. El build también incluye el lint visual para impedir un deploy con reglas que compitan accidentalmente con HeroUI.
