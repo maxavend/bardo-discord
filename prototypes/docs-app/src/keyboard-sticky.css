@@ -1,0 +1,20 @@
+:root {
+  --bardo-visual-viewport-top: 0px;
+}
+
+/*
+ * iOS/WebKit keeps sticky positioning tied to the layout viewport while the
+ * software keyboard can pan the visual viewport. Offset editor chrome by the
+ * live visual viewport top so it stays visually pinned while typing.
+ */
+.editing-route .doc-topbar {
+  top: var(--bardo-visual-viewport-top);
+}
+
+.editing-route .editor-toolbar-sticky {
+  top: calc(
+    var(--bardo-visual-viewport-top)
+    + var(--bardo-topbar)
+    + var(--bardo-toolbar-gap)
+  );
+}
