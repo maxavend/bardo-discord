@@ -1,19 +1,22 @@
 expected_marker=docs-current-document-only-v1
-checked_at=2026-08-23T20:56:09Z
+expected_context_fix=discord-context-retry-v1
+checked_at=2026-08-23T21:03:50Z
 
 --- worker-origin ---
-url=https://bardo-discord.bardo-discord.workers.dev/?diagnostic=1787518568
+url=https://bardo-discord.bardo-discord.workers.dev/?diagnostic=1787519029
 http=200
 marker=present
+context_fix=missing
 title=<title>Bardo · Docs</title>
-script=<script type="module" crossorigin src="/assets/index-DqyvxJKA.js">
+script=<script type="module" crossorigin src="/assets/index-BN1cOZ0E.js">
 
 --- discord-proxy ---
-url=https://1539704001535156254.discordsays.com/?diagnostic=1787518568
+url=https://1539704001535156254.discordsays.com/?diagnostic=1787519029
 http=200
 marker=present
+context_fix=missing
 title=<title>Bardo · Docs</title>
-script=<script type="module" crossorigin src="/assets/index-DqyvxJKA.js">
+script=<script type="module" crossorigin src="/assets/index-BN1cOZ0E.js">
 
 --- discord-html-head ---
 <!doctype html>
@@ -25,7 +28,7 @@ script=<script type="module" crossorigin src="/assets/index-DqyvxJKA.js">
     <meta name="bardo-build" content="docs-current-document-only-v1" />
     <title>Bardo · Docs</title>
     
-<script type="text/javascript" nonce="MTY1LDEwNSwxMDEsMTc4LDIxMCwwLDkxLDQw">
+<script type="text/javascript" nonce="NjgsMTA4LDQxLDIxMywxMjQsMTM0LDIyMSw5Mw==">
 RTCPeerConnection = null;
 WebTransport = null;
 
@@ -34,7 +37,7 @@ ServiceWorkerContainer.prototype.register = function() {
 };
 
 </script>
-<script type="module" crossorigin src="/assets/index-DqyvxJKA.js"></script>
+<script type="module" crossorigin src="/assets/index-BN1cOZ0E.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-KjslWaX7.css">
   </head>
   <body class="bg-background text-foreground">
