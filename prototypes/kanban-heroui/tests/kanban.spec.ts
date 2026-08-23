@@ -25,35 +25,38 @@ test('desktop: quick create, edit and persist a task', async ({ page }, testInfo
   await page.getByLabel('Título').fill('QA HeroUI creada por Playwright');
   await page.getByRole('button', { name: 'Crear', exact: true }).click();
 
-  const taskTitle = page.getByText('QA HeroUI creada por Playwright', { exact: true });
-  await expect(taskTitle).toBeVisible();
-  await taskTitle.click();
-
+  const card = page.locator('.bardo-card').filter({ hasText: 'QA HeroUI creada por Playwright' });
+  await expect(card).toBeVisible();
+  await card.click();
   await expect(page.getByLabel('Título de la tarea')).toHaveValue('QA HeroUI creada por Playwright');
   await page.getByLabel('Descripción').fill('Descripción persistida desde el gate E2E.');
   await page.getByRole('button', { name: 'Listo', exact: true }).click();
-  await expect(page.getByText('Descripción persistida desde el gate E2E.', { exact: true })).toBeVisible();
+  await expect(card.getByText('Descripción persistida desde el gate E2E.', { exact: true })).toBeVisible();
 
   await expect.poll(async () => page.evaluate((key) => Boolean(localStorage.getItem(key)), STORAGE)).toBe(true);
   expect(errors).toEqual([]);
 });
 
-test('desktop: drag and drop moves a task between columns', async ({ page }, testInfo) => {
+test('desktop: native drag lifecycle moves a task between columns', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const errors = await openApp(page);
 
-  const firstCard = page.locator('.bardo-card').first();
-  const taskTitle = (await firstCard.locator('.text-sm.font-medium').textContent())?.trim();
-  expect(taskTitle).toBeTruthy();
+  const firstCard = page.locator('.bardo-column').first().locator('.bardo-card').first();
+  const taskId = await firstCard.getAttribute('data-task-id');
+  expect(taskId).toBeTruthy();
   const targetDropzone = page.locator('.bardo-dropzone').nth(1);
-  await firstCard.dragTo(targetDropzone);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await firstCard.dispatchEvent('dragstart', { dataTransfer });
+  await targetDropzone.dispatchEvent('dragover', { dataTransfer });
+  await targetDropzone.dispatchEvent('drop', { dataTransfer });
+  await firstCard.dispatchEvent('dragend', { dataTransfer });
 
-  await expect.poll(async () => page.evaluate(({ key, title }) => {
+  await expect.poll(async () => page.evaluate(({ key, id }) => {
     const state = JSON.parse(localStorage.getItem(key) || 'null');
     const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
-    const task = board?.tasks?.find((item: { title: string }) => item.title === title);
+    const task = board?.tasks?.find((item: { id: string }) => item.id === id);
     return task?.status === board?.columns?.[1]?.id;
-  }, { key: STORAGE, title: taskTitle })).toBe(true);
+  }, { key: STORAGE, id: taskId })).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -79,6 +82,7 @@ test('desktop: board tag catalog stops at eight', async ({ page }, testInfo) => 
 
   await page.getByRole('button', { name: /Producto/ }).first().click();
   await page.getByRole('button', { name: /Personal/ }).click();
+  await expect(page.getByText('Personal', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Más opciones' }).click();
   await page.getByRole('button', { name: 'Configurar tablero' }).click();
   await expect(page.getByText('4/8 máximo por tablero')).toBeVisible();
