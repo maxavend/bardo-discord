@@ -3,10 +3,12 @@ import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
   archiveDocument,
+  cacheNormalizedDocument,
   documentHasGuildAccess,
   grantDocumentGuildAccess,
   listDocumentsForGuild,
   loadDocument,
+  loadDocumentSource,
   loadRecentDocsLaunchIntent,
   saveDocument,
   updateDocumentContent,
@@ -75,12 +77,14 @@ function parsePath(pathname) {
   if (pathname === DOCS_API_PREFIX || pathname === `${DOCS_API_PREFIX}/`) return { collection: true };
   if (!pathname.startsWith(`${DOCS_API_PREFIX}/`)) return null;
 
-  const encoded = pathname.slice(DOCS_API_PREFIX.length + 1);
-  if (!encoded || encoded.includes('/')) return null;
+  const rest = pathname.slice(DOCS_API_PREFIX.length + 1);
+  const [encodedId, action, extra] = rest.split('/');
+  if (!encodedId || extra) return null;
+  if (action && action !== 'source' && action !== 'normalize') return null;
 
   try {
-    const id = normalizeDocumentId(decodeURIComponent(encoded));
-    return id ? { collection: false, id } : null;
+    const id = normalizeDocumentId(decodeURIComponent(encodedId));
+    return id ? { collection: false, id, action: action || null } : null;
   } catch {
     return null;
   }
@@ -105,6 +109,43 @@ async function resolveContextDocument(request, env, session) {
   return null;
 }
 
+async function handleSource(route, request, env, session) {
+  if (request.method !== 'GET') return new Response('Method not allowed', {status:405});
+  const access = await requireDocumentAccess(env, route.id, session.guildId);
+  if (access.error) return access.error;
+  const source = await loadDocumentSource(env.DB, route.id);
+  if (!source) return json({error:'Document source not found'}, 404);
+
+  return new Response(source.bytes, {
+    status:200,
+    headers:{
+      'Content-Type': source.mime,
+      'Content-Length': String(source.bytes.byteLength),
+      'Cache-Control':'private, no-store',
+      'X-Content-Type-Options':'nosniff',
+    },
+  });
+}
+
+async function handleNormalize(route, request, env, session) {
+  if (request.method !== 'POST') return new Response('Method not allowed', {status:405});
+  const access = await requireDocumentAccess(env, route.id, session.guildId);
+  if (access.error) return access.error;
+
+  let payload;
+  try { payload = await request.json(); } catch { return json({error:'Invalid JSON payload'}, 400); }
+  const markdown = typeof payload?.markdown === 'string' ? payload.markdown.trim() : '';
+  if (!markdown) return json({error:'Normalized markdown required'}, 400);
+  if (encoder.encode(markdown).byteLength > MAX_DOCUMENT_BYTES) return json({error:'Normalized document is too large'}, 413);
+
+  const {body} = extractDocumentTitle(markdown, access.document.title);
+  const pages = paginateMarkdown(body || markdown).slice(0, 1);
+  if (!pages.length) return json({error:'Normalized document is empty'}, 400);
+
+  await cacheNormalizedDocument(env.DB, route.id, markdown, pages);
+  return json({ok:true, document:serialize(await loadDocument(env.DB, route.id))});
+}
+
 export async function handleDocsApi(request, url, env) {
   const route = parsePath(url.pathname);
   if (!route) return null;
@@ -113,11 +154,13 @@ export async function handleDocsApi(request, url, env) {
   if (auth.error) return auth.error;
   const { session } = auth;
 
+  if (!route.collection && route.action === 'source') return handleSource(route, request, env, session);
+  if (!route.collection && route.action === 'normalize') return handleNormalize(route, request, env, session);
+
   if (route.collection && request.method === 'GET') {
     const documents = await listDocumentsForGuild(env.DB, session.guildId, 150);
     const contextDocumentId = await resolveContextDocument(request, env, session);
 
-    // Archived docs remain reachable from their existing Discord message.
     if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
       const contextDocument = await loadDocument(env.DB, contextDocumentId);
       if (contextDocument) documents.unshift(contextDocument);
@@ -169,9 +212,7 @@ export async function handleDocsApi(request, url, env) {
   if (access.error) return access.error;
   const existing = access.document;
 
-  if (request.method === 'GET') {
-    return json(serialize(existing));
-  }
+  if (request.method === 'GET') return json(serialize(existing));
 
   if (request.method === 'PATCH' || request.method === 'PUT') {
     let payload;
@@ -185,7 +226,6 @@ export async function handleDocsApi(request, url, env) {
   }
 
   if (request.method === 'DELETE') {
-    // Soft archive only: the D1 row and Discord message deep-link remain intact.
     await archiveDocument(env.DB, route.id);
     return json({ ok: true, archived: true, id: route.id });
   }
