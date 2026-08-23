@@ -113,8 +113,9 @@ test('desktop: stress adds one thousand tasks and self-test remains green', asyn
 
   await page.getByRole('button', { name: 'Más opciones' }).click();
   await page.getByRole('button', { name: 'Configurar tablero' }).click();
-  await page.getByRole('button', { name: 'Autoprueba' }).click();
-  await expect(page.getByText(/PASS · 4 tableros/)).toBeVisible();
+  const settings = page.getByLabel('Tablero');
+  await settings.getByRole('button', { name: 'Autoprueba' }).click();
+  await expect(settings.getByText(/PASS · 4 tableros/)).toBeVisible();
   expect(errors).toEqual([]);
 });
 
