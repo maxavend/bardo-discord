@@ -22,14 +22,15 @@ function forceDocumentRoute(documentId) {
 function installDocumentOnlyGuard(documentId) {
   document.documentElement.dataset.bardoMode = 'document-only';
 
-  const stripNonDocumentUi = () => {
-    document.querySelectorAll('.back-button').forEach(node => node.remove());
-    document.querySelectorAll('option[value="reset"], option[value="duplicate"], option[value="delete"]').forEach(option => option.remove());
+  const disableNonDocumentActions = () => {
+    document.querySelectorAll('option[value="reset"], option[value="duplicate"], option[value="delete"]').forEach(option => {
+      option.disabled = true;
+    });
   };
 
-  const observer = new MutationObserver(stripNonDocumentUi);
+  const observer = new MutationObserver(disableNonDocumentActions);
   observer.observe(document.documentElement, {subtree:true, childList:true});
-  stripNonDocumentUi();
+  disableNonDocumentActions();
 
   const enforceRoute = () => {
     if (!documentId) return;
