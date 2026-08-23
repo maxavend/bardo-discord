@@ -41,7 +41,7 @@ jobs:
             -H "x-bardo-custom-id: bardo:open:$DOC_ID" \
             "$WORKER_ORIGIN/api/docs?launch_diagnostic=$GITHUB_RUN_ID" > /tmp/response.json
 
-          node - <<'NODE'
+          DOC_ID="$DOC_ID" node - <<'NODE'
           const fs = require('fs');
           const payload = JSON.parse(fs.readFileSync('/tmp/response.json','utf8'));
           const expected = process.env.DOC_ID;
@@ -52,8 +52,15 @@ jobs:
             throw new Error('Launch document missing from hydrated documents');
           }
           NODE
-        env:
-          DOC_ID: ${{ env.DOC_ID }}
+
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT document_id FROM activity_contexts WHERE instance_id = '$INSTANCE';" --json > /tmp/context.json
+          DOC_ID="$DOC_ID" node - <<'NODE'
+          const fs = require('fs');
+          const x = JSON.parse(fs.readFileSync('/tmp/context.json','utf8'));
+          const a = Array.isArray(x) ? x : [x];
+          const actual = a.flatMap(v => v.results || [])[0]?.document_id;
+          if (actual !== process.env.DOC_ID) throw new Error(`D1 context mismatch: ${actual}`);
+          NODE
       - name: Persist result
         if: success()
         shell: bash
@@ -63,6 +70,7 @@ jobs:
           status=success
           launch_fix=discord-custom-id-session-v2
           live_api_recovery=success
+          d1_session_recovery=success
           document_mutation=none
           checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
