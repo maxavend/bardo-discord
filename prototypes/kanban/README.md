@@ -57,3 +57,5 @@ Esto sirve el laboratorio directamente por HTTPS en un navegador real sin incorp
 ## Gate de aprobación
 
 Este módulo no se considera aprobado por verse bien. El gate es: todos los controles utilizables, flujos críticos recorridos, stress data validado en desktop y Safari iOS, persistencia/recuperación comprobadas y aprobación explícita de UX antes de migrar a la implementación definitiva.
+
+<!-- deploy-trigger: 2026-08-23T01:53:00-04:00 -->
