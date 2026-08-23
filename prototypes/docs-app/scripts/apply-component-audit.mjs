@@ -19,8 +19,14 @@ export function applyComponentAudit(filePath) {
 
   replace(
 `import {\n  Button,\n  Dropdown,\n  Input,\n  Label,\n  ListBox,\n  Modal,\n  Select,\n} from '@heroui/react';`,
-`import {\n  Button,\n  Input,\n  Label,\n  Modal,\n  SearchField,\n  TextField,\n  ToastProvider,\n  Toolbar,\n  toast,\n} from '@heroui/react';`,
-'HeroUI imports without web dropdown primitives',
+`import {\n  Button,\n  Input,\n  Label,\n  Modal,\n  SearchField,\n  TextField,\n  ToastProvider,\n  Toolbar,\n  toast,\n} from '@heroui/react';\nimport {\n  Bars,\n  Check,\n  ChevronLeft,\n  ChevronRight,\n  EllipsisVertical,\n  File,\n  Magnifier,\n  Plus,\n} from '@gravity-ui/icons';`,
+'HeroUI imports and Gravity icon set',
+  );
+
+  replaceRegex(
+/function Icon\(\{name, size = 18\}\) \{[\s\S]*?\n\}/,
+`const ICONS = {\n  search: Magnifier,\n  plus: Plus,\n  doc: File,\n  back: ChevronLeft,\n  chevron: ChevronRight,\n  list: Bars,\n  check: Check,\n};\n\nfunction Icon({name, size = 16}) {\n  const Glyph = ICONS[name];\n  return Glyph ? <Glyph width={size} height={size} aria-hidden=\"true\" /> : null;\n}`,
+'Gravity icon renderer',
   );
 
   replace(`  const [toast, setToast] = useState('');\n`, '', 'remove local toast state');
@@ -39,8 +45,8 @@ export function applyComponentAudit(filePath) {
 
   replace(
 `      <span className="native-menu-visual" aria-hidden="true">•••</span>`,
-`      <span className="native-menu-visual" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><circle cx="9" cy="4" r="1.6"/><circle cx="9" cy="9" r="1.6"/><circle cx="9" cy="14" r="1.6"/></svg></span>`,
-'vertical kebab visual',
+`      <span className="native-menu-visual" aria-hidden="true"><EllipsisVertical width={16} height={16}/></span>`,
+'Gravity vertical kebab visual with native select target',
   );
 
   replace(
@@ -70,19 +76,25 @@ export function applyComponentAudit(filePath) {
   replace(
 `return <Button aria-label={label} aria-pressed={active} isIconOnly size="sm" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={\`toolbar-button \${className}\`}>{children}</Button>;`,
 `return <Button aria-label={label} aria-pressed={active} isIconOnly size="md" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={\`toolbar-button \${className}\`}>{children}</Button>;`,
-'toolbar target size',
+'HeroUI-owned toolbar button sizing',
   );
 
   replaceRegex(
 /function InsertDropdown\(\{onAction\}\) \{[\s\S]*?\n\}\n\nfunction AppModal/,
-`function NativeInsertMenu({onAction}) {\n  return (\n    <span className="native-menu native-insert-menu">\n      <span className="native-menu-visual" aria-hidden="true"><Icon name="plus" size={18}/></span>\n      <select\n        aria-label="Insertar bloque"\n        value=""\n        onChange={e => {\n          const value = e.target.value;\n          if (value) onAction(value);\n        }}\n      >\n        <option value="" disabled>Insertar</option>\n        <option value="checklist">☑︎  Checklist</option>\n        <option value="callout">▣  Nota</option>\n        <option value="spoiler">▸  Desplegable</option>\n        <option value="hr">—  Separador</option>\n      </select>\n    </span>\n  );\n}\n\nfunction AppModal`,
+`function NativeInsertMenu({onAction}) {\n  return (\n    <span className="native-menu native-insert-menu">\n      <span className="native-menu-visual" aria-hidden="true"><Icon name="plus"/></span>\n      <select\n        aria-label="Insertar bloque"\n        value=""\n        onChange={e => {\n          const value = e.target.value;\n          if (value) onAction(value);\n        }}\n      >\n        <option value="" disabled>Insertar</option>\n        <option value="checklist">☑︎  Checklist</option>\n        <option value="callout">▣  Nota</option>\n        <option value="spoiler">▸  Desplegable</option>\n        <option value="hr">—  Separador</option>\n      </select>\n    </span>\n  );\n}\n\nfunction AppModal`,
 'native insert menu component',
   );
 
   replace(
+`        <Modal.Container placement="center" size="sm">`,
+`        <Modal.Container placement="auto" size="sm">`,
+'HeroUI responsive modal placement',
+  );
+
+  replace(
 `              {isLink && <Input autoFocus aria-label="URL" placeholder="https://…" value={linkValue} onChange={e => setLinkValue(e.target.value)} />}`,
-`              {isLink && (\n                <TextField className="modal-field">\n                  <Label>URL</Label>\n                  <Input autoFocus variant="primary" placeholder="https://…" value={linkValue} onChange={e => setLinkValue(e.target.value)} />\n                </TextField>\n              )}`,
-'link TextField composition',
+`              {isLink && (\n                <TextField className="modal-field">\n                  <Label>URL</Label>\n                  <Input autoFocus variant="secondary" placeholder="https://…" value={linkValue} onChange={e => setLinkValue(e.target.value)} />\n                </TextField>\n              )}`,
+'link TextField composition and semantic field hierarchy',
   );
 
   replace(
@@ -90,6 +102,12 @@ export function applyComponentAudit(filePath) {
 `      <ToastProvider placement="bottom"/>`,
 'HeroUI ToastProvider',
   );
+
+  source = source
+    .replaceAll('<Icon name="plus" size={17}/>', '<Icon name="plus"/>')
+    .replaceAll('<Icon name="back" size={18}/>', '<Icon name="back"/>')
+    .replaceAll('<Icon name="chevron" size={17}/>', '<Icon name="chevron"/>')
+    .replaceAll('<Icon name="list" size={18}/>', '<Icon name="list"/>');
 
   const forbidden = [
     'search-wrap',
@@ -101,6 +119,8 @@ export function applyComponentAudit(filePath) {
     '<ListBox',
     'function InsertDropdown',
     '>•••<',
+    'viewBox:\'0 0 24 24\'',
+    'placement="center"',
   ];
   for (const token of forbidden) {
     if (source.includes(token)) throw new Error(`HeroUI audit left legacy implementation: ${token}`);
