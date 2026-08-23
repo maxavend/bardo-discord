@@ -187,20 +187,20 @@ export function TaskDetailModal({
   return (
     <Modal>
       <Modal.Backdrop variant="opaque" isOpen={isOpen} onOpenChange={onOpenChange}>
-        <Modal.Container placement="center" size="lg" scroll="inside">
-          <Modal.Dialog className="bardo-task-dialog">
-            <Modal.CloseTrigger />
+        <Modal.Container placement="auto" size="lg" scroll="inside">
+          <Modal.Dialog className="bardo-task-dialog max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none">
+            <Modal.CloseTrigger className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none" />
 
             {!isEditing ? (
               <>
-                <Modal.Header className="bardo-detail-header">
+                <Modal.Header className="bardo-detail-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
                   <div className="bardo-detail-heading-copy">
-                    <Modal.Heading className="bardo-detail-title">{task.title}</Modal.Heading>
+                    <Modal.Heading className="bardo-detail-title max-md:text-lg max-md:leading-6">{task.title}</Modal.Heading>
                     <p className="bardo-detail-updated">Editada {formatTimestamp(task.updated)}</p>
                   </div>
                 </Modal.Header>
 
-                <Modal.Body key="task-read" className="bardo-detail-body" data-testid="task-read-view">
+                <Modal.Body key="task-read" className="bardo-detail-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="task-read-view">
                   {task.description ? (
                     <p className="bardo-detail-description">{task.description}</p>
                   ) : (
@@ -304,9 +304,9 @@ export function TaskDetailModal({
                   </section>
                 </Modal.Body>
 
-                <Modal.Footer className="bardo-detail-footer">
-                  <Button variant="secondary" onPress={onDuplicateTask}>Duplicar</Button>
-                  <Button variant="primary" onPress={startEditing}>
+                <Modal.Footer className="bardo-detail-footer max-md:px-4 max-md:py-3">
+                  <Button variant="secondary" size="sm" onPress={onDuplicateTask}>Duplicar</Button>
+                  <Button variant="primary" size="sm" onPress={startEditing}>
                     <Pencil className={ICON_CLASS} aria-hidden="true" />
                     Editar
                   </Button>
@@ -314,14 +314,14 @@ export function TaskDetailModal({
               </>
             ) : (
               <>
-                <Modal.Header className="bardo-detail-header">
+                <Modal.Header className="bardo-detail-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
                   <div className="bardo-detail-heading-copy">
-                    <Modal.Heading>Editar tarea</Modal.Heading>
+                    <Modal.Heading className="text-base font-semibold">Editar tarea</Modal.Heading>
                     <p className="bardo-detail-updated">Los cambios se aplican al guardar.</p>
                   </div>
                 </Modal.Header>
 
-                <Modal.Body key="task-edit" className="bardo-edit-body" data-testid="task-edit-view">
+                <Modal.Body key="task-edit" className="bardo-edit-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="task-edit-view">
                   <TextField variant="secondary">
                     <Label>Título</Label>
                     <Input
@@ -413,16 +413,16 @@ export function TaskDetailModal({
                           }
                         }}
                       />
-                      <Button variant="secondary" isDisabled={!subtaskDraft.trim() || draft.subtasks.length >= MAX_SUBTASKS} onPress={addDraftSubtask}>Añadir</Button>
+                      <Button variant="secondary" size="sm" isDisabled={!subtaskDraft.trim() || draft.subtasks.length >= MAX_SUBTASKS} onPress={addDraftSubtask}>Añadir</Button>
                     </div>
                   </section>
                 </Modal.Body>
 
-                <Modal.Footer className="bardo-detail-footer bardo-detail-footer-edit">
-                  <Button variant="danger" onPress={onDeleteTask}>Eliminar</Button>
-                  <Toolbar aria-label="Edición de tarea">
-                    <Button variant="secondary" onPress={cancelEditing}>Cancelar</Button>
-                    <Button variant="primary" isDisabled={!draft.title.trim()} onPress={saveEditing}>Guardar</Button>
+                <Modal.Footer className="bardo-detail-footer bardo-detail-footer-edit max-md:flex-nowrap max-md:gap-2 max-md:px-4 max-md:py-3">
+                  <Button variant="danger" size="sm" onPress={onDeleteTask}>Eliminar</Button>
+                  <Toolbar aria-label="Edición de tarea" className="ml-auto">
+                    <Button variant="secondary" size="sm" onPress={cancelEditing}>Cancelar</Button>
+                    <Button variant="primary" size="sm" isDisabled={!draft.title.trim()} onPress={saveEditing}>Guardar</Button>
                   </Toolbar>
                 </Modal.Footer>
               </>

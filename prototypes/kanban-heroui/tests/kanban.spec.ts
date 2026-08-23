@@ -205,13 +205,15 @@ test('desktop: board tag catalog stops at eight', async ({ page }, testInfo) => 
 test('desktop: stress adds 1000 tasks and self-test remains green', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const errors = await openApp(page);
-  await chooseBoardAction(page, 'stress-1000');
+  const settings = await openSettings(page);
+  const qaDetails = settings.locator('details').filter({ hasText: 'Herramientas QA' });
+  await qaDetails.locator('summary').click();
+  await settings.getByRole('button', { name: '+1000 tareas', exact: true }).click();
   await expect.poll(async () => page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || 'null');
     const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
     return board?.tasks?.length ?? 0;
   }, STORAGE)).toBe(1180);
-  const settings = await openSettings(page);
   await settings.getByRole('button', { name: 'Autoprueba' }).click();
   await expect(settings.getByText(/PASS · 4 tableros/)).toBeVisible();
   expect(errors).toEqual([]);

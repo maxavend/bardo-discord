@@ -531,12 +531,7 @@ function App() {
   };
 
   const handleOptionsMenu = (value: string) => {
-    switch (value) {
-      case 'settings': setSettingsOpen(true); break;
-      case 'stress-250': addStress(250); break;
-      case 'stress-1000': addStress(1000); break;
-      case 'self-test': runSelfTest(); break;
-    }
+    if (value === 'settings') setSettingsOpen(true);
   };
 
   const boardOptions = [
@@ -546,9 +541,6 @@ function App() {
 
   const actionOptions = [
     { id: 'settings', label: 'Configurar tablero' },
-    { id: 'stress-250', label: 'Añadir 250 tareas mock' },
-    { id: 'stress-1000', label: 'Añadir 1000 tareas mock' },
-    { id: 'self-test', label: 'Autoprueba' },
   ];
 
   return (
@@ -672,13 +664,13 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="opaque" isOpen={quickOpen} onOpenChange={setQuickOpen}>
-          <Modal.Container placement="center" size="sm">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header className="bardo-modal-header">
-                <Modal.Heading>Nueva tarea</Modal.Heading>
+          <Modal.Container placement="auto" size="sm">
+            <Modal.Dialog className="max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none">
+              <Modal.CloseTrigger className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none" />
+              <Modal.Header className="bardo-modal-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
+                <Modal.Heading className="text-base font-semibold">Nueva tarea</Modal.Heading>
               </Modal.Header>
-              <Modal.Body className="bardo-modal-stack" data-testid="quick-body">
+              <Modal.Body className="bardo-modal-stack max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="quick-body">
                 <TextField variant="secondary">
                   <Label>Título</Label>
                   <Input
@@ -698,9 +690,9 @@ function App() {
                   options={statusItems}
                 />
               </Modal.Body>
-              <Modal.Footer className="bardo-modal-footer">
-                <Button variant="secondary" onPress={() => setQuickOpen(false)}>Cancelar</Button>
-                <Button variant="primary" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button>
+              <Modal.Footer className="bardo-modal-footer max-md:px-4 max-md:py-3">
+                <Button variant="secondary" size="sm" onPress={() => setQuickOpen(false)}>Cancelar</Button>
+                <Button variant="primary" size="sm" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>
@@ -723,11 +715,13 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="opaque" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
-          <Modal.Container placement="center" size="lg" scroll="inside">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header className="bardo-modal-header"><Modal.Heading>Tablero</Modal.Heading></Modal.Header>
-              <Modal.Body className="bardo-settings-body" data-testid="settings-body">
+          <Modal.Container placement="auto" size="lg" scroll="inside">
+            <Modal.Dialog className="max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none">
+              <Modal.CloseTrigger className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none" />
+              <Modal.Header className="bardo-modal-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none">
+                <Modal.Heading className="text-base font-semibold">Tablero</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="bardo-settings-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4" data-testid="settings-body">
                 <TextField variant="secondary">
                   <Label>Nombre</Label>
                   <Input
@@ -755,7 +749,7 @@ function App() {
                   </div>
                   <div className="grid gap-2">
                     {board.columns.map((column, index) => (
-                      <div key={column.id} className="bardo-column-setting">
+                      <div key={column.id} className="bardo-column-setting max-md:grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_2.5rem] max-md:gap-1.5">
                         <Input
                           variant="secondary"
                           fullWidth
@@ -763,6 +757,7 @@ function App() {
                           onChange={(event) => renameColumn(column.id, event.target.value)}
                           maxLength={32}
                           aria-label={`Nombre columna ${index + 1}`}
+                          style={{ gridColumn: 'auto' }}
                         />
                         <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la izquierda" isDisabled={index === 0} onPress={() => moveColumn(column.id, -1)}>
                           <ArrowLeft className={ICON_CLASS} aria-hidden="true" />
@@ -812,33 +807,32 @@ function App() {
                         }
                       }}
                     />
-                    <Button variant="secondary" isDisabled={!tagDraft.trim() || board.tags.length >= MAX_TAGS} onPress={addTag}>Añadir</Button>
+                    <Button variant="secondary" size="sm" isDisabled={!tagDraft.trim() || board.tags.length >= MAX_TAGS} onPress={addTag}>Añadir</Button>
                   </div>
                 </section>
 
                 <Separator />
-                <section className="bardo-section" aria-labelledby="qa-heading">
-                  <div className="bardo-section-heading">
-                    <div>
-                      <h3 id="qa-heading" className="text-sm font-semibold">QA mock</h3>
-                      <p className="mt-0.5 text-xs text-muted">{board.tasks.length.toLocaleString(undefined)} tareas en este tablero.</p>
-                    </div>
+                <details className="grid min-w-0 gap-3">
+                  <summary className="cursor-pointer text-sm font-medium text-muted">
+                    Herramientas QA · {board.tasks.length.toLocaleString(undefined)} tareas
+                  </summary>
+                  <div className="mt-3 grid min-w-0 gap-3">
+                    <Toolbar aria-label="Herramientas QA" className="flex-wrap">
+                      <Button variant="secondary" size="sm" onPress={() => addStress(250)}>+250 tareas</Button>
+                      <Button variant="secondary" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button>
+                      <Button variant="secondary" size="sm" onPress={runSelfTest}>Autoprueba</Button>
+                      <Button variant="secondary" size="sm" onPress={clearBoard}>Vaciar</Button>
+                      <Button variant="danger" size="sm" onPress={resetMocks}>Restablecer mocks</Button>
+                    </Toolbar>
+                    {selfTestText && <pre className="bardo-qa-result">{selfTestText}</pre>}
                   </div>
-                  <Toolbar aria-label="Herramientas QA" className="flex-wrap">
-                    <Button variant="secondary" size="sm" onPress={() => addStress(250)}>+250 tareas</Button>
-                    <Button variant="secondary" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button>
-                    <Button variant="secondary" size="sm" onPress={runSelfTest}>Autoprueba</Button>
-                    <Button variant="secondary" size="sm" onPress={clearBoard}>Vaciar</Button>
-                    <Button variant="danger" size="sm" onPress={resetMocks}>Restablecer mocks</Button>
-                  </Toolbar>
-                  {selfTestText && <pre className="bardo-qa-result">{selfTestText}</pre>}
-                </section>
+                </details>
               </Modal.Body>
-              <Modal.Footer className="bardo-modal-footer bardo-settings-footer">
-                <Button variant="danger" onPress={deleteBoard}>Eliminar tablero</Button>
-                <Toolbar aria-label="Acciones del tablero">
-                  <Button variant="secondary" onPress={duplicateBoard}>Duplicar</Button>
-                  <Button variant="primary" onPress={() => setSettingsOpen(false)}>Listo</Button>
+              <Modal.Footer className="bardo-modal-footer bardo-settings-footer max-md:flex-nowrap max-md:gap-2 max-md:px-4 max-md:py-3">
+                <Button variant="danger" size="sm" onPress={deleteBoard}>Eliminar</Button>
+                <Toolbar aria-label="Acciones del tablero" className="ml-auto">
+                  <Button variant="secondary" size="sm" onPress={duplicateBoard}>Duplicar</Button>
+                  <Button variant="primary" size="sm" onPress={() => setSettingsOpen(false)}>Listo</Button>
                 </Toolbar>
               </Modal.Footer>
             </Modal.Dialog>

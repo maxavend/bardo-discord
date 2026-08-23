@@ -80,6 +80,35 @@ test('mobile audit: modal chrome is opaque and fields visibly separate from moda
   expect([colors.input, colors.textarea]).not.toEqual([colors.dialog, colors.dialog]);
 });
 
+test('mobile audit: app dialogs present as bottom sheets instead of centered desktop cards', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  await openApp(page);
+  await page.getByLabel('Más opciones').selectOption('settings');
+  const dialog = page.getByRole('dialog', { name: 'Tablero' });
+  await expect(dialog).toBeVisible();
+
+  const metrics = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      topLeftRadius: getComputedStyle(element).borderTopLeftRadius,
+      bottomLeftRadius: getComputedStyle(element).borderBottomLeftRadius,
+    };
+  });
+
+  expect(metrics.left).toBeLessThanOrEqual(1);
+  expect(metrics.right).toBeGreaterThanOrEqual(metrics.viewportWidth - 1);
+  expect(metrics.width).toBeGreaterThanOrEqual(metrics.viewportWidth - 1);
+  expect(metrics.bottom).toBeGreaterThanOrEqual(metrics.viewportHeight - 1);
+  expect(metrics.topLeftRadius).not.toBe('0px');
+  expect(metrics.bottomLeftRadius).toBe('0px');
+});
+
 test('mobile audit: switching from scrolled read mode to edit starts at the title', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   await openApp(page);
@@ -112,7 +141,7 @@ test('mobile audit: switching from scrolled read mode to edit starts at the titl
   expect(metrics.titleTop).toBeGreaterThanOrEqual(metrics.headerBottom - 1);
 });
 
-test('mobile audit: board settings has no horizontal clipping and column inputs own the row', async ({ page }, testInfo) => {
+test('mobile audit: board settings has no horizontal clipping and each column is one compact row', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   await openApp(page);
   await page.getByLabel('Más opciones').selectOption('settings');
@@ -123,25 +152,29 @@ test('mobile audit: board settings has no horizontal clipping and column inputs 
   const metrics = await body.evaluate((element) => {
     const bodyRect = element.getBoundingClientRect();
     const rows = Array.from(element.querySelectorAll<HTMLElement>('.bardo-column-setting'));
-    const inputs = rows.map((row) => row.querySelector<HTMLInputElement>('input')).filter(Boolean) as HTMLInputElement[];
     return {
       overflowX: element.scrollWidth - element.clientWidth,
       rowsInside: rows.every((row) => {
         const rect = row.getBoundingClientRect();
         return rect.left >= bodyRect.left - 1 && rect.right <= bodyRect.right + 1;
       }),
-      inputsInside: inputs.every((input) => {
-        const rect = input.getBoundingClientRect();
-        return rect.left >= bodyRect.left - 1 && rect.right <= bodyRect.right + 1;
+      compactRows: rows.every((row) => {
+        const input = row.querySelector<HTMLInputElement>('input');
+        const buttons = Array.from(row.querySelectorAll<HTMLButtonElement>('button'));
+        if (!input || buttons.length !== 3) return false;
+        const inputRect = input.getBoundingClientRect();
+        const firstButtonRect = buttons[0].getBoundingClientRect();
+        const lastButtonRect = buttons[2].getBoundingClientRect();
+        return Math.abs(inputRect.top - firstButtonRect.top) <= 2
+          && inputRect.width >= bodyRect.width * 0.45
+          && lastButtonRect.right <= bodyRect.right + 1;
       }),
-      inputsWide: inputs.every((input) => input.getBoundingClientRect().width >= bodyRect.width * 0.8),
     };
   });
 
   expect(metrics.overflowX).toBeLessThanOrEqual(1);
   expect(metrics.rowsInside).toBe(true);
-  expect(metrics.inputsInside).toBe(true);
-  expect(metrics.inputsWide).toBe(true);
+  expect(metrics.compactRows).toBe(true);
 });
 
 test('mobile audit: native select uses one OS focus treatment, not a doubled custom ring', async ({ page }, testInfo) => {
