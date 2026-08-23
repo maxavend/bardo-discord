@@ -1,20 +1,28 @@
-:root {
-  --bardo-visual-viewport-top: 0px;
-}
-
 /*
- * iOS/WebKit keeps sticky positioning tied to the layout viewport while the
- * software keyboard can pan the visual viewport. Offset editor chrome by the
- * live visual viewport top so it stays visually pinned while typing.
+ * Normal state: the editor toolbar uses the product's native sticky geometry.
+ * Keyboard state: only the visual toolbar becomes fixed; its wrapper remains
+ * in flow so the document keeps its vertical rhythm and does not jump.
  */
-.editing-route .doc-topbar {
-  top: var(--bardo-visual-viewport-top);
+
+html[data-editor-keyboard="open"] .editing-route .editor-toolbar-sticky {
+  position: relative;
+  top: auto;
+  min-height: 52px;
+  z-index: 50;
 }
 
-.editing-route .editor-toolbar-sticky {
-  top: calc(
-    var(--bardo-visual-viewport-top)
-    + var(--bardo-topbar)
-    + var(--bardo-toolbar-gap)
-  );
+html[data-editor-keyboard="open"] .editing-route .editor-toolbar {
+  position: fixed;
+  top: calc(var(--bardo-topbar) + var(--bardo-toolbar-gap));
+  left: 50%;
+  width: min(590px, calc(100vw - 28px));
+  transform: translateX(-50%) translateZ(0);
+  z-index: 90;
+  pointer-events: auto;
+}
+
+@media (min-width: 760px) {
+  html[data-editor-keyboard="open"] .editing-route .editor-toolbar {
+    width: min(590px, calc(100vw - 48px));
+  }
 }
