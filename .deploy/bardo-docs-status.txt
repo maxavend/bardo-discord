@@ -1,5 +1,6 @@
 status=success
 url=https://bardo-docs.pages.dev
 branch=module/bardo-docs
-source_commit=f35ecc1e69536da2f9c6dd5a2ae3b5505f9e981f
-deployed_at=2026-08-23T06:29:06Z
+stack=react-vite-heroui
+source_commit=16c8a763dc21168232fe2d68fedf832e337b7ba7
+deployed_at=2026-08-23T07:37:53Z
