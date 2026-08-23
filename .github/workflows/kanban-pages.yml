@@ -35,17 +35,18 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@latest pages project list --json > /tmp/pages-projects.json
-          exact=$(jq -r '[.[] | select(.name == "bardo-discord")][0].name // empty' /tmp/pages-projects.json)
+          exact=$(jq -r '[.[] | select(."Project Name" == "bardo-discord")][0]."Project Name" // empty' /tmp/pages-projects.json)
           if [ -n "$exact" ]; then
             project="$exact"
           else
-            matches=$(jq -r '[.[] | select(.name | test("bardo"; "i")) | .name] | .[]' /tmp/pages-projects.json)
+            matches=$(jq -r '[.[] | ."Project Name"? // empty | select(test("bardo"; "i"))] | .[]' /tmp/pages-projects.json)
             count=$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')
             if [ "$count" = "1" ]; then
               project=$(printf '%s\n' "$matches" | sed '/^$/d')
             else
               echo 'Could not safely infer a unique Bardo Pages project.'
-              jq -r '.[].name' /tmp/pages-projects.json
+              echo 'Available Pages projects:'
+              jq -r '.[] | ."Project Name"? // empty' /tmp/pages-projects.json
               exit 1
             fi
           fi
@@ -53,6 +54,7 @@ jobs:
           echo "Using Pages project: $project"
 
       - name: Deploy Kanban preview
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -60,22 +62,18 @@ jobs:
             --project-name='${{ steps.project.outputs.project }}' \
             --branch='module-kanban' \
             --commit-hash='${{ github.event.pull_request.head.sha || github.sha }}' \
-            --commit-message='Bardo Kanban QA preview'
+            --commit-message='Bardo Kanban QA preview' 2>&1 | tee /tmp/deploy.log
+          url=$(grep -Eo 'https://[^[:space:]]+\.pages\.dev' /tmp/deploy.log | tail -1)
+          test -n "$url" || { echo 'Deployment succeeded but URL was not found in Wrangler output'; cat /tmp/deploy.log; exit 1; }
+          echo "$url" | tee deployment-url.txt
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve and verify preview URL
-        id: preview
+      - name: Verify preview URL
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@latest pages deployment list \
-            --project-name='${{ steps.project.outputs.project }}' \
-            --environment=preview --json > /tmp/deployments.json
-          url=$(jq -r '.[0].url // .[0].aliases[0] // empty' /tmp/deployments.json)
-          test -n "$url" || { echo 'Preview URL not found'; cat /tmp/deployments.json; exit 1; }
-          case "$url" in http*) ;; *) url="https://$url" ;; esac
+          url='${{ steps.deploy.outputs.url }}'
           curl --fail --silent --show-error --location --head "$url" >/dev/null
-          echo "$url" | tee deployment-url.txt
-          echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "### Kanban QA Preview" >> "$GITHUB_STEP_SUMMARY"
           echo "[$url]($url)" >> "$GITHUB_STEP_SUMMARY"
 
