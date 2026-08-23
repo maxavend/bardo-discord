@@ -1,11 +1,12 @@
+import { requireDocsSession } from './discord-auth.js';
 import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
   archiveDocument,
-  listDocuments,
-  loadActivityContext,
+  documentHasGuildAccess,
+  grantDocumentGuildAccess,
+  listDocumentsForGuild,
   loadDocument,
-  saveActivityContext,
   saveDocument,
   updateDocumentContent,
 } from './db.js';
@@ -49,31 +50,6 @@ function launchDocumentId(request) {
   return normalizeDocumentId(customId);
 }
 
-async function verifyActivitySession(request, env) {
-  if (!env.DB) return { error: json({ error: 'Database unavailable' }, 503) };
-
-  const instanceId = request.headers.get('x-bardo-instance-id')?.trim();
-  if (!instanceId) return { error: json({ error: 'Activity instance required' }, 401) };
-
-  let context = await loadActivityContext(env.DB, instanceId);
-  if (context) return { instanceId, context };
-
-  // LAUNCH_ACTIVITY can open the iframe before Discord exposes the new
-  // activity_instance_id back to the interaction callback. The Activity itself,
-  // however, receives the server-generated message component custom_id in its
-  // launch URL. Use that capability to repair the missing instance -> document
-  // mapping exactly once. Existing mappings are never overwritten here.
-  const documentId = launchDocumentId(request);
-  if (!documentId) return { error: json({ error: 'Activity session not recognized' }, 403) };
-
-  const document = await loadDocument(env.DB, documentId);
-  if (!document) return { error: json({ error: 'Launch document not found' }, 404) };
-
-  await saveActivityContext(env.DB, instanceId, documentId);
-  context = { instanceId, documentId };
-  return { instanceId, context };
-}
-
 function normalizeEditorPayload(payload, existing = null) {
   const title = String(payload?.title ?? existing?.title ?? 'Sin título').trim().slice(0, 200) || 'Sin título';
   const description = String(payload?.description ?? existing?.description ?? '').trim().slice(0, 1000);
@@ -109,28 +85,38 @@ function parsePath(pathname) {
   }
 }
 
+async function requireDocumentAccess(env, documentId, guildId) {
+  const allowed = await documentHasGuildAccess(env.DB, documentId, guildId);
+  if (!allowed) return { error: json({ error: 'Document is not shared with this Discord server' }, 403) };
+  const document = await loadDocument(env.DB, documentId);
+  if (!document) return { error: json({ error: 'Document not found' }, 404) };
+  return { document };
+}
+
 export async function handleDocsApi(request, url, env) {
   const route = parsePath(url.pathname);
   if (!route) return null;
 
-  const session = await verifyActivitySession(request, env);
-  if (session.error) return session.error;
+  const auth = await requireDocsSession(request, env);
+  if (auth.error) return auth.error;
+  const { session } = auth;
 
   if (route.collection && request.method === 'GET') {
-    const documents = await listDocuments(env.DB, 150);
-    const contextDocumentId = session.context.documentId || null;
-
-    // The Discord message is the source of truth for production. A document can
-    // be archived from the library and must still open forever from its old
-    // Discord message, so always hydrate the context document explicitly.
-    if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
-      const contextDocument = await loadDocument(env.DB, contextDocumentId);
-      if (contextDocument) documents.unshift(contextDocument);
-    }
+    const documents = await listDocumentsForGuild(env.DB, session.guildId, 150);
+    const requestedDocumentId = launchDocumentId(request);
+    const contextDocumentId = requestedDocumentId && await documentHasGuildAccess(env.DB, requestedDocumentId, session.guildId)
+      ? requestedDocumentId
+      : null;
 
     return json({
       documents: documents.map(serialize),
       contextDocumentId,
+      guildId: session.guildId,
+      user: {
+        id: session.userId,
+        username: session.username,
+        avatar: session.avatar,
+      },
     });
   }
 
@@ -153,18 +139,20 @@ export async function handleDocsApi(request, url, env) {
       pages: normalized.pages,
       sourceName: null,
       createdAt: now,
-      createdBy: 'activity',
+      createdBy: session.userId,
     });
     await updateDocumentContent(env.DB, documentId, {
       ...normalized,
       updatedAt: now,
     });
+    await grantDocumentGuildAccess(env.DB, documentId, session.guildId, session.userId);
 
     return json(serialize(await loadDocument(env.DB, documentId)), 201);
   }
 
-  const existing = await loadDocument(env.DB, route.id);
-  if (!existing) return json({ error: 'Document not found' }, 404);
+  const access = await requireDocumentAccess(env, route.id, session.guildId);
+  if (access.error) return access.error;
+  const existing = access.document;
 
   if (request.method === 'GET') {
     return json(serialize(existing));
@@ -182,8 +170,7 @@ export async function handleDocsApi(request, url, env) {
   }
 
   if (request.method === 'DELETE') {
-    // Soft-delete only. The D1 row and its ID stay intact so Discord messages
-    // already pointing to this document continue to work forever.
+    // Soft archive only: the D1 row and Discord message deep-link remain intact.
     await archiveDocument(env.DB, route.id);
     return json({ ok: true, archived: true, id: route.id });
   }
