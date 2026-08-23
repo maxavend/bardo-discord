@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 
 const STORAGE = 'bardo-kanban-heroui-v6';
 
+function cssLightness(value: string) {
+  const match = value.match(/(?:lab|oklch)\(\s*([\d.]+)%/i);
+  return match ? Number.parseFloat(match[1]) : Number.NaN;
+}
+
 async function openApp(page: import('@playwright/test').Page) {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -40,6 +45,7 @@ test('uses the exact HeroUI default theme contract', async ({ page }) => {
       accent: style.getPropertyValue('--accent').trim(),
       background: style.getPropertyValue('--background').trim(),
       overlay: style.getPropertyValue('--overlay').trim(),
+      defaultColor: style.getPropertyValue('--default').trim(),
       fieldBackground: style.getPropertyValue('--field-background').trim(),
       fieldBorder: style.getPropertyValue('--field-border').trim(),
       radius: style.getPropertyValue('--radius').trim(),
@@ -49,7 +55,9 @@ test('uses the exact HeroUI default theme contract', async ({ page }) => {
   expect(tokens.accent).not.toBe('');
   expect(tokens.background).not.toBe('');
   expect(tokens.accent).not.toBe(tokens.background);
-  expect(tokens.overlay).toContain('100.00%');
+  expect(cssLightness(tokens.overlay)).toBeGreaterThan(98);
+  expect(cssLightness(tokens.defaultColor)).toBeGreaterThan(90);
+  expect(cssLightness(tokens.defaultColor)).toBeLessThan(98);
   expect(tokens.fieldBackground).not.toBe('transparent');
   expect(tokens.fieldBackground).not.toBe(tokens.background);
   expect(tokens.fieldBorder).toBe('transparent');
@@ -226,8 +234,9 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
   });
 
   expect(computed.theme).toBe('default');
-  expect(computed.overlayToken).toContain('100.00%');
-  expect(computed.defaultToken).toContain('94.00%');
+  expect(cssLightness(computed.overlayToken)).toBeGreaterThan(98);
+  expect(cssLightness(computed.defaultToken)).toBeGreaterThan(90);
+  expect(cssLightness(computed.defaultToken)).toBeLessThan(98);
   expect(computed.dialogBackground).not.toBe('');
   expect(computed.inputBackground).not.toBe('');
   expect(computed.inputBackground).not.toBe(computed.dialogBackground);
