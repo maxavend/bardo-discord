@@ -3,17 +3,20 @@ import process from 'node:process';
 
 const files = {
   app: new URL('../src/App.tsx', import.meta.url),
+  mobile: new URL('../src/MobileKanban.tsx', import.meta.url),
   index: new URL('../index.html', import.meta.url),
   styles: new URL('../src/styles.css', import.meta.url),
   theme: new URL('../src/theme.css', import.meta.url),
 };
 
-const [app, index, styles, theme] = await Promise.all([
+const [app, mobile, index, styles, theme] = await Promise.all([
   readFile(files.app, 'utf8'),
+  readFile(files.mobile, 'utf8'),
   readFile(files.index, 'utf8'),
   readFile(files.styles, 'utf8'),
   readFile(files.theme, 'utf8'),
 ]);
+const uiSource = `${app}\n${mobile}`;
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -58,12 +61,12 @@ const forbiddenUtilityPatterns = [
   /!bg-transparent/g,
 ];
 for (const pattern of forbiddenUtilityPatterns) {
-  if (pattern.test(app)) fail(`App.tsx contains forbidden style override: ${pattern}`);
+  if (pattern.test(uiSource)) fail(`UI contains forbidden style override: ${pattern}`);
 }
 
-if (/<input(?:\s|>)/.test(app)) fail('App.tsx contains a native <input>; use HeroUI Input/SearchField composition.');
-if (/<textarea(?:\s|>)/.test(app)) fail('App.tsx contains a native <textarea>; use HeroUI TextArea.');
-if (/<select(?:\s|>)/.test(app)) fail('App.tsx contains a native <select>; use HeroUI Select.');
+if (/<input(?:\s|>)/.test(uiSource)) fail('UI contains a native <input>; use HeroUI Input/SearchField composition.');
+if (/<textarea(?:\s|>)/.test(uiSource)) fail('UI contains a native <textarea>; use HeroUI TextArea.');
+if (/<select(?:\s|>)/.test(uiSource)) fail('UI contains a native <select>; use HeroUI Select.');
 
 const forbiddenHeroUiOverrides = [
   '.button--',
@@ -74,6 +77,7 @@ const forbiddenHeroUiOverrides = [
   '.select__',
   '.text-field__',
   '.tag-group__',
+  '.tabs__',
 ];
 for (const selector of forbiddenHeroUiOverrides) {
   if (styles.includes(selector)) {
@@ -86,7 +90,6 @@ const requiredHeroUi = [
   'Select',
   'Surface',
   'Modal',
-  'Tabs',
   'Dropdown',
   'TagGroup',
   'ToggleButtonGroup',
@@ -95,11 +98,42 @@ for (const name of requiredHeroUi) {
   if (!app.includes(name)) fail(`Expected HeroUI primitive ${name} is missing from App.tsx.`);
 }
 
+if (app.includes('<Tabs') || app.includes('Tabs.ListContainer') || app.includes('Tabs.Indicator')) {
+  fail('Mobile Kanban must not use HeroUI Tabs/ListContainer for the column carousel.');
+}
+if (!app.includes('<MobileKanban')) fail('App.tsx must render the dedicated MobileKanban carousel.');
+
+const mobileContracts = [
+  ['LONG_PRESS_MS = 420', '420ms long-press activation'],
+  ['data-drop-column-id', 'column drop targets'],
+  ['data-mobile-column-id', 'carousel slide identifiers'],
+  ['onPointerDownCapture', 'delegated pointer down handling'],
+  ['onPointerMoveCapture', 'delegated pointer move handling'],
+  ['onMoveTask', 'mobile task movement callback'],
+  ['scrollIntoView', 'active pill auto-scrolling'],
+];
+for (const [needle, label] of mobileContracts) {
+  if (!mobile.includes(needle)) fail(`MobileKanban.tsx is missing ${label}.`);
+}
+
+const carouselCssContracts = [
+  ['.bardo-column-pill-rail', 'pill rail'],
+  ['overflow-y: hidden;', 'vertical scrollbar suppression'],
+  ['.bardo-mobile-carousel', 'mobile carousel'],
+  ['scroll-snap-type: x mandatory;', 'horizontal scroll snapping'],
+  ['.bardo-mobile-column-slide', 'carousel slides'],
+  ['flex: 0 0 calc(100% - 2.75rem);', 'next-column peek width'],
+  ['.bardo-mobile-drag-ghost', 'long-press drag preview'],
+];
+for (const [needle, label] of carouselCssContracts) {
+  if (!styles.includes(needle)) fail(`styles.css is missing ${label}.`);
+}
+
 if (!app.includes("from '@gravity-ui/icons'")) {
   fail('App.tsx must use the normalized SVG icon set used by HeroUI examples.');
 }
 for (const glyph of ['•••', '＋', '⌕', '>×<', '>←<', '>→<']) {
-  if (app.includes(glyph)) fail(`App.tsx still contains typography-as-icon glyph ${glyph}.`);
+  if (uiSource.includes(glyph)) fail(`UI still contains typography-as-icon glyph ${glyph}.`);
 }
 if (!app.includes('EllipsisVertical')) fail('Board actions must use a real vertical kebab SVG icon.');
 if (!app.includes("const ICON_CLASS = 'size-4 shrink-0'")) fail('Interactive SVG icons must share one normalized 16px size contract.');
@@ -141,4 +175,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('HeroUI ownership lint passed.');
+console.log('HeroUI ownership + mobile carousel lint passed.');
