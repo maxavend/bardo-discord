@@ -1,5 +1,5 @@
 status=success
 url=https://bardo-docs.pages.dev
 branch=module/bardo-docs
-source_commit=52755e789550a18daa591b9fa8ab6e69e507a014
-deployed_at=2026-08-23T06:24:38Z
+source_commit=7e68054333a15e8c9516e309ae3d27741f58abbf
+deployed_at=2026-08-23T06:28:16Z
