@@ -73,7 +73,7 @@ if (/appearance\s*:\s*none/i.test(styles)) {
   fail('Native OS controls must keep browser appearance; appearance:none is forbidden.');
 }
 if (/<textarea(?:\s|>)/.test(uiSource)) fail('UI contains a native <textarea>; text areas should remain HeroUI unless OS-native behavior is required.');
-if (/<input(?![^>]*type=["'](?:date|time|datetime-local)["'])[^>]*>/i.test(uiSource)) {
+if (/<input(?![^>]*type=["'](?:date|time|datetime-local)["'])[^>]*>/.test(uiSource)) {
   fail('Native <input> is only allowed for date/time controls that intentionally invoke the OS picker.');
 }
 
