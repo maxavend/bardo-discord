@@ -4,6 +4,7 @@ import App from './App.jsx';
 import '@fontsource-variable/inter';
 import './styles.css';
 import './theme.css';
+import './layout-audit.css';
 
 const rootElement = document.documentElement;
 rootElement.classList.add('dark');
