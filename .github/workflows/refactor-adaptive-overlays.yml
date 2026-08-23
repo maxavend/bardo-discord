@@ -1,0 +1,218 @@
+name: One-shot adaptive overlay refactor
+
+on:
+  push:
+    branches:
+      - module/kanban
+    paths:
+      - .github/workflows/refactor-adaptive-overlays.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout module/kanban
+        uses: actions/checkout@v6
+        with:
+          ref: module/kanban
+          fetch-depth: 0
+
+      - name: Refactor Modal → Modal/Drawer composition
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('prototypes/kanban-heroui')
+
+          def read(rel):
+              return (root / rel).read_text()
+
+          def write(rel, text):
+              (root / rel).write_text(text)
+
+          def replace(text, old, new, label, minimum=1):
+              count = text.count(old)
+              if count < minimum:
+                  raise SystemExit(f'{label}: expected at least {minimum} occurrence(s), found {count}')
+              return text.replace(old, new)
+
+          # App.tsx: keep product content, replace the overlay primitive import and remove responsive modal geometry.
+          app = read('src/App.tsx')
+          app = replace(app, '  Modal,\n', '', 'App Modal import')
+          app = replace(
+              app,
+              "import { MobileKanban } from './MobileKanban';\n",
+              "import { AdaptiveModal as Modal } from './AdaptiveModal';\nimport { MobileKanban } from './MobileKanban';\n",
+              'App AdaptiveModal import',
+          )
+          app = app.replace('placement="auto"', 'placement="center"')
+          app = app.replace(' className="max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none"', '')
+          app = app.replace(' className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none"', '')
+          app = app.replace('bardo-modal-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none', 'bardo-modal-header')
+          app = app.replace('bardo-modal-stack max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4', 'bardo-modal-stack')
+          app = app.replace('bardo-settings-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4', 'bardo-settings-body')
+          app = app.replace('bardo-modal-footer max-md:px-4 max-md:py-3', 'bardo-modal-footer')
+          app = app.replace('bardo-modal-footer bardo-settings-footer max-md:flex-nowrap max-md:gap-2 max-md:px-4 max-md:py-3', 'bardo-modal-footer bardo-settings-footer')
+          write('src/App.tsx', app)
+
+          # TaskDetailModal.tsx: same content/state machine, adaptive presentation only.
+          detail = read('src/TaskDetailModal.tsx')
+          detail = replace(detail, '  Modal,\n', '', 'Task detail Modal import')
+          detail = replace(
+              detail,
+              "import { NativeSelect } from './NativeControls';\n",
+              "import { AdaptiveModal as Modal } from './AdaptiveModal';\nimport { NativeSelect } from './NativeControls';\n",
+              'Task detail AdaptiveModal import',
+          )
+          detail = detail.replace('placement="auto"', 'placement="center"')
+          detail = detail.replace('className="bardo-task-dialog max-md:w-screen max-md:max-w-none max-md:max-h-[calc(100dvh-0.75rem)] max-md:rounded-t-lg max-md:rounded-b-none"', 'className="bardo-task-dialog"')
+          detail = detail.replace(' className="max-md:top-3 max-md:right-3 max-md:size-8 max-md:rounded-full max-md:bg-transparent max-md:shadow-none"', '')
+          detail = detail.replace('bardo-detail-header max-md:px-4 max-md:pt-4 max-md:pb-2 max-md:pr-14 max-md:shadow-none', 'bardo-detail-header')
+          detail = detail.replace('bardo-detail-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4', 'bardo-detail-body')
+          detail = detail.replace('bardo-edit-body max-md:gap-4 max-md:px-4 max-md:pt-2 max-md:pb-4', 'bardo-edit-body')
+          detail = detail.replace('bardo-detail-footer max-md:px-4 max-md:py-3', 'bardo-detail-footer')
+          detail = detail.replace('bardo-detail-footer bardo-detail-footer-edit max-md:flex-nowrap max-md:gap-2 max-md:px-4 max-md:py-3', 'bardo-detail-footer bardo-detail-footer-edit')
+          write('src/TaskDetailModal.tsx', detail)
+
+          # One canonical stylesheet: remove the temporary viewport-forcing sheet layer.
+          main = read('src/main.tsx')
+          main = main.replace("import './modal-sheet.css';\n", '')
+          write('src/main.tsx', main)
+
+          styles = read('src/styles.css')
+          legacy_dialog = '''  [role="dialog"] {
+              --field-background: var(--surface-secondary);
+              min-width: 0;
+              max-width: min(100%, 42rem);
+              overflow: clip;
+              isolation: isolate;
+              background: var(--surface);
+              color: var(--surface-foreground);
+            }
+          '''
+          # Whitespace-safe replacement of the global dialog override.
+          styles, count = re.subn(
+              r'  \[role="dialog"\] \{\n    --field-background: var\(--surface-secondary\);\n    min-width: 0;\n    max-width: min\(100%, 42rem\);\n    overflow: clip;\n    isolation: isolate;\n    background: var\(--surface\);\n    color: var\(--surface-foreground\);\n  \}',
+              '  .bardo-overlay-dialog {\n    --field-background: var(--surface-secondary);\n    min-width: 0;\n    overflow: clip;\n    isolation: isolate;\n    padding: 0;\n  }',
+              styles,
+          )
+          if count != 1:
+              raise SystemExit(f'styles.css global dialog override: expected 1, found {count}')
+
+          styles, count = re.subn(
+              r'\n    \[role="dialog"\] \{\n      width: calc\(100vw - 1\.5rem\);\n      max-width: calc\(100vw - 1\.5rem\);\n      max-height: calc\(100dvh - 2rem\);\n    \}\n',
+              '\n',
+              styles,
+          )
+          if count != 1:
+              raise SystemExit(f'styles.css mobile dialog override: expected 1, found {count}')
+          write('src/styles.css', styles)
+
+          legacy_sheet = root / 'src/modal-sheet.css'
+          if legacy_sheet.exists():
+              legacy_sheet.unlink()
+
+          # Lint the architecture, not a visual patch.
+          lint = read('scripts/lint-ui.mjs')
+          lint = replace(
+              lint,
+              "  taskDetail: new URL('../src/TaskDetailModal.tsx', import.meta.url),\n",
+              "  taskDetail: new URL('../src/TaskDetailModal.tsx', import.meta.url),\n  adaptive: new URL('../src/AdaptiveModal.tsx', import.meta.url),\n",
+              'lint adaptive source',
+          )
+          lint = replace(
+              lint,
+              'const [app, mobile, native, taskDetail, main, index, styles, theme] = await Promise.all(',
+              'const [app, mobile, native, taskDetail, adaptive, main, index, styles, theme] = await Promise.all(',
+              'lint destructuring',
+          )
+          lint = replace(
+              lint,
+              'const uiSource = `${app}\\n${mobile}\\n${native}\\n${taskDetail}`;',
+              'const uiSource = `${app}\\n${mobile}\\n${native}\\n${taskDetail}\\n${adaptive}`;',
+              'lint source concat',
+          )
+          lint = replace(
+              lint,
+              "if (main.includes('interaction.css') || main.includes('audit-fixes.css')) {",
+              "if (main.includes('interaction.css') || main.includes('audit-fixes.css') || main.includes('modal-sheet.css')) {",
+              'lint canonical stylesheet check',
+          )
+          lint = replace(
+              lint,
+              "for (const required of ['SearchField', 'Modal', 'TagGroup', 'ToggleButtonGroup', 'Button']) {",
+              "for (const required of ['SearchField', 'Modal', 'Drawer', 'TagGroup', 'ToggleButtonGroup', 'Button']) {",
+              'lint Drawer requirement',
+          )
+          marker = "if (failures.length) {\n"
+          architecture_checks = '''if (!adaptive.includes("import { Drawer, Modal } from '@heroui/react';")) fail('AdaptiveModal must compose HeroUI Modal and Drawer directly.');
+          if (!adaptive.includes('<Drawer.Content placement="bottom"')) fail('Mobile presentation must use HeroUI Drawer.Content placement="bottom".');
+          if (!adaptive.includes('<Drawer.Handle />')) fail('Mobile bottom sheet must expose the HeroUI drag handle.');
+          if (!adaptive.includes("data-bardo-presentation=\"sheet\"")) fail('AdaptiveModal must expose the sheet presentation for runtime QA.');
+          if (!adaptive.includes("data-bardo-presentation=\"modal\"")) fail('AdaptiveModal must expose the modal presentation for runtime QA.');
+          if (styles.includes('[role="dialog"]')) fail('Product CSS must not globally reinterpret role=dialog geometry.');
+          if (styles.includes(':has(> [role="dialog"])')) fail('Product CSS must not patch HeroUI overlay ancestors.');
+          if (uiSource.includes('max-md:w-screen') || uiSource.includes('max-md:max-h-[calc(100dvh')) fail('Overlay geometry must belong to HeroUI primitives, not responsive utility patches.');
+          if (main.includes('modal-sheet.css')) fail('Legacy modal-sheet.css must not be loaded.');
+
+          '''
+          if architecture_checks not in lint:
+              lint = lint.replace(marker, architecture_checks + marker)
+          write('scripts/lint-ui.mjs', lint)
+
+          # Runtime QA proves the responsive primitive, not just source intent.
+          audit = read('tests/ui-audit.spec.ts')
+          contract_test = r'''
+          test('responsive overlay uses Modal on web and Drawer bottom sheet on mobile', async ({ page }, testInfo) => {
+            await openApp(page);
+            await page.getByLabel('Nueva tarea').click();
+            const dialog = page.getByRole('dialog', { name: 'Nueva tarea' });
+            await expect(dialog).toBeVisible();
+
+            const contract = await dialog.evaluate((element) => ({
+              presentation: element.getAttribute('data-bardo-presentation'),
+              inModalContainer: Boolean(element.closest('.modal__container')),
+              inBottomDrawer: Boolean(element.closest('.drawer__content--bottom')),
+              hasDrawerHandle: Boolean(element.querySelector('.drawer__handle')),
+            }));
+
+            if (testInfo.project.name === 'mobile-chromium') {
+              expect(contract.presentation).toBe('sheet');
+              expect(contract.inBottomDrawer).toBe(true);
+              expect(contract.inModalContainer).toBe(false);
+              expect(contract.hasDrawerHandle).toBe(true);
+            } else {
+              expect(contract.presentation).toBe('modal');
+              expect(contract.inModalContainer).toBe(true);
+              expect(contract.inBottomDrawer).toBe(false);
+              expect(contract.hasDrawerHandle).toBe(false);
+            }
+          });
+          '''
+          if 'responsive overlay uses Modal on web and Drawer bottom sheet on mobile' not in audit:
+              audit += contract_test
+          write('tests/ui-audit.spec.ts', audit)
+
+          readme = read('README.md')
+          note = '''\n\n## Responsive overlay architecture\n\nBardo delegates overlay behavior to HeroUI instead of rewriting its geometry:\n\n- desktop/tablet: HeroUI `Modal` with centered placement and native Modal focus/scroll behavior;\n- mobile: HeroUI `Drawer` with `placement="bottom"`, `Drawer.Handle`, native body scrolling and drag-to-dismiss;\n- shared product content: one adaptive compound wrapper (`src/AdaptiveModal.tsx`) maps Backdrop, Dialog, Header, Body, Footer and CloseTrigger to the correct HeroUI primitive;\n- no global `[role="dialog"]`, transformed-ancestor or `position: fixed !important` patches.\n\nThis follows HeroUI v3's composition-over-configuration, accessibility-first, predictable-behavior and separation-of-styles-and-logic principles.\n'''
+          if '## Responsive overlay architecture' not in readme:
+              readme += note
+          write('README.md', readme)
+          PY
+
+      - name: Commit refactor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && { echo "No changes"; exit 0; }
+          git commit -m "refactor(kanban): use HeroUI adaptive overlays"
+          git push origin HEAD:module/kanban
