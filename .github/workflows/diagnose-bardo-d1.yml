@@ -36,25 +36,45 @@ jobs:
         run: |
           set -o pipefail
           npx --yes wrangler@4.124.0 d1 execute db89af73-dc24-491e-bf57-975f7bd6c085 --remote --command "SELECT COUNT(*) AS count FROM documents;" --json 2>&1 | tee /tmp/d1.log
+      - name: Check Discord Worker secret names
+        id: secrets
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.124.0 secret list --json > /tmp/secrets.json
+          node - <<'NODE' | tee /tmp/secrets.log
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/secrets.json','utf8'));
+          const names = (Array.isArray(data) ? data : []).map(x => x.name).filter(Boolean).sort();
+          for (const name of names) console.log(name);
+          NODE
       - name: Record diagnostics
         if: always()
         shell: bash
         env:
           WHOAMI: ${{ steps.whoami.outcome }}
           D1: ${{ steps.d1.outcome }}
+          SECRETS: ${{ steps.secrets.outcome }}
         run: |
           mkdir -p .deploy
+          OAUTH_SECRET=missing
+          if grep -qx 'DISCORD_CLIENT_SECRET' /tmp/secrets.log 2>/dev/null; then OAUTH_SECRET=present; fi
           {
             echo "whoami=$WHOAMI"
             echo "d1=$D1"
+            echo "secrets=$SECRETS"
+            echo "discord_client_secret=$OAUTH_SECRET"
             echo "--- whoami ---"
             cat /tmp/whoami.log 2>/dev/null || true
             echo "--- d1 ---"
             cat /tmp/d1.log 2>/dev/null || true
+            echo "--- worker-secret-names ---"
+            cat /tmp/secrets.log 2>/dev/null || true
           } > .deploy/bardo-d1-diagnostic.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-d1-diagnostic.txt
-          git commit -m "chore(docs): record D1 diagnostic [skip ci]" || true
+          git commit -m "chore(docs): record D1 and OAuth diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$D1" = "success"
