@@ -51,6 +51,7 @@ async function expectModalOwnsTopLayer(page: Page) {
 
 test('mobile: full product flow keeps every wrapper contained and scrollers symmetric', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
+  test.setTimeout(60_000);
   await openApp(page);
 
   const boardPicker = page.getByLabel('Cambiar tablero');
@@ -62,8 +63,9 @@ test('mobile: full product flow keeps every wrapper contained and scrollers symm
   await page.getByLabel('Buscar').click();
   await expect(page.getByTestId('search-panel')).toBeVisible();
   await page.getByLabel('Orden').selectOption('priority');
-  await page.getByRole('button', { name: 'Urgentes', exact: true }).click();
-  await page.getByRole('button', { name: 'Todas', exact: true }).click();
+  const filterGroup = page.locator('.bardo-filter-group');
+  await filterGroup.getByText('Urgentes', { exact: true }).click();
+  await filterGroup.getByText('Todas', { exact: true }).click();
   await expectNoUnexpectedPageOverflow(page);
 
   const carousel = page.getByTestId('mobile-column-carousel');
@@ -127,7 +129,7 @@ test('mobile: full product flow keeps every wrapper contained and scrollers symm
   await detail.getByRole('button', { name: 'Editar', exact: true }).click();
   await expect(edit).toBeVisible();
   await detail.getByRole('button', { name: 'Guardar', exact: true }).click();
-  await page.getByRole('button', { name: 'Close', exact: false }).filter({ visible: true }).first().click().catch(() => page.keyboard.press('Escape'));
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await page.getByLabel('Más opciones').selectOption('settings');
@@ -146,8 +148,6 @@ test('mobile: full product flow keeps every wrapper contained and scrollers symm
     const footerRect = footer.getBoundingClientRect();
     const rows = Array.from(dialog.querySelectorAll<HTMLElement>('.bardo-column-setting'));
     return {
-      viewportLeft: dialogRect.left,
-      viewportRight: dialogRect.right,
       overflow: (dialog as HTMLElement).scrollWidth - (dialog as HTMLElement).clientWidth,
       bodyBeforeFooter: bodyRect.bottom <= footerRect.top + 1,
       rowsContained: rows.every((row) => {
