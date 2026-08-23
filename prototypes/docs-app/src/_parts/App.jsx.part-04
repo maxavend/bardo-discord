@@ -1,0 +1,142 @@
+
+        <Button aria-label="Insertar bloque" isIconOnly size="sm" variant="ghost" className="toolbar-button"><Icon name="plus" size={18}/></Button>
+      </Dropdown.Trigger>
+      <Dropdown.Popover>
+        <Dropdown.Menu onAction={onAction}>
+          <Dropdown.Item id="checklist" textValue="Checklist"><Label>Checklist</Label></Dropdown.Item>
+          <Dropdown.Item id="callout" textValue="Nota"><Label>Nota</Label></Dropdown.Item>
+          <Dropdown.Item id="spoiler" textValue="Desplegable"><Label>Desplegable</Label></Dropdown.Item>
+          <Dropdown.Item id="hr" textValue="Separador"><Label>Separador</Label></Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
+function AppModal({modal,setModal,linkValue,setLinkValue,docsById,onDelete,onReset}) {
+  const open = !!modal;
+  const close = () => {
+    if (modal?.type === 'link') modal.api?.cancel?.();
+    setModal(null);
+  };
+  const isDelete = modal?.type === 'delete';
+  const isReset = modal?.type === 'reset';
+  const isLink = modal?.type === 'link';
+  const doc = isDelete ? docsById.get(modal.docId) : null;
+  return (
+    <Modal>
+      <Modal.Backdrop isOpen={open} onOpenChange={value => {if (!value) close();}} variant="opaque" isDismissable>
+        <Modal.Container placement="center" size="sm">
+          <Modal.Dialog aria-label={isDelete ? 'Eliminar documento' : isReset ? 'Restaurar datos mock' : 'Agregar enlace'}>
+            <Modal.Header><Modal.Heading>{isDelete ? 'Eliminar documento' : isReset ? 'Restaurar datos mock' : 'Agregar enlace'}</Modal.Heading></Modal.Header>
+            <Modal.Body>
+              {isDelete && <p>“{doc?.title || 'Sin título'}” se eliminará de este prototipo. Puedes restaurar todos los datos mock desde el menú de Docs.</p>}
+              {isReset && <p>Se eliminarán cambios locales, documentos creados y borradores, y volverán los {SEED_COUNT} documentos mock originales.</p>}
+              {isLink && <Input autoFocus aria-label="URL" placeholder="https://…" value={linkValue} onChange={e => setLinkValue(e.target.value)} />}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="ghost" onPress={close}>Cancelar</Button>
+              {isDelete && <Button variant="danger" onPress={() => onDelete(modal.docId)}>Eliminar</Button>}
+              {isReset && <Button variant="danger" onPress={onReset}>Restaurar</Button>}
+              {isLink && <Button variant="primary" isDisabled={!linkValue.trim()} onPress={() => {modal.api?.apply?.(linkValue); setModal(null);}}>Aplicar</Button>}
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+}
+
+function singleLinePaste(e) {
+  e.preventDefault();
+  const text = e.clipboardData.getData('text/plain').replace(/\s*\n+\s*/g, ' ');
+  const input = e.currentTarget;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const next = input.value.slice(0,start) + text + input.value.slice(end);
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, next);
+  input.dispatchEvent(new Event('input', {bubbles:true}));
+  requestAnimationFrame(() => input.setSelectionRange(start + text.length, start + text.length));
+}
+
+function hydrateChecklistControls(root) {
+  if (!root) return;
+  root.querySelectorAll('ul.checklist > li').forEach(li => {
+    if (li.querySelector(':scope > .check-control')) return;
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'check-control'; button.contentEditable = 'false';
+    button.setAttribute('aria-label', li.classList.contains('done') ? 'Marcar como pendiente' : 'Marcar como completado');
+    button.setAttribute('aria-pressed', li.classList.contains('done') ? 'true' : 'false');
+    button.innerHTML = '<span aria-hidden="true">✓</span>';
+    li.prepend(button);
+  });
+}
+
+function elementForNode(node) { return node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement; }
+function execCommand(command, value = null) { try { return document.execCommand(command, false, value); } catch { return false; } }
+function selectNodeContents(node, rangeRef) {
+  const range = document.createRange(); range.selectNodeContents(node);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); rangeRef.current = range.cloneRange();
+}
+function unwrapElement(el) {
+  const parent = el.parentNode; if (!parent) return;
+  while (el.firstChild) parent.insertBefore(el.firstChild, el);
+  el.remove(); parent.normalize?.();
+}
+const INLINE_TAGS = {bold:'strong', italic:'em', underline:'u', strikeThrough:'s'};
+function manualInlineFormat(body, rangeRef, command) {
+  const sel = window.getSelection(); if (!sel?.rangeCount) return false;
+  const range = sel.getRangeAt(0); const tag = INLINE_TAGS[command]; if (!tag || range.collapsed) return false;
+  const startEl = elementForNode(range.startContainer); const endEl = elementForNode(range.endContainer);
+  const existing = startEl?.closest?.(tag);
+  if (existing && body.contains(existing) && existing.contains(endEl)) { unwrapElement(existing); return true; }
+  const wrapper = document.createElement(tag);
+  try { wrapper.appendChild(range.extractContents()); range.insertNode(wrapper); selectNodeContents(wrapper, rangeRef); return true; } catch { return false; }
+}
+function topLevelBlocksForRange(body, range) {
+  if (!body || !range) return [];
+  return [...body.children].filter(el => { try { return range.intersectsNode(el); } catch { return false; } }).filter(el => /^(P|H2|H3|BLOCKQUOTE|PRE)$/.test(el.tagName));
+}
+function replaceTag(el, tagName) {
+  if (!el || el.tagName.toLowerCase() === tagName) return el;
+  const replacement = document.createElement(tagName);
+  while (el.firstChild) replacement.appendChild(el.firstChild);
+  el.replaceWith(replacement); return replacement;
+}
+function applyBlockFormat(body, rangeRef, tagName) {
+  if (!body) return false;
+  const sel = window.getSelection(); if (!sel?.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  let blocks = topLevelBlocksForRange(body, range);
+  if (!blocks.length) {
+    let el = elementForNode(range.startContainer); while (el && el.parentElement !== body) el = el.parentElement;
+    if (el && /^(P|H2|H3|BLOCKQUOTE|PRE)$/.test(el.tagName)) blocks=[el];
+  }
+  if (!blocks.length) return execCommand('formatBlock', tagName);
+  const replacements = blocks.map(el => replaceTag(el, tagName));
+  const rr=document.createRange(); rr.selectNodeContents(replacements[0]); rr.collapse(false); sel.removeAllRanges(); sel.addRange(rr); rangeRef.current=rr.cloneRange(); return true;
+}
+function manualList(body, rangeRef, ordered) {
+  const sel = window.getSelection(); if (!sel?.rangeCount || !body) return false;
+  const range = sel.getRangeAt(0); const wantedTag = ordered ? 'OL' : 'UL';
+  let anchor = elementForNode(range.startContainer); const currentLi=anchor?.closest?.('li'); const currentList=currentLi?.parentElement;
+  if (currentList && body.contains(currentList) && /^(UL|OL)$/.test(currentList.tagName)) {
+    if (currentList.tagName === wantedTag) {
+      const items=[...currentList.children].filter(li=>li.tagName==='LI'); const idx=Math.max(0,items.indexOf(currentLi));
+      const ps=items.map(li=>{const p=document.createElement('p'); p.innerHTML=li.innerHTML || '<br>'; p.querySelector('.check-control')?.remove(); return p;});
+      currentList.before(...ps); currentList.remove(); const target=ps[Math.min(idx,ps.length-1)] || ps[0];
+      if (target) {const rr=document.createRange(); rr.selectNodeContents(target); rr.collapse(false); sel.removeAllRanges(); sel.addRange(rr); rangeRef.current=rr.cloneRange();}
+      return true;
+    }
+    const replacement=document.createElement(wantedTag.toLowerCase()); while(currentList.firstChild) replacement.appendChild(currentList.firstChild); currentList.replaceWith(replacement); return true;
+  }
+  const blocks=topLevelBlocksForRange(body,range).filter(el=>el.tagName!=='PRE'); if(!blocks.length) return false;
+  const list=document.createElement(wantedTag.toLowerCase()); blocks[0].before(list); blocks.forEach(block=>{const li=document.createElement('li'); li.innerHTML=block.innerHTML || '<br>'; list.appendChild(li); block.remove();});
+  const rr=document.createRange(); rr.selectNodeContents(list.lastElementChild || list); rr.collapse(false); sel.removeAllRanges(); sel.addRange(rr); rangeRef.current=rr.cloneRange(); return true;
+}
+function insertTopLevelBlock(body, html, rangeRef) {
+  const sel=window.getSelection(); const range=sel?.rangeCount ? sel.getRangeAt(0) : rangeRef.current;
+  let anchor=range?.startContainer || sel?.anchorNode; if(anchor?.nodeType===Node.TEXT_NODE) anchor=anchor.parentElement;
+  let top=anchor instanceof Element ? anchor : null; while(top && top.parentElement && top.parentElement!==body) top=top.parentElement;
+  const template=document.cr
