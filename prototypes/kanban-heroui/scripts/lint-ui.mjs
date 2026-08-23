@@ -33,10 +33,15 @@ const forbiddenCss = [
   [/\boklch\s*\(/gi, 'OKLCH colors outside theme.css'],
   [/\blinear-gradient\s*\(/gi, 'arbitrary gradients'],
   [/\bradial-gradient\s*\(/gi, 'arbitrary gradients'],
-  [/border-radius\s*:\s*(?!var\(--radius\))/gi, 'non-theme border radius'],
 ];
 for (const [pattern, label] of forbiddenCss) {
   if (pattern.test(styles)) fail(`styles.css contains ${label}; use HeroUI semantic tokens/theme instead.`);
+}
+
+for (const match of styles.matchAll(/border-radius\s*:\s*([^;]+);/gi)) {
+  if (match[1].trim() !== 'var(--radius)') {
+    fail(`styles.css contains non-theme border radius: ${match[1].trim()}`);
+  }
 }
 
 const forbiddenUtilityPatterns = [
@@ -54,9 +59,9 @@ for (const pattern of forbiddenUtilityPatterns) {
   if (pattern.test(app)) fail(`App.tsx contains forbidden style override: ${pattern}`);
 }
 
-if (/<input\b/i.test(app)) fail('App.tsx contains a native <input>; use HeroUI Input/SearchField composition.');
-if (/<textarea\b/i.test(app)) fail('App.tsx contains a native <textarea>; use HeroUI TextArea.');
-if (/<select\b/i.test(app)) fail('App.tsx contains a native <select>; use HeroUI Select.');
+if (/<input(?:\s|>)/.test(app)) fail('App.tsx contains a native <input>; use HeroUI Input/SearchField composition.');
+if (/<textarea(?:\s|>)/.test(app)) fail('App.tsx contains a native <textarea>; use HeroUI TextArea.');
+if (/<select(?:\s|>)/.test(app)) fail('App.tsx contains a native <select>; use HeroUI Select.');
 
 const requiredHeroUi = [
   'SearchField',
