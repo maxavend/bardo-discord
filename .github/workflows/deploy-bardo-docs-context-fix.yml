@@ -1,0 +1,79 @@
+name: Deploy Bardo Docs context race fix
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/deploy-bardo-docs-context-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      HEROUI_SOURCE_SHA: 1d2164e7b9a60221e39501081f0fe4f6c564bccf
+      WORKER_ORIGIN: https://bardo-discord.bardo-discord.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install and test Bardo
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - name: Patch production Worker
+        run: node scripts/apply-production-worker.mjs src/worker.js
+      - name: Install Docs dependencies
+        run: npm install --prefix prototypes/docs-app --no-audit --no-fund
+      - name: Generate exact HeroUI theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/heroui-inc/heroui/${HEROUI_SOURCE_SHA}/apps/docs/src/app/%5Blang%5D/themes/utils/generate-theme-colors.ts" -o /tmp/generate-theme-colors.ts
+          npx --yes tsx@4.20.6 prototypes/docs-app/scripts/generate-heroui-theme.mjs /tmp/generate-theme-colors.ts prototypes/docs-app/src/theme.css
+      - name: Build finalized Docs Activity
+        run: npm run build --prefix prototypes/docs-app
+      - name: Install Activity assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf activity
+          mkdir -p activity
+          cp -R prototypes/docs-app/dist/. activity/
+          grep -q 'discord-context-retry-v1' activity/index.html
+      - name: Deploy Worker and assets
+        run: npx --yes wrangler@4.124.0 deploy
+      - name: Verify context fix live
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=0
+          for ATTEMPT in $(seq 1 12); do
+            curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?context_fix=$GITHUB_SHA&attempt=$ATTEMPT" -o /tmp/live.html || true
+            if grep -q 'discord-context-retry-v1' /tmp/live.html 2>/dev/null; then OK=1; break; fi
+            sleep 5
+          done
+          test "$OK" = 1
+          mkdir -p .deploy
+          cat > .deploy/bardo-context-fix-status.txt <<EOF
+          status=success
+          source_commit=$GITHUB_SHA
+          context_fix=discord-context-retry-v1
+          worker_origin=success
+          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+      - name: Persist status
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-context-fix-status.txt prototypes/docs-app/src/theme.css
+          git commit -m "chore(docs): record context race fix deployment [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
