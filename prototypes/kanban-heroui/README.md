@@ -51,4 +51,4 @@ La pasada actual fija una escala geométrica única para spacing, alturas de con
 
 `npm run audit` ejecuta lint visual, typecheck, build y E2E. El build también incluye el lint visual para impedir un deploy con reglas que compitan accidentalmente con HeroUI.
 
-<!-- normalized-visual-qa-ready -->
+<!-- normalized-visual-qa-final -->
