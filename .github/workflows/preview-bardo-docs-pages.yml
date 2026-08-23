@@ -1,0 +1,91 @@
+name: Preview Bardo Docs on Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - 'prototypes/docs-app/**'
+      - '.github/workflows/preview-bardo-docs-pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: bardo-docs-preview-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      HEROUI_SOURCE_SHA: 1d2164e7b9a60221e39501081f0fe4f6c564bccf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --prefix prototypes/docs-app --no-audit --no-fund
+
+      - name: Generate exact HeroUI theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/heroui-inc/heroui/${HEROUI_SOURCE_SHA}/apps/docs/src/app/%5Blang%5D/themes/utils/generate-theme-colors.ts" -o /tmp/generate-theme-colors.ts
+          npx --yes tsx@4.20.6 prototypes/docs-app/scripts/generate-heroui-theme.mjs /tmp/generate-theme-colors.ts prototypes/docs-app/src/theme.css
+
+      - name: Build preview
+        run: npm run build --prefix prototypes/docs-app
+
+      - name: Verify preview output
+        shell: bash
+        run: |
+          test -f prototypes/docs-app/dist/index.html
+          test -f prototypes/docs-app/dist/_headers
+
+      - name: Ensure Pages project exists
+        shell: bash
+        run: |
+          npx --yes wrangler@4.124.0 pages project create bardo-docs --production-branch module/bardo-docs || true
+
+      - name: Deploy preview
+        id: deploy
+        shell: bash
+        run: |
+          npx --yes wrangler@4.124.0 pages deploy prototypes/docs-app/dist \
+            --project-name bardo-docs \
+            --branch module/bardo-docs \
+            --commit-hash "$GITHUB_SHA" \
+            --commit-message "Bardo Docs visual audit preview"
+
+      - name: Record preview result
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+        run: |
+          mkdir -p .deploy
+          STATUS=failure
+          if [ "$DEPLOY_OUTCOME" = "success" ]; then STATUS=success; fi
+          cat > .deploy/bardo-docs-preview-status.txt <<EOF
+          status=$STATUS
+          url=https://bardo-docs.pages.dev
+          branch=module/bardo-docs
+          mode=preview
+          source_commit=$GITHUB_SHA
+          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-docs-preview-status.txt prototypes/docs-app/src/theme.css
+          git commit -m "chore(docs): record preview Pages result [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
+          test "$STATUS" = "success"
