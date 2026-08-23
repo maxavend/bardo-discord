@@ -1,0 +1,153 @@
+name: Deploy finalized Bardo Docs to Discord
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - 'src/**'
+      - 'migrations/**'
+      - 'scripts/apply-production-worker.mjs'
+      - 'prototypes/docs-app/**'
+      - '.github/workflows/deploy-bardo-discord-docs-production.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: bardo-discord-docs-production
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      HEROUI_SOURCE_SHA: 1d2164e7b9a60221e39501081f0fe4f6c564bccf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Install Bardo dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run existing bot tests before integration build
+        run: npm test
+
+      - name: Verify new production modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/docs-api.js
+          node --check scripts/apply-production-worker.mjs
+
+      - name: Patch production Worker with Docs API
+        run: node scripts/apply-production-worker.mjs src/worker.js
+
+      - name: Verify legacy Discord behavior remains wired
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "commandName === 'doc' || commandName === 'documento'" src/worker.js
+          grep -q "BARDO_OPEN_PREFIX" src/worker.js
+          grep -q "handleDocsApi" src/worker.js
+          node --check src/worker.js
+
+      - name: Install finalized Docs app dependencies
+        run: npm install --prefix prototypes/docs-app --no-audit --no-fund
+
+      - name: Generate exact HeroUI theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/heroui-inc/heroui/${HEROUI_SOURCE_SHA}/apps/docs/src/app/%5Blang%5D/themes/utils/generate-theme-colors.ts" -o /tmp/generate-theme-colors.ts
+          npx --yes tsx@4.20.6 prototypes/docs-app/scripts/generate-heroui-theme.mjs /tmp/generate-theme-colors.ts prototypes/docs-app/src/theme.css
+
+      - name: Build finalized React Docs Activity
+        run: npm run build --prefix prototypes/docs-app
+
+      - name: Install finalized Activity assets into Bardo
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf activity
+          mkdir -p activity
+          cp -R prototypes/docs-app/dist/. activity/
+          test -f activity/index.html
+          test -n "$(find activity -maxdepth 2 -type f -name '*.js' -print -quit)"
+
+      - name: Count existing production documents
+        id: before
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT COUNT(*) AS count FROM documents;" --json > /tmp/docs-before.json
+          COUNT=$(node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/docs-before.json','utf8')); const a=Array.isArray(x)?x:[x]; const v=a.flatMap(i=>i.results||[])[0]?.count; if(v===undefined) process.exit(2); process.stdout.write(String(v));")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Existing documents before migration: $COUNT"
+
+      - name: Apply additive D1 migrations
+        run: npx --yes wrangler@4.124.0 d1 migrations apply bardo-db --remote
+
+      - name: Verify migration preserved every document
+        id: after
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT COUNT(*) AS count FROM documents;" --json > /tmp/docs-after.json
+          COUNT=$(node -e "const fs=require('fs'); const x=JSON.parse(fs.readFileSync('/tmp/docs-after.json','utf8')); const a=Array.isArray(x)?x:[x]; const v=a.flatMap(i=>i.results||[])[0]?.count; if(v===undefined) process.exit(2); process.stdout.write(String(v));")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Existing documents after migration: $COUNT"
+          test "$COUNT" = "${{ steps.before.outputs.count }}"
+
+      - name: Deploy existing Bardo Worker with finalized Docs Activity
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.124.0 deploy
+
+      - name: Record production deployment
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          DOCS_BEFORE: ${{ steps.before.outputs.count }}
+          DOCS_AFTER: ${{ steps.after.outputs.count }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          STATUS=failure
+          if [ "$DEPLOY_OUTCOME" = "success" ]; then STATUS=success; fi
+          cat > .deploy/bardo-docs-discord-status.txt <<EOF
+          status=$STATUS
+          worker=bardo-discord
+          branch=module/bardo-docs
+          source_commit=$GITHUB_SHA
+          docs_before=${DOCS_BEFORE:-unknown}
+          docs_after=${DOCS_AFTER:-unknown}
+          legacy_command=doc
+          legacy_message_ids=preserved
+          delete_behavior=soft_archive
+          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-docs-discord-status.txt prototypes/docs-app/src/theme.css
+          git commit -m "chore(docs): record Discord production deployment [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
+          test "$STATUS" = "success"
