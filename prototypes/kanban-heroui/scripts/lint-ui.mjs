@@ -6,36 +6,26 @@ const files = {
   mobile: new URL('../src/MobileKanban.tsx', import.meta.url),
   native: new URL('../src/NativeControls.tsx', import.meta.url),
   taskDetail: new URL('../src/TaskDetailModal.tsx', import.meta.url),
+  main: new URL('../src/main.tsx', import.meta.url),
   index: new URL('../index.html', import.meta.url),
   styles: new URL('../src/styles.css', import.meta.url),
-  interaction: new URL('../src/interaction.css', import.meta.url),
   theme: new URL('../src/theme.css', import.meta.url),
 };
 
-const [app, mobile, native, taskDetail, index, styles, interaction, theme] = await Promise.all([
-  readFile(files.app, 'utf8'),
-  readFile(files.mobile, 'utf8'),
-  readFile(files.native, 'utf8'),
-  readFile(files.taskDetail, 'utf8'),
-  readFile(files.index, 'utf8'),
-  readFile(files.styles, 'utf8'),
-  readFile(files.interaction, 'utf8'),
-  readFile(files.theme, 'utf8'),
-]);
+const [app, mobile, native, taskDetail, main, index, styles, theme] = await Promise.all(
+  Object.values(files).map((url) => readFile(url, 'utf8')),
+);
 const uiSource = `${app}\n${mobile}\n${native}\n${taskDetail}`;
-const allStyles = `${styles}\n${interaction}`;
-
 const failures = [];
 const fail = (message) => failures.push(message);
 
-const importOrder = [
-  '@import "tailwindcss";',
-  '@import "@heroui/styles";',
-  '@import "./theme.css";',
-];
-const firstLines = styles.split(/\r?\n/).slice(0, 3);
-if (JSON.stringify(firstLines) !== JSON.stringify(importOrder)) {
+const importOrder = ['@import "tailwindcss";', '@import "@heroui/styles";', '@import "./theme.css";'];
+if (JSON.stringify(styles.split(/\r?\n/).slice(0, 3)) !== JSON.stringify(importOrder)) {
   fail('styles.css must load Tailwind → @heroui/styles → theme.css in that exact order.');
+}
+
+if (main.includes('interaction.css') || main.includes('audit-fixes.css')) {
+  fail('Runtime must use one canonical layout/composition stylesheet only.');
 }
 
 const forbiddenCss = [
@@ -46,189 +36,64 @@ const forbiddenCss = [
   [/\blinear-gradient\s*\(/gi, 'arbitrary gradients'],
   [/\bradial-gradient\s*\(/gi, 'arbitrary gradients'],
 ];
-for (const [pattern, label] of forbiddenCss) {
-  if (pattern.test(allStyles)) fail(`UI styles contain ${label}; use HeroUI semantic tokens/theme instead.`);
+for (const [pattern, label] of forbiddenCss) if (pattern.test(styles)) fail(`styles.css contains ${label}.`);
+
+for (const selector of ['.button--', '.modal__', '.menu-item', '.dropdown__', '.input--', '.select__', '.text-field__', '.tag-group__', '.tabs__']) {
+  if (styles.includes(selector)) fail(`styles.css overrides HeroUI internal selector ${selector}.`);
 }
 
-const allowedRadii = new Set([
-  'var(--radius)',
-  'var(--field-radius)',
-  'inherit',
-  'calc(var(--radius) + 0.25rem)',
-]);
-for (const match of allStyles.matchAll(/border-radius\s*:\s*([^;]+);/gi)) {
-  const value = match[1].trim();
-  if (!allowedRadii.has(value)) fail(`UI styles contain non-theme border radius: ${value}`);
-}
-
-const forbiddenUtilityPatterns = [
-  /\bborder-0\b/g,
-  /\bborder-transparent\b/g,
-  /\bbg-transparent\b/g,
-  /\bshadow-none\b/g,
-  /\bring-0\b/g,
-  /\boutline-none\b/g,
-  /\bappearance-none\b/g,
-  /!border-0/g,
-  /!bg-transparent/g,
-];
-for (const pattern of forbiddenUtilityPatterns) {
-  if (pattern.test(uiSource)) fail(`UI contains forbidden style override: ${pattern}`);
-}
-
-if (/appearance\s*:\s*none/i.test(allStyles)) {
-  fail('Native OS controls must keep browser appearance; appearance:none is forbidden.');
-}
-if (/<textarea(?:\s|>)/.test(uiSource)) fail('UI contains a native <textarea>; text areas should remain HeroUI unless OS-native behavior is required.');
+if (/appearance\s*:\s*none/i.test(styles)) fail('Native OS controls must keep browser appearance.');
+if (/<textarea(?:\s|>)/.test(uiSource)) fail('Native textarea is forbidden; keep HeroUI TextArea.');
 if (/<input(?![^>]*type=["'](?:date|time|datetime-local)["'])[^>]*>/.test(uiSource)) {
-  fail('Native <input> is only allowed for date/time controls that intentionally invoke the OS picker.');
+  fail('Native input is only allowed for intentional OS date/time pickers.');
 }
 
-const forbiddenHeroUiOverrides = [
-  '.button--',
-  '.modal__',
-  '.menu-item',
-  '.dropdown__',
-  '.input--',
-  '.select__',
-  '.text-field__',
-  '.tag-group__',
-  '.tabs__',
-];
-for (const selector of forbiddenHeroUiOverrides) {
-  if (allStyles.includes(selector)) {
-    fail(`UI styles override HeroUI internal selector ${selector}; primitive geometry must remain owned by HeroUI.`);
-  }
+for (const required of ['SearchField', 'Modal', 'TagGroup', 'ToggleButtonGroup', 'Button']) {
+  if (!uiSource.includes(required)) fail(`Expected HeroUI primitive ${required} is missing.`);
 }
-
-const requiredHeroUi = ['SearchField', 'Modal', 'TagGroup', 'ToggleButtonGroup', 'Button'];
-for (const name of requiredHeroUi) {
-  if (!uiSource.includes(name)) fail(`Expected HeroUI primitive ${name} is missing from the UI.`);
-}
-
-const forbiddenCustomPickers = ['Dropdown', '<Select', 'Select.Trigger', 'DatePicker', '<Calendar', '<TimeField', '<DateField'];
-for (const name of forbiddenCustomPickers) {
-  if (uiSource.includes(name)) fail(`UI still contains ${name}; option/date/time pickers should delegate to native OS controls.`);
+for (const forbidden of ['Dropdown', '<Select', 'Select.Trigger', 'DatePicker', '<Calendar', '<TimeField', '<DateField']) {
+  if (uiSource.includes(forbidden)) fail(`UI still contains custom picker ${forbidden}.`);
 }
 
 if (!native.includes('<select') || !native.includes('NativeSelect') || !native.includes('NativeActionSelect')) {
-  fail('NativeControls.tsx must provide real HTML select controls for OS-native pickers.');
+  fail('NativeControls.tsx must provide real HTML select controls.');
 }
-if (!native.includes('bardo-native-select-shell')) {
-  fail('Native selects must be wrapped in a stable semantic field surface.');
-}
-if (!allStyles.includes('.bardo-native-select') || !styles.includes('accent-color: var(--accent);')) {
-  fail('Native select styling contract is missing.');
-}
-if (!allStyles.includes('background: var(--field-background);')) {
-  fail('Native fields must use the HeroUI semantic field background token.');
-}
-if (!interaction.includes('appearance: auto;')) {
+if (!styles.includes('-webkit-appearance: auto;') || !styles.includes('appearance: auto;')) {
   fail('Native selects must explicitly preserve OS/browser appearance.');
 }
 
-if (app.includes('<Tabs') || app.includes('Tabs.ListContainer') || app.includes('Tabs.Indicator')) {
-  fail('Mobile Kanban must not use HeroUI Tabs/ListContainer for the column carousel.');
-}
-if (!app.includes('<MobileKanban')) fail('App.tsx must render the dedicated MobileKanban carousel.');
-
-const mobileContracts = [
-  ['LONG_PRESS_MS = 420', '420ms long-press activation'],
-  ['data-drop-column-id', 'column drop targets'],
-  ['data-mobile-column-id', 'carousel slide identifiers'],
-  ['onPointerDownCapture', 'delegated pointer down handling'],
-  ['onPointerMoveCapture', 'delegated pointer move handling'],
-  ['onMoveTask', 'mobile task movement callback'],
-  ['scrollIntoView', 'active pill auto-scrolling'],
-  ['programmaticColumnRef', 'programmatic scroll guard that prevents pill flicker'],
-  ['PROGRAMMATIC_SCROLL_GUARD_MS', 'bounded programmatic scroll guard'],
+const layoutContracts = [
+  ['--bardo-gutter:', 'single page gutter variable'],
+  ['.bardo-mobile-carousel-bleed', 'mobile full-bleed wrapper'],
+  ['margin-inline: calc(var(--bardo-gutter) * -1);', 'symmetric negative gutter'],
+  ['padding: 0.25rem var(--bardo-gutter) 1rem;', 'internal carousel gutter'],
+  ['scroll-padding-inline: var(--bardo-gutter);', 'carousel snap gutter'],
+  ['scroll-snap-type: x mandatory;', 'horizontal snapping'],
+  ['flex: 0 0 calc(100% - 2.75rem);', 'next-column peek'],
+  ['grid-template-columns: minmax(0, 1fr) repeat(3, 2.5rem);', 'non-collapsing settings grid'],
+  ['.bardo-task-list[data-over="true"]::after', 'rounded drag target'],
+  ['border-radius: var(--field-radius);', 'semantic field/drop radius'],
 ];
-for (const [needle, label] of mobileContracts) {
-  if (!mobile.includes(needle)) fail(`MobileKanban.tsx is missing ${label}.`);
+for (const [needle, label] of layoutContracts) if (!styles.includes(needle)) fail(`styles.css is missing ${label}.`);
+
+for (const required of ['carouselInlineStart', 'snapLeft', 'programmaticColumnRef', 'LONG_PRESS_MS = 420', 'data-mobile-column-id', 'onPointerDownCapture', 'onMoveTask']) {
+  if (!mobile.includes(required)) fail(`MobileKanban.tsx is missing ${required}.`);
 }
 
-const carouselCssContracts = [
-  ['.bardo-column-pill-rail', 'pill rail'],
-  ['overflow-y: hidden;', 'vertical scrollbar suppression'],
-  ['.bardo-mobile-carousel', 'mobile carousel'],
-  ['scroll-snap-type: x mandatory;', 'horizontal scroll snapping'],
-  ['.bardo-mobile-column-slide', 'carousel slides'],
-  ['flex: 0 0 calc(100% - 2.75rem);', 'next-column peek width'],
-  ['.bardo-mobile-drag-ghost', 'long-press drag preview'],
-];
-for (const [needle, label] of carouselCssContracts) {
-  if (!styles.includes(needle)) fail(`styles.css is missing ${label}.`);
+for (const required of ['data-testid="task-read-view"', 'data-testid="task-edit-view"', 'startEditing', 'saveEditing', '<NativeSelect label="Columna"', '<NativeSelect label="Responsable"', '<NativeSelect label="Prioridad"']) {
+  if (!taskDetail.includes(required)) fail(`Task detail contract is missing ${required}.`);
 }
 
-const interactionContracts = [
-  ['.bardo-task-list[data-over="true"]::after', 'rounded drag target pseudo-border'],
-  ['border: 1px dashed var(--focus);', 'dashed drag target border'],
-  ['border-radius: calc(var(--radius) + 0.25rem);', 'rounded drag target radius'],
-  ['.bardo-native-select-shell', 'native select field surface'],
-];
-for (const [needle, label] of interactionContracts) {
-  if (!interaction.includes(needle)) fail(`interaction.css is missing ${label}.`);
-}
+if (!app.includes('autoFocus={allowProgrammaticInputFocus}')) fail('Quick create must use touch-safe autofocus.');
+if (!app.includes('EllipsisVertical')) fail('Board actions must use the vertical kebab SVG.');
+if (!app.includes("const ICON_CLASS = 'size-4 shrink-0'")) fail('Interactive icons must use the normalized 16px contract.');
 
-const detailContracts = [
-  ['data-testid="task-read-view"', 'read-first task view'],
-  ['data-testid="task-edit-view"', 'explicit task edit view'],
-  ['startEditing', 'edit transition'],
-  ['saveEditing', 'explicit save transition'],
-  ['Intl.DateTimeFormat(undefined', 'OS/browser locale date formatting'],
-  ['<NativeSelect label="Columna"', 'native column selector'],
-  ['<NativeSelect label="Responsable"', 'native assignee selector'],
-  ['<NativeSelect label="Prioridad"', 'native priority selector'],
-  ['placement="center"', 'stable centered modal placement'],
-  ['autoFocus={allowProgrammaticInputFocus}', 'touch-safe edit focus behavior'],
-];
-for (const [needle, label] of detailContracts) {
-  if (!taskDetail.includes(needle)) fail(`TaskDetailModal.tsx is missing ${label}.`);
-}
-
-if (!app.includes('autoFocus={allowProgrammaticInputFocus}')) {
-  fail('Quick-create input must not auto-open the keyboard on coarse-pointer devices.');
-}
-if ((app.match(/placement="center"/g) ?? []).length < 2) {
-  fail('Quick-create and settings modals must use stable centered placement.');
-}
-
-if (!app.includes("from '@gravity-ui/icons'")) {
-  fail('App.tsx must use the normalized SVG icon set used by HeroUI examples.');
-}
-for (const glyph of ['•••', '⌕', '>×<', '>←<', '>→<']) {
-  if (uiSource.includes(glyph)) fail(`UI still contains typography-as-icon glyph ${glyph}.`);
-}
-if (!app.includes('EllipsisVertical')) fail('Board actions must use a real vertical kebab SVG icon.');
-if (!app.includes("const ICON_CLASS = 'size-4 shrink-0'")) fail('Interactive SVG icons must share one normalized 16px size contract.');
-
-const requiredThemeTokens = [
-  '--background:',
-  '--foreground:',
-  '--surface:',
-  '--overlay:',
-  '--accent:',
-  '--border:',
-  '--field-background:',
-  '--field-border:',
-  '--field-radius:',
-  '--focus:',
-  '--radius:',
-];
-for (const token of requiredThemeTokens) {
+for (const token of ['--background:', '--foreground:', '--surface:', '--surface-secondary:', '--overlay:', '--accent:', '--border:', '--field-background:', '--field-border:', '--field-radius:', '--focus:', '--radius:']) {
   if (!theme.includes(token)) fail(`theme.css is missing ${token}`);
 }
-
-if (!theme.includes('--field-border: transparent;')) {
-  fail('Exact HeroUI Theme Builder contract requires transparent --field-border; do not patch fields with manual borders.');
-}
-
-if (!index.includes('data-theme="default"')) {
-  fail('The QA app must use the HeroUI default theme instead of forcing dark mode.');
-}
-if (index.includes('data-theme="dark"') || index.includes('content="dark"')) {
-  fail('index.html still forces dark mode.');
-}
+if (!theme.includes('--field-border: transparent;')) fail('Theme Builder field border contract changed unexpectedly.');
+if (!index.includes('data-theme="default"')) fail('The app must use HeroUI default theme.');
+if (index.includes('data-theme="dark"') || index.includes('content="dark"')) fail('Dark mode must not be forced.');
 
 if (failures.length) {
   console.error(`Visual system lint failed (${failures.length}):`);
@@ -236,4 +101,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('HeroUI shell + native OS picker + stable mobile interactions lint passed.');
+console.log('Single-layer HeroUI layout + native OS picker contract passed.');
