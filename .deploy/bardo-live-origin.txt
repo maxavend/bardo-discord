@@ -1,20 +1,20 @@
 expected_marker=docs-current-document-only-v1
 expected_context_fix=discord-context-retry-v1
-checked_at=2026-08-23T21:03:50Z
+checked_at=2026-08-23T21:05:48Z
 
 --- worker-origin ---
-url=https://bardo-discord.bardo-discord.workers.dev/?diagnostic=1787519029
+url=https://bardo-discord.bardo-discord.workers.dev/?diagnostic=1787519147
 http=200
 marker=present
-context_fix=missing
+context_fix=present
 title=<title>Bardo · Docs</title>
 script=<script type="module" crossorigin src="/assets/index-BN1cOZ0E.js">
 
 --- discord-proxy ---
-url=https://1539704001535156254.discordsays.com/?diagnostic=1787519029
+url=https://1539704001535156254.discordsays.com/?diagnostic=1787519147
 http=200
 marker=present
-context_fix=missing
+context_fix=present
 title=<title>Bardo · Docs</title>
 script=<script type="module" crossorigin src="/assets/index-BN1cOZ0E.js">
 
@@ -26,9 +26,10 @@ script=<script type="module" crossorigin src="/assets/index-BN1cOZ0E.js">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="bardo-build" content="docs-current-document-only-v1" />
+    <meta name="bardo-context-fix" content="discord-context-retry-v1" />
     <title>Bardo · Docs</title>
     
-<script type="text/javascript" nonce="NjgsMTA4LDQxLDIxMywxMjQsMTM0LDIyMSw5Mw==">
+<script type="text/javascript" nonce="MjMzLDE5Niw2MSwxMDUsMTg4LDI1LDE5OSwxNDE=">
 RTCPeerConnection = null;
 WebTransport = null;
 
