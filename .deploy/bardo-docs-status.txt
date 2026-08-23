@@ -1,6 +1,7 @@
-status=success
+status=failure
 url=https://bardo-docs.pages.dev
 branch=module/bardo-docs
 stack=react-vite-heroui
-source_commit=16c8a763dc21168232fe2d68fedf832e337b7ba7
-deployed_at=2026-08-23T07:37:53Z
+qa=playwright-mobile
+source_commit=3c639258c254f533846fbb83d17f09b81a5d24da
+deployed_at=2026-08-23T07:41:30Z
