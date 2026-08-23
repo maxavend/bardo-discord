@@ -62,6 +62,14 @@ if (!styles.includes('-webkit-appearance: auto;') || !styles.includes('appearanc
   fail('Native selects must explicitly preserve OS/browser appearance.');
 }
 
+if (uiSource.includes('Modal.Backdrop variant="blur"')) {
+  fail('Editing/configuration dialogs must use HeroUI opaque backdrops so background controls never show through.');
+}
+const opaqueBackdropCount = (uiSource.match(/Modal\.Backdrop variant="opaque"/g) ?? []).length;
+if (opaqueBackdropCount < 3) {
+  fail(`Expected all three app dialogs to use opaque HeroUI backdrops; found ${opaqueBackdropCount}.`);
+}
+
 const layoutContracts = [
   ['--bardo-gutter:', 'single page gutter variable'],
   ['.bardo-mobile-carousel-bleed', 'mobile full-bleed wrapper'],
@@ -73,6 +81,8 @@ const layoutContracts = [
   ['grid-template-columns: minmax(0, 1fr) repeat(3, 2.5rem);', 'non-collapsing settings grid'],
   ['.bardo-task-list[data-over="true"]::after', 'rounded drag target'],
   ['border-radius: var(--field-radius);', 'semantic field/drop radius'],
+  ['.toolbar[aria-label="Herramientas QA"] > *', 'QA action containment'],
+  ['max-width: 100%;', 'intrinsic width containment'],
 ];
 for (const [needle, label] of layoutContracts) if (!styles.includes(needle)) fail(`styles.css is missing ${label}.`);
 
