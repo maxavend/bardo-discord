@@ -1,0 +1,160 @@
+/*
+ * Bardo Docs layout contract.
+ * HeroUI owns component appearance; this file owns only product geometry.
+ * Scale: 4 / 8 / 12 / 16 / 24 / 32 / 44.
+ */
+:root {
+  --bardo-gutter: 16px;
+  --bardo-section-gap: 32px;
+  --bardo-label-gap: 8px;
+  --bardo-row-height: 72px;
+  --bardo-leading-column: 32px;
+  --bardo-row-gap: 12px;
+  --bardo-action-target: 44px;
+}
+
+/* One horizontal axis for the entire library. */
+.library {
+  padding-left: var(--bardo-gutter);
+  padding-right: var(--bardo-gutter);
+}
+
+.library-header,
+.docs-search,
+.library-section,
+.docs-list {
+  width: 100%;
+}
+
+.library-header {
+  height: var(--bardo-topbar);
+}
+
+.header-actions {
+  gap: 0;
+}
+
+.new-button,
+.native-menu {
+  min-height: var(--bardo-action-target);
+}
+
+/* Search is one Gestalt group between navigation and document sections. */
+.docs-search {
+  margin: 20px 0 28px;
+}
+
+.docs-search .search-field__group {
+  min-height: 48px;
+}
+
+.docs-search svg,
+.new-button svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+/* Section rhythm: label -> content = 8, sibling groups = 32. */
+.library-section,
+.recent-section {
+  margin-top: var(--bardo-section-gap);
+}
+
+.continue-section {
+  margin-top: 0;
+}
+
+.section-title {
+  margin-bottom: var(--bardo-label-gap);
+}
+
+/* Continue and document rows share exactly the same three-column geometry. */
+.continue-row,
+.doc-row {
+  min-height: var(--bardo-row-height);
+  grid-template-columns: var(--bardo-leading-column) minmax(0, 1fr) var(--bardo-action-target);
+  column-gap: var(--bardo-row-gap);
+}
+
+.continue-row {
+  padding: 12px 0;
+}
+
+.doc-row-main {
+  min-height: var(--bardo-row-height);
+  padding: 12px 0;
+}
+
+.continue-accent {
+  justify-self: center;
+  width: 4px;
+  height: 40px;
+}
+
+.doc-symbol {
+  width: var(--bardo-leading-column);
+  height: var(--bardo-leading-column);
+}
+
+.doc-symbol svg {
+  width: 20px;
+  height: 20px;
+}
+
+.continue-row > svg {
+  justify-self: center;
+  width: 18px;
+  height: 18px;
+}
+
+/* Native kebab: 44px target, 18px optical icon, vertical dots. */
+.native-menu {
+  width: var(--bardo-action-target);
+  height: var(--bardo-action-target);
+  flex-basis: var(--bardo-action-target);
+}
+
+.native-menu select {
+  width: var(--bardo-action-target);
+  height: var(--bardo-action-target);
+}
+
+.native-menu-visual {
+  position: relative;
+  display: block;
+  width: 18px;
+  height: 18px;
+  font-size: 0;
+  line-height: 0;
+  letter-spacing: 0;
+  transform: none;
+}
+
+.native-menu-visual::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor;
+}
+
+/* Keep the same optical geometry in document headers and editor toolbar. */
+.topbar-right {
+  gap: 0;
+}
+
+.toolbar-native-menu .native-menu-visual,
+.doc-topbar .native-menu-visual {
+  width: 18px;
+  height: 18px;
+}
+
+@media (min-width: 760px) {
+  :root { --bardo-gutter: 24px; }
+}
