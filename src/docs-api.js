@@ -7,6 +7,7 @@ import {
   grantDocumentGuildAccess,
   listDocumentsForGuild,
   loadDocument,
+  loadRecentDocsLaunchIntent,
   saveDocument,
   updateDocumentContent,
 } from './db.js';
@@ -93,6 +94,17 @@ async function requireDocumentAccess(env, documentId, guildId) {
   return { document };
 }
 
+async function resolveContextDocument(request, env, session) {
+  const requested = launchDocumentId(request);
+  if (requested && await documentHasGuildAccess(env.DB, requested, session.guildId)) return requested;
+
+  const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
+  if (intent?.documentId && await documentHasGuildAccess(env.DB, intent.documentId, session.guildId)) {
+    return intent.documentId;
+  }
+  return null;
+}
+
 export async function handleDocsApi(request, url, env) {
   const route = parsePath(url.pathname);
   if (!route) return null;
@@ -103,10 +115,13 @@ export async function handleDocsApi(request, url, env) {
 
   if (route.collection && request.method === 'GET') {
     const documents = await listDocumentsForGuild(env.DB, session.guildId, 150);
-    const requestedDocumentId = launchDocumentId(request);
-    const contextDocumentId = requestedDocumentId && await documentHasGuildAccess(env.DB, requestedDocumentId, session.guildId)
-      ? requestedDocumentId
-      : null;
+    const contextDocumentId = await resolveContextDocument(request, env, session);
+
+    // Archived docs remain reachable from their existing Discord message.
+    if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
+      const contextDocument = await loadDocument(env.DB, contextDocumentId);
+      if (contextDocument) documents.unshift(contextDocument);
+    }
 
     return json({
       documents: documents.map(serialize),
