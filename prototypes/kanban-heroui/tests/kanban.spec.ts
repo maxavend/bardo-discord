@@ -16,14 +16,12 @@ async function openApp(page: import('@playwright/test').Page) {
   return pageErrors;
 }
 
-async function openOptions(page: import('@playwright/test').Page) {
-  await page.getByLabel('Más opciones').click();
-  await expect(page.getByRole('menu')).toBeVisible();
+async function chooseBoardAction(page: import('@playwright/test').Page, value: string) {
+  await page.getByLabel('Más opciones').selectOption(value);
 }
 
 async function openSettings(page: import('@playwright/test').Page) {
-  await openOptions(page);
-  await page.getByRole('menuitem', { name: 'Configurar tablero' }).click({ force: true });
+  await chooseBoardAction(page, 'settings');
   const dialog = page.getByRole('dialog', { name: 'Tablero' });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -31,8 +29,7 @@ async function openSettings(page: import('@playwright/test').Page) {
 
 test('loads the HeroUI app without runtime errors', async ({ page }) => {
   const errors = await openApp(page);
-  const backlog = page.getByText('Backlog', { exact: true }).filter({ visible: true }).first();
-  await expect(backlog).toBeVisible();
+  await expect(page.getByText('Backlog', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -49,6 +46,7 @@ test('uses the exact HeroUI default theme contract', async ({ page }) => {
       fieldBackground: style.getPropertyValue('--field-background').trim(),
       fieldBorder: style.getPropertyValue('--field-border').trim(),
       radius: style.getPropertyValue('--radius').trim(),
+      fieldRadius: style.getPropertyValue('--field-radius').trim(),
     };
   });
   expect(tokens.theme).toBe('default');
@@ -62,27 +60,79 @@ test('uses the exact HeroUI default theme contract', async ({ page }) => {
   expect(tokens.fieldBackground).not.toBe(tokens.background);
   expect(tokens.fieldBorder).toBe('transparent');
   expect(Number.parseFloat(tokens.radius)).toBeCloseTo(0.25, 5);
+  expect(Number.parseFloat(tokens.fieldRadius)).toBeCloseTo(0.75, 5);
   expect(errors).toEqual([]);
 });
 
-test('desktop: quick create, edit and persist a task', async ({ page }, testInfo) => {
+test('desktop: quick create opens task in read mode, then explicit edit persists', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const errors = await openApp(page);
 
   await page.keyboard.press('n');
   await expect(page.getByRole('heading', { name: 'Nueva tarea' })).toBeVisible();
-  await page.getByLabel('Título').fill('QA HeroUI creada por Playwright');
+  await expect(page.getByLabel('Columna')).toHaveJSProperty('tagName', 'SELECT');
+  await page.getByLabel('Título').fill('QA read first por Playwright');
   await page.getByRole('button', { name: 'Crear', exact: true }).click();
 
-  const card = page.locator('.bardo-desktop-board .bardo-task-card').filter({ hasText: 'QA HeroUI creada por Playwright' });
+  const card = page.locator('.bardo-desktop-board .bardo-task-card').filter({ hasText: 'QA read first por Playwright' });
   await expect(card).toBeVisible();
   await card.click();
-  await expect(page.getByLabel('Título de la tarea')).toHaveValue('QA HeroUI creada por Playwright');
-  await page.getByLabel('Descripción').fill('Descripción persistida desde el gate E2E.');
-  await page.getByRole('button', { name: 'Listo', exact: true }).click();
-  await expect(card.getByText('Descripción persistida desde el gate E2E.', { exact: true })).toBeVisible();
 
-  await expect.poll(async () => page.evaluate((key) => Boolean(localStorage.getItem(key)), STORAGE)).toBe(true);
+  await expect(page.getByTestId('task-read-view')).toBeVisible();
+  await expect(page.getByTestId('task-edit-view')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'QA read first por Playwright' })).toBeVisible();
+  await expect(page.getByLabel('Título de la tarea')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Editar', exact: true }).click();
+  await expect(page.getByTestId('task-edit-view')).toBeVisible();
+  await expect(page.getByLabel('Título de la tarea')).toHaveValue('QA read first por Playwright');
+  await page.getByLabel('Descripción').fill('Descripción persistida desde edición explícita.');
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+
+  await expect(page.getByTestId('task-read-view')).toBeVisible();
+  await expect(page.getByText('Descripción persistida desde edición explícita.', { exact: true })).toBeVisible();
+  await expect.poll(async () => page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || 'null');
+    const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
+    const task = board?.tasks?.find((item: { title: string }) => item.title === 'QA read first por Playwright');
+    return task?.description ?? '';
+  }, STORAGE)).toBe('Descripción persistida desde edición explícita.');
+  expect(errors).toEqual([]);
+});
+
+test('desktop: task detail has deliberate Gestalt hierarchy and no accidental overflow', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  const errors = await openApp(page);
+  await page.locator('.bardo-desktop-board .bardo-task-card').first().click();
+  await expect(page.getByTestId('task-read-view')).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const title = dialog.querySelector<HTMLElement>('.bardo-detail-title')!;
+    const subtitle = dialog.querySelector<HTMLElement>('.bardo-detail-updated')!;
+    const description = dialog.querySelector<HTMLElement>('.bardo-detail-description')!;
+    const propertyLabel = dialog.querySelector<HTMLElement>('.bardo-detail-property-label')!;
+    const propertyValue = dialog.querySelector<HTMLElement>('.bardo-detail-property-value')!;
+    const body = dialog.querySelector<HTMLElement>('.bardo-detail-body')!;
+    const rect = dialog.getBoundingClientRect();
+    return {
+      titleSize: Number.parseFloat(getComputedStyle(title).fontSize),
+      subtitleSize: Number.parseFloat(getComputedStyle(subtitle).fontSize),
+      descriptionSize: Number.parseFloat(getComputedStyle(description).fontSize),
+      propertyLabelSize: Number.parseFloat(getComputedStyle(propertyLabel).fontSize),
+      propertyValueSize: Number.parseFloat(getComputedStyle(propertyValue).fontSize),
+      bodyGap: Number.parseFloat(getComputedStyle(body).gap),
+      overflowX: dialog.scrollWidth - dialog.clientWidth,
+      withinViewport: rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= window.innerHeight,
+    };
+  });
+
+  expect(metrics.titleSize).toBeGreaterThan(metrics.descriptionSize);
+  expect(metrics.descriptionSize).toBeGreaterThan(metrics.subtitleSize);
+  expect(metrics.propertyValueSize).toBeGreaterThan(metrics.propertyLabelSize);
+  expect(metrics.bodyGap).toBeGreaterThanOrEqual(18);
+  expect(metrics.overflowX).toBeLessThanOrEqual(1);
+  expect(metrics.withinViewport).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -109,6 +159,22 @@ test('desktop: native drag lifecycle moves a task between columns', async ({ pag
   expect(errors).toEqual([]);
 });
 
+test('desktop: native board picker changes board and action picker opens settings', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  const errors = await openApp(page);
+
+  const boardPicker = page.getByLabel('Cambiar tablero');
+  await expect(boardPicker).toHaveJSProperty('tagName', 'SELECT');
+  await boardPicker.selectOption('personal');
+  await expect(page.getByText('Personal', { exact: true }).filter({ visible: true }).first()).toBeVisible();
+
+  const actionPicker = page.getByLabel('Más opciones');
+  await expect(actionPicker).toHaveJSProperty('tagName', 'SELECT');
+  await actionPicker.selectOption('settings');
+  await expect(page.getByRole('dialog', { name: 'Tablero' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('desktop: allows a fifth column and blocks a sixth', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const errors = await openApp(page);
@@ -126,8 +192,7 @@ test('desktop: board tag catalog stops at eight', async ({ page }, testInfo) => 
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const errors = await openApp(page);
 
-  await page.getByLabel('Cambiar tablero').click();
-  await page.getByRole('menuitem', { name: /Personal/ }).click();
+  await page.getByLabel('Cambiar tablero').selectOption('personal');
   await expect(page.getByText('Personal', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   const settings = await openSettings(page);
   await expect(settings.getByText('4/8 máximo por tablero')).toBeVisible();
@@ -148,8 +213,7 @@ test('desktop: stress adds one thousand tasks and self-test remains green', asyn
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const errors = await openApp(page);
 
-  await openOptions(page);
-  await page.getByRole('menuitem', { name: '+1000 tareas mock' }).click();
+  await chooseBoardAction(page, 'stress-1000');
   await expect.poll(async () => page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || 'null');
     const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
@@ -210,6 +274,7 @@ test('mobile: pill navigation is single-axis, readable and shows the next column
   await page.getByLabel('Nueva tarea').click();
   await expect(page.getByRole('heading', { name: 'Nueva tarea' })).toBeVisible();
   await expect(page.getByLabel('Título')).toBeVisible();
+  await expect(page.getByLabel('Columna')).toHaveJSProperty('tagName', 'SELECT');
   expect(errors).toEqual([]);
 });
 
@@ -284,22 +349,48 @@ test('mobile: long press and horizontal drag moves a card to the next column', a
   expect(errors).toEqual([]);
 });
 
-test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, testInfo) => {
+test('mobile: task detail is read-first and native selectors only appear in edit mode', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  const errors = await openApp(page);
+
+  const card = page.locator('.bardo-mobile-column-slide').first().locator('.bardo-task-card').first();
+  await card.click();
+  const dialog = page.getByRole('dialog');
+  await expect(page.getByTestId('task-read-view')).toBeVisible();
+  await expect(dialog.locator('select')).toHaveCount(0);
+  await expect(page.getByLabel('Título de la tarea')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Editar', exact: true }).click();
+  await expect(page.getByTestId('task-edit-view')).toBeVisible();
+  const nativeSelectors = dialog.locator('select');
+  await expect(nativeSelectors).toHaveCount(3);
+
+  for (const label of ['Columna', 'Responsable', 'Prioridad']) {
+    const control = page.getByLabel(label);
+    await expect(control).toHaveJSProperty('tagName', 'SELECT');
+    const appearance = await control.evaluate((element) => getComputedStyle(element).appearance);
+    expect(appearance).not.toBe('none');
+  }
+  expect(errors).toEqual([]);
+});
+
+test('mobile: native action control matches icon geometry and quick modal stays inside viewport', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   const errors = await openApp(page);
 
   const geometry = await page.evaluate(() => {
-    const action = document.querySelector<HTMLElement>('button[aria-label="Más opciones"]');
+    const action = document.querySelector<HTMLElement>('.bardo-native-icon-picker');
     const search = document.querySelector<HTMLElement>('button[aria-label="Buscar"]');
     const create = document.querySelector<HTMLElement>('button[aria-label="Nueva tarea"]');
-    const svgs = [action, search, create].map((button) => button?.querySelector<SVGElement>('svg'));
+    const actionSvg = action?.querySelector<SVGElement>('svg');
+    const searchSvg = search?.querySelector<SVGElement>('svg');
+    const createSvg = create?.querySelector<SVGElement>('svg');
     const pills = Array.from(document.querySelectorAll<HTMLElement>('.bardo-column-pill'));
     return {
       actionBox: action ? [action.getBoundingClientRect().width, action.getBoundingClientRect().height] : [0, 0],
       searchBox: search ? [search.getBoundingClientRect().width, search.getBoundingClientRect().height] : [0, 0],
       createBox: create ? [create.getBoundingClientRect().width, create.getBoundingClientRect().height] : [0, 0],
-      svgBoxes: svgs.map((svg) => svg ? [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height] : [0, 0]),
-      buttonText: [action, search, create].map((button) => button?.textContent?.trim() ?? ''),
+      svgBoxes: [actionSvg, searchSvg, createSvg].map((svg) => svg ? [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height] : [0, 0]),
       pillRadii: pills.map((pill) => Number.parseFloat(getComputedStyle(pill).borderRadius)),
       pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
@@ -311,7 +402,6 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
     expect(width).toBeCloseTo(16, 0);
     expect(height).toBeCloseTo(16, 0);
   }
-  expect(geometry.buttonText).toEqual(['', '', '']);
   expect(geometry.pillRadii.every((radius) => radius >= 16)).toBe(true);
   expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
 
@@ -324,10 +414,12 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
   expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual((await page.viewportSize())!.width);
   expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual((await page.viewportSize())!.height);
 
+  const nativeColumn = page.getByLabel('Columna');
+  await expect(nativeColumn).toHaveJSProperty('tagName', 'SELECT');
   const computed = await page.evaluate(() => {
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[aria-label="Título"]');
-    const surface = document.querySelector<HTMLElement>('[data-testid="quick-surface"]');
+    const select = document.querySelector<HTMLSelectElement>('[role="dialog"] select[aria-label="Columna"]');
     const root = getComputedStyle(document.documentElement);
     return {
       theme: document.documentElement.getAttribute('data-theme'),
@@ -335,7 +427,8 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
       defaultToken: root.getPropertyValue('--default').trim(),
       dialogBackground: dialog ? getComputedStyle(dialog).backgroundColor : '',
       inputBackground: input ? getComputedStyle(input).backgroundColor : '',
-      surfaceBackground: surface ? getComputedStyle(surface).backgroundColor : '',
+      selectBackground: select ? getComputedStyle(select).backgroundColor : '',
+      selectAppearance: select ? getComputedStyle(select).appearance : '',
     };
   });
 
@@ -346,6 +439,8 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
   expect(computed.dialogBackground).not.toBe('');
   expect(computed.inputBackground).not.toBe('');
   expect(computed.inputBackground).not.toBe(computed.dialogBackground);
-  expect(computed.inputBackground).not.toBe(computed.surfaceBackground);
+  expect(computed.selectBackground).not.toBe('');
+  expect(computed.selectBackground).not.toBe(computed.dialogBackground);
+  expect(computed.selectAppearance).not.toBe('none');
   expect(errors).toEqual([]);
 });
