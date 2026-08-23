@@ -91,3 +91,4 @@ jobs:
           test "$STATUS" = "success"
 
 # Triggered after the library spacing/icon audit on 2026-08-23.
+# Triggered after the iOS visual-viewport keyboard sticky fix on 2026-08-23.
