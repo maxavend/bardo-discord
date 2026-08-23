@@ -113,6 +113,8 @@
   height: 16px;
   font-size: 0;
   line-height: 0;
+  letter-spacing: 0;
+  transform: none;
   pointer-events: none;
 }
 
