@@ -144,7 +144,7 @@
     position: relative;
     display: inline-flex;
     min-width: 0;
-    height: 2rem;
+    height: 2.25rem;
     align-items: center;
     border-radius: var(--radius);
   }
@@ -179,8 +179,8 @@
   }
 
   .bardo-native-icon-picker {
-    width: 2rem;
-    flex: 0 0 2rem;
+    width: 2.25rem;
+    flex: 0 0 2.25rem;
   }
 
   .bardo-mobile-kanban {
