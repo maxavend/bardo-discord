@@ -47,6 +47,14 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function carouselInlineStart(carousel: HTMLElement) {
+  return Number.parseFloat(getComputedStyle(carousel).paddingInlineStart) || 0;
+}
+
+function snapLeft(carousel: HTMLElement, slide: HTMLElement) {
+  return Math.max(0, slide.offsetLeft - carouselInlineStart(carousel));
+}
+
 export function MobileKanban({
   columns,
   activeColumnId,
@@ -101,7 +109,7 @@ export function MobileKanban({
     const slide = carousel.querySelector<HTMLElement>(`[data-mobile-column-id="${CSS.escape(columnId)}"]`);
     if (!slide) return;
     guardProgrammaticScroll(columnId, behavior);
-    carousel.scrollTo({ left: slide.offsetLeft, behavior });
+    carousel.scrollTo({ left: snapLeft(carousel, slide), behavior });
     scrollPillIntoView(columnId);
   };
 
@@ -256,17 +264,18 @@ export function MobileKanban({
       const guardedColumnId = programmaticColumnRef.current;
       if (guardedColumnId) {
         const guardedSlide = carousel.querySelector<HTMLElement>(`[data-mobile-column-id="${CSS.escape(guardedColumnId)}"]`);
-        if (guardedSlide && Math.abs(carousel.scrollLeft - guardedSlide.offsetLeft) <= 2) releaseProgrammaticScroll();
+        if (guardedSlide && Math.abs(carousel.scrollLeft - snapLeft(carousel, guardedSlide)) <= 2) releaseProgrammaticScroll();
         return;
       }
 
-      const viewportLeft = carousel.getBoundingClientRect().left;
+      const carouselRect = carousel.getBoundingClientRect();
+      const snapLine = carouselRect.left + carouselInlineStart(carousel);
       const slides = Array.from(carousel.querySelectorAll<HTMLElement>('[data-mobile-column-id]'));
       let nearest: { id: string; distance: number } | null = null;
       for (const slide of slides) {
         const id = slide.dataset.mobileColumnId;
         if (!id) continue;
-        const distance = Math.abs(slide.getBoundingClientRect().left - viewportLeft);
+        const distance = Math.abs(slide.getBoundingClientRect().left - snapLine);
         if (!nearest || distance < nearest.distance) nearest = { id, distance };
       }
       if (nearest && nearest.id !== activeColumnId) {
