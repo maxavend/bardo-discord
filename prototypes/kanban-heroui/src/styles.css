@@ -737,10 +737,11 @@
   }
 
   .toolbar[aria-label="Herramientas QA"] {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
     width: 100%;
     min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
     gap: 0.5rem;
   }
 
@@ -748,11 +749,7 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    justify-self: stretch;
-  }
-
-  .toolbar[aria-label="Herramientas QA"] > :last-child {
-    grid-column: 1 / -1;
+    flex: 0 0 auto;
   }
 
   .bardo-qa-result {
@@ -894,18 +891,14 @@
     }
 
     .toolbar[aria-label="Herramientas QA"] {
-      display: flex;
+      flex-direction: row;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     .toolbar[aria-label="Herramientas QA"] > * {
       width: auto;
       max-width: none;
-      justify-self: auto;
-    }
-
-    .toolbar[aria-label="Herramientas QA"] > :last-child {
-      grid-column: auto;
     }
   }
 
