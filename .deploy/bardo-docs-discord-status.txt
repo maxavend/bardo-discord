@@ -1,0 +1,10 @@
+status=failure
+worker=bardo-discord
+branch=module/bardo-docs
+source_commit=87526d3d143ce5f5a168c00d2eeb79450883b1c8
+docs_before=unknown
+docs_after=unknown
+legacy_command=doc
+legacy_message_ids=preserved
+delete_behavior=soft_archive
+deployed_at=2026-08-23T20:03:42Z
