@@ -78,6 +78,9 @@ export function TaskDetailModal({
   const [draft, setDraft] = useState<TaskDraft | null>(task ? makeDraft(task) : null);
   const [subtaskDraft, setSubtaskDraft] = useState('');
   const [commentDraft, setCommentDraft] = useState('');
+  const allowProgrammaticInputFocus = typeof window === 'undefined'
+    ? true
+    : window.matchMedia('(pointer: fine)').matches;
 
   useEffect(() => {
     if (!task || !isOpen) return;
@@ -96,8 +99,6 @@ export function TaskDetailModal({
 
   const person = personById(task.assignee);
   const doneSubtasks = task.subtasks.filter((item) => item.done).length;
-
-  const close = () => onOpenChange(false);
 
   const startEditing = () => {
     setDraft(makeDraft(task));
@@ -186,7 +187,7 @@ export function TaskDetailModal({
   return (
     <Modal>
       <Modal.Backdrop variant="blur" isOpen={isOpen} onOpenChange={onOpenChange}>
-        <Modal.Container placement="auto" size="lg" scroll="inside">
+        <Modal.Container placement="center" size="lg" scroll="inside">
           <Modal.Dialog>
             <Modal.CloseTrigger />
 
@@ -324,7 +325,7 @@ export function TaskDetailModal({
                   <TextField variant="secondary">
                     <Label>Título</Label>
                     <Input
-                      autoFocus
+                      autoFocus={allowProgrammaticInputFocus}
                       fullWidth
                       value={draft.title}
                       onChange={(event) => setDraft({ ...draft, title: event.target.value })}
