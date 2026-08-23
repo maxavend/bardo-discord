@@ -219,6 +219,9 @@ export function MobileKanban({
     }
     setDragState(null);
     document.body.removeAttribute('data-kanban-moving');
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 350);
   };
 
   const onScroll = () => {
@@ -246,23 +249,23 @@ export function MobileKanban({
   return (
     <section className="bardo-mobile-kanban" aria-label="Columnas del tablero">
       <nav className="bardo-column-pill-viewport" aria-label="Navegar columnas">
-        <div ref={pillRailRef} className="bardo-column-pill-rail" role="tablist" aria-label="Columnas">
+        <div ref={pillRailRef} className="bardo-column-pill-rail" aria-label="Columnas">
           {columns.map((column) => {
             const active = column.id === activeColumnId;
+            const count = tasksByColumn.get(column.id)?.length ?? 0;
             return (
               <Button
                 key={column.id}
                 size="sm"
                 variant={active ? 'secondary' : 'ghost'}
                 className="bardo-column-pill rounded-full"
-                role="tab"
-                aria-selected={active}
+                aria-label={`${column.title}, ${count} tareas${active ? ', columna actual' : ''}`}
                 data-active={String(active)}
                 data-drop-column-id={column.id}
                 onPress={() => selectColumn(column.id)}
               >
                 <span className="bardo-column-pill-label">{column.title}</span>
-                <span className="bardo-column-pill-count tabular-nums">{tasksByColumn.get(column.id)?.length ?? 0}</span>
+                <span className="bardo-column-pill-count tabular-nums">{count}</span>
               </Button>
             );
           })}
