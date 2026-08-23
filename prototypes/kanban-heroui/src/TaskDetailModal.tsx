@@ -186,7 +186,7 @@ export function TaskDetailModal({
 
   return (
     <Modal>
-      <Modal.Backdrop variant="blur" isOpen={isOpen} onOpenChange={onOpenChange}>
+      <Modal.Backdrop variant="opaque" isOpen={isOpen} onOpenChange={onOpenChange}>
         <Modal.Container placement="center" size="lg" scroll="inside">
           <Modal.Dialog className="bardo-task-dialog">
             <Modal.CloseTrigger />
