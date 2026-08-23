@@ -8,10 +8,13 @@
     "dev": "npm run assemble && vite",
     "build": "npm run assemble && vite build",
     "preview": "vite preview",
-    "check": "npm run build",
+    "lint": "npm run assemble && eslint src --max-warnings=0",
+    "typecheck": "npm run assemble && tsc -p tsconfig.json",
+    "check": "npm run lint && npm run typecheck && npm run build",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.2.8",
     "@heroui/react": "3.2.4",
     "@heroui/styles": "3.2.4",
     "react": "19.2.8",
@@ -21,7 +24,10 @@
     "@playwright/test": "1.62.1",
     "@tailwindcss/vite": "4.3.3",
     "@vitejs/plugin-react": "6.1.0",
+    "eslint": "9.39.2",
+    "globals": "16.4.0",
     "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
     "vite": "8.2.2"
   }
 }
