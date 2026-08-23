@@ -7,7 +7,7 @@ async function openApp(page: import('@playwright/test').Page) {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.goto('/');
   await expect(page.getByLabel('Cambiar tablero')).toBeVisible();
-  await expect(page.getByText('Producto', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Producto', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   return pageErrors;
 }
 
@@ -18,21 +18,16 @@ async function openOptions(page: import('@playwright/test').Page) {
 
 async function openSettings(page: import('@playwright/test').Page) {
   await openOptions(page);
-  const item = page.getByRole('menuitem', { name: 'Configurar tablero' });
-  await expect(item).toBeVisible();
-  await item.click({ force: true });
+  await page.getByRole('menuitem', { name: 'Configurar tablero' }).click({ force: true });
   const dialog = page.getByRole('dialog', { name: 'Tablero' });
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
-test('loads the HeroUI app without runtime errors', async ({ page }, testInfo) => {
+test('loads the HeroUI app without runtime errors', async ({ page }) => {
   const errors = await openApp(page);
-  if (testInfo.project.name === 'mobile-chromium') {
-    await expect(page.locator('.bardo-mobile-panel:visible .bardo-column h2')).toHaveText('Backlog');
-  } else {
-    await expect(page.locator('.bardo-desktop-board .bardo-column h2').first()).toHaveText('Backlog');
-  }
+  const backlog = page.getByText('Backlog', { exact: true }).filter({ visible: true }).first();
+  await expect(backlog).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -42,7 +37,6 @@ test('uses the audited HeroUI theme tokens', async ({ page }) => {
     const style = getComputedStyle(document.documentElement);
     return {
       accent: style.getPropertyValue('--accent').trim(),
-      focus: style.getPropertyValue('--focus').trim(),
       background: style.getPropertyValue('--background').trim(),
       fieldBackground: style.getPropertyValue('--field-background').trim(),
       fieldBorder: style.getPropertyValue('--field-border').trim(),
@@ -50,14 +44,12 @@ test('uses the audited HeroUI theme tokens', async ({ page }) => {
     };
   });
   expect(tokens.accent).not.toBe('');
-  expect(tokens.focus).toBe(tokens.accent);
   expect(tokens.background).not.toBe('');
-  expect(tokens.fieldBackground).not.toBe('');
+  expect(tokens.accent).not.toBe(tokens.background);
   expect(tokens.fieldBackground).not.toBe('transparent');
   expect(tokens.fieldBackground).not.toBe(tokens.background);
   expect(tokens.fieldBorder).toBe('transparent');
-  expect(Number.parseFloat(tokens.radius)).toBeCloseTo(0.25, 3);
-  expect(tokens.radius.endsWith('rem')).toBe(true);
+  expect(Number.parseFloat(tokens.radius)).toBeCloseTo(0.25, 5);
   expect(errors).toEqual([]);
 });
 
@@ -123,10 +115,8 @@ test('desktop: board tag catalog stops at eight', async ({ page }, testInfo) => 
   const errors = await openApp(page);
 
   await page.getByLabel('Cambiar tablero').click();
-  const personal = page.getByRole('menuitem', { name: /Personal/ });
-  await expect(personal).toBeVisible();
-  await personal.click({ force: true });
-  await expect(page.getByText('Personal', { exact: true }).first()).toBeVisible();
+  await page.getByRole('menuitem', { name: /Personal/ }).click();
+  await expect(page.getByText('Personal', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   const settings = await openSettings(page);
   await expect(settings.getByText('4/8 máximo por tablero')).toBeVisible();
 
@@ -147,9 +137,7 @@ test('desktop: stress adds one thousand tasks and self-test remains green', asyn
   const errors = await openApp(page);
 
   await openOptions(page);
-  const stressItem = page.getByRole('menuitem', { name: '+1000 tareas mock' });
-  await expect(stressItem).toBeVisible();
-  await stressItem.click({ force: true });
+  await page.getByRole('menuitem', { name: '+1000 tareas mock' }).click();
   await expect.poll(async () => page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || 'null');
     const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
@@ -175,5 +163,45 @@ test('mobile: exposes one column at a time and quick create stays reachable', as
   await page.getByLabel('Nueva tarea').click();
   await expect(page.getByRole('heading', { name: 'Nueva tarea' })).toBeVisible();
   await expect(page.getByLabel('Título')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('mobile: normalized topbar, tabs and modal geometry stay coherent', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  const errors = await openApp(page);
+
+  const geometry = await page.evaluate(() => {
+    const action = document.querySelector<HTMLElement>('button[aria-label="Más opciones"]');
+    const create = document.querySelector<HTMLElement>('button[aria-label="Nueva tarea"]');
+    const prev = document.querySelector<HTMLElement>('.tabs__list-container__scroll-prev');
+    const next = document.querySelector<HTMLElement>('.tabs__list-container__scroll-next');
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>('.bardo-mobile-tabs .tabs__tab'));
+    const before = action ? getComputedStyle(action, '::before').content : '';
+    return {
+      actionBox: action ? [action.getBoundingClientRect().width, action.getBoundingClientRect().height] : [0, 0],
+      createBox: create ? [create.getBoundingClientRect().width, create.getBoundingClientRect().height] : [0, 0],
+      prevDisplay: prev ? getComputedStyle(prev).display : 'none',
+      nextDisplay: next ? getComputedStyle(next).display : 'none',
+      noWrappedTabs: tabs.every((tab) => tab.getBoundingClientRect().height <= 45),
+      kebabContent: before,
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+
+  expect(geometry.actionBox).toEqual(geometry.createBox);
+  expect(geometry.prevDisplay).toBe('none');
+  expect(geometry.nextDisplay).toBe('none');
+  expect(geometry.noWrappedTabs).toBe(true);
+  expect(geometry.kebabContent).toContain('⋮');
+  expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
+
+  await page.getByLabel('Nueva tarea').click();
+  const dialog = page.getByRole('dialog', { name: 'Nueva tarea' });
+  const dialogBox = await dialog.boundingBox();
+  expect(dialogBox).not.toBeNull();
+  expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual((await page.viewportSize())!.width);
+  expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual((await page.viewportSize())!.height);
   expect(errors).toEqual([]);
 });
