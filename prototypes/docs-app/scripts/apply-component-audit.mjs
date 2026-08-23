@@ -103,6 +103,17 @@ export function applyComponentAudit(filePath) {
 'HeroUI ToastProvider',
   );
 
+  replace(
+`    if (action === 'print') window.print();`,
+`    if ((action === 'pdf' || action === 'docx') && window.__bardoExportDocument) {\n      await window.__bardoExportDocument(doc.id, action);\n      showToast(action === 'pdf' ? 'PDF abierto' : 'Word abierto');\n    }\n    if (action === 'print') window.print();`,
+'preserve server PDF/DOCX exports',
+  );
+
+  source = source.replaceAll(
+`{value:'html',label:'Exportar HTML'},`,
+`{value:'html',label:'Exportar HTML'},\n                    ...(window.__BARDO_PRODUCTION__ ? [\n                      {value:'pdf',label:'Exportar PDF'},\n                      {value:'docx',label:'Exportar Word'},\n                    ] : []),`,
+  );
+
   source = source
     .replaceAll('<Icon name="plus" size={17}/>', '<Icon name="plus"/>')
     .replaceAll('<Icon name="back" size={18}/>', '<Icon name="back"/>')
