@@ -69,3 +69,5 @@ jobs:
           git add .deploy/bardo-live-origin.txt
           git commit -m "chore(docs): record Worker and Discord Activity proxy diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
+
+# Recheck after deploying discord-context-retry-v1.
