@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -34,6 +34,10 @@ jobs:
             echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"
             exit 1
           fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
 
       - name: Ensure Pages project exists
         shell: bash
@@ -48,3 +52,20 @@ jobs:
             --branch module/bardo-docs \
             --commit-hash "$GITHUB_SHA" \
             --commit-message "Bardo Docs functional prototype"
+
+      - name: Record successful deployment
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/bardo-docs-status.txt <<EOF
+          status=success
+          url=https://bardo-docs.pages.dev
+          branch=module/bardo-docs
+          source_commit=$GITHUB_SHA
+          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-docs-status.txt
+          git commit -m "chore(docs): record Cloudflare Pages deployment" || exit 0
+          git push origin HEAD:module/bardo-docs
