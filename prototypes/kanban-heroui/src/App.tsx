@@ -1,17 +1,29 @@
 import {
   Avatar,
   Button,
+  Checkbox,
   Chip,
+  Dropdown,
   Input,
   Label,
   ListBox,
   Modal,
-  Popover,
+  SearchField,
   Select,
+  Separator,
+  Tag,
+  TagGroup,
+  Tabs,
   TextArea,
+  TextField,
+  Toast,
+  ToggleButton,
+  ToggleButtonGroup,
+  Toolbar,
+  toast,
 } from '@heroui/react';
+import { cardVariants } from '@heroui/styles';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import type { Key } from '@heroui/react';
 import {
   cloneState,
@@ -42,21 +54,37 @@ import {
 
 type Filter = 'all' | 'mine' | 'urgent' | 'unassigned' | 'comments';
 type Sort = 'manual' | 'priority' | 'title';
-type ToastState = { text: string; canUndo?: boolean } | null;
 
-function HeroSelect({ label, value, onChange, items }: {
+function HeroSelect({
+  label,
+  value,
+  onChange,
+  items,
+  showLabel = true,
+  variant = 'primary',
+  className,
+}: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   items: Array<{ id: string; label: string }>;
+  showLabel?: boolean;
+  variant?: 'primary' | 'secondary';
+  className?: string;
 }) {
   const selectValue = value === '' ? '__none__' : value;
   return (
-    <Select aria-label={label} value={selectValue || null} onChange={(key: Key | Key[] | null) => {
-      const next = String(key ?? '');
-      onChange(next === '__none__' ? '' : next);
-    }}>
-      <Label className="text-xs text-muted">{label}</Label>
+    <Select
+      aria-label={label}
+      className={className}
+      value={selectValue || null}
+      variant={variant}
+      onChange={(key: Key | Key[] | null) => {
+        const next = String(key ?? '');
+        onChange(next === '__none__' ? '' : next);
+      }}
+    >
+      {showLabel && <Label>{label}</Label>}
       <Select.Trigger className="w-full">
         <Select.Value />
         <Select.Indicator />
@@ -87,13 +115,10 @@ function PersonAvatar({ assignee, size = 'sm' }: { assignee: string; size?: 'sm'
 function App() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [undoState, setUndoState] = useState<AppState | null>(null);
-  const [toast, setToast] = useState<ToastState>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('manual');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [boardPickerOpen, setBoardPickerOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState('');
   const [quickStatus, setQuickStatus] = useState('');
@@ -108,12 +133,13 @@ function App() {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [renderLimits, setRenderLimits] = useState<Record<string, number>>({});
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const toastTimer = useRef<number | null>(null);
 
   const board = state.boards.find((item) => item.id === state.activeBoardId) ?? state.boards[0];
   const task = activeTaskId ? board.tasks.find((item) => item.id === activeTaskId) ?? null : null;
 
-  useEffect(() => { saveState(state); }, [state]);
+  useEffect(() => {
+    saveState(state);
+  }, [state]);
 
   useEffect(() => {
     if (!board.columns.some((column) => column.id === state.activeColumnId)) {
@@ -123,14 +149,16 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
       if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
         event.preventDefault();
         setSearchOpen(true);
         requestAnimationFrame(() => searchRef.current?.focus());
       }
       if (event.key.toLowerCase() === 'n' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
         event.preventDefault();
         openQuick();
       }
@@ -140,18 +168,21 @@ function App() {
   });
 
   const showToast = (text: string, canUndo = false) => {
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    setToast({ text, canUndo });
-    toastTimer.current = window.setTimeout(() => setToast(null), 4200);
+    toast.clear();
+    toast(text, {
+      timeout: 4200,
+      actionProps: canUndo ? { children: 'Deshacer', onPress: () => undo() } : undefined,
+    });
   };
 
   const changeState = (mutator: (draft: AppState) => void, options?: { undo?: boolean; toast?: string }) => {
-    const previous = state;
-    if (options?.undo) setUndoState(cloneState(previous));
-    const draft = cloneState(previous);
-    mutator(draft);
-    draft.boards.forEach(normalizeOrders);
-    setState(draft);
+    setState((previous) => {
+      if (options?.undo) setUndoState(cloneState(previous));
+      const draft = cloneState(previous);
+      mutator(draft);
+      for (const item of draft.boards) normalizeOrders(item);
+      return draft;
+    });
     if (options?.toast) showToast(options.toast, Boolean(options.undo));
   };
 
@@ -166,7 +197,6 @@ function App() {
     const nextBoard = state.boards.find((item) => item.id === boardId);
     if (!nextBoard) return;
     setState((previous) => ({ ...previous, activeBoardId: boardId, activeColumnId: nextBoard.columns[0].id }));
-    setBoardPickerOpen(false);
     setQuery('');
     setFilter('all');
     setRenderLimits({});
@@ -182,10 +212,14 @@ function App() {
     const title = quickTitle.trim();
     if (!title) return;
     const status = board.columns.some((column) => column.id === quickStatus) ? quickStatus : board.columns[0].id;
-    changeState((draft) => {
-      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      target.tasks.push(createTask(target, status, title));
-    }, { undo: true, toast: 'Tarea creada' });
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const next = createTask(target, status, title);
+        target.tasks.push(next);
+      },
+      { undo: true, toast: 'Tarea creada' },
+    );
     setQuickOpen(false);
     setQuickTitle('');
   };
@@ -198,91 +232,105 @@ function App() {
     setTaskOpen(true);
   };
 
-  const closeTask = () => {
-    setTaskOpen(false);
-    setActiveTaskId(null);
-  };
-
   const updateTask = (taskId: string, patch: Partial<Task>) => {
     changeState((draft) => {
       const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
       const targetTask = targetBoard.tasks.find((item) => item.id === taskId);
-      if (targetTask) Object.assign(targetTask, patch, { updated: new Date().toISOString() });
+      if (!targetTask) return;
+      Object.assign(targetTask, patch, { updated: new Date().toISOString() });
     });
   };
 
   const duplicateTask = () => {
     if (!task) return;
-    changeState((draft) => {
-      const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      const source = targetBoard.tasks.find((item) => item.id === task.id)!;
-      const copy = cloneState(source);
-      copy.id = makeId('task');
-      copy.title = `${copy.title} copia`;
-      copy.order = targetBoard.tasks.filter((item) => item.status === copy.status).length;
-      copy.created = new Date().toISOString();
-      copy.updated = copy.created;
-      copy.subtasks = copy.subtasks.map((item) => ({ ...item, id: makeId('subtask') }));
-      copy.comments = copy.comments.map((item) => ({ ...item, id: makeId('comment') }));
-      targetBoard.tasks.push(copy);
-    }, { undo: true, toast: 'Tarea duplicada' });
+    changeState(
+      (draft) => {
+        const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const source = targetBoard.tasks.find((item) => item.id === task.id)!;
+        const copy = cloneState(source);
+        copy.id = makeId('task');
+        copy.title = `${copy.title} copia`;
+        copy.order = targetBoard.tasks.filter((item) => item.status === copy.status).length;
+        copy.created = new Date().toISOString();
+        copy.updated = copy.created;
+        copy.subtasks = copy.subtasks.map((item) => ({ ...item, id: makeId('subtask') }));
+        copy.comments = copy.comments.map((item) => ({ ...item, id: makeId('comment') }));
+        targetBoard.tasks.push(copy);
+      },
+      { undo: true, toast: 'Tarea duplicada' },
+    );
   };
 
   const deleteTask = () => {
     if (!task) return;
-    changeState((draft) => {
-      const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      targetBoard.tasks = targetBoard.tasks.filter((item) => item.id !== task.id);
-    }, { undo: true, toast: 'Tarea eliminada' });
-    closeTask();
+    changeState(
+      (draft) => {
+        const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        targetBoard.tasks = targetBoard.tasks.filter((item) => item.id !== task.id);
+      },
+      { undo: true, toast: 'Tarea eliminada' },
+    );
+    setTaskOpen(false);
+    setActiveTaskId(null);
   };
 
   const addSubtask = () => {
     if (!task || !subtaskDraft.trim()) return;
     if (task.subtasks.length >= MAX_SUBTASKS) return showToast(`Máximo ${MAX_SUBTASKS} subtareas`);
-    updateTask(task.id, { subtasks: [...task.subtasks, { id: makeId('subtask'), text: subtaskDraft.trim().slice(0, 140), done: false }] });
+    updateTask(task.id, {
+      subtasks: [...task.subtasks, { id: makeId('subtask'), text: subtaskDraft.trim().slice(0, 140), done: false }],
+    });
     setSubtaskDraft('');
   };
 
   const toggleSubtask = (subtaskId: string) => {
     if (!task) return;
-    updateTask(task.id, { subtasks: task.subtasks.map((item) => item.id === subtaskId ? { ...item, done: !item.done } : item) });
+    updateTask(task.id, {
+      subtasks: task.subtasks.map((item) => (item.id === subtaskId ? { ...item, done: !item.done } : item)),
+    });
   };
 
   const removeSubtask = (subtaskId: string) => {
-    if (task) updateTask(task.id, { subtasks: task.subtasks.filter((item) => item.id !== subtaskId) });
+    if (!task) return;
+    updateTask(task.id, { subtasks: task.subtasks.filter((item) => item.id !== subtaskId) });
   };
 
   const addComment = () => {
     if (!task || !commentDraft.trim()) return;
     if (task.comments.length >= MAX_COMMENTS) return showToast(`Máximo ${MAX_COMMENTS} comentarios`);
-    updateTask(task.id, { comments: [...task.comments, { id: makeId('comment'), author: ME, text: commentDraft.trim().slice(0, 800), created: new Date().toISOString() }] });
+    updateTask(task.id, {
+      comments: [
+        ...task.comments,
+        { id: makeId('comment'), author: ME, text: commentDraft.trim().slice(0, 800), created: new Date().toISOString() },
+      ],
+    });
     setCommentDraft('');
-  };
-
-  const toggleTaskTag = (tag: string) => {
-    if (!task) return;
-    updateTask(task.id, { tags: task.tags.includes(tag) ? task.tags.filter((item) => item !== tag) : [...task.tags, tag] });
   };
 
   const moveTask = (taskId: string, status: string) => {
     const current = board.tasks.find((item) => item.id === taskId);
     if (!current || current.status === status) return;
-    changeState((draft) => {
-      const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      const targetTask = targetBoard.tasks.find((item) => item.id === taskId)!;
-      targetTask.status = status;
-      targetTask.order = targetBoard.tasks.filter((item) => item.status === status).length;
-      targetTask.updated = new Date().toISOString();
-    }, { undo: true, toast: 'Tarea movida' });
+    changeState(
+      (draft) => {
+        const targetBoard = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const targetTask = targetBoard.tasks.find((item) => item.id === taskId)!;
+        targetTask.status = status;
+        targetTask.order = targetBoard.tasks.filter((item) => item.status === status).length;
+        targetTask.updated = new Date().toISOString();
+      },
+      { undo: true, toast: 'Tarea movida' },
+    );
   };
 
   const addColumn = () => {
     if (board.columns.length >= MAX_COLUMNS) return showToast(`Máximo ${MAX_COLUMNS} columnas`);
-    changeState((draft) => {
-      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      target.columns.push({ id: makeId('column'), title: 'Nueva columna' });
-    }, { undo: true, toast: 'Columna creada' });
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.columns.push({ id: makeId('column'), title: 'Nueva columna' });
+      },
+      { undo: true, toast: 'Columna creada' },
+    );
   };
 
   const renameColumn = (columnId: string, title: string) => {
@@ -307,11 +355,14 @@ function App() {
   const deleteColumn = (columnId: string) => {
     if (board.columns.length <= 2) return showToast('El tablero necesita al menos 2 columnas');
     if (board.tasks.some((item) => item.status === columnId)) return showToast('Mueve las tareas antes de eliminar la columna');
-    changeState((draft) => {
-      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      target.columns = target.columns.filter((item) => item.id !== columnId);
-      if (draft.activeColumnId === columnId) draft.activeColumnId = target.columns[0].id;
-    }, { undo: true, toast: 'Columna eliminada' });
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.columns = target.columns.filter((item) => item.id !== columnId);
+        if (draft.activeColumnId === columnId) draft.activeColumnId = target.columns[0].id;
+      },
+      { undo: true, toast: 'Columna eliminada' },
+    );
   };
 
   const addTag = () => {
@@ -320,70 +371,90 @@ function App() {
     if (board.tags.some((item) => item.toLowerCase() === tag.toLowerCase())) return showToast('Ese tag ya existe');
     if (board.tags.length >= MAX_TAGS) return showToast(`Máximo ${MAX_TAGS} tags por tablero`);
     changeState((draft) => {
-      draft.boards.find((item) => item.id === draft.activeBoardId)!.tags.push(tag);
+      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      target.tags.push(tag);
     });
     setTagDraft('');
   };
 
   const deleteTag = (tag: string) => {
-    changeState((draft) => {
-      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      target.tags = target.tags.filter((item) => item !== tag);
-      target.tasks.forEach((item) => { item.tags = item.tags.filter((taskTag) => taskTag !== tag); });
-    }, { undo: true, toast: 'Tag eliminado' });
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.tags = target.tags.filter((item) => item !== tag);
+        target.tasks.forEach((item) => {
+          item.tags = item.tags.filter((taskTag) => taskTag !== tag);
+        });
+      },
+      { undo: true, toast: 'Tag eliminado' },
+    );
   };
 
   const createNewBoard = () => {
     const next = createBoard();
-    changeState((draft) => {
-      draft.boards.push(next);
-      draft.activeBoardId = next.id;
-      draft.activeColumnId = next.columns[0].id;
-    }, { undo: true, toast: 'Tablero creado' });
-    setBoardPickerOpen(false);
+    changeState(
+      (draft) => {
+        draft.boards.push(next);
+        draft.activeBoardId = next.id;
+        draft.activeColumnId = next.columns[0].id;
+      },
+      { undo: true, toast: 'Tablero creado' },
+    );
   };
 
   const duplicateBoard = () => {
-    changeState((draft) => {
-      const source = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-      const copy = cloneState(source);
-      const nextId = makeId('board');
-      const columnMap = new Map<string, string>();
-      copy.id = nextId;
-      copy.title = `${copy.title} copia`.slice(0, 48);
-      copy.columns = copy.columns.map((column) => {
-        const id = makeId('column');
-        columnMap.set(column.id, id);
-        return { ...column, id };
-      });
-      copy.tasks = copy.tasks.map((item) => ({
-        ...item,
-        id: makeId('task'),
-        status: columnMap.get(item.status)!,
-        subtasks: item.subtasks.map((subtask) => ({ ...subtask, id: makeId('subtask') })),
-        comments: item.comments.map((comment) => ({ ...comment, id: makeId('comment') })),
-      }));
-      draft.boards.push(copy);
-      draft.activeBoardId = copy.id;
-      draft.activeColumnId = copy.columns[0].id;
-    }, { undo: true, toast: 'Tablero duplicado' });
+    changeState(
+      (draft) => {
+        const source = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        const copy = cloneState(source);
+        const nextId = makeId('board');
+        const columnMap = new Map<string, string>();
+        copy.id = nextId;
+        copy.title = `${copy.title} copia`.slice(0, 48);
+        copy.columns = copy.columns.map((column) => {
+          const id = makeId('column');
+          columnMap.set(column.id, id);
+          return { ...column, id };
+        });
+        copy.tasks = copy.tasks.map((item) => ({
+          ...item,
+          id: makeId('task'),
+          status: columnMap.get(item.status)!,
+          subtasks: item.subtasks.map((subtask) => ({ ...subtask, id: makeId('subtask') })),
+          comments: item.comments.map((comment) => ({ ...comment, id: makeId('comment') })),
+        }));
+        draft.boards.push(copy);
+        draft.activeBoardId = copy.id;
+        draft.activeColumnId = copy.columns[0].id;
+      },
+      { undo: true, toast: 'Tablero duplicado' },
+    );
     setSettingsOpen(false);
   };
 
   const deleteBoard = () => {
     if (state.boards.length <= 1) return showToast('Debe quedar al menos un tablero');
-    changeState((draft) => {
-      const currentIndex = draft.boards.findIndex((item) => item.id === draft.activeBoardId);
-      draft.boards.splice(currentIndex, 1);
-      const next = draft.boards[Math.max(0, currentIndex - 1)] ?? draft.boards[0];
-      draft.activeBoardId = next.id;
-      draft.activeColumnId = next.columns[0].id;
-    }, { undo: true, toast: 'Tablero eliminado' });
+    changeState(
+      (draft) => {
+        const currentIndex = draft.boards.findIndex((item) => item.id === draft.activeBoardId);
+        draft.boards.splice(currentIndex, 1);
+        const next = draft.boards[Math.max(0, currentIndex - 1)] ?? draft.boards[0];
+        draft.activeBoardId = next.id;
+        draft.activeColumnId = next.columns[0].id;
+      },
+      { undo: true, toast: 'Tablero eliminado' },
+    );
     setSettingsOpen(false);
   };
 
   const clearBoard = () => {
-    changeState((draft) => { draft.boards.find((item) => item.id === draft.activeBoardId)!.tasks = []; }, { undo: true, toast: 'Tablero vaciado' });
+    changeState(
+      (draft) => {
+        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+        target.tasks = [];
+      },
+      { undo: true, toast: 'Tablero vaciado' },
+    );
   };
 
   const resetMocks = () => {
@@ -398,19 +469,16 @@ function App() {
 
   const addStress = (count: number) => {
     const started = performance.now();
-    changeState((draft) => { stressTasks(draft.boards.find((item) => item.id === draft.activeBoardId)!, count); });
-    setMoreOpen(false);
+    changeState((draft) => {
+      const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+      stressTasks(target, count);
+    });
     showToast(`+${count.toLocaleString('es-CL')} tareas · ${Math.round(performance.now() - started)} ms`);
   };
 
   const runSelfTest = () => {
     const failures = selfTest(state);
-    const result = failures.length
-      ? `FAIL · ${failures.join('\n')}`
-      : `PASS · ${state.boards.length} tableros · ${state.boards.reduce((total, item) => total + item.tasks.length, 0)} tareas`;
-    setSelfTestText(result);
-    setMoreOpen(false);
-    showToast(result);
+    setSelfTestText(failures.length ? `FAIL · ${failures.join('\n')}` : `PASS · ${state.boards.length} tableros · ${state.boards.reduce((total, item) => total + item.tasks.length, 0)} tareas`);
   };
 
   const filteredTasks = useMemo(() => {
@@ -420,7 +488,14 @@ function App() {
       const list = board.tasks.filter((item) => {
         if (item.status !== column.id) return false;
         if (normalizedQuery) {
-          const haystack = [item.title, item.description, personById(item.assignee)?.name ?? '', ...item.tags, ...item.subtasks.map((subtask) => subtask.text), ...item.comments.map((comment) => comment.text)].join(' ').toLocaleLowerCase('es');
+          const haystack = [
+            item.title,
+            item.description,
+            personById(item.assignee)?.name ?? '',
+            ...item.tags,
+            ...item.subtasks.map((subtask) => subtask.text),
+            ...item.comments.map((comment) => comment.text),
+          ].join(' ').toLocaleLowerCase('es');
           if (!haystack.includes(normalizedQuery)) return false;
         }
         if (filter === 'mine' && item.assignee !== ME) return false;
@@ -441,207 +516,515 @@ function App() {
   const assigneeItems = [{ id: '__none__', label: 'Sin responsable' }, ...people.map((item) => ({ id: item.id, label: item.name }))];
   const statusItems = board.columns.map((column) => ({ id: column.id, label: column.title }));
 
-  return (
-    <div className="bardo-app">
-      <div className="bardo-shell">
-        <header className="bardo-topbar">
-          <Popover isOpen={boardPickerOpen} onOpenChange={setBoardPickerOpen}>
-            <Button variant="ghost" size="sm" className="min-w-0 max-w-[65vw] justify-start px-2">
-              <span className="bardo-board-title">{board.title}</span><span aria-hidden="true" className="text-muted">⌄</span>
-            </Button>
-            <Popover.Content placement="bottom start" className="min-w-64">
-              <Popover.Dialog className="p-2">
-                <div className="grid gap-1">
-                  {state.boards.map((item) => (
-                    <Button key={item.id} variant={item.id === board.id ? 'secondary' : 'ghost'} size="sm" fullWidth className="justify-between" onPress={() => switchBoard(item.id)}>
-                      <span>{item.title}</span><span className="text-xs text-muted">{item.tasks.length}</span>
-                    </Button>
-                  ))}
-                  <div className="mt-1 border-t border-border pt-1">
-                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={createNewBoard}>＋ Nuevo tablero</Button>
+  const renderColumn = (column: (typeof board.columns)[number]) => {
+    const all = filteredTasks.get(column.id) ?? [];
+    const limitKey = `${board.id}:${column.id}`;
+    const limit = renderLimits[limitKey] ?? PAGE_SIZE;
+    const visible = all.slice(0, limit);
+    return (
+      <section key={column.id} className="bardo-column" aria-labelledby={`column-${column.id}`}>
+        <header className="bardo-column-head">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 id={`column-${column.id}`} className="bardo-column-title">{column.title}</h2>
+            <span className="text-xs text-muted tabular-nums">{all.length}</span>
+          </div>
+          <Button variant="ghost" size="sm" isIconOnly aria-label={`Crear tarea en ${column.title}`} onPress={() => openQuick(column.id)}>＋</Button>
+        </header>
+        <div
+          className="bardo-task-list"
+          data-over={String(dragOverColumn === column.id)}
+          data-column-id={column.id}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragOverColumn(column.id);
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverColumn(null);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            const id = event.dataTransfer.getData('text/plain') || dragTaskId;
+            if (id) moveTask(id, column.id);
+            setDragTaskId(null);
+            setDragOverColumn(null);
+          }}
+        >
+          {visible.length === 0 ? (
+            <div className="bardo-empty">No hay tareas aquí.</div>
+          ) : visible.map((item) => {
+            const person = personById(item.assignee);
+            const doneSubtasks = item.subtasks.filter((subtask) => subtask.done).length;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`${cardVariants().base()} bardo-task-card`}
+                draggable
+                data-task-id={item.id}
+                data-dragging={String(dragTaskId === item.id)}
+                onDragStart={(event) => {
+                  setDragTaskId(item.id);
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', item.id);
+                }}
+                onDragEnd={() => {
+                  setDragTaskId(null);
+                  setDragOverColumn(null);
+                }}
+                onClick={() => openTask(item.id)}
+              >
+                <div className="flex gap-2.5">
+                  <span className="bardo-priority rounded-full" data-priority={item.priority} aria-label={`Prioridad ${priorityLabel[item.priority]}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium leading-5">{item.title}</div>
+                    {item.description && <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.description}</div>}
+                    <div className="mt-3 flex items-end justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        {item.tags.slice(0, 2).map((tag) => <Chip key={tag} size="sm" variant="tertiary">{tag}</Chip>)}
+                        {item.tags.length > 2 && <span className="text-xs text-muted">+{item.tags.length - 2}</span>}
+                        {item.subtasks.length > 0 && <span className="text-xs text-muted">☑ {doneSubtasks}/{item.subtasks.length}</span>}
+                        {item.comments.length > 0 && <span className="text-xs text-muted">◌ {item.comments.length}</span>}
+                      </div>
+                      <Avatar size="sm" variant="soft" aria-label={person?.name ?? 'Sin responsable'}>
+                        <Avatar.Fallback>{person?.initials ?? '—'}</Avatar.Fallback>
+                      </Avatar>
+                    </div>
                   </div>
                 </div>
-              </Popover.Dialog>
-            </Popover.Content>
-          </Popover>
+              </button>
+            );
+          })}
+          {all.length > limit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              fullWidth
+              onPress={() => setRenderLimits((previous) => ({ ...previous, [limitKey]: limit + PAGE_SIZE }))}
+            >Mostrar {Math.min(PAGE_SIZE, all.length - limit)} más</Button>
+          )}
+        </div>
+      </section>
+    );
+  };
 
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" isIconOnly aria-label="Buscar" onPress={() => {
-              setSearchOpen((open) => !open);
-              requestAnimationFrame(() => searchRef.current?.focus());
-            }}>⌕</Button>
-            <Popover isOpen={moreOpen} onOpenChange={setMoreOpen}>
-              <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones">•••</Button>
-              <Popover.Content placement="bottom end" className="min-w-56">
-                <Popover.Dialog className="p-2">
-                  <div className="grid gap-1">
-                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={() => { setMoreOpen(false); setSettingsOpen(true); }}>Configurar tablero</Button>
-                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={() => addStress(250)}>+250 tareas mock</Button>
-                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={() => addStress(1000)}>+1000 tareas mock</Button>
-                    <Button variant="ghost" size="sm" fullWidth className="justify-start" onPress={runSelfTest}>Autoprueba</Button>
-                  </div>
-                </Popover.Dialog>
-              </Popover.Content>
-            </Popover>
-            <Button variant="primary" size="sm" className="hidden sm:inline-flex" aria-label="Nueva tarea" onPress={() => openQuick()}>＋</Button>
-          </div>
+  const handleBoardMenu = (key: Key) => {
+    const value = String(key);
+    if (value === '__new__') createNewBoard();
+    else switchBoard(value);
+  };
+
+  const handleOptionsMenu = (key: Key) => {
+    switch (String(key)) {
+      case 'settings': setSettingsOpen(true); break;
+      case 'stress-250': addStress(250); break;
+      case 'stress-1000': addStress(1000); break;
+      case 'self-test': runSelfTest(); break;
+    }
+  };
+
+  return (
+    <div className="bardo-app">
+      <Toast.Provider placement="bottom" maxVisibleToasts={1} />
+
+      <div className="bardo-shell">
+        <header className="bardo-topbar">
+          <Dropdown>
+            <Dropdown.Trigger>
+              <Button variant="ghost" size="sm" className="bardo-board-trigger" aria-label="Cambiar tablero">
+                <span className="bardo-board-title">{board.title}</span>
+                <span className="bardo-icon text-muted" aria-hidden="true">⌄</span>
+              </Button>
+            </Dropdown.Trigger>
+            <Dropdown.Popover placement="bottom start" className="min-w-64">
+              <Dropdown.Menu onAction={handleBoardMenu} aria-label="Tableros">
+                <Dropdown.Section>
+                  {state.boards.map((item) => (
+                    <Dropdown.Item id={item.id} key={item.id} textValue={item.title}>
+                      <Label>{item.title}</Label>
+                      <span className="ml-auto text-xs text-muted tabular-nums">{item.tasks.length}</span>
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Section>
+                <Separator />
+                <Dropdown.Section>
+                  <Dropdown.Item id="__new__" textValue="Nuevo tablero"><Label>＋ Nuevo tablero</Label></Dropdown.Item>
+                </Dropdown.Section>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+
+          <Toolbar aria-label="Acciones del tablero" className="gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              isIconOnly
+              aria-label="Buscar"
+              onPress={() => {
+                setSearchOpen((open) => !open);
+                requestAnimationFrame(() => searchRef.current?.focus());
+              }}
+            ><span className="bardo-icon" aria-hidden="true">⌕</span></Button>
+
+            <Dropdown>
+              <Dropdown.Trigger>
+                <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones">•••</Button>
+              </Dropdown.Trigger>
+              <Dropdown.Popover placement="bottom end" className="min-w-56">
+                <Dropdown.Menu onAction={handleOptionsMenu} aria-label="Opciones del tablero">
+                  <Dropdown.Item id="settings" textValue="Configurar tablero"><Label>Configurar tablero</Label></Dropdown.Item>
+                  <Separator />
+                  <Dropdown.Section>
+                    <Dropdown.Item id="stress-250" textValue="Añadir 250 tareas mock"><Label>+250 tareas mock</Label></Dropdown.Item>
+                    <Dropdown.Item id="stress-1000" textValue="Añadir 1000 tareas mock"><Label>+1000 tareas mock</Label></Dropdown.Item>
+                    <Dropdown.Item id="self-test" textValue="Autoprueba"><Label>Autoprueba</Label></Dropdown.Item>
+                  </Dropdown.Section>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+            <Button variant="primary" size="sm" isIconOnly aria-label="Nueva tarea" onPress={() => openQuick()}>＋</Button>
+          </Toolbar>
         </header>
 
         {searchOpen && (
-          <div className="border-b border-border pb-2">
+          <div className="bardo-search-panel" data-testid="search-panel">
             <div className="bardo-search-row">
-              <Input ref={searchRef} variant="secondary" fullWidth type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar tareas…" aria-label="Buscar tareas" />
-              <HeroSelect label="Orden" value={sort} onChange={(value) => setSort(value as Sort)} items={[{ id: 'manual', label: 'Manual' }, { id: 'priority', label: 'Prioridad' }, { id: 'title', label: 'Título' }]} />
+              <SearchField
+                fullWidth
+                variant="primary"
+                value={query}
+                onChange={setQuery}
+                onClear={() => setQuery('')}
+                aria-label="Buscar tareas"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input ref={searchRef} placeholder="Buscar tareas…" />
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              <HeroSelect
+                label="Orden"
+                showLabel={false}
+                className="bardo-sort-control"
+                value={sort}
+                onChange={(value) => setSort(value as Sort)}
+                items={[
+                  { id: 'manual', label: 'Orden manual' },
+                  { id: 'priority', label: 'Prioridad' },
+                  { id: 'title', label: 'Título' },
+                ]}
+              />
             </div>
-            <div className="bardo-filter-row">
-              {([['all', 'Todas'], ['mine', 'Mías'], ['urgent', 'Urgentes'], ['unassigned', 'Sin responsable'], ['comments', 'Con comentarios']] as Array<[Filter, string]>).map(([id, label]) => (
-                <Button key={id} variant={filter === id ? 'secondary' : 'ghost'} size="sm" onPress={() => setFilter(id)}>{label}</Button>
-              ))}
+            <div className="bardo-filter-scroll">
+              <ToggleButtonGroup
+                aria-label="Filtrar tareas"
+                className="bardo-filter-group"
+                selectionMode="single"
+                selectedKeys={new Set<Key>([filter])}
+                onSelectionChange={(keys) => {
+                  const next = keys.values().next().value;
+                  if (next) setFilter(String(next) as Filter);
+                }}
+                disallowEmptySelection
+                isDetached
+                size="sm"
+              >
+                {([
+                  ['all', 'Todas'],
+                  ['mine', 'Mías'],
+                  ['urgent', 'Urgentes'],
+                  ['unassigned', 'Sin responsable'],
+                  ['comments', 'Con comentarios'],
+                ] as Array<[Filter, string]>).map(([id, label]) => (
+                  <ToggleButton id={id} key={id} variant="ghost">{label}</ToggleButton>
+                ))}
+              </ToggleButtonGroup>
             </div>
           </div>
         )}
 
-        <nav className="bardo-tabs" aria-label="Columnas">
+        <Tabs
+          className="bardo-mobile-tabs"
+          variant="secondary"
+          selectedKey={state.activeColumnId}
+          onSelectionChange={(key) => setState((previous) => ({ ...previous, activeColumnId: String(key) }))}
+        >
+          <Tabs.ListContainer>
+            <Tabs.List aria-label="Columnas del tablero">
+              {board.columns.map((column, index) => (
+                <Tabs.Tab id={column.id} key={column.id}>
+                  {index > 0 && <Tabs.Separator />}
+                  <span>{column.title}</span>
+                  <span className="text-xs text-muted tabular-nums">{filteredTasks.get(column.id)?.length ?? 0}</span>
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
           {board.columns.map((column) => (
-            <Button key={column.id} variant={state.activeColumnId === column.id ? 'secondary' : 'ghost'} size="sm" onPress={() => setState((previous) => ({ ...previous, activeColumnId: column.id }))}>
-              {column.title}<span className="text-xs text-muted">{filteredTasks.get(column.id)?.length ?? 0}</span>
-            </Button>
+            <Tabs.Panel id={column.id} key={column.id} className="bardo-mobile-panel">
+              {renderColumn(column)}
+            </Tabs.Panel>
           ))}
-        </nav>
+        </Tabs>
 
-        <main className="bardo-board" style={{ '--column-count': board.columns.length } as CSSProperties}>
+        <main className="bardo-desktop-board" aria-label="Tablero Kanban">
           <div className="bardo-columns">
-            {board.columns.map((column) => {
-              const all = filteredTasks.get(column.id) ?? [];
-              const limitKey = `${board.id}:${column.id}`;
-              const limit = renderLimits[limitKey] ?? PAGE_SIZE;
-              const visible = all.slice(0, limit);
-              return (
-                <section key={column.id} className="bardo-column" data-active={String(column.id === state.activeColumnId)}>
-                  <header className="bardo-column-head">
-                    <div className="flex min-w-0 items-center gap-2"><h2 className="truncate text-sm font-semibold">{column.title}</h2><span className="text-xs text-muted">{all.length}</span></div>
-                    <Button variant="ghost" size="sm" isIconOnly aria-label={`Crear tarea en ${column.title}`} onPress={() => openQuick(column.id)}>＋</Button>
-                  </header>
-                  <div className="bardo-dropzone grid min-h-24 gap-2" data-over={String(dragOverColumn === column.id)}
-                    onDragOver={(event) => { event.preventDefault(); setDragOverColumn(column.id); }}
-                    onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverColumn(null); }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const id = event.dataTransfer.getData('text/plain') || dragTaskId;
-                      if (id) moveTask(id, column.id);
-                      setDragTaskId(null); setDragOverColumn(null);
-                    }}>
-                    {visible.length === 0 ? <div className="bardo-empty">No hay tareas aquí.</div> : visible.map((item) => {
-                      const person = personById(item.assignee);
-                      const doneSubtasks = item.subtasks.filter((subtask) => subtask.done).length;
-                      return (
-                        <button key={item.id} type="button" className="bardo-card" draggable data-task-id={item.id} data-dragging={String(dragTaskId === item.id)}
-                          onDragStart={(event) => { setDragTaskId(item.id); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); }}
-                          onDragEnd={() => { setDragTaskId(null); setDragOverColumn(null); }} onClick={() => openTask(item.id)}>
-                          <div className="flex gap-2.5">
-                            <span className="bardo-priority" data-priority={item.priority} aria-label={`Prioridad ${priorityLabel[item.priority]}`} />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-medium leading-5">{item.title}</div>
-                              {item.description && <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.description}</div>}
-                              <div className="mt-2.5 flex items-center justify-between gap-2">
-                                <div className="flex min-w-0 flex-wrap items-center gap-1">
-                                  {item.tags.slice(0, 2).map((tag) => <Chip key={tag} size="sm" variant="tertiary">{tag}</Chip>)}
-                                  {item.tags.length > 2 && <span className="text-xs text-muted">+{item.tags.length - 2}</span>}
-                                  {item.subtasks.length > 0 && <span className="text-xs text-muted">☑ {doneSubtasks}/{item.subtasks.length}</span>}
-                                  {item.comments.length > 0 && <span className="text-xs text-muted">◌ {item.comments.length}</span>}
-                                </div>
-                                <Avatar size="sm" variant="soft" aria-label={person?.name ?? 'Sin responsable'}><Avatar.Fallback>{person?.initials ?? '—'}</Avatar.Fallback></Avatar>
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                    {all.length > limit && <Button variant="ghost" size="sm" fullWidth onPress={() => setRenderLimits((previous) => ({ ...previous, [limitKey]: limit + PAGE_SIZE }))}>Mostrar {Math.min(PAGE_SIZE, all.length - limit)} más</Button>}
-                  </div>
-                </section>
-              );
-            })}
+            {board.columns.map(renderColumn)}
           </div>
         </main>
       </div>
 
-      <div className="bardo-fab sm:hidden"><Button variant="primary" size="lg" isIconOnly aria-label="Nueva tarea" onPress={() => openQuick()}>＋</Button></div>
+      <Modal>
+        <Modal.Backdrop variant="blur" isOpen={quickOpen} onOpenChange={setQuickOpen}>
+          <Modal.Container placement="center" size="sm">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header><Modal.Heading>Nueva tarea</Modal.Heading></Modal.Header>
+              <Modal.Body className="grid gap-4">
+                <Input autoFocus fullWidth variant="primary" value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="¿Qué hay que hacer?" maxLength={180} aria-label="Título" />
+                <HeroSelect label="Columna" value={quickStatus || board.columns[0].id} onChange={setQuickStatus} items={statusItems} />
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="ghost" onPress={() => setQuickOpen(false)}>Cancelar</Button>
+                <Button variant="primary" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
-      <Modal><Modal.Backdrop variant="blur" isOpen={quickOpen} onOpenChange={setQuickOpen}><Modal.Container placement="center" size="sm"><Modal.Dialog>
-        <Modal.CloseTrigger /><Modal.Header><Modal.Heading>Nueva tarea</Modal.Heading></Modal.Header>
-        <Modal.Body className="grid gap-4">
-          <Input autoFocus value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="¿Qué hay que hacer?" maxLength={180} aria-label="Título" />
-          <HeroSelect label="Columna" value={quickStatus || board.columns[0].id} onChange={setQuickStatus} items={statusItems} />
-        </Modal.Body>
-        <Modal.Footer><Button variant="ghost" onPress={() => setQuickOpen(false)}>Cancelar</Button><Button variant="primary" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button></Modal.Footer>
-      </Modal.Dialog></Modal.Container></Modal.Backdrop></Modal>
+      <Modal>
+        <Modal.Backdrop variant="blur" isOpen={taskOpen} onOpenChange={(open) => {
+          setTaskOpen(open);
+          if (!open) setActiveTaskId(null);
+        }}>
+          <Modal.Container placement="center" size="lg" scroll="inside">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              {task && (
+                <>
+                  <Modal.Header className="pr-12">
+                    <Input
+                      variant="primary"
+                      fullWidth
+                      className="bardo-task-title-field"
+                      value={task.title}
+                      onChange={(event) => updateTask(task.id, { title: event.target.value.slice(0, 180) })}
+                      placeholder="Título"
+                      aria-label="Título de la tarea"
+                    />
+                  </Modal.Header>
+                  <Modal.Body>
+                    <div className="grid gap-4">
+                      <TextArea
+                        variant="primary"
+                        fullWidth
+                        rows={4}
+                        value={task.description}
+                        onChange={(event) => updateTask(task.id, { description: event.target.value.slice(0, 3000) })}
+                        placeholder="Añade una descripción…"
+                        aria-label="Descripción"
+                      />
 
-      <Modal><Modal.Backdrop variant="blur" isOpen={taskOpen} onOpenChange={(open) => { if (open) setTaskOpen(true); else closeTask(); }}><Modal.Container placement="center" size="lg" scroll="inside"><Modal.Dialog>
-        <Modal.CloseTrigger />
-        {task && <>
-          <Modal.Header className="pr-12"><input className="bardo-modal-title-input" value={task.title} onChange={(event) => updateTask(task.id, { title: event.target.value.slice(0, 180) })} placeholder="Título" aria-label="Título de la tarea" /></Modal.Header>
-          <Modal.Body><div className="grid gap-4">
-            <TextArea variant="secondary" rows={4} value={task.description} onChange={(event) => updateTask(task.id, { description: event.target.value.slice(0, 3000) })} placeholder="Añade una descripción…" aria-label="Descripción" />
-            <div className="bardo-prop-grid">
-              <HeroSelect label="Columna" value={task.status} onChange={(value) => moveTask(task.id, value)} items={statusItems} />
-              <HeroSelect label="Responsable" value={task.assignee} onChange={(value) => updateTask(task.id, { assignee: value })} items={assigneeItems} />
-              <HeroSelect label="Prioridad" value={task.priority} onChange={(value) => updateTask(task.id, { priority: value as Priority })} items={priorityItems} />
-            </div>
-            <section className="bardo-section">
-              <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Tags</h3><span className="text-xs text-muted">{task.tags.length}/{board.tags.length}</span></div>
-              {board.tags.length ? <div className="flex flex-wrap gap-2">{board.tags.map((tag) => <Button key={tag} variant={task.tags.includes(tag) ? 'secondary' : 'ghost'} size="sm" className="rounded-full" onPress={() => toggleTaskTag(tag)}>{tag}</Button>)}</div> : <p className="text-sm text-muted">Este tablero todavía no tiene tags.</p>}
-            </section>
-            <section className="bardo-section">
-              <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Subtareas</h3><span className="text-xs text-muted">{task.subtasks.filter((item) => item.done).length}/{task.subtasks.length}</span></div>
-              <div className="grid gap-1">{task.subtasks.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-lg px-1 py-1">
-                <Button variant="ghost" size="sm" isIconOnly aria-label={item.done ? 'Marcar pendiente' : 'Marcar lista'} onPress={() => toggleSubtask(item.id)}>{item.done ? '✓' : '○'}</Button>
-                <span className={`min-w-0 flex-1 text-sm ${item.done ? 'text-muted line-through' : ''}`}>{item.text}</span>
-                <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar subtarea" onPress={() => removeSubtask(item.id)}>×</Button>
-              </div>)}</div>
-              <div className="mt-2 flex gap-2"><Input variant="secondary" fullWidth value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Añadir subtarea" maxLength={140} aria-label="Nueva subtarea" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSubtask(); } }} /><Button variant="secondary" isDisabled={!subtaskDraft.trim()} onPress={addSubtask}>Añadir</Button></div>
-            </section>
-            <section className="bardo-section">
-              <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Comentarios</h3><span className="text-xs text-muted">{task.comments.length}</span></div>
-              <div>{task.comments.map((comment) => {
-                const author = personById(comment.author);
-                return <article key={comment.id} className="bardo-comment"><div className="flex items-start gap-2.5"><PersonAvatar assignee={comment.author} /><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-xs"><strong>{author?.name ?? 'Persona'}</strong><span className="text-muted">{new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' }).format(new Date(comment.created))}</span></div><p className="mt-1 whitespace-pre-wrap text-sm leading-6">{comment.text}</p></div></div></article>;
-              })}</div>
-              <div className="mt-2 grid gap-2"><TextArea variant="secondary" rows={2} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Escribe un comentario…" maxLength={800} aria-label="Nuevo comentario" /><div className="flex justify-end"><Button variant="secondary" size="sm" isDisabled={!commentDraft.trim()} onPress={addComment}>Comentar</Button></div></div>
-            </section>
-          </div></Modal.Body>
-          <Modal.Footer className="justify-between"><Button variant="danger" onPress={deleteTask}>Eliminar</Button><div className="flex gap-2"><Button variant="ghost" onPress={duplicateTask}>Duplicar</Button><Button variant="primary" onPress={closeTask}>Listo</Button></div></Modal.Footer>
-        </>}
-      </Modal.Dialog></Modal.Container></Modal.Backdrop></Modal>
+                      <div className="bardo-prop-grid">
+                        <HeroSelect label="Columna" value={task.status} onChange={(value) => moveTask(task.id, value)} items={statusItems} />
+                        <HeroSelect label="Responsable" value={task.assignee} onChange={(value) => updateTask(task.id, { assignee: value })} items={assigneeItems} />
+                        <HeroSelect label="Prioridad" value={task.priority} onChange={(value) => updateTask(task.id, { priority: value as Priority })} items={priorityItems} />
+                      </div>
 
-      <Modal><Modal.Backdrop variant="blur" isOpen={settingsOpen} onOpenChange={setSettingsOpen}><Modal.Container placement="center" size="lg" scroll="inside"><Modal.Dialog>
-        <Modal.CloseTrigger /><Modal.Header><Modal.Heading>Tablero</Modal.Heading></Modal.Header>
-        <Modal.Body><div className="grid gap-5">
-          <div><Label className="mb-1 block text-xs text-muted">Nombre</Label><Input variant="secondary" value={board.title} onChange={(event) => changeState((draft) => { draft.boards.find((item) => item.id === draft.activeBoardId)!.title = event.target.value.slice(0, 48); })} maxLength={48} /></div>
-          <section className="bardo-section">
-            <div className="mb-2 flex items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Columnas</h3><p className="text-xs text-muted">{board.columns.length}/{MAX_COLUMNS} · 4 por defecto</p></div><Button variant="secondary" size="sm" isDisabled={board.columns.length >= MAX_COLUMNS} onPress={addColumn}>＋ Columna</Button></div>
-            <div className="grid gap-2">{board.columns.map((column, index) => <div key={column.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-1">
-              <Input variant="secondary" value={column.title} onChange={(event) => renameColumn(column.id, event.target.value)} maxLength={32} aria-label={`Nombre columna ${index + 1}`} />
-              <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la izquierda" isDisabled={index === 0} onPress={() => moveColumn(column.id, -1)}>←</Button>
-              <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la derecha" isDisabled={index === board.columns.length - 1} onPress={() => moveColumn(column.id, 1)}>→</Button>
-              <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar columna" onPress={() => deleteColumn(column.id)}>×</Button>
-            </div>)}</div>
-          </section>
-          <section className="bardo-section">
-            <div className="mb-2"><h3 className="text-sm font-semibold">Tags</h3><p className="text-xs text-muted">{board.tags.length}/{MAX_TAGS} máximo por tablero</p></div>
-            <div className="flex flex-wrap gap-2">{board.tags.map((tag) => <Chip key={tag} size="sm" variant="tertiary">{tag}<button type="button" className="ml-1 text-muted" aria-label={`Eliminar ${tag}`} onClick={() => deleteTag(tag)}>×</button></Chip>)}</div>
-            <div className="mt-3 flex gap-2"><Input variant="secondary" fullWidth value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={24} placeholder="Nuevo tag" aria-label="Nuevo tag" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTag(); } }} /><Button variant="secondary" isDisabled={!tagDraft.trim() || board.tags.length >= MAX_TAGS} onPress={addTag}>Añadir</Button></div>
-          </section>
-          <section className="bardo-section">
-            <h3 className="text-sm font-semibold">QA mock</h3><p className="mt-1 text-xs text-muted">{board.tasks.length.toLocaleString('es-CL')} tareas en este tablero.</p>
-            <div className="mt-3 flex flex-wrap gap-2"><Button variant="ghost" size="sm" onPress={() => addStress(250)}>+250 tareas</Button><Button variant="ghost" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button><Button variant="ghost" size="sm" onPress={runSelfTest}>Autoprueba</Button><Button variant="ghost" size="sm" onPress={clearBoard}>Vaciar</Button><Button variant="danger" size="sm" onPress={resetMocks}>Restablecer mocks</Button></div>
-            {selfTestText && <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-border p-3 text-xs text-muted">{selfTestText}</pre>}
-          </section>
-        </div></Modal.Body>
-        <Modal.Footer className="flex-wrap justify-between"><Button variant="danger" onPress={deleteBoard}>Eliminar tablero</Button><div className="flex gap-2"><Button variant="ghost" onPress={duplicateBoard}>Duplicar</Button><Button variant="primary" onPress={() => setSettingsOpen(false)}>Listo</Button></div></Modal.Footer>
-      </Modal.Dialog></Modal.Container></Modal.Backdrop></Modal>
+                      <Separator />
+                      <section className="bardo-section" aria-labelledby="task-tags-heading">
+                        <div className="bardo-section-heading">
+                          <h3 id="task-tags-heading" className="text-sm font-semibold">Tags</h3>
+                          <span className="text-xs text-muted tabular-nums">{task.tags.length}/{board.tags.length}</span>
+                        </div>
+                        {board.tags.length ? (
+                          <TagGroup
+                            aria-label="Tags de la tarea"
+                            selectionMode="multiple"
+                            selectedKeys={new Set<Key>(task.tags)}
+                            onSelectionChange={(keys) => {
+                              const tags = keys === 'all' ? [...board.tags] : Array.from(keys).map(String);
+                              updateTask(task.id, { tags });
+                            }}
+                            size="sm"
+                          >
+                            <TagGroup.List>
+                              {board.tags.map((tag) => <Tag id={tag} key={tag}>{tag}</Tag>)}
+                            </TagGroup.List>
+                          </TagGroup>
+                        ) : <p className="text-sm text-muted">Este tablero todavía no tiene tags.</p>}
+                      </section>
 
-      {toast && <div className="fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom)+.75rem))] left-1/2 z-[80] flex max-w-[92vw] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-sm shadow-lg"><span>{toast.text}</span>{toast.canUndo && <Button variant="ghost" size="sm" onPress={undo}>Deshacer</Button>}</div>}
+                      <Separator />
+                      <section className="bardo-section" aria-labelledby="subtasks-heading">
+                        <div className="bardo-section-heading">
+                          <h3 id="subtasks-heading" className="text-sm font-semibold">Subtareas</h3>
+                          <span className="text-xs text-muted tabular-nums">{task.subtasks.filter((item) => item.done).length}/{task.subtasks.length}</span>
+                        </div>
+                        <div className="grid gap-1">
+                          {task.subtasks.map((item) => (
+                            <div key={item.id} className="flex min-w-0 items-center gap-2 py-1">
+                              <Checkbox isSelected={item.done} onChange={() => toggleSubtask(item.id)} aria-label={`${item.done ? 'Completada' : 'Pendiente'}: ${item.text}`}>
+                                <Checkbox.Content className="min-w-0 flex-1">
+                                  <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
+                                  <span className={`min-w-0 flex-1 truncate text-sm ${item.done ? 'text-muted line-through' : ''}`}>{item.text}</span>
+                                </Checkbox.Content>
+                              </Checkbox>
+                              <Button variant="ghost" size="sm" isIconOnly aria-label={`Eliminar subtarea ${item.text}`} onPress={() => removeSubtask(item.id)}>×</Button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input variant="primary" fullWidth value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Añadir subtarea" maxLength={140} aria-label="Nueva subtarea" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSubtask(); } }} />
+                          <Button variant="secondary" isDisabled={!subtaskDraft.trim()} onPress={addSubtask}>Añadir</Button>
+                        </div>
+                      </section>
+
+                      <Separator />
+                      <section className="bardo-section" aria-labelledby="comments-heading">
+                        <div className="bardo-section-heading">
+                          <h3 id="comments-heading" className="text-sm font-semibold">Comentarios</h3>
+                          <span className="text-xs text-muted tabular-nums">{task.comments.length}</span>
+                        </div>
+                        <div className="bardo-comment-list">
+                          {task.comments.map((comment) => {
+                            const author = personById(comment.author);
+                            return (
+                              <article key={comment.id} className="bardo-comment">
+                                <div className="flex items-start gap-2.5">
+                                  <PersonAvatar assignee={comment.author} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 text-xs">
+                                      <strong>{author?.name ?? 'Persona'}</strong>
+                                      <span className="text-muted">{new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short' }).format(new Date(comment.created))}</span>
+                                    </div>
+                                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{comment.text}</p>
+                                  </div>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                        <div className="grid gap-2">
+                          <TextArea variant="primary" fullWidth rows={2} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Escribe un comentario…" maxLength={800} aria-label="Nuevo comentario" />
+                          <div className="flex justify-end"><Button variant="secondary" size="sm" isDisabled={!commentDraft.trim()} onPress={addComment}>Comentar</Button></div>
+                        </div>
+                      </section>
+                    </div>
+                  </Modal.Body>
+                  <Modal.Footer className="justify-between">
+                    <Button variant="danger" onPress={deleteTask}>Eliminar</Button>
+                    <Toolbar aria-label="Acciones de la tarea" className="gap-2">
+                      <Button variant="ghost" onPress={duplicateTask}>Duplicar</Button>
+                      <Button variant="primary" onPress={() => { setTaskOpen(false); setActiveTaskId(null); }}>Listo</Button>
+                    </Toolbar>
+                  </Modal.Footer>
+                </>
+              )}
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal>
+        <Modal.Backdrop variant="blur" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
+          <Modal.Container placement="center" size="lg" scroll="inside">
+            <Modal.Dialog>
+              <Modal.CloseTrigger />
+              <Modal.Header><Modal.Heading>Tablero</Modal.Heading></Modal.Header>
+              <Modal.Body>
+                <div className="grid gap-5">
+                  <TextField>
+                    <Label>Nombre</Label>
+                    <Input
+                      fullWidth
+                      variant="primary"
+                      value={board.title}
+                      onChange={(event) => changeState((draft) => {
+                        const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
+                        target.title = event.target.value.slice(0, 48);
+                      })}
+                      maxLength={48}
+                    />
+                  </TextField>
+
+                  <Separator />
+                  <section className="bardo-section" aria-labelledby="columns-heading">
+                    <div className="bardo-section-heading">
+                      <div>
+                        <h3 id="columns-heading" className="text-sm font-semibold">Columnas</h3>
+                        <p className="mt-0.5 text-xs text-muted">{board.columns.length}/{MAX_COLUMNS} · 4 por defecto</p>
+                      </div>
+                      <Button variant="secondary" size="sm" isDisabled={board.columns.length >= MAX_COLUMNS} onPress={addColumn}>＋ Columna</Button>
+                    </div>
+                    <div className="grid gap-2">
+                      {board.columns.map((column, index) => (
+                        <div key={column.id} className="bardo-column-setting">
+                          <Input variant="primary" fullWidth value={column.title} onChange={(event) => renameColumn(column.id, event.target.value)} maxLength={32} aria-label={`Nombre columna ${index + 1}`} />
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la izquierda" isDisabled={index === 0} onPress={() => moveColumn(column.id, -1)}>←</Button>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la derecha" isDisabled={index === board.columns.length - 1} onPress={() => moveColumn(column.id, 1)}>→</Button>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar columna" onPress={() => deleteColumn(column.id)}>×</Button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <Separator />
+                  <section className="bardo-section" aria-labelledby="board-tags-heading">
+                    <div className="bardo-section-heading">
+                      <div>
+                        <h3 id="board-tags-heading" className="text-sm font-semibold">Tags</h3>
+                        <p className="mt-0.5 text-xs text-muted">{board.tags.length}/{MAX_TAGS} máximo por tablero</p>
+                      </div>
+                    </div>
+                    <TagGroup
+                      aria-label="Tags del tablero"
+                      size="sm"
+                      variant="default"
+                      onRemove={(keys) => keys.forEach((key) => deleteTag(String(key)))}
+                    >
+                      <TagGroup.List renderEmptyState={() => <span className="text-sm text-muted">Sin tags todavía.</span>}>
+                        {board.tags.map((tag) => <Tag id={tag} key={tag}>{tag}</Tag>)}
+                      </TagGroup.List>
+                    </TagGroup>
+                    <div className="flex gap-2">
+                      <Input variant="primary" fullWidth value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={24} placeholder="Nuevo tag" aria-label="Nuevo tag" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTag(); } }} />
+                      <Button variant="secondary" isDisabled={!tagDraft.trim() || board.tags.length >= MAX_TAGS} onPress={addTag}>Añadir</Button>
+                    </div>
+                  </section>
+
+                  <Separator />
+                  <section className="bardo-section" aria-labelledby="qa-heading">
+                    <div className="bardo-section-heading">
+                      <div>
+                        <h3 id="qa-heading" className="text-sm font-semibold">QA mock</h3>
+                        <p className="mt-0.5 text-xs text-muted">{board.tasks.length.toLocaleString('es-CL')} tareas en este tablero.</p>
+                      </div>
+                    </div>
+                    <Toolbar aria-label="Herramientas QA" className="flex-wrap gap-1">
+                      <Button variant="ghost" size="sm" onPress={() => addStress(250)}>+250 tareas</Button>
+                      <Button variant="ghost" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button>
+                      <Button variant="ghost" size="sm" onPress={runSelfTest}>Autoprueba</Button>
+                      <Button variant="ghost" size="sm" onPress={clearBoard}>Vaciar</Button>
+                      <Button variant="danger" size="sm" onPress={resetMocks}>Restablecer mocks</Button>
+                    </Toolbar>
+                    {selfTestText && <pre className="bardo-qa-result">{selfTestText}</pre>}
+                  </section>
+                </div>
+              </Modal.Body>
+              <Modal.Footer className="flex-wrap justify-between gap-2">
+                <Button variant="danger" onPress={deleteBoard}>Eliminar tablero</Button>
+                <Toolbar aria-label="Acciones del tablero" className="gap-2">
+                  <Button variant="ghost" onPress={duplicateBoard}>Duplicar</Button>
+                  <Button variant="primary" onPress={() => setSettingsOpen(false)}>Listo</Button>
+                </Toolbar>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }
