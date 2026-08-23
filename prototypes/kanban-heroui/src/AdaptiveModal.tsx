@@ -92,7 +92,7 @@ function AdaptiveContainer({ children, placement, scroll, size, className }: Con
 type DialogProps = {
   children: ReactNode;
   className?: string;
-  role?: string;
+  role?: 'dialog' | 'alertdialog';
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
