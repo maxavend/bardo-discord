@@ -216,6 +216,10 @@
     .bardo-native-select:focus-visible {
       outline: none;
     }
+
+    .bardo-native-field:focus-within .bardo-native-select-shell {
+      box-shadow: inset 0 0 0 1px var(--separator);
+    }
   }
 
   @media (max-width: 47.999rem) {
