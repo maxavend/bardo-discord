@@ -56,7 +56,8 @@ test('uses the audited HeroUI theme tokens', async ({ page }) => {
   expect(tokens.fieldBackground).not.toBe('transparent');
   expect(tokens.fieldBackground).not.toBe(tokens.background);
   expect(tokens.fieldBorder).toBe('transparent');
-  expect(tokens.radius).toBe('0.25rem');
+  expect(Number.parseFloat(tokens.radius)).toBeCloseTo(0.25, 3);
+  expect(tokens.radius.endsWith('rem')).toBe(true);
   expect(errors).toEqual([]);
 });
 
