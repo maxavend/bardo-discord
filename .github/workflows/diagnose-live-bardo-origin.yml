@@ -34,12 +34,16 @@ jobs:
           context_fix() {
             if grep -q 'discord-context-retry-v1' "$1" 2>/dev/null; then echo present; else echo missing; fi
           }
+          launch_fix() {
+            if grep -q 'discord-custom-id-session-v2' "$1" 2>/dev/null; then echo present; else echo missing; fi
+          }
           title() { grep -o '<title>[^<]*</title>' "$1" 2>/dev/null | head -1 || true; }
           script() { grep -o '<script[^>]*src="[^"]*"[^>]*>' "$1" 2>/dev/null | head -1 || true; }
 
           {
             echo "expected_marker=docs-current-document-only-v1"
             echo "expected_context_fix=discord-context-retry-v1"
+            echo "expected_launch_fix=discord-custom-id-session-v2"
             echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo
             echo '--- worker-origin ---'
@@ -47,6 +51,7 @@ jobs:
             echo "http=$WORKER_HTTP"
             echo "marker=$(marker /tmp/worker.html)"
             echo "context_fix=$(context_fix /tmp/worker.html)"
+            echo "launch_fix=$(launch_fix /tmp/worker.html)"
             echo "title=$(title /tmp/worker.html)"
             echo "script=$(script /tmp/worker.html)"
             echo
@@ -55,11 +60,12 @@ jobs:
             echo "http=$DISCORD_HTTP"
             echo "marker=$(marker /tmp/discord.html)"
             echo "context_fix=$(context_fix /tmp/discord.html)"
+            echo "launch_fix=$(launch_fix /tmp/discord.html)"
             echo "title=$(title /tmp/discord.html)"
             echo "script=$(script /tmp/discord.html)"
             echo
             echo '--- discord-html-head ---'
-            sed -n '1,50p' /tmp/discord.html 2>/dev/null || true
+            sed -n '1,55p' /tmp/discord.html 2>/dev/null || true
           } > .deploy/bardo-live-origin.txt
       - name: Persist diagnostic
         shell: bash
@@ -70,4 +76,4 @@ jobs:
           git commit -m "chore(docs): record Worker and Discord Activity proxy diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
 
-# Recheck after deploying discord-context-retry-v1.
+# Recheck after deploying discord-custom-id-session-v2.
