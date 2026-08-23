@@ -272,3 +272,5 @@ jobs:
           git commit -m "chore(docs): record authenticated Discord production deployment [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$STATUS" = "success"
+
+# Manual re-run marker: authenticated guild deploy
