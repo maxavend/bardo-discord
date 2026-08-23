@@ -1,6 +1,7 @@
 /*
  * Bardo Docs layout contract.
- * HeroUI owns component appearance; this file owns only product geometry.
+ * HeroUI owns component appearance; this file owns product geometry only.
+ * Native OS selects are the explicit exception because their trigger target is ours.
  * Scale: 4 / 8 / 12 / 16 / 24 / 32 / 44.
  */
 :root {
@@ -13,7 +14,6 @@
   --bardo-action-target: 44px;
 }
 
-/* One horizontal axis for the entire library. */
 .library {
   padding-left: var(--bardo-gutter);
   padding-right: var(--bardo-gutter);
@@ -34,28 +34,10 @@
   gap: 0;
 }
 
-.new-button,
-.native-menu {
-  min-height: var(--bardo-action-target);
-}
-
-/* Search is one Gestalt group between navigation and document sections. */
 .docs-search {
   margin: 20px 0 28px;
 }
 
-.docs-search .search-field__group {
-  min-height: 48px;
-}
-
-.docs-search svg,
-.new-button svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-}
-
-/* Section rhythm: label -> content = 8, sibling groups = 32. */
 .library-section,
 .recent-section {
   margin-top: var(--bardo-section-gap);
@@ -69,7 +51,6 @@
   margin-bottom: var(--bardo-label-gap);
 }
 
-/* Continue and document rows share exactly the same three-column geometry. */
 .continue-row,
 .doc-row {
   min-height: var(--bardo-row-height);
@@ -104,17 +85,15 @@
 
 .continue-row > svg {
   justify-self: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
-/*
- * Native option controls.
- * The invisible selects are real browser controls, so iOS/Android own the picker UI.
- */
+/* Native OS picker triggers keep a 44px touch target. */
 .native-menu {
   width: var(--bardo-action-target);
   height: var(--bardo-action-target);
+  min-height: var(--bardo-action-target);
   flex-basis: var(--bardo-action-target);
 }
 
@@ -130,22 +109,20 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   font-size: 0;
   line-height: 0;
-  letter-spacing: 0;
-  transform: none;
   pointer-events: none;
 }
 
 .native-menu-visual > svg {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
-/* Visible block-type trigger is also a real native select. */
+/* Block style remains a real native select; tokens only integrate its trigger with HeroUI. */
 .block-select.native-option-select {
   width: 112px;
   flex: 0 0 112px;
@@ -172,19 +149,13 @@
   outline-offset: 2px;
 }
 
-.native-insert-menu {
+.native-insert-menu,
+.toolbar-native-menu {
   color: var(--foreground);
 }
 
-/* Keep the same optical geometry in document headers and editor toolbar. */
 .topbar-right {
   gap: 0;
-}
-
-.toolbar-native-menu .native-menu-visual,
-.doc-topbar .native-menu-visual {
-  width: 18px;
-  height: 18px;
 }
 
 @media (max-width: 520px) {
