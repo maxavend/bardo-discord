@@ -42,13 +42,18 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npx --yes wrangler@4.124.0 secret list --json > /tmp/secrets.json
-          node - <<'NODE' | tee /tmp/secrets.log
+          npx --yes wrangler@4.124.0 secret list --json 2>&1 | tee /tmp/secrets.raw
+          STATUS=${PIPESTATUS[0]}
+          if [ "$STATUS" -eq 0 ]; then
+            cp /tmp/secrets.raw /tmp/secrets.json
+            node - <<'NODE' | tee /tmp/secrets.log
           const fs = require('fs');
           const data = JSON.parse(fs.readFileSync('/tmp/secrets.json','utf8'));
           const names = (Array.isArray(data) ? data : []).map(x => x.name).filter(Boolean).sort();
           for (const name of names) console.log(name);
           NODE
+          fi
+          exit "$STATUS"
       - name: Record diagnostics
         if: always()
         shell: bash
@@ -58,8 +63,11 @@ jobs:
           SECRETS: ${{ steps.secrets.outcome }}
         run: |
           mkdir -p .deploy
-          OAUTH_SECRET=missing
-          if grep -qx 'DISCORD_CLIENT_SECRET' /tmp/secrets.log 2>/dev/null; then OAUTH_SECRET=present; fi
+          OAUTH_SECRET=unknown
+          if [ "$SECRETS" = "success" ]; then
+            OAUTH_SECRET=missing
+            if grep -qx 'DISCORD_CLIENT_SECRET' /tmp/secrets.log 2>/dev/null; then OAUTH_SECRET=present; fi
+          fi
           {
             echo "whoami=$WHOAMI"
             echo "d1=$D1"
@@ -69,6 +77,8 @@ jobs:
             cat /tmp/whoami.log 2>/dev/null || true
             echo "--- d1 ---"
             cat /tmp/d1.log 2>/dev/null || true
+            echo "--- worker-secret-list-raw ---"
+            cat /tmp/secrets.raw 2>/dev/null || true
             echo "--- worker-secret-names ---"
             cat /tmp/secrets.log 2>/dev/null || true
           } > .deploy/bardo-d1-diagnostic.txt
