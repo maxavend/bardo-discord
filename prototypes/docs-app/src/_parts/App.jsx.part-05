@@ -1,0 +1,32 @@
+eateElement('template'); template.innerHTML=html.trim(); const nodes=[...template.content.childNodes]; const caretBlock=document.createElement('p'); caretBlock.innerHTML='<br>';
+  if(range?.collapsed && top && /^(P|H2|H3|BLOCKQUOTE|PRE)$/.test(top.tagName)) {
+    try {const tailRange=document.createRange(); tailRange.selectNodeContents(top); tailRange.setStart(range.startContainer,range.startOffset); const tail=tailRange.extractContents(); const after=top.cloneNode(false); after.appendChild(tail); if(!after.textContent && !after.querySelector('*')) after.innerHTML='<br>'; top.after(...nodes,after); placeCaret(after,rangeRef,true); return; } catch {}
+  }
+  if(top?.parentElement===body) top.after(...nodes,caretBlock); else body.append(...nodes,caretBlock); placeCaret(caretBlock,rangeRef,true);
+}
+function placeCaret(el, rangeRef, atStart=true) { const r=document.createRange(); r.selectNodeContents(el); r.collapse(atStart); const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); rangeRef.current=r.cloneRange(); }
+function updateToolbarState(body,setInline,setBlock) {
+  const next={}; ['bold','italic','underline','strikeThrough'].forEach(cmd=>{try{next[cmd]=document.queryCommandState(cmd);}catch{next[cmd]=false;}});
+  const sel=window.getSelection(); const el=sel?.rangeCount ? elementForNode(sel.getRangeAt(0).startContainer) : null; const list=el?.closest?.('ul,ol');
+  next.insertUnorderedList=!!list && body?.contains(list) && list.tagName==='UL'; next.insertOrderedList=!!list && body?.contains(list) && list.tagName==='OL'; setInline(next);
+  let block=el; while(block && block.parentElement!==body) block=block.parentElement; const tag=block?.tagName?.toLowerCase(); if(['p','h2','h3','blockquote','pre'].includes(tag)) setBlock(tag);
+}
+function createLinkBookmark(range) {
+  if(!range) return null;
+  try {
+    if(range.collapsed){const marker=document.createComment('bardo-link-caret'); const point=range.cloneRange(); point.collapse(true); point.insertNode(marker); return {collapsed:true,marker};}
+    const endMarker=document.createComment('bardo-link-end'); const startMarker=document.createComment('bardo-link-start'); const end=range.cloneRange(); end.collapse(false); end.insertNode(endMarker); const start=range.cloneRange(); start.collapse(true); start.insertNode(startMarker); return {collapsed:false,startMarker,endMarker};
+  } catch { return null; }
+}
+function cleanupLinkBookmark(bookmark){bookmark?.marker?.remove?.(); bookmark?.startMarker?.remove?.(); bookmark?.endMarker?.remove?.();}
+function applyLinkBookmark(bookmark, href) {
+  if(!bookmark || !href) return false;
+  try {
+    const a=document.createElement('a'); a.href=href; a.target='_blank'; a.rel='noreferrer';
+    if(bookmark.collapsed){a.textContent=href; bookmark.marker.before(a); bookmark.marker.remove();}
+    else {const range=document.createRange(); range.setStartAfter(bookmark.startMarker); range.setEndBefore(bookmark.endMarker); const contents=range.extractContents(); a.appendChild(contents); range.insertNode(a); bookmark.startMarker.remove(); bookmark.endMarker.remove();}
+    const sel=window.getSelection(); const caret=document.createRange(); caret.setStartAfter(a); caret.collapse(true); sel.removeAllRanges(); sel.addRange(caret); return true;
+  } catch { cleanupLinkBookmark(bookmark); return false; }
+}
+
+export default App;
