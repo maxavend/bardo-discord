@@ -5,6 +5,18 @@
 @layer base {
   :root {
     --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --b-space-1: 0.25rem;
+    --b-space-2: 0.5rem;
+    --b-space-3: 0.75rem;
+    --b-space-4: 1rem;
+    --b-space-5: 1.25rem;
+    --b-control-sm: 2.25rem;
+    --b-control-md: 2.5rem;
+    --b-touch: 2.75rem;
+    --b-text-xs: 0.75rem;
+    --b-text-sm: 0.875rem;
+    --b-text-md: 1rem;
+    --b-text-lg: 1.125rem;
   }
 
   html,
@@ -42,7 +54,7 @@
 
   .bardo-shell {
     width: 100%;
-    padding-inline: 1rem;
+    padding-inline: var(--b-space-4);
   }
 
   .bardo-topbar {
@@ -50,17 +62,23 @@
     top: 0;
     z-index: 40;
     display: flex;
-    min-height: 3.5rem;
+    min-height: 4rem;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: var(--b-space-2);
     background: var(--background);
   }
 
+  .bardo-topbar > .dropdown,
   .bardo-board-trigger {
     min-width: 0;
-    max-width: min(70vw, 20rem);
+  }
+
+  .bardo-board-trigger {
+    max-width: min(62vw, 20rem);
+    min-height: var(--b-control-md);
     justify-content: flex-start;
+    padding-inline: var(--b-space-2);
   }
 
   .bardo-board-title {
@@ -68,25 +86,75 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 1rem;
+    font-size: var(--b-text-md);
     font-weight: 600;
     line-height: 1.25rem;
   }
 
   .bardo-icon {
+    display: inline-grid;
     flex: 0 0 auto;
+    place-items: center;
+    width: 1rem;
+    height: 1rem;
+    font-size: 1rem;
     line-height: 1;
   }
 
+  .bardo-topbar .toolbar {
+    flex: 0 0 auto;
+    gap: var(--b-space-1);
+  }
+
+  .bardo-topbar .button--icon-only {
+    width: var(--b-control-md);
+    min-width: var(--b-control-md);
+    height: var(--b-control-md);
+    min-height: var(--b-control-md);
+    padding: 0;
+  }
+
+  .bardo-topbar .button--icon-only[aria-label="Nueva tarea"] {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .bardo-topbar .button--icon-only[aria-label="Más opciones"] {
+    font-size: 0;
+    line-height: 1;
+  }
+
+  .bardo-topbar .button--icon-only[aria-label="Más opciones"]::before {
+    content: "⋮";
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .dropdown__popover {
+    padding: var(--b-space-1);
+  }
+
+  .dropdown__menu {
+    gap: 0;
+  }
+
+  .menu-item {
+    min-height: var(--b-control-md);
+    padding: var(--b-space-2) var(--b-space-3);
+    font-size: var(--b-text-sm);
+    line-height: 1.25rem;
+  }
+
   .bardo-search-panel {
-    padding-bottom: 0.5rem;
+    padding-bottom: var(--b-space-2);
   }
 
   .bardo-search-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-    gap: 0.5rem;
+    gap: var(--b-space-2);
   }
 
   .bardo-sort-control {
@@ -95,11 +163,12 @@
 
   .bardo-filter-scroll {
     overflow-x: auto;
-    padding-block: 0.5rem 0.25rem;
+    padding-block: var(--b-space-2) var(--b-space-1);
     scrollbar-width: none;
   }
 
-  .bardo-filter-scroll::-webkit-scrollbar {
+  .bardo-filter-scroll::-webkit-scrollbar,
+  .bardo-mobile-tabs .tabs__list-container__scroller::-webkit-scrollbar {
     display: none;
   }
 
@@ -109,10 +178,50 @@
 
   .bardo-mobile-tabs {
     display: block;
+    margin-inline: calc(var(--b-space-4) * -1);
+  }
+
+  .bardo-mobile-tabs .tabs__list-container {
+    width: 100%;
+  }
+
+  .bardo-mobile-tabs .tabs__list-container__scroller {
+    overflow-x: auto;
+    padding-inline: var(--b-space-4);
+    scrollbar-width: none;
+  }
+
+  .bardo-mobile-tabs .tabs__list-container__scroll-prev,
+  .bardo-mobile-tabs .tabs__list-container__scroll-next {
+    display: none;
+  }
+
+  .bardo-mobile-tabs .tabs__list {
+    min-width: max-content;
+    gap: 0;
+  }
+
+  .bardo-mobile-tabs .tabs__tab {
+    min-width: max-content;
+    height: var(--b-touch);
+    flex: 0 0 auto;
+    gap: 0.375rem;
+    padding-inline: var(--b-space-3);
+    white-space: nowrap;
+    font-size: var(--b-text-sm);
+    line-height: 1.25rem;
+  }
+
+  .bardo-mobile-tabs .tabs__separator {
+    display: none;
+  }
+
+  .bardo-mobile-tabs .tabs__indicator {
+    height: 0.125rem;
   }
 
   .bardo-mobile-panel {
-    padding-top: 0.5rem;
+    padding: var(--b-space-3) var(--b-space-4) 0;
   }
 
   .bardo-desktop-board {
@@ -125,10 +234,24 @@
 
   .bardo-column-head {
     display: flex;
-    min-height: 2.75rem;
+    min-height: var(--b-control-md);
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: var(--b-space-2);
+    margin-bottom: var(--b-space-2);
+  }
+
+  .bardo-column-head > div {
+    gap: var(--b-space-2);
+  }
+
+  .bardo-column-head .button--icon-only {
+    width: var(--b-control-sm);
+    min-width: var(--b-control-sm);
+    height: var(--b-control-sm);
+    min-height: var(--b-control-sm);
+    padding: 0;
+    font-size: 1.125rem;
   }
 
   .bardo-column-title {
@@ -136,7 +259,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.875rem;
+    font-size: var(--b-text-sm);
     font-weight: 600;
     line-height: 1.25rem;
   }
@@ -145,21 +268,35 @@
     display: grid;
     min-height: 6rem;
     align-content: start;
-    gap: 0.5rem;
-    padding-bottom: 1rem;
+    gap: var(--b-space-2);
+    padding-bottom: var(--b-space-4);
   }
 
   .bardo-task-list[data-over="true"] {
     outline: 1px dashed var(--focus);
-    outline-offset: 0.25rem;
+    outline-offset: var(--b-space-1);
   }
 
   .bardo-task-card {
     width: 100%;
-    padding: 0.75rem;
+    padding: var(--b-space-3);
     cursor: pointer;
     text-align: left;
     transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  .bardo-task-card > .flex {
+    gap: var(--b-space-3);
+  }
+
+  .bardo-task-card .line-clamp-2 {
+    margin-top: var(--b-space-1);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+
+  .bardo-task-card .mt-3 {
+    margin-top: var(--b-space-3);
   }
 
   .bardo-task-card:focus-visible {
@@ -202,10 +339,62 @@
     text-align: center;
   }
 
+  .modal__container {
+    padding: max(var(--b-space-3), env(safe-area-inset-top)) var(--b-space-4) max(var(--b-space-3), env(safe-area-inset-bottom));
+  }
+
+  .modal__dialog {
+    max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  .modal__header {
+    min-height: 3rem;
+    padding: var(--b-space-5) var(--b-space-5) var(--b-space-2);
+    padding-right: 4rem;
+  }
+
+  .modal__header h1,
+  .modal__header h2,
+  .modal__header h3,
+  .modal__header [role="heading"] {
+    font-size: var(--b-text-lg);
+    font-weight: 600;
+    line-height: 1.5rem;
+  }
+
+  .modal__close-trigger {
+    top: var(--b-space-4);
+    right: var(--b-space-4);
+    width: var(--b-control-sm);
+    min-width: var(--b-control-sm);
+    height: var(--b-control-sm);
+    min-height: var(--b-control-sm);
+  }
+
+  .modal__body {
+    padding: var(--b-space-3) var(--b-space-5) var(--b-space-4);
+  }
+
+  .modal__body > .grid,
+  .modal__body.grid {
+    gap: var(--b-space-4);
+  }
+
+  .modal__footer {
+    gap: var(--b-space-2);
+    padding: var(--b-space-2) var(--b-space-5) var(--b-space-5);
+  }
+
+  .modal__footer .toolbar {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: var(--b-space-2);
+  }
+
   .bardo-prop-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.75rem;
+    gap: var(--b-space-3);
   }
 
   .bardo-task-title-field {
@@ -214,7 +403,7 @@
 
   .bardo-section {
     display: grid;
-    gap: 0.75rem;
+    gap: var(--b-space-3);
   }
 
   .bardo-section-heading {
@@ -222,12 +411,25 @@
     min-height: 2rem;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: var(--b-space-3);
+  }
+
+  .bardo-section-heading h3 {
+    font-size: var(--b-text-sm);
+    font-weight: 600;
+    line-height: 1.25rem;
+  }
+
+  .bardo-section .tag-group__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    min-width: 0;
   }
 
   .bardo-comment-list {
     display: grid;
-    gap: 0.25rem;
+    gap: var(--b-space-1);
   }
 
   .bardo-comment {
@@ -236,9 +438,40 @@
 
   .bardo-column-setting {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(3, 2.25rem);
+    grid-template-columns: repeat(3, var(--b-control-sm));
     align-items: center;
-    gap: 0.25rem;
+    justify-content: end;
+    gap: var(--b-space-2);
+  }
+
+  .bardo-column-setting > :first-child {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .bardo-column-setting > .button--icon-only {
+    width: var(--b-control-sm);
+    min-width: var(--b-control-sm);
+    height: var(--b-control-sm);
+    min-height: var(--b-control-sm);
+    padding: 0;
+  }
+
+  .toolbar[aria-label="Herramientas QA"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--b-space-2);
+    width: 100%;
+  }
+
+  .toolbar[aria-label="Herramientas QA"] .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .toolbar[aria-label="Herramientas QA"] .button--danger {
+    grid-column: 1 / -1;
   }
 
   .bardo-qa-result {
@@ -247,10 +480,52 @@
     border-radius: var(--radius);
     background: var(--surface-secondary);
     color: var(--surface-secondary-foreground);
-    padding: 0.75rem;
-    font-size: 0.75rem;
+    padding: var(--b-space-3);
+    font-size: var(--b-text-xs);
     line-height: 1.25rem;
     white-space: pre-wrap;
+  }
+
+  @media (max-width: 29.999rem) {
+    .bardo-search-row {
+      grid-template-columns: 1fr;
+    }
+
+    .bardo-sort-control {
+      width: 100%;
+    }
+
+    .modal__container {
+      padding-inline: var(--b-space-3);
+    }
+
+    .modal__header {
+      padding: var(--b-space-4) var(--b-space-4) var(--b-space-2);
+      padding-right: 3.75rem;
+    }
+
+    .modal__close-trigger {
+      top: var(--b-space-3);
+      right: var(--b-space-3);
+    }
+
+    .modal__body {
+      padding: var(--b-space-3) var(--b-space-4) var(--b-space-4);
+    }
+
+    .modal__footer {
+      padding: var(--b-space-2) var(--b-space-4) var(--b-space-4);
+      align-items: stretch;
+    }
+
+    .modal__footer > .toolbar {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .modal__footer > .button--danger {
+      align-self: flex-start;
+    }
   }
 
   @media (min-width: 48rem) {
@@ -264,6 +539,7 @@
 
     .bardo-mobile-tabs {
       display: none;
+      margin-inline: 0;
     }
 
     .bardo-desktop-board {
@@ -281,7 +557,7 @@
 
     .bardo-column-head {
       position: sticky;
-      top: 3.5rem;
+      top: 4rem;
       z-index: 20;
       background: var(--background);
     }
@@ -292,6 +568,29 @@
 
     .bardo-sort-control {
       width: 10rem;
+    }
+
+    .bardo-column-setting {
+      grid-template-columns: minmax(0, 1fr) repeat(3, var(--b-control-sm));
+      justify-content: stretch;
+    }
+
+    .bardo-column-setting > :first-child {
+      grid-column: auto;
+    }
+
+    .toolbar[aria-label="Herramientas QA"] {
+      display: flex;
+      flex-wrap: wrap;
+      width: auto;
+    }
+
+    .toolbar[aria-label="Herramientas QA"] .button {
+      width: auto;
+    }
+
+    .toolbar[aria-label="Herramientas QA"] .button--danger {
+      grid-column: auto;
     }
   }
 
