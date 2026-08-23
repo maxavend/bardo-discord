@@ -8,7 +8,8 @@
     "dev": "npm run assemble && vite",
     "build": "npm run assemble && vite build",
     "preview": "vite preview",
-    "check": "npm run build"
+    "check": "npm run build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@heroui/react": "3.2.4",
@@ -17,6 +18,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@tailwindcss/vite": "4.3.3",
     "@vitejs/plugin-react": "6.1.0",
     "tailwindcss": "4.3.3",
