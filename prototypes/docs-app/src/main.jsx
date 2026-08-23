@@ -3,8 +3,7 @@ import {useTheme} from '@heroui/react';
 import {createRoot} from 'react-dom/client';
 import App from './App.jsx';
 import {prepareBardoProduction} from './production-bridge.js';
-import {waitForBardoActivityContext} from './production-context-ready.js';
-import {installBardoLaunchAuth} from './production-launch-auth.js';
+import {authenticateBardoDiscord} from './production-discord-auth.js';
 import {activateBardoDocumentOnlyMode} from './production-document-only.js';
 import '@fontsource-variable/inter';
 import './styles.css';
@@ -31,25 +30,18 @@ function ThemedApp({productionState}) {
   return <App />;
 }
 
-const activityContext = await waitForBardoActivityContext();
+const discordAuth = await authenticateBardoDiscord();
 let productionState;
 
-if (activityContext.embedded && !activityContext.ready) {
+if (discordAuth.embedded && !discordAuth.ready) {
   window.__BARDO_PRODUCTION__ = true;
-  window.__BARDO_INSTANCE_ID__ = activityContext.instanceId;
   productionState = {
     active:true,
     ready:false,
     documentId:null,
-    message:'No pudimos identificar el documento de este mensaje. Cierra esta vista y vuelve a abrirlo desde Discord.',
+    message:discordAuth.message || 'No pudimos autenticar tu sesión de Discord.',
   };
 } else {
-  if (activityContext.embedded) {
-    window.__BARDO_INSTANCE_ID__ = activityContext.instanceId;
-    window.__BARDO_DOCUMENT_ID__ = activityContext.documentId;
-    installBardoLaunchAuth(activityContext.customId);
-  }
-
   await prepareBardoProduction();
   productionState = await activateBardoDocumentOnlyMode();
 }
