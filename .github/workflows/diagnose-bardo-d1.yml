@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npx --yes wrangler@4.124.0 secret list --json 2>&1 | tee /tmp/secrets.raw
+          npx --yes wrangler@4.124.0 secret list --format json 2>&1 | tee /tmp/secrets.raw
           STATUS=${PIPESTATUS[0]}
           if [ "$STATUS" -eq 0 ]; then
             cp /tmp/secrets.raw /tmp/secrets.json
