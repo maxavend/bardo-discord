@@ -24,6 +24,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PAGES_PROJECT: bardo-kanban
+      STABLE_URL: https://module-kanban.bardo-kanban.pages.dev
     steps:
       - name: Checkout module/kanban
         uses: actions/checkout@v6
@@ -47,17 +48,20 @@ jobs:
             --commit-message='Bardo Kanban QA' 2>&1 | tee /tmp/deploy.log
           url=$(grep -Eo 'https://[^[:space:]]+\.pages\.dev' /tmp/deploy.log | tail -1)
           test -n "$url" || { echo 'Deployment succeeded but URL was not found in Wrangler output'; cat /tmp/deploy.log; exit 1; }
-          echo "$url" | tee deployment-url.txt
-          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "unique_url=$url" >> "$GITHUB_OUTPUT"
+          echo "Unique deployment: $url"
 
-      - name: Verify QA URL
+      - name: Verify stable QA URL
         shell: bash
         run: |
           set -euo pipefail
-          url='${{ steps.deploy.outputs.url }}'
-          curl --fail --silent --show-error --location --head "$url" >/dev/null
+          curl --fail --silent --show-error --location --head \
+            --retry 12 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
+            "$STABLE_URL" >/dev/null
+          echo "$STABLE_URL" | tee deployment-url.txt
           echo "### Kanban QA" >> "$GITHUB_STEP_SUMMARY"
-          echo "[$url]($url)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$STABLE_URL]($STABLE_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Unique deployment: ${{ steps.deploy.outputs.unique_url }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload deployment URL
         uses: actions/upload-artifact@v4
