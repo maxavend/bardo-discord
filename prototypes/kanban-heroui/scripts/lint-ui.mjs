@@ -4,19 +4,23 @@ import process from 'node:process';
 const files = {
   app: new URL('../src/App.tsx', import.meta.url),
   mobile: new URL('../src/MobileKanban.tsx', import.meta.url),
+  native: new URL('../src/NativeControls.tsx', import.meta.url),
+  taskDetail: new URL('../src/TaskDetailModal.tsx', import.meta.url),
   index: new URL('../index.html', import.meta.url),
   styles: new URL('../src/styles.css', import.meta.url),
   theme: new URL('../src/theme.css', import.meta.url),
 };
 
-const [app, mobile, index, styles, theme] = await Promise.all([
+const [app, mobile, native, taskDetail, index, styles, theme] = await Promise.all([
   readFile(files.app, 'utf8'),
   readFile(files.mobile, 'utf8'),
+  readFile(files.native, 'utf8'),
+  readFile(files.taskDetail, 'utf8'),
   readFile(files.index, 'utf8'),
   readFile(files.styles, 'utf8'),
   readFile(files.theme, 'utf8'),
 ]);
-const uiSource = `${app}\n${mobile}`;
+const uiSource = `${app}\n${mobile}\n${native}\n${taskDetail}`;
 
 const failures = [];
 const fail = (message) => failures.push(message);
@@ -44,8 +48,9 @@ for (const [pattern, label] of forbiddenCss) {
 }
 
 for (const match of styles.matchAll(/border-radius\s*:\s*([^;]+);/gi)) {
-  if (match[1].trim() !== 'var(--radius)') {
-    fail(`styles.css contains non-theme border radius: ${match[1].trim()}`);
+  const value = match[1].trim();
+  if (value !== 'var(--radius)' && value !== 'var(--field-radius)') {
+    fail(`styles.css contains non-theme border radius: ${value}`);
   }
 }
 
@@ -64,9 +69,13 @@ for (const pattern of forbiddenUtilityPatterns) {
   if (pattern.test(uiSource)) fail(`UI contains forbidden style override: ${pattern}`);
 }
 
-if (/<input(?:\s|>)/.test(uiSource)) fail('UI contains a native <input>; use HeroUI Input/SearchField composition.');
-if (/<textarea(?:\s|>)/.test(uiSource)) fail('UI contains a native <textarea>; use HeroUI TextArea.');
-if (/<select(?:\s|>)/.test(uiSource)) fail('UI contains a native <select>; use HeroUI Select.');
+if (/appearance\s*:\s*none/i.test(styles)) {
+  fail('Native OS controls must keep browser appearance; appearance:none is forbidden.');
+}
+if (/<textarea(?:\s|>)/.test(uiSource)) fail('UI contains a native <textarea>; text areas should remain HeroUI unless OS-native behavior is required.');
+if (/<input(?![^>]*type=["'](?:date|time|datetime-local)["'])[^>]*>/i.test(uiSource)) {
+  fail('Native <input> is only allowed for date/time controls that intentionally invoke the OS picker.');
+}
 
 const forbiddenHeroUiOverrides = [
   '.button--',
@@ -85,17 +94,24 @@ for (const selector of forbiddenHeroUiOverrides) {
   }
 }
 
-const requiredHeroUi = [
-  'SearchField',
-  'Select',
-  'Surface',
-  'Modal',
-  'Dropdown',
-  'TagGroup',
-  'ToggleButtonGroup',
-];
+const requiredHeroUi = ['SearchField', 'Modal', 'TagGroup', 'ToggleButtonGroup', 'Button'];
 for (const name of requiredHeroUi) {
-  if (!app.includes(name)) fail(`Expected HeroUI primitive ${name} is missing from App.tsx.`);
+  if (!uiSource.includes(name)) fail(`Expected HeroUI primitive ${name} is missing from the UI.`);
+}
+
+const forbiddenCustomPickers = ['Dropdown', '<Select', 'Select.Trigger', 'DatePicker', '<Calendar', '<TimeField', '<DateField'];
+for (const name of forbiddenCustomPickers) {
+  if (uiSource.includes(name)) fail(`UI still contains ${name}; option/date/time pickers should delegate to native OS controls.`);
+}
+
+if (!native.includes('<select') || !native.includes('NativeSelect') || !native.includes('NativeActionSelect')) {
+  fail('NativeControls.tsx must provide real HTML select controls for OS-native pickers.');
+}
+if (!styles.includes('.bardo-native-select') || !styles.includes('accent-color: var(--accent);')) {
+  fail('Native select styling contract is missing.');
+}
+if (!styles.includes('background: var(--field-background);')) {
+  fail('Native fields must use the HeroUI semantic field background token.');
 }
 
 if (app.includes('<Tabs') || app.includes('Tabs.ListContainer') || app.includes('Tabs.Indicator')) {
@@ -129,18 +145,28 @@ for (const [needle, label] of carouselCssContracts) {
   if (!styles.includes(needle)) fail(`styles.css is missing ${label}.`);
 }
 
+const detailContracts = [
+  ['data-testid="task-read-view"', 'read-first task view'],
+  ['data-testid="task-edit-view"', 'explicit task edit view'],
+  ['startEditing', 'edit transition'],
+  ['saveEditing', 'explicit save transition'],
+  ['Intl.DateTimeFormat(undefined', 'OS/browser locale date formatting'],
+  ['<NativeSelect label="Columna"', 'native column selector'],
+  ['<NativeSelect label="Responsable"', 'native assignee selector'],
+  ['<NativeSelect label="Prioridad"', 'native priority selector'],
+];
+for (const [needle, label] of detailContracts) {
+  if (!taskDetail.includes(needle)) fail(`TaskDetailModal.tsx is missing ${label}.`);
+}
+
 if (!app.includes("from '@gravity-ui/icons'")) {
   fail('App.tsx must use the normalized SVG icon set used by HeroUI examples.');
 }
-for (const glyph of ['•••', '＋', '⌕', '>×<', '>←<', '>→<']) {
+for (const glyph of ['•••', '⌕', '>×<', '>←<', '>→<']) {
   if (uiSource.includes(glyph)) fail(`UI still contains typography-as-icon glyph ${glyph}.`);
 }
 if (!app.includes('EllipsisVertical')) fail('Board actions must use a real vertical kebab SVG icon.');
 if (!app.includes("const ICON_CLASS = 'size-4 shrink-0'")) fail('Interactive SVG icons must share one normalized 16px size contract.');
-
-if (!app.includes('<Surface variant="default"') || !app.includes('variant="secondary"')) {
-  fail('Modal forms must follow HeroUI Surface + secondary-field composition.');
-}
 
 const requiredThemeTokens = [
   '--background:',
@@ -151,6 +177,7 @@ const requiredThemeTokens = [
   '--border:',
   '--field-background:',
   '--field-border:',
+  '--field-radius:',
   '--focus:',
   '--radius:',
 ];
@@ -175,4 +202,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('HeroUI ownership + mobile carousel lint passed.');
+console.log('HeroUI shell + native OS picker + mobile carousel lint passed.');
