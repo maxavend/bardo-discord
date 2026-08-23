@@ -39,7 +39,7 @@ const forbiddenCss = [
 ];
 for (const [pattern, label] of forbiddenCss) if (pattern.test(styles)) fail(`styles.css contains ${label}.`);
 
-for (const selector of ['.button--', '.modal__', '.menu-item', '.dropdown__', '.input--', '.select__', '.text-field__', '.tag-group__', '.tabs__']) {
+for (const selector of ['.button--', '.modal__', '.drawer__', '.menu-item', '.dropdown__', '.input--', '.select__', '.text-field__', '.tag-group__', '.tabs__']) {
   if (styles.includes(selector)) fail(`styles.css overrides HeroUI internal selector ${selector}.`);
 }
 
@@ -109,8 +109,8 @@ if (index.includes('data-theme="dark"') || index.includes('content="dark"')) fai
 if (!adaptive.includes("import { Drawer, Modal } from '@heroui/react';")) fail('AdaptiveModal must compose HeroUI Modal and Drawer directly.');
 if (!adaptive.includes('<Drawer.Content placement="bottom"')) fail('Mobile presentation must use HeroUI Drawer.Content placement="bottom".');
 if (!adaptive.includes('<Drawer.Handle />')) fail('Mobile bottom sheet must expose the HeroUI drag handle.');
-if (!adaptive.includes("data-bardo-presentation="sheet"")) fail('AdaptiveModal must expose the sheet presentation for runtime QA.');
-if (!adaptive.includes("data-bardo-presentation="modal"")) fail('AdaptiveModal must expose the modal presentation for runtime QA.');
+if (!adaptive.includes('data-bardo-presentation="sheet"')) fail('AdaptiveModal must expose the sheet presentation for runtime QA.');
+if (!adaptive.includes('data-bardo-presentation="modal"')) fail('AdaptiveModal must expose the modal presentation for runtime QA.');
 if (styles.includes('[role="dialog"]')) fail('Product CSS must not globally reinterpret role=dialog geometry.');
 if (styles.includes(':has(> [role="dialog"])')) fail('Product CSS must not patch HeroUI overlay ancestors.');
 if (uiSource.includes('max-md:w-screen') || uiSource.includes('max-md:max-h-[calc(100dvh')) fail('Overlay geometry must belong to HeroUI primitives, not responsive utility patches.');
@@ -122,4 +122,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('Single-layer HeroUI layout + native OS picker contract passed.');
+console.log('Single-layer HeroUI layout + adaptive Modal/Drawer contract passed.');
