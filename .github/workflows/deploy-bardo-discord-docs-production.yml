@@ -36,6 +36,8 @@ jobs:
           node-version: '22'
 
       - name: Verify Cloudflare credentials
+        id: creds
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -43,12 +45,18 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
 
       - name: Install Bardo dependencies
+        id: rootdeps
+        continue-on-error: true
         run: npm ci --no-audit --no-fund
 
       - name: Run existing bot tests before integration build
+        id: tests
+        continue-on-error: true
         run: npm test
 
       - name: Verify new production modules
+        id: modules
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -56,9 +64,13 @@ jobs:
           node --check scripts/apply-production-worker.mjs
 
       - name: Patch production Worker with Docs API
+        id: patch
+        continue-on-error: true
         run: node scripts/apply-production-worker.mjs src/worker.js
 
       - name: Verify legacy Discord behavior remains wired
+        id: legacy
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -68,9 +80,13 @@ jobs:
           node --check src/worker.js
 
       - name: Install finalized Docs app dependencies
+        id: docsdeps
+        continue-on-error: true
         run: npm install --prefix prototypes/docs-app --no-audit --no-fund
 
       - name: Generate exact HeroUI theme
+        id: theme
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -78,9 +94,13 @@ jobs:
           npx --yes tsx@4.20.6 prototypes/docs-app/scripts/generate-heroui-theme.mjs /tmp/generate-theme-colors.ts prototypes/docs-app/src/theme.css
 
       - name: Build finalized React Docs Activity
+        id: docsbuild
+        continue-on-error: true
         run: npm run build --prefix prototypes/docs-app
 
       - name: Install finalized Activity assets into Bardo
+        id: assets
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -89,6 +109,29 @@ jobs:
           cp -R prototypes/docs-app/dist/. activity/
           test -f activity/index.html
           test -n "$(find activity -maxdepth 2 -type f -name '*.js' -print -quit)"
+
+      - name: Gate production preflight
+        id: preflight
+        if: always()
+        shell: bash
+        env:
+          CREDS: ${{ steps.creds.outcome }}
+          ROOT_DEPS: ${{ steps.rootdeps.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          MODULES: ${{ steps.modules.outcome }}
+          PATCH: ${{ steps.patch.outcome }}
+          LEGACY: ${{ steps.legacy.outcome }}
+          DOCS_DEPS: ${{ steps.docsdeps.outcome }}
+          THEME: ${{ steps.theme.outcome }}
+          DOCS_BUILD: ${{ steps.docsbuild.outcome }}
+          ASSETS: ${{ steps.assets.outcome }}
+        run: |
+          set -euo pipefail
+          FAILED=0
+          for VALUE in "$CREDS" "$ROOT_DEPS" "$TESTS" "$MODULES" "$PATCH" "$LEGACY" "$DOCS_DEPS" "$THEME" "$DOCS_BUILD" "$ASSETS"; do
+            if [ "$VALUE" != "success" ]; then FAILED=1; fi
+          done
+          exit "$FAILED"
 
       - name: Count existing production documents
         id: before
@@ -101,6 +144,7 @@ jobs:
           echo "Existing documents before migration: $COUNT"
 
       - name: Apply additive D1 migrations
+        id: migrate
         run: npx --yes wrangler@4.124.0 d1 migrations apply bardo-db --remote
 
       - name: Verify migration preserved every document
@@ -128,6 +172,17 @@ jobs:
           DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
           DOCS_BEFORE: ${{ steps.before.outputs.count }}
           DOCS_AFTER: ${{ steps.after.outputs.count }}
+          CREDS: ${{ steps.creds.outcome }}
+          ROOT_DEPS: ${{ steps.rootdeps.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          MODULES: ${{ steps.modules.outcome }}
+          PATCH: ${{ steps.patch.outcome }}
+          LEGACY: ${{ steps.legacy.outcome }}
+          DOCS_DEPS: ${{ steps.docsdeps.outcome }}
+          THEME: ${{ steps.theme.outcome }}
+          DOCS_BUILD: ${{ steps.docsbuild.outcome }}
+          ASSETS: ${{ steps.assets.outcome }}
+          MIGRATE: ${{ steps.migrate.outcome }}
         run: |
           set -euo pipefail
           mkdir -p .deploy
@@ -138,6 +193,17 @@ jobs:
           worker=bardo-discord
           branch=module/bardo-docs
           source_commit=$GITHUB_SHA
+          credentials=$CREDS
+          root_dependencies=$ROOT_DEPS
+          tests=$TESTS
+          modules=$MODULES
+          worker_patch=$PATCH
+          legacy_contract=$LEGACY
+          docs_dependencies=$DOCS_DEPS
+          theme=$THEME
+          docs_build=$DOCS_BUILD
+          activity_assets=$ASSETS
+          migration=$MIGRATE
           docs_before=${DOCS_BEFORE:-unknown}
           docs_after=${DOCS_AFTER:-unknown}
           legacy_command=doc
