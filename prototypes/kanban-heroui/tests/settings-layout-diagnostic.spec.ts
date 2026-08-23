@@ -11,13 +11,16 @@ test('mobile: settings descendants have zero intrinsic overflow', async ({ page 
     const bodyRect = element.getBoundingClientRect();
     const nodes = [element, ...Array.from(element.querySelectorAll<HTMLElement>('*'))] as HTMLElement[];
     return nodes.flatMap((node) => {
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.display === 'contents') return [];
+
       const rect = node.getBoundingClientRect();
       const overflow = node.scrollWidth - node.clientWidth;
-      const escapesBody = rect.left < bodyRect.left - 1 || rect.right > bodyRect.right + 1;
+      const escapesBody = rect.width > 0 && (rect.left < bodyRect.left - 1 || rect.right > bodyRect.right + 1);
       if (overflow <= 1 && !escapesBody) return [];
+
       const section = node.closest<HTMLElement>('.bardo-section');
       const heading = section?.querySelector('h3')?.textContent?.trim() ?? null;
-      const style = getComputedStyle(node);
       return [{
         tag: node.tagName,
         className: typeof node.className === 'string' ? node.className : '',
