@@ -91,8 +91,8 @@ test('desktop: quick create opens read-first detail and explicit edit persists',
   await editView.locator('textarea').first().fill('Descripción persistida desde edición explícita.');
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
 
-  await expect(page.getByTestId('task-read-view')).toBeVisible();
-  await expect(page.getByText('Descripción persistida desde edición explícita.', { exact: true })).toBeVisible();
+  await expect(readView).toBeVisible();
+  await expect(readView.getByText('Descripción persistida desde edición explícita.', { exact: true })).toBeVisible();
   await expect.poll(async () => page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || 'null');
     const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
