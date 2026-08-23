@@ -217,3 +217,5 @@ jobs:
           git commit -m "chore(docs): record Discord production deployment [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$STATUS" = "success"
+
+# Final production trigger: Discord opens only the approved Bardo Docs document view.
