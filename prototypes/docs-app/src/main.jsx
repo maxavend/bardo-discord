@@ -10,6 +10,7 @@ import './theme.css';
 import './layout-audit.css';
 import './editor-focus.css';
 import './keyboard-sticky.css';
+import './production-document-only.css';
 import './keyboard-sticky.js';
 
 function DocumentOnlyUnavailable({message}) {
