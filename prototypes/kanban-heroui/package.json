@@ -1,14 +1,16 @@
 {
   "name": "bardo-kanban-heroui-qa",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lint": "node scripts/lint-ui.mjs",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "audit": "npm run lint && npm run typecheck && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@heroui/react": "3.2.4",
