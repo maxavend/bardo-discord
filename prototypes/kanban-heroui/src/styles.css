@@ -35,7 +35,8 @@
 
   button,
   input,
-  textarea {
+  textarea,
+  select {
     font: inherit;
   }
 }
@@ -63,12 +64,6 @@
     background: var(--background);
   }
 
-  .bardo-board-trigger {
-    min-width: 0;
-    max-width: min(62vw, 20rem);
-    justify-content: flex-start;
-  }
-
   .bardo-board-title {
     min-width: 0;
     overflow: hidden;
@@ -91,7 +86,7 @@
   }
 
   .bardo-sort-control {
-    width: 8.5rem;
+    width: 9rem;
   }
 
   .bardo-filter-scroll {
@@ -110,6 +105,82 @@
 
   .bardo-filter-group {
     min-width: max-content;
+  }
+
+  .bardo-native-field {
+    display: grid;
+    min-width: 0;
+    gap: 0.375rem;
+  }
+
+  .bardo-native-label {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1rem;
+  }
+
+  .bardo-native-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 2.5rem;
+    border: 1px solid var(--field-border);
+    border-radius: var(--field-radius);
+    background: var(--field-background);
+    color: var(--field-foreground);
+    padding-inline: 0.75rem;
+    font-size: 1rem;
+    line-height: 1.25rem;
+    accent-color: var(--accent);
+  }
+
+  .bardo-native-select:focus-visible,
+  .bardo-native-overlay-control:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .bardo-native-overlay-select {
+    position: relative;
+    display: inline-flex;
+    min-width: 0;
+    height: 2rem;
+    align-items: center;
+    border-radius: var(--radius);
+  }
+
+  .bardo-native-overlay-visual {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    pointer-events: none;
+  }
+
+  .bardo-native-overlay-control {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    opacity: 0;
+  }
+
+  .bardo-board-picker {
+    width: min(62vw, 20rem);
+    padding-inline: 0.5rem;
+  }
+
+  .bardo-board-picker .bardo-native-overlay-visual {
+    justify-content: flex-start;
+  }
+
+  .bardo-native-icon-picker {
+    width: 2rem;
+    flex: 0 0 2rem;
   }
 
   .bardo-mobile-kanban {
@@ -154,9 +225,9 @@
   }
 
   .bardo-column-pill-count {
+    color: var(--muted);
     font-size: 0.6875rem;
     line-height: 1;
-    color: var(--muted);
   }
 
   .bardo-column-pill[data-active="true"] .bardo-column-pill-count {
@@ -223,9 +294,9 @@
   }
 
   .bardo-mobile-drag-target {
+    color: var(--muted);
     font-size: 0.75rem;
     line-height: 1rem;
-    color: var(--muted);
   }
 
   .bardo-desktop-board {
@@ -317,14 +388,210 @@
     text-align: center;
   }
 
-  .bardo-prop-grid {
+  .bardo-modal-header,
+  .bardo-detail-header {
+    align-items: flex-start;
+  }
+
+  .bardo-modal-stack,
+  .bardo-settings-body,
+  .bardo-edit-body {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .bardo-modal-footer,
+  .bardo-detail-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .bardo-detail-heading-copy {
+    display: grid;
+    min-width: 0;
+    gap: 0.375rem;
+    padding-inline-end: 2.5rem;
+  }
+
+  .bardo-detail-title {
+    max-width: 34rem;
+    font-size: 1.25rem;
+    font-weight: 650;
+    line-height: 1.65rem;
+    letter-spacing: -0.0125em;
+  }
+
+  .bardo-detail-updated {
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .bardo-detail-body {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .bardo-detail-description {
+    max-width: 42rem;
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.5rem;
+    white-space: pre-wrap;
+  }
+
+  .bardo-detail-description-empty,
+  .bardo-detail-empty {
+    color: var(--muted);
+  }
+
+  .bardo-detail-properties {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .bardo-detail-property {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 0.25rem;
+  }
+
+  .bardo-detail-property-label {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1rem;
+  }
+
+  .bardo-detail-property-value,
+  .bardo-detail-property-person,
+  .bardo-detail-tags {
+    min-width: 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .bardo-detail-property-person,
+  .bardo-detail-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .bardo-detail-section {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .bardo-detail-section-heading {
+    display: flex;
+    min-height: 1.5rem;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .bardo-detail-section-heading h3 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+  }
+
+  .bardo-detail-section-heading > span {
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bardo-detail-subtasks,
+  .bardo-edit-subtasks {
+    display: grid;
+    gap: 0.375rem;
+  }
+
+  .bardo-detail-comments {
+    display: grid;
+    gap: 0.25rem;
+  }
+
+  .bardo-detail-comment {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 0.625rem;
+    padding-block: 0.625rem;
+  }
+
+  .bardo-detail-comment-copy {
+    display: grid;
+    min-width: 0;
+    gap: 0.25rem;
+  }
+
+  .bardo-detail-comment-meta {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .bardo-detail-comment-meta span {
+    color: var(--muted);
+  }
+
+  .bardo-detail-comment-copy p {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.375rem;
+    white-space: pre-wrap;
+  }
+
+  .bardo-comment-composer {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: end;
+    padding-top: 0.25rem;
+  }
+
+  .bardo-edit-properties {
     display: grid;
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
 
-  .bardo-task-title-field {
-    width: 100%;
+  .bardo-edit-subtask {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .bardo-edit-subtask-add,
+  .bardo-inline-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.5rem;
+  }
+
+  .bardo-detail-footer {
+    justify-content: space-between;
+  }
+
+  .bardo-detail-footer-edit,
+  .bardo-settings-footer {
+    flex-wrap: wrap;
+    justify-content: space-between;
   }
 
   .bardo-section {
@@ -338,15 +605,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-  }
-
-  .bardo-comment-list {
-    display: grid;
-    gap: 0.25rem;
-  }
-
-  .bardo-comment {
-    padding-block: 0.625rem;
   }
 
   .bardo-column-setting {
@@ -402,6 +660,28 @@
     .bardo-mobile-column-slide {
       flex-basis: calc(100% - 2.25rem);
     }
+
+    .bardo-edit-subtask-add,
+    .bardo-inline-form {
+      grid-template-columns: 1fr;
+    }
+
+    .bardo-edit-subtask-add > :last-child,
+    .bardo-inline-form > :last-child {
+      justify-self: end;
+    }
+  }
+
+  @media (min-width: 40rem) {
+    .bardo-detail-properties {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 2rem;
+      row-gap: 1.125rem;
+    }
+
+    .bardo-edit-properties {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 
   @media (min-width: 48rem) {
@@ -437,8 +717,8 @@
       background: var(--background);
     }
 
-    .bardo-prop-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    .bardo-native-select {
+      font-size: 0.875rem;
     }
 
     .bardo-sort-control {
