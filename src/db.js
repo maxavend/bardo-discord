@@ -12,6 +12,35 @@ function toArrayBuffer(value) {
   throw new TypeError('Bardo esperaba bytes binarios compatibles con ArrayBuffer.');
 }
 
+function parsePages(value) {
+  try {
+    const pages = JSON.parse(value || '[]');
+    return Array.isArray(pages) ? pages : [];
+  } catch {
+    return [];
+  }
+}
+
+function mapDocumentRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    originalMarkdown: row.original_markdown || '',
+    pages: parsePages(row.pages),
+    sourceName: row.source_name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    archivedAt: row.archived_at || null,
+    createdBy: row.created_by,
+    sourceMime: row.source_mime || null,
+    sourceType: row.source_type || 'markdown',
+    importStatus: row.import_status || 'ready',
+    hasSource: Boolean(row.has_source),
+  };
+}
+
 export async function saveDocument(db, messageId, document) {
   await db
     .prepare(
@@ -53,29 +82,67 @@ export async function saveDocumentSource(db, documentId, source) {
 export async function loadDocument(db, messageId) {
   const row = await db
     .prepare(
-      `SELECT id, title, original_markdown, pages, source_name, created_at, created_by,
-              source_mime, source_type, import_status,
+      `SELECT id, title, description, original_markdown, pages, source_name, created_at, updated_at,
+              archived_at, created_by, source_mime, source_type, import_status,
               CASE WHEN source_blob IS NULL THEN 0 ELSE 1 END AS has_source
        FROM documents WHERE id = ?`,
     )
     .bind(messageId)
     .first();
 
-  if (!row) return null;
+  return mapDocumentRow(row);
+}
 
-  return {
-    id: row.id,
-    title: row.title,
-    originalMarkdown: row.original_markdown,
-    pages: JSON.parse(row.pages),
-    sourceName: row.source_name,
-    createdAt: row.created_at,
-    createdBy: row.created_by,
-    sourceMime: row.source_mime || null,
-    sourceType: row.source_type || 'markdown',
-    importStatus: row.import_status || 'ready',
-    hasSource: Boolean(row.has_source),
-  };
+export async function listDocuments(db, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 250));
+  const result = await db
+    .prepare(
+      `SELECT id, title, description, original_markdown, pages, source_name, created_at, updated_at,
+              archived_at, created_by, source_mime, source_type, import_status,
+              CASE WHEN source_blob IS NULL THEN 0 ELSE 1 END AS has_source
+       FROM documents
+       WHERE archived_at IS NULL
+       ORDER BY COALESCE(updated_at, created_at) DESC
+       LIMIT ?`,
+    )
+    .bind(safeLimit)
+    .all();
+
+  return (result?.results || []).map(mapDocumentRow).filter(Boolean);
+}
+
+export async function updateDocumentContent(db, documentId, document) {
+  const updatedAt = document.updatedAt || new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE documents
+       SET title = ?, description = ?, original_markdown = ?, pages = ?, updated_at = ?, archived_at = NULL
+       WHERE id = ?`,
+    )
+    .bind(
+      document.title || 'Sin título',
+      document.description || '',
+      document.originalMarkdown || '',
+      JSON.stringify(document.pages || []),
+      updatedAt,
+      documentId,
+    )
+    .run();
+}
+
+export async function archiveDocument(db, documentId, archivedAt = new Date().toISOString()) {
+  await db
+    .prepare('UPDATE documents SET archived_at = ?, updated_at = ? WHERE id = ?')
+    .bind(archivedAt, archivedAt, documentId)
+    .run();
+}
+
+export async function restoreDocument(db, documentId) {
+  const updatedAt = new Date().toISOString();
+  await db
+    .prepare('UPDATE documents SET archived_at = NULL, updated_at = ? WHERE id = ?')
+    .bind(updatedAt, documentId)
+    .run();
 }
 
 export async function loadDocumentSource(db, documentId) {
@@ -101,7 +168,8 @@ export async function cacheNormalizedDocument(db, documentId, markdown, pages) {
   await db
     .prepare(
       `UPDATE documents
-       SET original_markdown = ?, pages = ?, import_status = 'ready', source_blob = NULL
+       SET original_markdown = ?, pages = ?, import_status = 'ready', source_blob = NULL,
+           updated_at = COALESCE(updated_at, created_at)
        WHERE id = ?`,
     )
     .bind(markdown, JSON.stringify(pages), documentId)
