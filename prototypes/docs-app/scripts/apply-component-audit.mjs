@@ -8,6 +8,12 @@ export function applyComponentAudit(filePath) {
   };
 
   replace(
+`import React, {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';`,
+`import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';`,
+'remove unused React namespace',
+  );
+
+  replace(
 `  Modal,\n  Select,\n} from '@heroui/react';`,
 `  Modal,\n  SearchField,\n  Select,\n  TextField,\n  ToastProvider,\n  Toolbar,\n  toast,\n} from '@heroui/react';`,
 'import compounds',
@@ -64,6 +70,16 @@ export function applyComponentAudit(filePath) {
 `      <ToastProvider placement="bottom"/>`,
 'HeroUI ToastProvider',
   );
+
+  const forbidden = [
+    'search-wrap',
+    'search-input',
+    'role="toolbar"',
+    'className={`toast ',
+  ];
+  for (const token of forbidden) {
+    if (source.includes(token)) throw new Error(`HeroUI audit left legacy implementation: ${token}`);
+  }
 
   writeFileSync(filePath, source);
 }
