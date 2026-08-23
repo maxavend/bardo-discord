@@ -108,7 +108,10 @@
   height: 18px;
 }
 
-/* Native kebab: 44px target, 18px optical icon, vertical dots. */
+/*
+ * Native option controls.
+ * The invisible selects are real browser controls, so iOS/Android own the picker UI.
+ */
 .native-menu {
   width: var(--bardo-action-target);
   height: var(--bardo-action-target);
@@ -118,30 +121,59 @@
 .native-menu select {
   width: var(--bardo-action-target);
   height: var(--bardo-action-target);
+  font-size: 16px;
+  appearance: auto;
+  -webkit-appearance: menulist;
 }
 
 .native-menu-visual {
   position: relative;
-  display: block;
+  display: grid;
+  place-items: center;
   width: 18px;
   height: 18px;
   font-size: 0;
   line-height: 0;
   letter-spacing: 0;
   transform: none;
+  pointer-events: none;
 }
 
-.native-menu-visual::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
-  transform: translate(-50%, -50%);
-  box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor;
+.native-menu-visual > svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+/* Visible block-type trigger is also a real native select. */
+.block-select.native-option-select {
+  width: 112px;
+  flex: 0 0 112px;
+  height: var(--bardo-action-target);
+  min-height: var(--bardo-action-target);
+  padding-inline: 10px 28px;
+  border: var(--field-border-width) solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-background);
+  color: var(--field-foreground);
+  box-shadow: var(--field-shadow);
+  font-size: 16px;
+  line-height: 1.2;
+  appearance: auto;
+  -webkit-appearance: menulist;
+}
+
+.block-select.native-option-select:hover {
+  background: var(--field-hover);
+}
+
+.block-select.native-option-select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.native-insert-menu {
+  color: var(--foreground);
 }
 
 /* Keep the same optical geometry in document headers and editor toolbar. */
@@ -153,6 +185,20 @@
 .doc-topbar .native-menu-visual {
   width: 18px;
   height: 18px;
+}
+
+@media (max-width: 520px) {
+  .block-select.native-option-select {
+    width: 100px;
+    flex-basis: 100px;
+  }
+}
+
+@media (max-width: 360px) {
+  .block-select.native-option-select {
+    width: 88px;
+    flex-basis: 88px;
+  }
 }
 
 @media (min-width: 760px) {
