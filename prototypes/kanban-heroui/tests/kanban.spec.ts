@@ -168,7 +168,7 @@ test('mobile: pill navigation is single-axis, readable and shows the next column
 
   const carousel = page.getByTestId('mobile-column-carousel');
   await expect(carousel).toBeVisible();
-  const pills = page.getByRole('tab');
+  const pills = page.locator('.bardo-column-pill');
   await expect(pills.first()).toBeVisible();
 
   const metrics = await page.evaluate(() => {
@@ -202,9 +202,9 @@ test('mobile: pill navigation is single-axis, readable and shows the next column
   expect(metrics.scrollSnapType).toContain('x mandatory');
   expect(metrics.pageOverflow).toBeLessThanOrEqual(1);
 
-  const nextPill = page.getByRole('tab', { name: /^Por hacer/ });
+  const nextPill = pills.filter({ hasText: 'Por hacer' }).first();
   await nextPill.click();
-  await expect(nextPill).toHaveAttribute('aria-selected', 'true');
+  await expect(nextPill).toHaveAttribute('data-active', 'true');
   await expect.poll(async () => carousel.evaluate((element) => element.scrollLeft)).toBeGreaterThan(20);
 
   await page.getByLabel('Nueva tarea').click();
@@ -224,7 +224,7 @@ test('mobile: carousel scrolling updates the active pill', async ({ page }, test
     element.dispatchEvent(new Event('scroll', { bubbles: true }));
   });
 
-  await expect(page.getByRole('tab', { name: /^Por hacer/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.bardo-column-pill').filter({ hasText: 'Por hacer' }).first()).toHaveAttribute('data-active', 'true');
   expect(errors).toEqual([]);
 });
 
@@ -280,7 +280,7 @@ test('mobile: long press and horizontal drag moves a card to the next column', a
     const task = board?.tasks?.find((item: { id: string }) => item.id === id);
     return task?.status === board?.columns?.[1]?.id;
   }, { key: STORAGE, id: taskId })).toBe(true);
-  await expect(page.getByRole('tab', { name: /^Por hacer/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.bardo-column-pill').filter({ hasText: 'Por hacer' }).first()).toHaveAttribute('data-active', 'true');
   expect(errors).toEqual([]);
 });
 
