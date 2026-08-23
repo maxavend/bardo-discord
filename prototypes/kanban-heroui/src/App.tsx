@@ -671,7 +671,7 @@ function App() {
       </div>
 
       <Modal>
-        <Modal.Backdrop variant="blur" isOpen={quickOpen} onOpenChange={setQuickOpen}>
+        <Modal.Backdrop variant="opaque" isOpen={quickOpen} onOpenChange={setQuickOpen}>
           <Modal.Container placement="center" size="sm">
             <Modal.Dialog>
               <Modal.CloseTrigger />
@@ -722,7 +722,7 @@ function App() {
       />
 
       <Modal>
-        <Modal.Backdrop variant="blur" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
+        <Modal.Backdrop variant="opaque" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
           <Modal.Container placement="center" size="lg" scroll="inside">
             <Modal.Dialog>
               <Modal.CloseTrigger />
