@@ -26,6 +26,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       HEROUI_SOURCE_SHA: 1d2164e7b9a60221e39501081f0fe4f6c564bccf
+      EXPECTED_ACTIVITY_BUILD: docs-current-document-only-v1
+      WORKER_ORIGIN: https://bardo-discord.bardo-discord.workers.dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,6 +110,7 @@ jobs:
           mkdir -p activity
           cp -R prototypes/docs-app/dist/. activity/
           test -f activity/index.html
+          grep -q "$EXPECTED_ACTIVITY_BUILD" activity/index.html
           test -n "$(find activity -maxdepth 2 -type f -name '*.js' -print -quit)"
 
       - name: Gate production preflight
@@ -165,11 +168,30 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.124.0 deploy
 
+      - name: Verify Worker serves the current Bardo Docs build
+        id: origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in $(seq 1 12); do
+            if curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?bardo_build=$GITHUB_SHA&attempt=$ATTEMPT" -o /tmp/bardo-live.html; then
+              if grep -q "$EXPECTED_ACTIVITY_BUILD" /tmp/bardo-live.html; then
+                echo "Worker origin is serving $EXPECTED_ACTIVITY_BUILD"
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo 'Worker origin did not serve the expected Activity build.'
+          sed -n '1,80p' /tmp/bardo-live.html 2>/dev/null || true
+          exit 1
+
       - name: Record production deployment
         if: always()
         shell: bash
         env:
           DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          ORIGIN_OUTCOME: ${{ steps.origin.outcome }}
           DOCS_BEFORE: ${{ steps.before.outputs.count }}
           DOCS_AFTER: ${{ steps.after.outputs.count }}
           CREDS: ${{ steps.creds.outcome }}
@@ -187,10 +209,13 @@ jobs:
           set -euo pipefail
           mkdir -p .deploy
           STATUS=failure
-          if [ "$DEPLOY_OUTCOME" = "success" ]; then STATUS=success; fi
+          if [ "$DEPLOY_OUTCOME" = "success" ] && [ "$ORIGIN_OUTCOME" = "success" ]; then STATUS=success; fi
           cat > .deploy/bardo-docs-discord-status.txt <<EOF
           status=$STATUS
           worker=bardo-discord
+          worker_origin=$WORKER_ORIGIN
+          expected_activity_build=$EXPECTED_ACTIVITY_BUILD
+          origin_verification=$ORIGIN_OUTCOME
           branch=module/bardo-docs
           source_commit=$GITHUB_SHA
           credentials=$CREDS
@@ -217,5 +242,3 @@ jobs:
           git commit -m "chore(docs): record Discord production deployment [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$STATUS" = "success"
-
-# Final production trigger: Discord opens only the approved Bardo Docs document view.
