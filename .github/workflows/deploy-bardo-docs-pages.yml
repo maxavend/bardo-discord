@@ -64,19 +64,31 @@ jobs:
         id: lint
         if: steps.theme.outcome == 'success'
         continue-on-error: true
-        run: npm run lint --prefix prototypes/docs-app
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .deploy
+          npm run lint --prefix prototypes/docs-app 2>&1 | tee .deploy/bardo-docs-lint.log
 
       - name: Typecheck audited application
         id: typecheck
         if: steps.lint.outcome == 'success'
         continue-on-error: true
-        run: npm run typecheck --prefix prototypes/docs-app
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .deploy
+          npm run typecheck --prefix prototypes/docs-app 2>&1 | tee .deploy/bardo-docs-typecheck.log
 
       - name: Build React + HeroUI prototype
         id: build
         if: steps.typecheck.outcome == 'success'
         continue-on-error: true
-        run: npm run build --prefix prototypes/docs-app
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .deploy
+          npm run build --prefix prototypes/docs-app 2>&1 | tee .deploy/bardo-docs-build.log
 
       - name: Verify build and semantic source output
         id: verify
@@ -178,7 +190,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-docs-status.txt prototypes/docs-app/src/theme.css
-          if [ -f .deploy/bardo-docs-e2e.log ]; then git add .deploy/bardo-docs-e2e.log; fi
+          for log in .deploy/bardo-docs-lint.log .deploy/bardo-docs-typecheck.log .deploy/bardo-docs-build.log .deploy/bardo-docs-e2e.log; do
+            if [ -f "$log" ]; then git add "$log"; fi
+          done
           git commit -m "chore(docs): record audited Pages result [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$STATUS" = "success"
