@@ -1,5 +1,18 @@
+const BARDO_OPEN_PREFIX = 'bardo:open:';
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function normalizeLaunchDocument(value) {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith(BARDO_OPEN_PREFIX)) {
+    const id = trimmed.slice(BARDO_OPEN_PREFIX.length).trim();
+    return id || null;
+  }
+  return trimmed;
 }
 
 async function fetchContext(instanceId) {
@@ -21,7 +34,26 @@ export async function waitForBardoActivityContext() {
   const embedded = Boolean(instanceId && params.get('frame_id'));
 
   if (!embedded) {
-    return {embedded:false, ready:true, instanceId:null, documentId:null};
+    return {embedded:false, ready:true, instanceId:null, documentId:null, customId:null};
+  }
+
+  // Discord injects the originating message component custom_id into the
+  // Activity launch URL. It is the most direct link to the document and is
+  // available before the server-side activity context callback settles.
+  const customId = params.get('custom_id')?.trim() || null;
+  const directDocumentId = normalizeLaunchDocument(
+    customId || params.get('document') || params.get('id'),
+  );
+
+  if (directDocumentId) {
+    return {
+      embedded:true,
+      ready:true,
+      instanceId,
+      documentId:directDocumentId,
+      customId:customId || `${BARDO_OPEN_PREFIX}${directDocumentId}`,
+      source:'launch-custom-id',
+    };
   }
 
   let delay = 160;
@@ -29,7 +61,7 @@ export async function waitForBardoActivityContext() {
     try {
       const documentId = await fetchContext(instanceId);
       if (documentId) {
-        return {embedded:true, ready:true, instanceId, documentId};
+        return {embedded:true, ready:true, instanceId, documentId, customId:null, source:'activity-context'};
       }
     } catch (error) {
       console.warn(`Bardo Docs: activity context intento ${attempt + 1} falló`, error);
@@ -41,5 +73,5 @@ export async function waitForBardoActivityContext() {
     }
   }
 
-  return {embedded:true, ready:false, instanceId, documentId:null};
+  return {embedded:true, ready:false, instanceId, documentId:null, customId:null};
 }
