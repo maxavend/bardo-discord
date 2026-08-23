@@ -1,49 +1,67 @@
 const root = document.documentElement;
 const viewport = window.visualViewport;
 
+let baselineHeight = viewport?.height || window.innerHeight;
 let frame = 0;
 let settleTimer = 0;
 
-function editingControlIsFocused() {
+function editingTextIsFocused() {
   const active = document.activeElement;
   if (!active?.closest?.('.editing-route')) return false;
-  return active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+  return active.isContentEditable || active.matches?.('.doc-title-input, .doc-description-input, textarea, input[type="text"], input[type="url"]');
 }
 
-function readVisualTop() {
-  if (!viewport || !editingControlIsFocused()) return 0;
-
-  // WebKit positions sticky elements against the layout viewport while the
-  // software keyboard can pan the visual viewport. pageTop - scrollY is a
-  // useful fallback on iOS versions where offsetTop briefly reports 0.
-  const offsetTop = Number(viewport.offsetTop) || 0;
-  const pageDelta = Math.max(0, (Number(viewport.pageTop) || 0) - window.scrollY);
-  return Math.max(0, offsetTop, pageDelta);
+function rememberBaseline() {
+  if (!viewport) return;
+  baselineHeight = Math.max(baselineHeight, viewport.height);
 }
 
-function commitViewportOffset() {
-  const top = readVisualTop();
-  root.style.setProperty('--bardo-visual-viewport-top', `${top.toFixed(2)}px`);
+function syncKeyboardState() {
+  if (!viewport) {
+    root.removeAttribute('data-editor-keyboard');
+    return;
+  }
+
+  const focused = editingTextIsFocused();
+  const reduction = Math.max(0, baselineHeight - viewport.height);
+  const keyboardOpen = focused && reduction > 120;
+
+  if (keyboardOpen) root.dataset.editorKeyboard = 'open';
+  else root.removeAttribute('data-editor-keyboard');
+
+  if (!focused && reduction < 80) {
+    baselineHeight = Math.max(viewport.height, window.innerHeight);
+  }
 }
 
-function syncViewportOffset() {
+function scheduleSync() {
   cancelAnimationFrame(frame);
-  frame = requestAnimationFrame(commitViewportOffset);
-
-  // iOS can publish the final visualViewport offset one tick late after the
-  // keyboard animates. Re-read once after the animation starts settling.
+  frame = requestAnimationFrame(syncKeyboardState);
   clearTimeout(settleTimer);
-  settleTimer = window.setTimeout(commitViewportOffset, 80);
+  settleTimer = window.setTimeout(syncKeyboardState, 180);
 }
 
-root.style.setProperty('--bardo-visual-viewport-top', '0px');
+// Establish the largest normal visual viewport as our keyboard-free baseline.
+rememberBaseline();
 
-viewport?.addEventListener('resize', syncViewportOffset, {passive: true});
-viewport?.addEventListener('scroll', syncViewportOffset, {passive: true});
-window.addEventListener('scroll', syncViewportOffset, {passive: true});
-document.addEventListener('focusin', syncViewportOffset);
-document.addEventListener('focusout', () => window.setTimeout(syncViewportOffset, 0));
-window.addEventListener('pageshow', syncViewportOffset);
-window.addEventListener('orientationchange', syncViewportOffset);
+viewport?.addEventListener('resize', scheduleSync, {passive: true});
+document.addEventListener('focusin', () => {
+  // focusin usually fires before the keyboard finishes animating, which makes
+  // it the safest moment to preserve the keyboard-free baseline.
+  rememberBaseline();
+  scheduleSync();
+});
+document.addEventListener('focusout', () => window.setTimeout(scheduleSync, 0));
+window.addEventListener('orientationchange', () => {
+  root.removeAttribute('data-editor-keyboard');
+  window.setTimeout(() => {
+    baselineHeight = viewport?.height || window.innerHeight;
+    scheduleSync();
+  }, 300);
+});
+window.addEventListener('pageshow', () => {
+  baselineHeight = viewport?.height || window.innerHeight;
+  scheduleSync();
+});
 
-syncViewportOffset();
+scheduleSync();
