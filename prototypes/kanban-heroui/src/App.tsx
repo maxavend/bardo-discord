@@ -80,6 +80,9 @@ function App() {
 
   const board = state.boards.find((item) => item.id === state.activeBoardId) ?? state.boards[0];
   const task = activeTaskId ? board.tasks.find((item) => item.id === activeTaskId) ?? null : null;
+  const allowProgrammaticInputFocus = typeof window === 'undefined'
+    ? true
+    : window.matchMedia('(pointer: fine)').matches;
 
   useEffect(() => {
     saveState(state);
@@ -669,23 +672,25 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="blur" isOpen={quickOpen} onOpenChange={setQuickOpen}>
-          <Modal.Container placement="auto" size="sm">
+          <Modal.Container placement="center" size="sm">
             <Modal.Dialog>
               <Modal.CloseTrigger />
               <Modal.Header className="bardo-modal-header">
                 <Modal.Heading>Nueva tarea</Modal.Heading>
               </Modal.Header>
               <Modal.Body className="bardo-modal-stack" data-testid="quick-body">
-                <Input
-                  autoFocus
-                  fullWidth
-                  variant="secondary"
-                  value={quickTitle}
-                  onChange={(event) => setQuickTitle(event.target.value)}
-                  placeholder="¿Qué hay que hacer?"
-                  maxLength={180}
-                  aria-label="Título"
-                />
+                <TextField variant="secondary">
+                  <Label>Título</Label>
+                  <Input
+                    autoFocus={allowProgrammaticInputFocus}
+                    fullWidth
+                    value={quickTitle}
+                    onChange={(event) => setQuickTitle(event.target.value)}
+                    placeholder="¿Qué hay que hacer?"
+                    maxLength={180}
+                    aria-label="Título"
+                  />
+                </TextField>
                 <NativeSelect
                   label="Columna"
                   value={quickStatus || board.columns[0].id}
@@ -718,7 +723,7 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="blur" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
-          <Modal.Container placement="auto" size="lg" scroll="inside">
+          <Modal.Container placement="center" size="lg" scroll="inside">
             <Modal.Dialog>
               <Modal.CloseTrigger />
               <Modal.Header className="bardo-modal-header"><Modal.Heading>Tablero</Modal.Heading></Modal.Header>
