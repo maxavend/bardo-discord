@@ -31,21 +31,25 @@ test('loads the HeroUI app without runtime errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('uses the audited HeroUI theme tokens', async ({ page }) => {
+test('uses the exact HeroUI default theme contract', async ({ page }) => {
   const errors = await openApp(page);
   const tokens = await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement);
     return {
+      theme: document.documentElement.getAttribute('data-theme'),
       accent: style.getPropertyValue('--accent').trim(),
       background: style.getPropertyValue('--background').trim(),
+      overlay: style.getPropertyValue('--overlay').trim(),
       fieldBackground: style.getPropertyValue('--field-background').trim(),
       fieldBorder: style.getPropertyValue('--field-border').trim(),
       radius: style.getPropertyValue('--radius').trim(),
     };
   });
+  expect(tokens.theme).toBe('default');
   expect(tokens.accent).not.toBe('');
   expect(tokens.background).not.toBe('');
   expect(tokens.accent).not.toBe(tokens.background);
+  expect(tokens.overlay).toContain('100.00%');
   expect(tokens.fieldBackground).not.toBe('transparent');
   expect(tokens.fieldBackground).not.toBe(tokens.background);
   expect(tokens.fieldBorder).toBe('transparent');
@@ -166,33 +170,35 @@ test('mobile: exposes one column at a time and quick create stays reachable', as
   expect(errors).toEqual([]);
 });
 
-test('mobile: normalized topbar, tabs and modal geometry stay coherent', async ({ page }, testInfo) => {
+test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   const errors = await openApp(page);
 
   const geometry = await page.evaluate(() => {
     const action = document.querySelector<HTMLElement>('button[aria-label="Más opciones"]');
+    const search = document.querySelector<HTMLElement>('button[aria-label="Buscar"]');
     const create = document.querySelector<HTMLElement>('button[aria-label="Nueva tarea"]');
-    const prev = document.querySelector<HTMLElement>('.tabs__list-container__scroll-prev');
-    const next = document.querySelector<HTMLElement>('.tabs__list-container__scroll-next');
-    const tabs = Array.from(document.querySelectorAll<HTMLElement>('.bardo-mobile-tabs .tabs__tab'));
-    const before = action ? getComputedStyle(action, '::before').content : '';
+    const svgs = [action, search, create].map((button) => button?.querySelector<SVGElement>('svg'));
+    const tabs = Array.from(document.querySelectorAll<HTMLElement>('.bardo-mobile-tabs [role="tab"]'));
     return {
       actionBox: action ? [action.getBoundingClientRect().width, action.getBoundingClientRect().height] : [0, 0],
+      searchBox: search ? [search.getBoundingClientRect().width, search.getBoundingClientRect().height] : [0, 0],
       createBox: create ? [create.getBoundingClientRect().width, create.getBoundingClientRect().height] : [0, 0],
-      prevDisplay: prev ? getComputedStyle(prev).display : 'none',
-      nextDisplay: next ? getComputedStyle(next).display : 'none',
-      noWrappedTabs: tabs.every((tab) => tab.getBoundingClientRect().height <= 45),
-      kebabContent: before,
+      svgBoxes: svgs.map((svg) => svg ? [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height] : [0, 0]),
+      buttonText: [action, search, create].map((button) => button?.textContent?.trim() ?? ''),
+      noWrappedTabs: tabs.every((tab) => tab.getBoundingClientRect().height <= 48),
       pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
 
+  expect(geometry.actionBox).toEqual(geometry.searchBox);
   expect(geometry.actionBox).toEqual(geometry.createBox);
-  expect(geometry.prevDisplay).toBe('none');
-  expect(geometry.nextDisplay).toBe('none');
+  for (const [width, height] of geometry.svgBoxes) {
+    expect(width).toBeCloseTo(16, 0);
+    expect(height).toBeCloseTo(16, 0);
+  }
+  expect(geometry.buttonText).toEqual(['', '', '']);
   expect(geometry.noWrappedTabs).toBe(true);
-  expect(geometry.kebabContent).toContain('⋮');
   expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
 
   await page.getByLabel('Nueva tarea').click();
@@ -203,5 +209,28 @@ test('mobile: normalized topbar, tabs and modal geometry stay coherent', async (
   expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
   expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual((await page.viewportSize())!.width);
   expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual((await page.viewportSize())!.height);
+
+  const computed = await page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[aria-label="Título"]');
+    const surface = document.querySelector<HTMLElement>('[data-testid="quick-surface"]');
+    const root = getComputedStyle(document.documentElement);
+    return {
+      theme: document.documentElement.getAttribute('data-theme'),
+      overlayToken: root.getPropertyValue('--overlay').trim(),
+      defaultToken: root.getPropertyValue('--default').trim(),
+      dialogBackground: dialog ? getComputedStyle(dialog).backgroundColor : '',
+      inputBackground: input ? getComputedStyle(input).backgroundColor : '',
+      surfaceBackground: surface ? getComputedStyle(surface).backgroundColor : '',
+    };
+  });
+
+  expect(computed.theme).toBe('default');
+  expect(computed.overlayToken).toContain('100.00%');
+  expect(computed.defaultToken).toContain('94.00%');
+  expect(computed.dialogBackground).not.toBe('');
+  expect(computed.inputBackground).not.toBe('');
+  expect(computed.inputBackground).not.toBe(computed.dialogBackground);
+  expect(computed.inputBackground).not.toBe(computed.surfaceBackground);
   expect(errors).toEqual([]);
 });
