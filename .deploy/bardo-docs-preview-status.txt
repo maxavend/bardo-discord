@@ -2,5 +2,5 @@ status=success
 url=https://bardo-docs.pages.dev
 branch=module/bardo-docs
 mode=preview
-source_commit=37b9ffd1f3df79c54c3cbb7efe65de889ceb2ce4
-deployed_at=2026-08-23T20:36:57Z
+source_commit=300853b2adfe9a92514e64546ea148b16dbb2cad
+deployed_at=2026-08-23T20:38:03Z
