@@ -1,4 +1,13 @@
 import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  EllipsisVertical,
+  Magnifier,
+  Plus,
+  Xmark,
+} from '@gravity-ui/icons';
+import {
   Avatar,
   Button,
   Checkbox,
@@ -11,6 +20,7 @@ import {
   SearchField,
   Select,
   Separator,
+  Surface,
   Tag,
   TagGroup,
   Tabs,
@@ -54,6 +64,8 @@ import {
 
 type Filter = 'all' | 'mine' | 'urgent' | 'unassigned' | 'comments';
 type Sort = 'manual' | 'priority' | 'title';
+
+const ICON_CLASS = 'size-4 shrink-0';
 
 function HeroSelect({
   label,
@@ -215,8 +227,7 @@ function App() {
     changeState(
       (draft) => {
         const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
-        const next = createTask(target, status, title);
-        target.tasks.push(next);
+        target.tasks.push(createTask(target, status, title));
       },
       { undo: true, toast: 'Tarea creada' },
     );
@@ -478,7 +489,11 @@ function App() {
 
   const runSelfTest = () => {
     const failures = selfTest(state);
-    setSelfTestText(failures.length ? `FAIL · ${failures.join('\n')}` : `PASS · ${state.boards.length} tableros · ${state.boards.reduce((total, item) => total + item.tasks.length, 0)} tareas`);
+    setSelfTestText(
+      failures.length
+        ? `FAIL · ${failures.join('\n')}`
+        : `PASS · ${state.boards.length} tableros · ${state.boards.reduce((total, item) => total + item.tasks.length, 0)} tareas`,
+    );
   };
 
   const filteredTasks = useMemo(() => {
@@ -521,6 +536,7 @@ function App() {
     const limitKey = `${board.id}:${column.id}`;
     const limit = renderLimits[limitKey] ?? PAGE_SIZE;
     const visible = all.slice(0, limit);
+
     return (
       <section key={column.id} className="bardo-column" aria-labelledby={`column-${column.id}`}>
         <header className="bardo-column-head">
@@ -528,7 +544,9 @@ function App() {
             <h2 id={`column-${column.id}`} className="bardo-column-title">{column.title}</h2>
             <span className="text-xs text-muted tabular-nums">{all.length}</span>
           </div>
-          <Button variant="ghost" size="sm" isIconOnly aria-label={`Crear tarea en ${column.title}`} onPress={() => openQuick(column.id)}>＋</Button>
+          <Button variant="ghost" size="sm" isIconOnly aria-label={`Crear tarea en ${column.title}`} onPress={() => openQuick(column.id)}>
+            <Plus className={ICON_CLASS} aria-hidden="true" />
+          </Button>
         </header>
         <div
           className="bardo-task-list"
@@ -573,8 +591,8 @@ function App() {
                 }}
                 onClick={() => openTask(item.id)}
               >
-                <div className="flex gap-2.5">
-                  <span className="bardo-priority rounded-full" data-priority={item.priority} aria-label={`Prioridad ${priorityLabel[item.priority]}`} />
+                <div className="flex gap-3">
+                  <span className="bardo-priority" data-priority={item.priority} aria-label={`Prioridad ${priorityLabel[item.priority]}`} />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium leading-5">{item.title}</div>
                     {item.description && <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.description}</div>}
@@ -582,8 +600,8 @@ function App() {
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {item.tags.slice(0, 2).map((tag) => <Chip key={tag} size="sm" variant="tertiary">{tag}</Chip>)}
                         {item.tags.length > 2 && <span className="text-xs text-muted">+{item.tags.length - 2}</span>}
-                        {item.subtasks.length > 0 && <span className="text-xs text-muted">☑ {doneSubtasks}/{item.subtasks.length}</span>}
-                        {item.comments.length > 0 && <span className="text-xs text-muted">◌ {item.comments.length}</span>}
+                        {item.subtasks.length > 0 && <span className="text-xs text-muted">{doneSubtasks}/{item.subtasks.length} subt.</span>}
+                        {item.comments.length > 0 && <span className="text-xs text-muted">{item.comments.length} com.</span>}
                       </div>
                       <Avatar size="sm" variant="soft" aria-label={person?.name ?? 'Sin responsable'}>
                         <Avatar.Fallback>{person?.initials ?? '—'}</Avatar.Fallback>
@@ -600,7 +618,9 @@ function App() {
               size="sm"
               fullWidth
               onPress={() => setRenderLimits((previous) => ({ ...previous, [limitKey]: limit + PAGE_SIZE }))}
-            >Mostrar {Math.min(PAGE_SIZE, all.length - limit)} más</Button>
+            >
+              Mostrar {Math.min(PAGE_SIZE, all.length - limit)} más
+            </Button>
           )}
         </div>
       </section>
@@ -632,7 +652,7 @@ function App() {
             <Dropdown.Trigger>
               <Button variant="ghost" size="sm" className="bardo-board-trigger" aria-label="Cambiar tablero">
                 <span className="bardo-board-title">{board.title}</span>
-                <span className="bardo-icon text-muted" aria-hidden="true">⌄</span>
+                <ChevronDown className={`${ICON_CLASS} text-muted`} aria-hidden="true" />
               </Button>
             </Dropdown.Trigger>
             <Dropdown.Popover placement="bottom start" className="min-w-64">
@@ -647,13 +667,16 @@ function App() {
                 </Dropdown.Section>
                 <Separator />
                 <Dropdown.Section>
-                  <Dropdown.Item id="__new__" textValue="Nuevo tablero"><Label>＋ Nuevo tablero</Label></Dropdown.Item>
+                  <Dropdown.Item id="__new__" textValue="Nuevo tablero">
+                    <Plus className={ICON_CLASS} aria-hidden="true" />
+                    <Label>Nuevo tablero</Label>
+                  </Dropdown.Item>
                 </Dropdown.Section>
               </Dropdown.Menu>
             </Dropdown.Popover>
           </Dropdown>
 
-          <Toolbar aria-label="Acciones del tablero" className="gap-1">
+          <Toolbar aria-label="Acciones del tablero">
             <Button
               variant="ghost"
               size="sm"
@@ -663,11 +686,15 @@ function App() {
                 setSearchOpen((open) => !open);
                 requestAnimationFrame(() => searchRef.current?.focus());
               }}
-            ><span className="bardo-icon" aria-hidden="true">⌕</span></Button>
+            >
+              <Magnifier className={ICON_CLASS} aria-hidden="true" />
+            </Button>
 
             <Dropdown>
               <Dropdown.Trigger>
-                <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones">•••</Button>
+                <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones">
+                  <EllipsisVertical className={ICON_CLASS} aria-hidden="true" />
+                </Button>
               </Dropdown.Trigger>
               <Dropdown.Popover placement="bottom end" className="min-w-56">
                 <Dropdown.Menu onAction={handleOptionsMenu} aria-label="Opciones del tablero">
@@ -681,7 +708,10 @@ function App() {
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown>
-            <Button variant="primary" size="sm" isIconOnly aria-label="Nueva tarea" onPress={() => openQuick()}>＋</Button>
+
+            <Button variant="primary" size="sm" isIconOnly aria-label="Nueva tarea" onPress={() => openQuick()}>
+              <Plus className={ICON_CLASS} aria-hidden="true" />
+            </Button>
           </Toolbar>
         </header>
 
@@ -769,24 +799,39 @@ function App() {
         </Tabs>
 
         <main className="bardo-desktop-board" aria-label="Tablero Kanban">
-          <div className="bardo-columns">
-            {board.columns.map(renderColumn)}
-          </div>
+          <div className="bardo-columns">{board.columns.map(renderColumn)}</div>
         </main>
       </div>
 
       <Modal>
         <Modal.Backdrop variant="blur" isOpen={quickOpen} onOpenChange={setQuickOpen}>
-          <Modal.Container placement="center" size="sm">
+          <Modal.Container placement="auto" size="sm">
             <Modal.Dialog>
               <Modal.CloseTrigger />
               <Modal.Header><Modal.Heading>Nueva tarea</Modal.Heading></Modal.Header>
-              <Modal.Body className="grid gap-4">
-                <Input autoFocus fullWidth variant="primary" value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="¿Qué hay que hacer?" maxLength={180} aria-label="Título" />
-                <HeroSelect label="Columna" value={quickStatus || board.columns[0].id} onChange={setQuickStatus} items={statusItems} />
+              <Modal.Body>
+                <Surface variant="default" className="grid gap-4" data-testid="quick-surface">
+                  <Input
+                    autoFocus
+                    fullWidth
+                    variant="secondary"
+                    value={quickTitle}
+                    onChange={(event) => setQuickTitle(event.target.value)}
+                    placeholder="¿Qué hay que hacer?"
+                    maxLength={180}
+                    aria-label="Título"
+                  />
+                  <HeroSelect
+                    label="Columna"
+                    variant="secondary"
+                    value={quickStatus || board.columns[0].id}
+                    onChange={setQuickStatus}
+                    items={statusItems}
+                  />
+                </Surface>
               </Modal.Body>
               <Modal.Footer>
-                <Button variant="ghost" onPress={() => setQuickOpen(false)}>Cancelar</Button>
+                <Button variant="secondary" onPress={() => setQuickOpen(false)}>Cancelar</Button>
                 <Button variant="primary" isDisabled={!quickTitle.trim()} onPress={submitQuick}>Crear</Button>
               </Modal.Footer>
             </Modal.Dialog>
@@ -799,14 +844,14 @@ function App() {
           setTaskOpen(open);
           if (!open) setActiveTaskId(null);
         }}>
-          <Modal.Container placement="center" size="lg" scroll="inside">
+          <Modal.Container placement="auto" size="lg" scroll="inside">
             <Modal.Dialog>
               <Modal.CloseTrigger />
               {task && (
                 <>
-                  <Modal.Header className="pr-12">
+                  <Modal.Header>
                     <Input
-                      variant="primary"
+                      variant="secondary"
                       fullWidth
                       className="bardo-task-title-field"
                       value={task.title}
@@ -816,9 +861,9 @@ function App() {
                     />
                   </Modal.Header>
                   <Modal.Body>
-                    <div className="grid gap-4">
+                    <Surface variant="default" className="grid gap-4" data-testid="task-surface">
                       <TextArea
-                        variant="primary"
+                        variant="secondary"
                         fullWidth
                         rows={4}
                         value={task.description}
@@ -828,9 +873,9 @@ function App() {
                       />
 
                       <div className="bardo-prop-grid">
-                        <HeroSelect label="Columna" value={task.status} onChange={(value) => moveTask(task.id, value)} items={statusItems} />
-                        <HeroSelect label="Responsable" value={task.assignee} onChange={(value) => updateTask(task.id, { assignee: value })} items={assigneeItems} />
-                        <HeroSelect label="Prioridad" value={task.priority} onChange={(value) => updateTask(task.id, { priority: value as Priority })} items={priorityItems} />
+                        <HeroSelect variant="secondary" label="Columna" value={task.status} onChange={(value) => moveTask(task.id, value)} items={statusItems} />
+                        <HeroSelect variant="secondary" label="Responsable" value={task.assignee} onChange={(value) => updateTask(task.id, { assignee: value })} items={assigneeItems} />
+                        <HeroSelect variant="secondary" label="Prioridad" value={task.priority} onChange={(value) => updateTask(task.id, { priority: value as Priority })} items={priorityItems} />
                       </div>
 
                       <Separator />
@@ -850,9 +895,7 @@ function App() {
                             }}
                             size="sm"
                           >
-                            <TagGroup.List>
-                              {board.tags.map((tag) => <Tag id={tag} key={tag}>{tag}</Tag>)}
-                            </TagGroup.List>
+                            <TagGroup.List>{board.tags.map((tag) => <Tag id={tag} key={tag}>{tag}</Tag>)}</TagGroup.List>
                           </TagGroup>
                         ) : <p className="text-sm text-muted">Este tablero todavía no tiene tags.</p>}
                       </section>
@@ -872,12 +915,28 @@ function App() {
                                   <span className={`min-w-0 flex-1 truncate text-sm ${item.done ? 'text-muted line-through' : ''}`}>{item.text}</span>
                                 </Checkbox.Content>
                               </Checkbox>
-                              <Button variant="ghost" size="sm" isIconOnly aria-label={`Eliminar subtarea ${item.text}`} onPress={() => removeSubtask(item.id)}>×</Button>
+                              <Button variant="ghost" size="sm" isIconOnly aria-label={`Eliminar subtarea ${item.text}`} onPress={() => removeSubtask(item.id)}>
+                                <Xmark className={ICON_CLASS} aria-hidden="true" />
+                              </Button>
                             </div>
                           ))}
                         </div>
                         <div className="flex gap-2">
-                          <Input variant="primary" fullWidth value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Añadir subtarea" maxLength={140} aria-label="Nueva subtarea" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSubtask(); } }} />
+                          <Input
+                            variant="secondary"
+                            fullWidth
+                            value={subtaskDraft}
+                            onChange={(event) => setSubtaskDraft(event.target.value)}
+                            placeholder="Añadir subtarea"
+                            maxLength={140}
+                            aria-label="Nueva subtarea"
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                addSubtask();
+                              }
+                            }}
+                          />
                           <Button variant="secondary" isDisabled={!subtaskDraft.trim()} onPress={addSubtask}>Añadir</Button>
                         </div>
                       </section>
@@ -908,16 +967,27 @@ function App() {
                           })}
                         </div>
                         <div className="grid gap-2">
-                          <TextArea variant="primary" fullWidth rows={2} value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Escribe un comentario…" maxLength={800} aria-label="Nuevo comentario" />
-                          <div className="flex justify-end"><Button variant="secondary" size="sm" isDisabled={!commentDraft.trim()} onPress={addComment}>Comentar</Button></div>
+                          <TextArea
+                            variant="secondary"
+                            fullWidth
+                            rows={2}
+                            value={commentDraft}
+                            onChange={(event) => setCommentDraft(event.target.value)}
+                            placeholder="Escribe un comentario…"
+                            maxLength={800}
+                            aria-label="Nuevo comentario"
+                          />
+                          <div className="flex justify-end">
+                            <Button variant="secondary" size="sm" isDisabled={!commentDraft.trim()} onPress={addComment}>Comentar</Button>
+                          </div>
                         </div>
                       </section>
-                    </div>
+                    </Surface>
                   </Modal.Body>
                   <Modal.Footer className="justify-between">
                     <Button variant="danger" onPress={deleteTask}>Eliminar</Button>
-                    <Toolbar aria-label="Acciones de la tarea" className="gap-2">
-                      <Button variant="ghost" onPress={duplicateTask}>Duplicar</Button>
+                    <Toolbar aria-label="Acciones de la tarea">
+                      <Button variant="secondary" onPress={duplicateTask}>Duplicar</Button>
                       <Button variant="primary" onPress={() => { setTaskOpen(false); setActiveTaskId(null); }}>Listo</Button>
                     </Toolbar>
                   </Modal.Footer>
@@ -930,17 +1000,16 @@ function App() {
 
       <Modal>
         <Modal.Backdrop variant="blur" isOpen={settingsOpen} onOpenChange={setSettingsOpen}>
-          <Modal.Container placement="center" size="lg" scroll="inside">
+          <Modal.Container placement="auto" size="lg" scroll="inside">
             <Modal.Dialog>
               <Modal.CloseTrigger />
               <Modal.Header><Modal.Heading>Tablero</Modal.Heading></Modal.Header>
               <Modal.Body>
-                <div className="grid gap-5">
-                  <TextField>
+                <Surface variant="default" className="grid gap-5" data-testid="settings-surface">
+                  <TextField variant="secondary">
                     <Label>Nombre</Label>
                     <Input
                       fullWidth
-                      variant="primary"
                       value={board.title}
                       onChange={(event) => changeState((draft) => {
                         const target = draft.boards.find((item) => item.id === draft.activeBoardId)!;
@@ -957,15 +1026,31 @@ function App() {
                         <h3 id="columns-heading" className="text-sm font-semibold">Columnas</h3>
                         <p className="mt-0.5 text-xs text-muted">{board.columns.length}/{MAX_COLUMNS} · 4 por defecto</p>
                       </div>
-                      <Button variant="secondary" size="sm" isDisabled={board.columns.length >= MAX_COLUMNS} onPress={addColumn}>＋ Columna</Button>
+                      <Button variant="secondary" size="sm" isDisabled={board.columns.length >= MAX_COLUMNS} onPress={addColumn}>
+                        <Plus className={ICON_CLASS} aria-hidden="true" />
+                        Columna
+                      </Button>
                     </div>
                     <div className="grid gap-2">
                       {board.columns.map((column, index) => (
                         <div key={column.id} className="bardo-column-setting">
-                          <Input variant="primary" fullWidth value={column.title} onChange={(event) => renameColumn(column.id, event.target.value)} maxLength={32} aria-label={`Nombre columna ${index + 1}`} />
-                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la izquierda" isDisabled={index === 0} onPress={() => moveColumn(column.id, -1)}>←</Button>
-                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la derecha" isDisabled={index === board.columns.length - 1} onPress={() => moveColumn(column.id, 1)}>→</Button>
-                          <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar columna" onPress={() => deleteColumn(column.id)}>×</Button>
+                          <Input
+                            variant="secondary"
+                            fullWidth
+                            value={column.title}
+                            onChange={(event) => renameColumn(column.id, event.target.value)}
+                            maxLength={32}
+                            aria-label={`Nombre columna ${index + 1}`}
+                          />
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la izquierda" isDisabled={index === 0} onPress={() => moveColumn(column.id, -1)}>
+                            <ArrowLeft className={ICON_CLASS} aria-hidden="true" />
+                          </Button>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Mover columna a la derecha" isDisabled={index === board.columns.length - 1} onPress={() => moveColumn(column.id, 1)}>
+                            <ArrowRight className={ICON_CLASS} aria-hidden="true" />
+                          </Button>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Eliminar columna" onPress={() => deleteColumn(column.id)}>
+                            <Xmark className={ICON_CLASS} aria-hidden="true" />
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -990,7 +1075,21 @@ function App() {
                       </TagGroup.List>
                     </TagGroup>
                     <div className="flex gap-2">
-                      <Input variant="primary" fullWidth value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} maxLength={24} placeholder="Nuevo tag" aria-label="Nuevo tag" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTag(); } }} />
+                      <Input
+                        variant="secondary"
+                        fullWidth
+                        value={tagDraft}
+                        onChange={(event) => setTagDraft(event.target.value)}
+                        maxLength={24}
+                        placeholder="Nuevo tag"
+                        aria-label="Nuevo tag"
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            addTag();
+                          }
+                        }}
+                      />
                       <Button variant="secondary" isDisabled={!tagDraft.trim() || board.tags.length >= MAX_TAGS} onPress={addTag}>Añadir</Button>
                     </div>
                   </section>
@@ -1003,21 +1102,21 @@ function App() {
                         <p className="mt-0.5 text-xs text-muted">{board.tasks.length.toLocaleString('es-CL')} tareas en este tablero.</p>
                       </div>
                     </div>
-                    <Toolbar aria-label="Herramientas QA" className="flex-wrap gap-1">
-                      <Button variant="ghost" size="sm" onPress={() => addStress(250)}>+250 tareas</Button>
-                      <Button variant="ghost" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button>
-                      <Button variant="ghost" size="sm" onPress={runSelfTest}>Autoprueba</Button>
-                      <Button variant="ghost" size="sm" onPress={clearBoard}>Vaciar</Button>
+                    <Toolbar aria-label="Herramientas QA" className="flex-wrap">
+                      <Button variant="secondary" size="sm" onPress={() => addStress(250)}>+250 tareas</Button>
+                      <Button variant="secondary" size="sm" onPress={() => addStress(1000)}>+1000 tareas</Button>
+                      <Button variant="secondary" size="sm" onPress={runSelfTest}>Autoprueba</Button>
+                      <Button variant="secondary" size="sm" onPress={clearBoard}>Vaciar</Button>
                       <Button variant="danger" size="sm" onPress={resetMocks}>Restablecer mocks</Button>
                     </Toolbar>
                     {selfTestText && <pre className="bardo-qa-result">{selfTestText}</pre>}
                   </section>
-                </div>
+                </Surface>
               </Modal.Body>
-              <Modal.Footer className="flex-wrap justify-between gap-2">
+              <Modal.Footer className="flex-wrap justify-between">
                 <Button variant="danger" onPress={deleteBoard}>Eliminar tablero</Button>
-                <Toolbar aria-label="Acciones del tablero" className="gap-2">
-                  <Button variant="ghost" onPress={duplicateBoard}>Duplicar</Button>
+                <Toolbar aria-label="Acciones del tablero">
+                  <Button variant="secondary" onPress={duplicateBoard}>Duplicar</Button>
                   <Button variant="primary" onPress={() => setSettingsOpen(false)}>Listo</Button>
                 </Toolbar>
               </Modal.Footer>
