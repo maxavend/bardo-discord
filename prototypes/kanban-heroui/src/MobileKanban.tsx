@@ -41,6 +41,7 @@ type Props = {
 const LONG_PRESS_MS = 420;
 const CANCEL_DISTANCE = 10;
 const COLUMN_SWIPE_STEP = 92;
+const PROGRAMMATIC_SCROLL_GUARD_MS = 420;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -60,6 +61,8 @@ export function MobileKanban({
   const dragRef = useRef<MobileDrag | null>(null);
   const suppressClickRef = useRef(false);
   const scrollFrameRef = useRef<number | null>(null);
+  const programmaticColumnRef = useRef<string | null>(null);
+  const programmaticReleaseRef = useRef<number | null>(null);
   const [drag, setDrag] = useState<MobileDrag | null>(null);
   const columnSignature = columns.map((column) => column.id).join('|');
 
@@ -68,11 +71,28 @@ export function MobileKanban({
     setDrag(next);
   };
 
+  const releaseProgrammaticScroll = () => {
+    programmaticColumnRef.current = null;
+    if (programmaticReleaseRef.current !== null) {
+      window.clearTimeout(programmaticReleaseRef.current);
+      programmaticReleaseRef.current = null;
+    }
+  };
+
+  const guardProgrammaticScroll = (columnId: string, behavior: ScrollBehavior) => {
+    programmaticColumnRef.current = columnId;
+    if (programmaticReleaseRef.current !== null) window.clearTimeout(programmaticReleaseRef.current);
+    programmaticReleaseRef.current = window.setTimeout(
+      releaseProgrammaticScroll,
+      behavior === 'smooth' ? PROGRAMMATIC_SCROLL_GUARD_MS : 80,
+    );
+  };
+
   const scrollPillIntoView = (columnId: string) => {
     const rail = pillRailRef.current;
     if (!rail) return;
     const pill = rail.querySelector<HTMLElement>(`[data-drop-column-id="${CSS.escape(columnId)}"]`);
-    pill?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    pill?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
   };
 
   const scrollToColumn = (columnId: string, behavior: ScrollBehavior = 'smooth') => {
@@ -80,6 +100,7 @@ export function MobileKanban({
     if (!carousel) return;
     const slide = carousel.querySelector<HTMLElement>(`[data-mobile-column-id="${CSS.escape(columnId)}"]`);
     if (!slide) return;
+    guardProgrammaticScroll(columnId, behavior);
     carousel.scrollTo({ left: slide.offsetLeft, behavior });
     scrollPillIntoView(columnId);
   };
@@ -100,6 +121,7 @@ export function MobileKanban({
     const pending = pendingPressRef.current;
     if (pending) window.clearTimeout(pending.timer);
     if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+    if (programmaticReleaseRef.current !== null) window.clearTimeout(programmaticReleaseRef.current);
     document.body.removeAttribute('data-kanban-moving');
   }, []);
 
@@ -230,6 +252,14 @@ export function MobileKanban({
       scrollFrameRef.current = null;
       const carousel = carouselRef.current;
       if (!carousel) return;
+
+      const guardedColumnId = programmaticColumnRef.current;
+      if (guardedColumnId) {
+        const guardedSlide = carousel.querySelector<HTMLElement>(`[data-mobile-column-id="${CSS.escape(guardedColumnId)}"]`);
+        if (guardedSlide && Math.abs(carousel.scrollLeft - guardedSlide.offsetLeft) <= 2) releaseProgrammaticScroll();
+        return;
+      }
+
       const viewportLeft = carousel.getBoundingClientRect().left;
       const slides = Array.from(carousel.querySelectorAll<HTMLElement>('[data-mobile-column-id]'));
       let nearest: { id: string; distance: number } | null = null;
