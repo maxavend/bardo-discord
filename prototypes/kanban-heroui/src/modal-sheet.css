@@ -1,4 +1,11 @@
 @media (max-width: 47.999rem) {
+  /* HeroUI may animate the dialog's containing box; keep mobile sheets viewport-relative. */
+  :has(> [role="dialog"]) {
+    transform: none !important;
+    translate: 0 0 !important;
+    scale: 1 !important;
+  }
+
   /* Mobile dialogs are viewport-anchored sheets, not centered desktop cards. */
   [role="dialog"] {
     position: fixed !important;
