@@ -1,7 +1,10 @@
 status=success
 worker=bardo-discord
+worker_origin=https://bardo-discord.bardo-discord.workers.dev
+expected_activity_build=docs-current-document-only-v1
+origin_verification=success
 branch=module/bardo-docs
-source_commit=6e6981cd6781f1895b55d6011eebe8a12b56a160
+source_commit=0c351e45543e5f7a56f24917593973fe84c744ea
 credentials=success
 root_dependencies=success
 tests=success
@@ -18,4 +21,4 @@ docs_after=15
 legacy_command=doc
 legacy_message_ids=preserved
 delete_behavior=soft_archive
-deployed_at=2026-08-23T20:40:01Z
+deployed_at=2026-08-23T20:49:33Z
