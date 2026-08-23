@@ -162,19 +162,125 @@ test('desktop: stress adds one thousand tasks and self-test remains green', asyn
   expect(errors).toEqual([]);
 });
 
-test('mobile: exposes one column at a time and quick create stays reachable', async ({ page }, testInfo) => {
+test('mobile: pill navigation is single-axis, readable and shows the next column peek', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
   const errors = await openApp(page);
 
-  const visibleColumn = page.locator('.bardo-mobile-panel:visible .bardo-column');
-  await expect(visibleColumn).toHaveCount(1);
-  await page.getByRole('tab', { name: /^Por hacer/ }).click();
-  await expect(page.locator('.bardo-mobile-panel:visible .bardo-column h2')).toHaveText('Por hacer');
-  await expect(visibleColumn).toHaveCount(1);
+  const carousel = page.getByTestId('mobile-column-carousel');
+  await expect(carousel).toBeVisible();
+  const pills = page.getByRole('tab');
+  await expect(pills.first()).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const rail = document.querySelector<HTMLElement>('.bardo-column-pill-rail')!;
+    const carousel = document.querySelector<HTMLElement>('[data-testid="mobile-column-carousel"]')!;
+    const slides = Array.from(document.querySelectorAll<HTMLElement>('.bardo-mobile-column-slide'));
+    const labels = Array.from(document.querySelectorAll<HTMLElement>('.bardo-column-pill-label'));
+    const first = slides[0].getBoundingClientRect();
+    const second = slides[1].getBoundingClientRect();
+    const viewport = carousel.getBoundingClientRect();
+    return {
+      railOverflowY: getComputedStyle(rail).overflowY,
+      railClientHeight: rail.clientHeight,
+      railScrollHeight: rail.scrollHeight,
+      labelsUnclipped: labels.every((label) => getComputedStyle(label).textOverflow === 'clip' && getComputedStyle(label).whiteSpace === 'nowrap'),
+      firstWidth: first.width,
+      viewportWidth: viewport.width,
+      secondLeft: second.left,
+      viewportRight: viewport.right,
+      scrollSnapType: getComputedStyle(carousel).scrollSnapType,
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+
+  expect(metrics.railOverflowY).toBe('hidden');
+  expect(metrics.railScrollHeight).toBeLessThanOrEqual(metrics.railClientHeight + 1);
+  expect(metrics.labelsUnclipped).toBe(true);
+  expect(metrics.firstWidth).toBeLessThan(metrics.viewportWidth - 20);
+  expect(metrics.firstWidth).toBeGreaterThan(metrics.viewportWidth * 0.78);
+  expect(metrics.secondLeft).toBeLessThan(metrics.viewportRight);
+  expect(metrics.scrollSnapType).toContain('x mandatory');
+  expect(metrics.pageOverflow).toBeLessThanOrEqual(1);
+
+  const nextPill = page.getByRole('tab', { name: /^Por hacer/ });
+  await nextPill.click();
+  await expect(nextPill).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(async () => carousel.evaluate((element) => element.scrollLeft)).toBeGreaterThan(20);
 
   await page.getByLabel('Nueva tarea').click();
   await expect(page.getByRole('heading', { name: 'Nueva tarea' })).toBeVisible();
   await expect(page.getByLabel('Título')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('mobile: carousel scrolling updates the active pill', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  const errors = await openApp(page);
+  const carousel = page.getByTestId('mobile-column-carousel');
+
+  await carousel.evaluate((element) => {
+    const second = element.querySelectorAll<HTMLElement>('[data-mobile-column-id]')[1];
+    element.scrollTo({ left: second.offsetLeft, behavior: 'auto' });
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
+
+  await expect(page.getByRole('tab', { name: /^Por hacer/ })).toHaveAttribute('aria-selected', 'true');
+  expect(errors).toEqual([]);
+});
+
+test('mobile: long press and horizontal drag moves a card to the next column', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  const errors = await openApp(page);
+
+  const carousel = page.getByTestId('mobile-column-carousel');
+  const firstSlide = page.locator('.bardo-mobile-column-slide').first();
+  const card = firstSlide.locator('.bardo-task-card').first();
+  const taskId = await card.getAttribute('data-task-id');
+  expect(taskId).toBeTruthy();
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  const startX = Math.round(box!.x + Math.min(box!.width / 2, 120));
+  const startY = Math.round(box!.y + Math.min(box!.height / 2, 48));
+  const pointerId = 17;
+
+  await card.dispatchEvent('pointerdown', {
+    pointerId,
+    pointerType: 'touch',
+    isPrimary: true,
+    button: 0,
+    clientX: startX,
+    clientY: startY,
+  });
+  await page.waitForTimeout(460);
+  await expect(page.getByTestId('mobile-drag-ghost')).toBeVisible();
+
+  await carousel.dispatchEvent('pointermove', {
+    pointerId,
+    pointerType: 'touch',
+    isPrimary: true,
+    button: 0,
+    clientX: startX + 110,
+    clientY: startY,
+  });
+  await expect(page.getByTestId('mobile-drag-ghost')).toContainText('Mover a Por hacer');
+
+  await carousel.dispatchEvent('pointerup', {
+    pointerId,
+    pointerType: 'touch',
+    isPrimary: true,
+    button: 0,
+    clientX: startX + 110,
+    clientY: startY,
+  });
+  await expect(page.getByTestId('mobile-drag-ghost')).toHaveCount(0);
+
+  await expect.poll(async () => page.evaluate(({ key, id }) => {
+    const state = JSON.parse(localStorage.getItem(key) || 'null');
+    const board = state?.boards?.find((item: { id: string }) => item.id === state.activeBoardId);
+    const task = board?.tasks?.find((item: { id: string }) => item.id === id);
+    return task?.status === board?.columns?.[1]?.id;
+  }, { key: STORAGE, id: taskId })).toBe(true);
+  await expect(page.getByRole('tab', { name: /^Por hacer/ })).toHaveAttribute('aria-selected', 'true');
   expect(errors).toEqual([]);
 });
 
@@ -187,14 +293,14 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
     const search = document.querySelector<HTMLElement>('button[aria-label="Buscar"]');
     const create = document.querySelector<HTMLElement>('button[aria-label="Nueva tarea"]');
     const svgs = [action, search, create].map((button) => button?.querySelector<SVGElement>('svg'));
-    const tabs = Array.from(document.querySelectorAll<HTMLElement>('.bardo-mobile-tabs [role="tab"]'));
+    const pills = Array.from(document.querySelectorAll<HTMLElement>('.bardo-column-pill'));
     return {
       actionBox: action ? [action.getBoundingClientRect().width, action.getBoundingClientRect().height] : [0, 0],
       searchBox: search ? [search.getBoundingClientRect().width, search.getBoundingClientRect().height] : [0, 0],
       createBox: create ? [create.getBoundingClientRect().width, create.getBoundingClientRect().height] : [0, 0],
       svgBoxes: svgs.map((svg) => svg ? [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height] : [0, 0]),
       buttonText: [action, search, create].map((button) => button?.textContent?.trim() ?? ''),
-      noWrappedTabs: tabs.every((tab) => tab.getBoundingClientRect().height <= 48),
+      pillRadii: pills.map((pill) => Number.parseFloat(getComputedStyle(pill).borderRadius)),
       pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
@@ -206,7 +312,7 @@ test('mobile: HeroUI owns icon field and modal rendering', async ({ page }, test
     expect(height).toBeCloseTo(16, 0);
   }
   expect(geometry.buttonText).toEqual(['', '', '']);
-  expect(geometry.noWrappedTabs).toBe(true);
+  expect(geometry.pillRadii.every((radius) => radius >= 16)).toBe(true);
   expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
 
   await page.getByLabel('Nueva tarea').click();
