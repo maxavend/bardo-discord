@@ -10,6 +10,22 @@ function readStore() {
   }
 }
 
+function readLastOpenedId() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAST_OPENED_KEY) || 'null');
+    return typeof parsed?.id === 'string' && parsed.id.trim() ? parsed.id.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function documentIdFromHash() {
+  const hash = decodeURIComponent(location.hash.replace(/^#/, ''));
+  if (hash.startsWith('doc-')) return hash.slice(4) || null;
+  if (hash.startsWith('edit-')) return hash.slice(5) || null;
+  return null;
+}
+
 function forceDocumentRoute(documentId) {
   if (!documentId) return;
   const encoded = encodeURIComponent(documentId);
@@ -43,48 +59,32 @@ function installDocumentOnlyGuard(documentId) {
   enforceRoute();
 }
 
-async function resolveContextDocument(instanceId) {
-  const response = await fetch(`/api/activity-context/${encodeURIComponent(instanceId)}`, {
-    headers:{Accept:'application/json'},
-    cache:'no-store',
-  });
-  if (!response.ok) throw new Error(`activity-context HTTP ${response.status}`);
-  const payload = await response.json();
-  return typeof payload?.documentId === 'string' && payload.documentId.trim() ? payload.documentId.trim() : null;
-}
-
 export async function activateBardoDocumentOnlyMode() {
   if (!window.__BARDO_PRODUCTION__) return {active:false, ready:true, documentId:null};
 
-  const instanceId = window.__BARDO_INSTANCE_ID__;
   window.__BARDO_DOCUMENT_ONLY__ = true;
 
-  if (!instanceId) {
-    installDocumentOnlyGuard(null);
-    return {active:true, ready:false, documentId:null, message:'Abre un documento desde un mensaje de Bardo en Discord.'};
-  }
-
-  let documentId = null;
-  try {
-    documentId = await resolveContextDocument(instanceId);
-  } catch (error) {
-    console.warn('Bardo Docs: no se pudo resolver el documento de la Activity', error);
-  }
+  // The authenticated /api/docs hydration is the source of truth. It resolves
+  // the document from a signed Discord launch intent (or custom_id when present)
+  // and writes the resulting route/LAST_OPENED state before this guard runs.
+  const store = readStore();
+  const candidates = [
+    window.__BARDO_DOCUMENT_ID__,
+    documentIdFromHash(),
+    readLastOpenedId(),
+  ].filter(Boolean);
+  const documentId = candidates.find(id => store?.docs?.some(doc => doc.id === id)) || null;
 
   window.__BARDO_DOCUMENT_ID__ = documentId;
   installDocumentOnlyGuard(documentId);
 
   if (!documentId) {
-    return {active:true, ready:false, documentId:null, message:'No pudimos identificar el documento de este mensaje.'};
-  }
-
-  // Never prune or rewrite the production document collection here. The
-  // production bridge owns D1 synchronization; document-only mode only
-  // controls which route/UI is reachable.
-  const store = readStore();
-  const current = store?.docs?.find(doc => doc.id === documentId) || null;
-  if (!current) {
-    return {active:true, ready:false, documentId, message:'No pudimos cargar este documento. Cierra esta vista y vuelve a abrirlo desde el mensaje.'};
+    return {
+      active:true,
+      ready:false,
+      documentId:null,
+      message:'No pudimos cargar el documento compartido en este servidor.',
+    };
   }
 
   try {
