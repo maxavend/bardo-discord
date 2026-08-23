@@ -5,6 +5,7 @@ import App from './App.jsx';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord} from './production-discord-auth.js';
 import {activateBardoDocumentOnlyMode} from './production-document-only.js';
+import {installProductionImportNormalizer} from './production-import-normalizer.js';
 import '@fontsource-variable/inter';
 import './styles.css';
 import './theme.css';
@@ -42,6 +43,7 @@ if (discordAuth.embedded && !discordAuth.ready) {
     message:discordAuth.message || 'No pudimos autenticar tu sesión de Discord.',
   };
 } else {
+  if (discordAuth.embedded) installProductionImportNormalizer();
   await prepareBardoProduction();
   productionState = await activateBardoDocumentOnlyMode();
 }
