@@ -52,6 +52,12 @@ jobs:
           grep -q '<div id="root"></div>' prototypes/docs-app/dist/index.html
           test -f prototypes/docs-app/dist/_headers
 
+      - name: Install Chromium for E2E
+        run: npx --prefix prototypes/docs-app playwright install --with-deps chromium
+
+      - name: Mobile E2E regression gate
+        run: npm run test:e2e --prefix prototypes/docs-app
+
       - name: Ensure Pages project exists
         shell: bash
         run: |
@@ -78,6 +84,7 @@ jobs:
           url=https://bardo-docs.pages.dev
           branch=module/bardo-docs
           stack=react-vite-heroui
+          qa=playwright-mobile
           source_commit=$GITHUB_SHA
           deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
