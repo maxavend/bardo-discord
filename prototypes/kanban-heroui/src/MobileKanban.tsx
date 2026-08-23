@@ -61,6 +61,7 @@ export function MobileKanban({
   const suppressClickRef = useRef(false);
   const scrollFrameRef = useRef<number | null>(null);
   const [drag, setDrag] = useState<MobileDrag | null>(null);
+  const columnSignature = columns.map((column) => column.id).join('|');
 
   const setDragState = (next: MobileDrag | null) => {
     dragRef.current = next;
@@ -91,9 +92,9 @@ export function MobileKanban({
   useEffect(() => {
     const id = requestAnimationFrame(() => scrollToColumn(activeColumnId, 'auto'));
     return () => cancelAnimationFrame(id);
-    // We intentionally only reset position when the column set changes.
+    // Reset only when the board's column structure changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns]);
+  }, [columnSignature]);
 
   useEffect(() => () => {
     const pending = pendingPressRef.current;
@@ -178,8 +179,11 @@ export function MobileKanban({
     const originIndex = columns.findIndex((column) => column.id === currentDrag.originColumnId);
     const dx = event.clientX - currentDrag.startX;
     const inferredIndex = clamp(originIndex + Math.round(dx / COLUMN_SWIPE_STEP), 0, columns.length - 1);
+    const inferredColumnId = columns[inferredIndex]?.id ?? currentDrag.originColumnId;
     const pointColumnId = resolveColumnFromPoint(event.clientX, event.clientY);
-    const nextTarget = pointColumnId ?? columns[inferredIndex]?.id ?? currentDrag.originColumnId;
+    const nextTarget = pointColumnId && pointColumnId !== currentDrag.originColumnId
+      ? pointColumnId
+      : inferredColumnId;
     const next: MobileDrag = {
       ...currentDrag,
       x: event.clientX,
