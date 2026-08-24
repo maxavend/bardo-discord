@@ -1,0 +1,1 @@
+Trigger exact materialized Bardo Activity deployment and Discord application configuration diagnostic after repeated button timeout.
