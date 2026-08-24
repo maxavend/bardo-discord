@@ -1,0 +1,65 @@
+name: Deploy Bardo fast Activity launch fix
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/deploy-bardo-fast-launch-fix.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-bardo-fast-launch-fix
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_ORIGIN: https://bardo-discord.bardo-discord.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Apply production Worker patch
+        run: |
+          node scripts/apply-production-worker.mjs src/worker.js
+          grep -q "persistLaunchContext" src/worker.js
+          grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
+          node --check src/worker.js
+
+      - name: Run tests
+        run: npm test
+
+      - name: Deploy Worker
+        run: npx --yes wrangler@4.124.0 deploy --keep-vars
+
+      - name: Verify live origin
+        run: |
+          set -euo pipefail
+          curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?fast-launch=$GITHUB_SHA" -o /tmp/live.html
+          grep -q 'docs-current-document-only-v1' /tmp/live.html
+
+      - name: Record status
+        if: always()
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/bardo-fast-launch-status.txt <<EOF
+          source_commit=$GITHUB_SHA
+          completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-fast-launch-status.txt
+          git commit -m "chore(docs): record fast Activity launch deploy [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
