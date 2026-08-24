@@ -201,3 +201,4 @@ jobs:
           git push origin HEAD:module/bardo-docs || true
 
 # Forced rerun for native Activity launch restoration 2026-08-24
+# Explicit deployment requested by user 2026-08-24T09:39-04:00
