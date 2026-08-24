@@ -209,6 +209,29 @@ export async function grantDocumentGuildAccess(db, documentId, guildId, addedBy 
     .run();
 }
 
+export async function adoptLegacyDocumentsForGuild(db, guildId, userId = null) {
+  if (!db || !guildId) return 0;
+  const addedAt = new Date().toISOString();
+  try {
+    const res = await db
+      .prepare(
+        `INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by)
+         SELECT d.id, ?, ?, ?
+         FROM documents d
+         WHERE d.archived_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id
+           )`,
+      )
+      .bind(guildId, addedAt, userId)
+      .run();
+    return res?.meta?.changes || 0;
+  } catch (error) {
+    console.error('Error adopting legacy documents for guild:', error);
+    return 0;
+  }
+}
+
 export async function documentHasGuildAccess(db, documentId, guildId) {
   if (!documentId || !guildId) return false;
   const row = await db

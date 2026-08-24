@@ -1,7 +1,0 @@
-status=failure
-sole_guild_check=failure
-legacy_before=unknown
-legacy_after=unknown
-recovered=unknown
-source_commit=52bcdf049adb943676bae9a1e420e5c41ffb4447
-checked_at=2026-08-24T01:43:13Z

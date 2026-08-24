@@ -2,6 +2,7 @@ import { requireDocsSession } from './discord-auth.js';
 import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
+  adoptLegacyDocumentsForGuild,
   archiveDocument,
   cacheNormalizedDocument,
   documentHasGuildAccess,
@@ -91,36 +92,33 @@ function parsePath(pathname) {
 }
 
 async function soleAuthenticatedGuild(env) {
-  const row = await env.DB
-    .prepare('SELECT COUNT(DISTINCT guild_id) AS guild_count, MIN(guild_id) AS guild_id FROM docs_sessions')
-    .first();
-  return Number(row?.guild_count || 0) === 1 ? row.guild_id || null : null;
+  try {
+    const row = await env.DB
+      .prepare('SELECT COUNT(DISTINCT guild_id) AS guild_count, MIN(guild_id) AS guild_id FROM docs_sessions')
+      .first();
+    return Number(row?.guild_count || 0) === 1 ? row.guild_id || null : null;
+  } catch {
+    return null;
+  }
 }
 
 async function adoptLegacyLibraryIfSafe(env, session) {
   if (!env.DB || !session?.guildId) return false;
 
-  const accessSummary = await env.DB
-    .prepare('SELECT COUNT(*) AS count FROM document_guild_access')
-    .first();
-  if (Number(accessSummary?.count || 0) > 0) return false;
+  try {
+    const accessSummary = await env.DB
+      .prepare('SELECT COUNT(*) AS count FROM document_guild_access')
+      .first();
+    if (Number(accessSummary?.count || 0) > 0) return false;
 
-  const onlyGuild = await soleAuthenticatedGuild(env);
-  if (!onlyGuild || onlyGuild !== session.guildId) return false;
+    const onlyGuild = await soleAuthenticatedGuild(env);
+    if (!onlyGuild || onlyGuild !== session.guildId) return false;
 
-  const addedAt = new Date().toISOString();
-  await env.DB
-    .prepare(`INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by)
-      SELECT d.id, ?, ?, ?
-      FROM documents d
-      WHERE d.archived_at IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id
-        )`)
-    .bind(session.guildId, addedAt, session.userId || null)
-    .run();
-
-  return true;
+    await adoptLegacyDocumentsForGuild(env.DB, session.guildId, session.userId || null);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function requireDocumentAccess(env, documentId, guildId) {

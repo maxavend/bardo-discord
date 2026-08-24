@@ -1,2 +1,0 @@
-Run emergency Bardo Docs deployment and capture live Discord Activity configuration after repeated Mostrar más timeout.
-Rerun after updating worker tests for inline LAUNCH_ACTIVITY.

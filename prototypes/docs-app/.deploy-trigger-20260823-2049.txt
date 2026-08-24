@@ -1,1 +1,0 @@
-Trigger production deployment after configuring DISCORD_CLIENT_SECRET.

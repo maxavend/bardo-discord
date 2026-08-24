@@ -1,1 +1,0 @@
-Trigger production deploy after restoring native Discord Activity launch on Mostrar más. Validate tests, current D1 migrations, Worker deploy, live health, and inline LAUNCH_ACTIVITY response. Requested 2026-08-24.

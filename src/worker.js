@@ -12,6 +12,7 @@ import { handleDocsApi } from './docs-api.js';
 import { handleDiscordAuthApi } from './discord-auth.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
 import {
+  adoptLegacyDocumentsForGuild,
   cacheNormalizedDocument,
   grantDocumentGuildAccess,
   loadActivityContext,
@@ -262,14 +263,7 @@ async function handleComponentInteraction(interaction, env, ctx) {
       }
 
       if (interaction.guild_id) {
-        const accessSummary = await env.DB.prepare('SELECT COUNT(*) AS count FROM document_guild_access').first();
-        if (Number(accessSummary?.count || 0) === 0) {
-          const legacyAddedAt = new Date().toISOString();
-          await env.DB.prepare('INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by) SELECT d.id, ?, ?, ? FROM documents d WHERE d.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id)')
-            .bind(interaction.guild_id, legacyAddedAt, invokingUserId)
-            .run();
-        }
-
+        await adoptLegacyDocumentsForGuild(env.DB, interaction.guild_id, invokingUserId);
         await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);
         await saveDocsLaunchIntent(env.DB, invokingUserId, interaction.guild_id, documentId);
       }

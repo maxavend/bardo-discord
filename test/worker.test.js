@@ -14,51 +14,137 @@ function signBody(privateKey, timestamp, body) {
   return sign(null, message, privateKey).toString('hex');
 }
 
-function createReadDb(documentId = 'doc-123') {
+function createMockDb(initialDocs = []) {
+  const documents = new Map();
+  const guildAccess = new Map();
+  const launchIntents = new Map();
+  const sessions = new Map();
   const activityContexts = new Map([
     ['inst-123', { instance_id: 'inst-123', document_id: 'doc-123', created_at: '2026-08-19T12:00:00.000Z' }],
   ]);
 
+  for (const doc of initialDocs) {
+    documents.set(doc.id, doc);
+  }
+
   return {
+    documents,
+    guildAccess,
+    launchIntents,
+    sessions,
     activityContexts,
     prepare(query) {
       return {
         bind(...params) {
           return {
             async first() {
-              if (query.includes('FROM documents')) {
+              if (query.includes('FROM documents WHERE id = ?')) {
                 const [id] = params;
-                if (id !== documentId) return null;
+                const doc = documents.get(id);
+                if (!doc) return null;
                 return {
-                  id: documentId,
-                  title: 'Documento Test',
-                  original_markdown: '# Documento Test\n\nContenido completo',
-                  pages: JSON.stringify(['Contenido completo']),
-                  source_name: 'test.md',
-                  created_at: '2026-08-19T12:00:00.000Z',
-                  created_by: 'user-1',
+                  id: doc.id,
+                  title: doc.title,
+                  description: doc.description || '',
+                  original_markdown: doc.original_markdown || doc.originalMarkdown,
+                  pages: JSON.stringify(doc.pages || ['']),
+                  source_name: doc.source_name || doc.sourceName || null,
+                  created_at: doc.created_at || doc.createdAt || '2026-08-19T12:00:00.000Z',
+                  updated_at: doc.updated_at || doc.updatedAt || '2026-08-19T12:00:00.000Z',
+                  created_by: doc.created_by || doc.createdBy || 'user-1',
+                  source_mime: null,
+                  source_type: 'markdown',
+                  import_status: 'ready',
+                  has_source: 0,
                 };
               }
               if (query.includes('FROM activity_contexts')) {
                 const [instanceId] = params;
                 return activityContexts.get(instanceId) || null;
               }
+              if (query.includes('FROM document_guild_access WHERE document_id = ? AND guild_id = ?')) {
+                const [docId, guildId] = params;
+                const key = `${docId}:${guildId}`;
+                return guildAccess.has(key) ? { allowed: 1 } : null;
+              }
+              if (query.includes('FROM docs_sessions WHERE token_hash = ?')) {
+                const [hash] = params;
+                return sessions.get(hash) || null;
+              }
+              if (query.includes('FROM docs_launch_intents')) {
+                const [userId, guildId] = params;
+                const key = `${userId}:${guildId}`;
+                return launchIntents.get(key) || null;
+              }
               if (query.includes('COUNT(*) AS count FROM document_guild_access')) {
-                return { count: 1 };
+                return { count: guildAccess.size };
               }
               return null;
             },
-            async run() {
-              if (query.includes('INSERT INTO activity_contexts')) {
-                const [instance_id, document_id, created_at] = params;
-                activityContexts.set(instance_id, {
-                  instance_id,
-                  document_id,
-                  created_at,
-                });
-                return { success: true };
+            async all() {
+              if (query.includes('FROM documents d') && query.includes('INNER JOIN document_guild_access a')) {
+                const [guildId] = params;
+                const results = [];
+                for (const [key, access] of guildAccess.entries()) {
+                  if (access.guild_id === guildId) {
+                    const doc = documents.get(access.document_id);
+                    if (doc && !doc.archived_at) {
+                      results.push({
+                        id: doc.id,
+                        title: doc.title,
+                        description: doc.description || '',
+                        original_markdown: doc.original_markdown || doc.originalMarkdown,
+                        pages: JSON.stringify(doc.pages || []),
+                        source_name: doc.source_name || doc.sourceName || null,
+                        created_at: doc.created_at || doc.createdAt,
+                        updated_at: doc.updated_at || doc.updatedAt,
+                        created_by: doc.created_by || doc.createdBy,
+                        source_mime: null,
+                        source_type: 'markdown',
+                        import_status: 'ready',
+                        has_source: 0,
+                      });
+                    }
+                  }
+                }
+                return { results };
               }
-              return { success: true };
+              return { results: [] };
+            },
+            async run() {
+              if (query.includes('INSERT INTO documents')) {
+                const [id, title, original_markdown, pages, source_name, created_at, created_by] = params;
+                documents.set(id, { id, title, original_markdown, pages, source_name, created_at, created_by });
+                return { meta: { changes: 1 } };
+              }
+              if (query.includes('INSERT INTO document_guild_access')) {
+                if (query.includes('SELECT d.id, ?')) {
+                  const [guildId, addedAt, addedBy] = params;
+                  let count = 0;
+                  for (const [docId, doc] of documents.entries()) {
+                    const key = `${docId}:${guildId}`;
+                    if (!guildAccess.has(key)) {
+                      guildAccess.set(key, { document_id: docId, guild_id: guildId, added_at: addedAt, added_by: addedBy });
+                      count += 1;
+                    }
+                  }
+                  return { meta: { changes: count } };
+                }
+                const [document_id, guild_id, added_at, added_by] = params;
+                guildAccess.set(`${document_id}:${guild_id}`, { document_id, guild_id, added_at, added_by });
+                return { meta: { changes: 1 } };
+              }
+              if (query.includes('INSERT INTO docs_launch_intents')) {
+                const [user_id, guild_id, document_id, created_at] = params;
+                launchIntents.set(`${user_id}:${guild_id}`, { user_id, guild_id, document_id, created_at });
+                return { meta: { changes: 1 } };
+              }
+              if (query.includes('INSERT INTO docs_sessions')) {
+                const [token_hash, user_id, guild_id, username, avatar, created_at, expires_at] = params;
+                sessions.set(token_hash, { token_hash, user_id, guild_id, username, avatar, created_at, expires_at });
+                return { meta: { changes: 1 } };
+              }
+              return { meta: { changes: 1 } };
             },
           };
         },
@@ -106,9 +192,100 @@ test('Worker responde a PING con PONG', async () => {
   assert.equal(json.type, 1);
 });
 
+test('Worker responde inmediatamente con DEFERRED (type 5) para comando /doc', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const interactionPayload = {
+    type: 2,
+    id: 'cmd-interaction-1',
+    token: 'token-cmd-1',
+    application_id: '1539704001535156254',
+    guild_id: 'guild-123',
+    member: { user: { id: 'user-123' } },
+    data: {
+      name: 'doc',
+      options: [{ name: 'archivo', value: 'att-1' }],
+      resolved: {
+        attachments: {
+          'att-1': {
+            id: 'att-1',
+            filename: 'documento.md',
+            size: 250,
+            url: 'https://example.com/test.md',
+          },
+        },
+      },
+    },
+  };
+
+  const body = JSON.stringify(interactionPayload);
+  const signature = signBody(privateKey, timestamp, body);
+  let backgroundTask = null;
+
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const env = { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() };
+  const res = await worker.fetch(req, env, {
+    waitUntil(p) { backgroundTask = p; },
+  });
+
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 5); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+  assert.ok(backgroundTask instanceof Promise);
+});
+
+test('Worker responde con error ephemeral si /doc no tiene archivo adjunto', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const interactionPayload = {
+    type: 2,
+    id: 'cmd-interaction-2',
+    token: 'token-cmd-2',
+    data: {
+      name: 'doc',
+      options: [],
+    },
+  };
+
+  const body = JSON.stringify(interactionPayload);
+  const signature = signBody(privateKey, timestamp, body);
+
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const env = { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() };
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 4); // CHANNEL_MESSAGE_WITH_SOURCE
+  assert.match(json.data.content, /archivo/);
+});
+
 test('Worker expone el documento completo para el lector embebido', async () => {
+  const db = createMockDb([{
+    id: 'doc-123',
+    title: 'Documento Test',
+    original_markdown: '# Documento Test\n\nContenido completo',
+    pages: ['Contenido completo'],
+  }]);
   const req = new Request('http://localhost/api/documents/doc-123', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: db };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -121,8 +298,13 @@ test('Worker expone el documento completo para el lector embebido', async () => 
 });
 
 test('Worker normaliza bardo:open: también en la API de documentos', async () => {
+  const db = createMockDb([{
+    id: 'doc-123',
+    title: 'Documento Test',
+    original_markdown: '# Documento Test\n\nContenido completo',
+  }]);
   const req = new Request('http://localhost/api/documents/bardo%3Aopen%3Adoc-123', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: db };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -131,8 +313,13 @@ test('Worker normaliza bardo:open: también en la API de documentos', async () =
 });
 
 test('Worker exporta documento como markdown attachment', async () => {
+  const db = createMockDb([{
+    id: 'doc-123',
+    title: 'Documento Test',
+    original_markdown: '# Documento Test\n\nContenido completo',
+  }]);
   const req = new Request('http://localhost/api/documents/doc-123/export?format=markdown', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: db };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -143,8 +330,13 @@ test('Worker exporta documento como markdown attachment', async () => {
 });
 
 test('Worker exporta documento como docx attachment', async () => {
+  const db = createMockDb([{
+    id: 'doc-123',
+    title: 'Documento Test',
+    original_markdown: '# Documento Test\n\nContenido completo',
+  }]);
   const req = new Request('http://localhost/api/documents/doc-123/export?format=docx', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: db };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -155,8 +347,13 @@ test('Worker exporta documento como docx attachment', async () => {
 });
 
 test('Worker exporta documento como pdf attachment', async () => {
+  const db = createMockDb([{
+    id: 'doc-123',
+    title: 'Documento Test',
+    original_markdown: '# Documento Test\n\nContenido completo',
+  }]);
   const req = new Request('http://localhost/api/documents/doc-123/export?format=pdf', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: db };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -168,7 +365,7 @@ test('Worker exporta documento como pdf attachment', async () => {
 
 test('Worker responde 404 para documentos inexistentes', async () => {
   const req = new Request('http://localhost/api/documents/no-existe', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: createMockDb() };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 404);
@@ -176,7 +373,7 @@ test('Worker responde 404 para documentos inexistentes', async () => {
 
 test('Worker expone el contexto de activity por instanceId', async () => {
   const req = new Request('http://localhost/api/activity-context/inst-123', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: createMockDb() };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -189,7 +386,7 @@ test('Worker expone el contexto de activity por instanceId', async () => {
 
 test('Worker responde 404 para contextos de activity inexistentes', async () => {
   const req = new Request('http://localhost/api/activity-context/inst-no-existe', { method: 'GET' });
-  const env = { DB: createReadDb() };
+  const env = { DB: createMockDb() };
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 404);
@@ -210,7 +407,11 @@ test('Worker responde LAUNCH_ACTIVITY inline y persiste el contexto fuera de la 
   };
   const body = JSON.stringify(interactionPayload);
   const signature = signBody(privateKey, timestamp, body);
-  const db = createReadDb();
+  const db = createMockDb([{
+    id: 'doc-123',
+    title: 'Doc 123',
+    original_markdown: 'Content',
+  }]);
   let background = null;
 
   const req = new Request('http://localhost/', {
@@ -235,6 +436,9 @@ test('Worker responde LAUNCH_ACTIVITY inline y persiste el contexto fuera de la 
   assert.equal(json.type, 12);
   assert.ok(background instanceof Promise);
   await background;
+
+  // Verificamos que se guardó el launch intent en segundo plano
+  assert.equal(db.launchIntents.get('user-123:guild-123')?.document_id, 'doc-123');
 });
 
 test('Worker prioriza responder LAUNCH_ACTIVITY aunque el documento haya sido eliminado', async () => {
@@ -263,7 +467,7 @@ test('Worker prioriza responder LAUNCH_ACTIVITY aunque el documento haya sido el
 
   const res = await worker.fetch(
     req,
-    { DISCORD_PUBLIC_KEY: publicKey, DB: createReadDb() },
+    { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() },
     { waitUntil(promise) { background = promise; } },
   );
 
@@ -274,7 +478,7 @@ test('Worker prioriza responder LAUNCH_ACTIVITY aunque el documento haya sido el
 });
 
 test('Worker delega assets GET cuando existe el binding ASSETS', async () => {
-  const req = new Request('http://localhost/app.js', { method: 'GET' });
+  const req = new Request('http://localhost/assets/index.js', { method: 'GET' });
   const env = {
     ASSETS: {
       async fetch() {

@@ -1,6 +1,0 @@
-status=success
-launch_fix=discord-custom-id-session-v2
-live_api_recovery=success
-d1_session_recovery=success
-document_mutation=none
-checked_at=2026-08-23T21:17:20Z

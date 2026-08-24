@@ -2,27 +2,31 @@ name: CI
 
 on:
   push:
-    branches: ['main', 'feat/**']
+    branches: ['main', 'module/bardo-docs', 'feat/**']
   pull_request:
-    branches: ['main']
+    branches: ['main', 'module/bardo-docs']
 
 jobs:
   test:
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix prototypes/docs-app --no-audit --no-fund
 
-      - name: Syntax check
+      - name: Syntax and build check
         run: npm run check
 
-      - name: Tests
+      - name: Run test suite
         run: npm test

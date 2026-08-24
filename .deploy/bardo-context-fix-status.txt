@@ -1,5 +1,0 @@
-status=success
-source_commit=84d4d0aadc717f2f2453b3b557bf2a15c31e2a56
-launch_fix=discord-custom-id-session-v2
-worker_origin=success
-deployed_at=2026-08-23T21:14:47Z

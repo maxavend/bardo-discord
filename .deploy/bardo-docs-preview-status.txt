@@ -1,6 +1,0 @@
-status=success
-url=https://bardo-docs.pages.dev
-branch=module/bardo-docs
-mode=preview
-source_commit=78c14fd76fefd3d5c36a8b80e7799de7c3f25c68
-deployed_at=2026-08-23T21:03:21Z

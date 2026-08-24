@@ -2,80 +2,15 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
-    <title>Bardo · Documento</title>
-    <link rel="stylesheet" href="/styles-K5ZDMMN5.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="bardo-build" content="docs-current-document-only-v1" />
+    <meta name="bardo-auth" content="discord-guild-auth-v1" />
+    <title>Bardo · Docs</title>
+    <script type="module" crossorigin src="/assets/index-Ogjbt3lk.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-ex6GcuAf.css">
   </head>
-  <body>
-    <main class="shell">
-      <header class="topbar" aria-label="Bardo">
-        <div class="brand-mark" aria-hidden="true">
-          <img src="/bardo-avatar-254980EB.png" alt="Bardo" class="brand-avatar" />
-        </div>
-        <div class="brand-copy">
-          <strong>Bardo</strong>
-          <span>Lector de documentos</span>
-        </div>
-      </header>
-
-      <section id="loading" class="view-state" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
-        <div>
-          <strong>Abriendo documento</strong>
-          <p>Un momento…</p>
-        </div>
-      </section>
-
-      <section id="empty" class="view-state" hidden>
-        <div class="state-symbol" aria-hidden="true">B</div>
-        <div>
-          <h1>No hay un documento abierto</h1>
-          <p>Abre <strong>Mostrar más</strong> desde un mensaje publicado por Bardo.</p>
-        </div>
-      </section>
-
-      <section id="error" class="view-state" hidden>
-        <div class="state-symbol" aria-hidden="true">!</div>
-        <div>
-          <h1>No pudimos cargar el documento</h1>
-          <p id="error-message">Cierra esta vista y vuelve a abrir el documento desde el mensaje de Bardo.</p>
-        </div>
-      </section>
-
-      <article id="document" class="document" hidden>
-        <header class="document-header">
-          <p class="eyebrow">Documento</p>
-          <h1 id="document-title"></h1>
-          <div id="document-meta" class="meta"></div>
-
-          <div class="document-actions" aria-label="Acciones del documento">
-            <div class="select-wrapper">
-              <select id="download-select" class="action-select" aria-label="Guardar documento como">
-                <option value="" disabled selected>Guardar como</option>
-                <option value="pdf">PDF (.pdf)</option>
-                <option value="markdown">Markdown (.md)</option>
-                <option value="docx">Word (.docx)</option>
-              </select>
-              <span class="select-arrow" aria-hidden="true">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </span>
-            </div>
-
-            <div class="action-group-right">
-              <span id="action-status" class="action-status" aria-live="polite"></span>
-              <button id="copy-document" class="action-button action-button-primary" type="button">
-                Copiar todo
-              </button>
-            </div>
-          </div>
-        </header>
-        <div id="document-body" class="markdown-body"></div>
-      </article>
-    </main>
-
-    <script type="module" src="/main-2AL2JALX.js"></script>
+  <body class="bg-background text-foreground">
+    <div id="root"></div>
   </body>
 </html>

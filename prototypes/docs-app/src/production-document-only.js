@@ -73,24 +73,21 @@ export async function activateBardoDocumentOnlyMode() {
     documentIdFromHash(),
     readLastOpenedId(),
   ].filter(Boolean);
-  const documentId = candidates.find(id => store?.docs?.some(doc => doc.id === id)) || null;
+  let documentId = candidates.find(id => store?.docs?.some(doc => doc.id === id)) || null;
+
+  if (!documentId && store?.docs?.length > 0) {
+    documentId = store.docs[0].id;
+  }
 
   window.__BARDO_DOCUMENT_ID__ = documentId;
   installDocumentOnlyGuard(documentId);
 
-  if (!documentId) {
-    return {
-      active:true,
-      ready:false,
-      documentId:null,
-      message:'No pudimos cargar el documento compartido en este servidor.',
-    };
+  if (documentId) {
+    try {
+      localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:documentId, offset:0, at:Date.now()}));
+    } catch {}
+    forceDocumentRoute(documentId);
   }
 
-  try {
-    localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:documentId, offset:0, at:Date.now()}));
-  } catch {}
-
-  forceDocumentRoute(documentId);
   return {active:true, ready:true, documentId};
 }

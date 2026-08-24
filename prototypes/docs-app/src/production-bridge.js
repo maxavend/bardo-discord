@@ -231,17 +231,19 @@ function installProductionDomGuard() {
   removeMockReset();
 }
 
-export async function prepareBardoProduction() {
-  const params = new URLSearchParams(window.location.search);
-  const instanceId = params.get('instance_id')?.trim();
-  if (!instanceId) return false;
+export async function prepareBardoProduction(options = {}) {
+  const instanceId = options.instanceId
+    || window.__BARDO_INSTANCE_ID__
+    || new URLSearchParams(window.location.search).get('instance_id')?.trim()
+    || null;
 
   window.__BARDO_PRODUCTION__ = true;
-  window.__BARDO_INSTANCE_ID__ = instanceId;
+  if (instanceId) window.__BARDO_INSTANCE_ID__ = instanceId;
   installProductionDomGuard();
 
-  const sdk = await initSdk();
-  window.__BARDO_DISCORD_SDK__ = sdk;
+  const sdk = options.sdk || window.__BARDO_DISCORD_SDK__ || await initSdk();
+  if (sdk) window.__BARDO_DISCORD_SDK__ = sdk;
+
   window.__bardoExportDocument = async (documentId, format) => {
     const url = `${window.location.origin}/api/documents/${encodeURIComponent(documentId)}/export?format=${encodeURIComponent(format)}`;
     if (sdk?.commands?.openExternalLink) {
@@ -250,7 +252,11 @@ export async function prepareBardoProduction() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const headers = {'Accept':'application/json', 'x-bardo-instance-id':instanceId};
+  const headers = {'Accept':'application/json'};
+  if (window.__BARDO_SESSION_TOKEN__) headers['Authorization'] = `Bearer ${window.__BARDO_SESSION_TOKEN__}`;
+  if (window.__BARDO_CUSTOM_ID__) headers['x-bardo-custom-id'] = window.__BARDO_CUSTOM_ID__;
+  if (instanceId) headers['x-bardo-instance-id'] = instanceId;
+
   let payload = {documents:[], contextDocumentId:null};
   try {
     const response = await fetch('/api/docs', {headers, cache:'no-store'});
@@ -274,6 +280,8 @@ export async function prepareBardoProduction() {
       stress:false,
       sourceName:item.sourceName || null,
       sourceType:item.sourceType || 'markdown',
+      importStatus:item.importStatus || 'ready',
+      hasSource:Boolean(item.hasSource),
     };
     remote.set(doc.id, signature(doc));
     return doc;
@@ -281,10 +289,22 @@ export async function prepareBardoProduction() {
 
   localStorage.setItem(STORE_KEY, JSON.stringify({version:1, docs, deletedIds:seedIds}));
 
-  const contextId = payload.contextDocumentId;
+  const explicitCustomId = window.__BARDO_CUSTOM_ID__?.startsWith('bardo:open:')
+    ? window.__BARDO_CUSTOM_ID__.slice('bardo:open:'.length)
+    : window.__BARDO_CUSTOM_ID__;
+  const contextId = payload.contextDocumentId || explicitCustomId;
+
   if (contextId && docs.some(doc => doc.id === contextId)) {
     localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:contextId, offset:0, at:Date.now()}));
-    if (!location.hash || location.hash === '#docs') history.replaceState(null, '', `#doc-${encodeURIComponent(contextId)}`);
+    window.__BARDO_DOCUMENT_ID__ = contextId;
+    history.replaceState(null, '', `#doc-${encodeURIComponent(contextId)}`);
+  } else if (docs.length > 0) {
+    const targetId = docs[0].id;
+    localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:targetId, offset:0, at:Date.now()}));
+    window.__BARDO_DOCUMENT_ID__ = targetId;
+    if (!location.hash || location.hash === '#docs') {
+      history.replaceState(null, '', `#doc-${encodeURIComponent(targetId)}`);
+    }
   } else if (!location.hash) {
     history.replaceState(null, '', '#docs');
   }
@@ -294,10 +314,18 @@ export async function prepareBardoProduction() {
   let lastStoreJson = localStorage.getItem(STORE_KEY) || '';
 
   const request = async (path, init = {}) => {
+    const reqHeaders = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...(window.__BARDO_SESSION_TOKEN__ ? {'Authorization': `Bearer ${window.__BARDO_SESSION_TOKEN__}`} : {}),
+      ...(window.__BARDO_CUSTOM_ID__ ? {'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__} : {}),
+      ...(instanceId ? {'x-bardo-instance-id': instanceId} : {}),
+      ...(init.headers || {}),
+    };
     const response = await fetch(path, {
       ...init,
-      headers:{'Content-Type':'application/json', 'Accept':'application/json', 'x-bardo-instance-id':instanceId, ...(init.headers || {})},
-      cache:'no-store',
+      headers: reqHeaders,
+      cache: 'no-store',
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.status === 204 ? null : response.json();
