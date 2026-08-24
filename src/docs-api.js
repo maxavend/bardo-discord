@@ -90,6 +90,39 @@ function parsePath(pathname) {
   }
 }
 
+async function soleAuthenticatedGuild(env) {
+  const row = await env.DB
+    .prepare('SELECT COUNT(DISTINCT guild_id) AS guild_count, MIN(guild_id) AS guild_id FROM docs_sessions')
+    .first();
+  return Number(row?.guild_count || 0) === 1 ? row.guild_id || null : null;
+}
+
+async function adoptLegacyLibraryIfSafe(env, session) {
+  if (!env.DB || !session?.guildId) return false;
+
+  const accessSummary = await env.DB
+    .prepare('SELECT COUNT(*) AS count FROM document_guild_access')
+    .first();
+  if (Number(accessSummary?.count || 0) > 0) return false;
+
+  const onlyGuild = await soleAuthenticatedGuild(env);
+  if (!onlyGuild || onlyGuild !== session.guildId) return false;
+
+  const addedAt = new Date().toISOString();
+  await env.DB
+    .prepare(`INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by)
+      SELECT d.id, ?, ?, ?
+      FROM documents d
+      WHERE d.archived_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id
+        )`)
+    .bind(session.guildId, addedAt, session.userId || null)
+    .run();
+
+  return true;
+}
+
 async function requireDocumentAccess(env, documentId, guildId) {
   const allowed = await documentHasGuildAccess(env.DB, documentId, guildId);
   if (!allowed) return { error: json({ error: 'Document is not shared with this Discord server' }, 403) };
@@ -153,6 +186,12 @@ export async function handleDocsApi(request, url, env) {
   const auth = await requireDocsSession(request, env);
   if (auth.error) return auth.error;
   const { session } = auth;
+
+  // Legacy Bardo stored documents before guild ACL existed. If production has
+  // never assigned any document and every authenticated session points at the
+  // same guild, that guild is the only safe legacy owner. This restores the
+  // existing library once, without making documents globally readable.
+  await adoptLegacyLibraryIfSafe(env, session);
 
   if (!route.collection && route.action === 'source') return handleSource(route, request, env, session);
   if (!route.collection && route.action === 'normalize') return handleNormalize(route, request, env, session);
