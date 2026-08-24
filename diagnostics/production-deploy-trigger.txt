@@ -1,1 +1,1 @@
-Deploy the current materialized Bardo Docs Worker and capture Discord Activity configuration after fixing inline launch tests.
+Trigger production deploy after refreshing DISCORD_PUBLIC_KEY in Cloudflare. Validate tests, D1 migrations, Worker deploy, live health, Discord Activity configuration, and public key match. Requested 2026-08-24.
