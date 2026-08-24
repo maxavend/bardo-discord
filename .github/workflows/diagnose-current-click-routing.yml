@@ -36,3 +36,5 @@ jobs:
           git add .deploy/current-click-routing.json
           git commit -m "chore(docs): record current click routing diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
+
+# rerun after repeated live Mostrar más timeout
