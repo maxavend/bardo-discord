@@ -273,4 +273,4 @@ jobs:
           git push origin HEAD:module/bardo-docs || true
           test "$STATUS" = "success"
 
-# Manual re-run marker: authenticated guild deploy
+# Manual re-run marker: authenticated guild deploy after DISCORD_CLIENT_SECRET 2026-08-24T00:59Z
