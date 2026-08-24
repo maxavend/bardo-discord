@@ -8,15 +8,19 @@ import {
   TextField,
   ToastProvider,
   Toolbar,
+  Tooltip,
   toast,
 } from '@heroui/react';
 import {
-  Bars,
+  Bold,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   EllipsisVertical,
   File,
+  Italic,
+  ListUl,
   Magnifier,
   Plus,
 } from '@gravity-ui/icons';
@@ -41,8 +45,12 @@ const ICONS = {
   doc: File,
   back: ChevronLeft,
   chevron: ChevronRight,
-  list: Bars,
+  list: ListUl,
   check: Check,
+  bold: Bold,
+  italic: Italic,
+  kebab: EllipsisVertical,
+  chevronDown: ChevronDown,
 };
 
 function Icon({name, size = 16}) {
@@ -226,8 +234,9 @@ function saveStore(store) {
 function NativeMenu({label, options, onAction, disabledKeys = [], className = ''}) {
   const disabled = new Set(disabledKeys);
   return (
-    <span className={`native-menu ${className}`}>
-      <span className="native-menu-visual" aria-hidden="true"><EllipsisVertical width={16} height={16}/></span>
+    <Tooltip content={label} placement="top" offset={6} delay={300}>
+      <span className={`native-menu ${className}`}>
+      <span className="native-menu-visual" aria-hidden="true"><Icon name="kebab"/></span>
       <select
         aria-label={label}
         value=""
@@ -240,6 +249,7 @@ function NativeMenu({label, options, onAction, disabledKeys = [], className = ''
         {options.map(item => <option key={item.value} value={item.value} disabled={disabled.has(item.value)}>{item.label}</option>)}
       </select>
     </span>
+    </Tooltip>
   );
 }
 
@@ -755,21 +765,24 @@ function Editor({doc,isNew,onBack,onFinish,onAutosave,onOpenLink}) {
 
         <div className="editor-toolbar-sticky" onPointerDownCapture={rememberSelection} onTouchStartCapture={rememberSelection}>
           <Toolbar isAttached className="editor-toolbar" aria-label="Formato del documento">
-            <select
-              aria-label="Tipo de texto"
-              className="block-select native-option-select"
-              value={blockValue}
-              onChange={e => {
-                const value = e.target.value;
-                setBlockValue(value);
-                applyBlock(value);
-              }}
-            >
-              {BLOCK_OPTIONS.map(([id,label]) => <option key={id} value={id}>{label}</option>)}
-            </select>
+            <div className="block-select-wrapper">
+              <select
+                aria-label="Tipo de texto"
+                className="block-select native-option-select"
+                value={blockValue}
+                onChange={e => {
+                  const value = e.target.value;
+                  setBlockValue(value);
+                  applyBlock(value);
+                }}
+              >
+                {BLOCK_OPTIONS.map(([id,label]) => <option key={id} value={id}>{label}</option>)}
+              </select>
+              <span className="block-select-chevron" aria-hidden="true"><Icon name="chevronDown" size={13}/></span>
+            </div>
             <span className="toolbar-separator"/>
-            <ToolbarButton label="Negrita" active={inlineState.bold} onPress={() => runFormat('bold')}><strong>B</strong></ToolbarButton>
-            <ToolbarButton label="Cursiva" active={inlineState.italic} onPress={() => runFormat('italic')}><em>I</em></ToolbarButton>
+            <ToolbarButton label="Negrita" active={inlineState.bold} onPress={() => runFormat('bold')}><Icon name="bold"/></ToolbarButton>
+            <ToolbarButton label="Cursiva" active={inlineState.italic} onPress={() => runFormat('italic')}><Icon name="italic"/></ToolbarButton>
             <ToolbarButton label="Lista" active={inlineState.insertUnorderedList} onPress={() => runFormat('insertUnorderedList')} className="optional-bullets"><Icon name="list"/></ToolbarButton>
             <NativeInsertMenu onAction={runFormat}/>
             <NativeMenu
@@ -814,28 +827,34 @@ function Editor({doc,isNew,onBack,onFinish,onAutosave,onOpenLink}) {
 }
 
 function ToolbarButton({label,active,onPress,children,className=''}) {
-  return <Button aria-label={label} aria-pressed={active} isIconOnly size="md" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={`toolbar-button ${className}`}>{children}</Button>;
+  return (
+    <Tooltip content={label} placement="top" offset={6} delay={300}>
+      <Button aria-label={label} aria-pressed={active} isIconOnly size="sm" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={`toolbar-button ${active ? 'is-active' : ''} ${className}`}>{children}</Button>
+    </Tooltip>
+  );
 }
 
 function NativeInsertMenu({onAction}) {
   return (
-    <span className="native-menu native-insert-menu">
-      <span className="native-menu-visual" aria-hidden="true"><Icon name="plus"/></span>
-      <select
-        aria-label="Insertar bloque"
-        value=""
-        onChange={e => {
-          const value = e.target.value;
-          if (value) onAction(value);
-        }}
-      >
-        <option value="" disabled>Insertar</option>
-        <option value="checklist">☑︎  Checklist</option>
-        <option value="callout">▣  Nota</option>
-        <option value="spoiler">▸  Desplegable</option>
-        <option value="hr">—  Separador</option>
-      </select>
-    </span>
+    <Tooltip content="Insertar bloque" placement="top" offset={6} delay={300}>
+      <span className="native-menu native-insert-menu">
+        <span className="native-menu-visual" aria-hidden="true"><Icon name="plus"/></span>
+        <select
+          aria-label="Insertar bloque"
+          value=""
+          onChange={e => {
+            const value = e.target.value;
+            if (value) onAction(value);
+          }}
+        >
+          <option value="" disabled>Insertar</option>
+          <option value="checklist">☑︎  Checklist</option>
+          <option value="callout">▣  Nota</option>
+          <option value="spoiler">▸  Desplegable</option>
+          <option value="hr">—  Separador</option>
+        </select>
+      </span>
+    </Tooltip>
   );
 }
 

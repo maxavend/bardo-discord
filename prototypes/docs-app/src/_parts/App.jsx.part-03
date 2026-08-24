@@ -120,9 +120,9 @@
               </Select.Popover>
             </Select>
             <span className="toolbar-separator"/>
-            <ToolbarButton label="Negrita" active={inlineState.bold} onPress={() => runFormat('bold')}><strong>B</strong></ToolbarButton>
-            <ToolbarButton label="Cursiva" active={inlineState.italic} onPress={() => runFormat('italic')}><em>I</em></ToolbarButton>
-            <ToolbarButton label="Lista" active={inlineState.insertUnorderedList} onPress={() => runFormat('insertUnorderedList')} className="optional-bullets"><Icon name="list" size={18}/></ToolbarButton>
+            <ToolbarButton label="Negrita" active={inlineState.bold} onPress={() => runFormat('bold')}><Icon name="bold"/></ToolbarButton>
+            <ToolbarButton label="Cursiva" active={inlineState.italic} onPress={() => runFormat('italic')}><Icon name="italic"/></ToolbarButton>
+            <ToolbarButton label="Lista" active={inlineState.insertUnorderedList} onPress={() => runFormat('insertUnorderedList')} className="optional-bullets"><Icon name="list"/></ToolbarButton>
             <InsertDropdown onAction={runFormat}/>
             <NativeMenu
               label="Más formatos"

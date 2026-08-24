@@ -19,13 +19,13 @@ export function applyComponentAudit(filePath) {
 
   replace(
 `import {\n  Button,\n  Dropdown,\n  Input,\n  Label,\n  ListBox,\n  Modal,\n  Select,\n} from '@heroui/react';`,
-`import {\n  Button,\n  Input,\n  Label,\n  Modal,\n  SearchField,\n  TextField,\n  ToastProvider,\n  Toolbar,\n  toast,\n} from '@heroui/react';\nimport {\n  Bars,\n  Check,\n  ChevronLeft,\n  ChevronRight,\n  EllipsisVertical,\n  File,\n  Magnifier,\n  Plus,\n} from '@gravity-ui/icons';`,
+`import {\n  Button,\n  Input,\n  Label,\n  Modal,\n  SearchField,\n  TextField,\n  ToastProvider,\n  Toolbar,\n  Tooltip,\n  toast,\n} from '@heroui/react';\nimport {\n  Bold,\n  Check,\n  ChevronDown,\n  ChevronLeft,\n  ChevronRight,\n  EllipsisVertical,\n  File,\n  Italic,\n  ListUl,\n  Magnifier,\n  Plus,\n} from '@gravity-ui/icons';`,
 'HeroUI imports and Gravity icon set',
   );
 
   replaceRegex(
 /function Icon\(\{name, size = 18\}\) \{[\s\S]*?\n\}/,
-`const ICONS = {\n  search: Magnifier,\n  plus: Plus,\n  doc: File,\n  back: ChevronLeft,\n  chevron: ChevronRight,\n  list: Bars,\n  check: Check,\n};\n\nfunction Icon({name, size = 16}) {\n  const Glyph = ICONS[name];\n  return Glyph ? <Glyph width={size} height={size} aria-hidden=\"true\" /> : null;\n}`,
+`const ICONS = {\n  search: Magnifier,\n  plus: Plus,\n  doc: File,\n  back: ChevronLeft,\n  chevron: ChevronRight,\n  list: ListUl,\n  check: Check,\n  bold: Bold,\n  italic: Italic,\n  kebab: EllipsisVertical,\n  chevronDown: ChevronDown,\n};\n\nfunction Icon({name, size = 16}) {\n  const Glyph = ICONS[name];\n  return Glyph ? <Glyph width={size} height={size} aria-hidden=\"true\" /> : null;\n}`,
 'Gravity icon renderer',
   );
 
@@ -44,8 +44,19 @@ export function applyComponentAudit(filePath) {
   );
 
   replace(
+`    <span className={\`native-menu \${className}\`}>`,
+`    <Tooltip content={label} placement="top" offset={6} delay={300}>\n      <span className={\`native-menu \${className}\`}>`,
+'HeroUI Tooltip on NativeMenu open',
+  );
+  replace(
+`    </span>\n  );\n}\n\nfunction RichBody`,
+`    </span>\n    </Tooltip>\n  );\n}\n\nfunction RichBody`,
+'HeroUI Tooltip on NativeMenu close',
+  );
+
+  replace(
 `      <span className="native-menu-visual" aria-hidden="true">•••</span>`,
-`      <span className="native-menu-visual" aria-hidden="true"><EllipsisVertical width={16} height={16}/></span>`,
+`      <span className="native-menu-visual" aria-hidden="true"><Icon name="kebab"/></span>`,
 'Gravity vertical kebab visual with native select target',
   );
 
@@ -57,7 +68,7 @@ export function applyComponentAudit(filePath) {
 
   replaceRegex(
 /            <Select aria-label="Tipo de texto"[\s\S]*?<\/Select>/,
-`            <select\n              aria-label="Tipo de texto"\n              className="block-select native-option-select"\n              value={blockValue}\n              onChange={e => {\n                const value = e.target.value;\n                setBlockValue(value);\n                applyBlock(value);\n              }}\n            >\n              {BLOCK_OPTIONS.map(([id,label]) => <option key={id} value={id}>{label}</option>)}\n            </select>`,
+`            <div className="block-select-wrapper">\n              <select\n                aria-label="Tipo de texto"\n                className="block-select native-option-select"\n                value={blockValue}\n                onChange={e => {\n                  const value = e.target.value;\n                  setBlockValue(value);\n                  applyBlock(value);\n                }}\n              >\n                {BLOCK_OPTIONS.map(([id,label]) => <option key={id} value={id}>{label}</option>)}\n              </select>\n              <span className="block-select-chevron" aria-hidden="true"><Icon name="chevronDown" size={13}/></span>\n            </div>`,
 'native block format select',
   );
 
@@ -75,13 +86,13 @@ export function applyComponentAudit(filePath) {
 
   replace(
 `return <Button aria-label={label} aria-pressed={active} isIconOnly size="sm" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={\`toolbar-button \${className}\`}>{children}</Button>;`,
-`return <Button aria-label={label} aria-pressed={active} isIconOnly size="md" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={\`toolbar-button \${className}\`}>{children}</Button>;`,
+`return (\n    <Tooltip content={label} placement="top" offset={6} delay={300}>\n      <Button aria-label={label} aria-pressed={active} isIconOnly size="sm" variant={active ? 'secondary' : 'ghost'} onPress={onPress} className={\`toolbar-button \${active ? 'is-active' : ''} \${className}\`}>{children}</Button>\n    </Tooltip>\n  );`,
 'HeroUI-owned toolbar button sizing',
   );
 
   replaceRegex(
 /function InsertDropdown\(\{onAction\}\) \{[\s\S]*?\n\}\n\nfunction AppModal/,
-`function NativeInsertMenu({onAction}) {\n  return (\n    <span className="native-menu native-insert-menu">\n      <span className="native-menu-visual" aria-hidden="true"><Icon name="plus"/></span>\n      <select\n        aria-label="Insertar bloque"\n        value=""\n        onChange={e => {\n          const value = e.target.value;\n          if (value) onAction(value);\n        }}\n      >\n        <option value="" disabled>Insertar</option>\n        <option value="checklist">☑︎  Checklist</option>\n        <option value="callout">▣  Nota</option>\n        <option value="spoiler">▸  Desplegable</option>\n        <option value="hr">—  Separador</option>\n      </select>\n    </span>\n  );\n}\n\nfunction AppModal`,
+`function NativeInsertMenu({onAction}) {\n  return (\n    <Tooltip content="Insertar bloque" placement="top" offset={6} delay={300}>\n      <span className="native-menu native-insert-menu">\n        <span className="native-menu-visual" aria-hidden="true"><Icon name="plus"/></span>\n        <select\n          aria-label="Insertar bloque"\n          value=""\n          onChange={e => {\n            const value = e.target.value;\n            if (value) onAction(value);\n          }}\n        >\n          <option value="" disabled>Insertar</option>\n          <option value="checklist">☑︎  Checklist</option>\n          <option value="callout">▣  Nota</option>\n          <option value="spoiler">▸  Desplegable</option>\n          <option value="hr">—  Separador</option>\n        </select>\n      </span>\n    </Tooltip>\n  );\n}\n\nfunction AppModal`,
 'native insert menu component',
   );
 
