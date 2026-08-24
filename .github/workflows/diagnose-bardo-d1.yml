@@ -22,69 +22,31 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check Wrangler identity
-        id: whoami
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          npx --yes wrangler@4.124.0 whoami 2>&1 | tee /tmp/whoami.log
-      - name: Read D1 document count
+
+      - name: Inspect production D1 legacy access
         id: d1
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          npx --yes wrangler@4.124.0 d1 execute db89af73-dc24-491e-bf57-975f7bd6c085 --remote --command "SELECT COUNT(*) AS count FROM documents;" --json 2>&1 | tee /tmp/d1.log
-      - name: Check Discord Worker secret names
-        id: secrets
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          npx --yes wrangler@4.124.0 secret list --format json 2>&1 | tee /tmp/secrets.raw
-          STATUS=${PIPESTATUS[0]}
-          if [ "$STATUS" -eq 0 ]; then
-            cp /tmp/secrets.raw /tmp/secrets.json
-            node - <<'NODE' | tee /tmp/secrets.log
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/secrets.json','utf8'));
-          const names = (Array.isArray(data) ? data : []).map(x => x.name).filter(Boolean).sort();
-          for (const name of names) console.log(name);
-          NODE
-          fi
-          exit "$STATUS"
+          npx --yes wrangler@4.124.0 d1 execute db89af73-dc24-491e-bf57-975f7bd6c085 --remote --command "SELECT COUNT(*) AS total_docs FROM documents WHERE archived_at IS NULL; SELECT COUNT(*) AS access_rows FROM document_guild_access; SELECT COUNT(*) AS legacy_unscoped FROM documents d WHERE d.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id); SELECT guild_id, COUNT(*) AS access_count FROM document_guild_access GROUP BY guild_id ORDER BY access_count DESC; SELECT guild_id, COUNT(*) AS session_count FROM docs_sessions GROUP BY guild_id ORDER BY session_count DESC; SELECT guild_id, COUNT(*) AS launch_count FROM docs_launch_intents GROUP BY guild_id ORDER BY launch_count DESC;" --json 2>&1 | tee /tmp/d1.log
+
       - name: Record diagnostics
         if: always()
         shell: bash
         env:
-          WHOAMI: ${{ steps.whoami.outcome }}
           D1: ${{ steps.d1.outcome }}
-          SECRETS: ${{ steps.secrets.outcome }}
         run: |
           mkdir -p .deploy
-          OAUTH_SECRET=unknown
-          if [ "$SECRETS" = "success" ]; then
-            OAUTH_SECRET=missing
-            if grep -qx 'DISCORD_CLIENT_SECRET' /tmp/secrets.log 2>/dev/null; then OAUTH_SECRET=present; fi
-          fi
           {
-            echo "whoami=$WHOAMI"
-            echo "d1=$D1"
-            echo "secrets=$SECRETS"
-            echo "discord_client_secret=$OAUTH_SECRET"
-            echo "--- whoami ---"
-            cat /tmp/whoami.log 2>/dev/null || true
-            echo "--- d1 ---"
+            echo "status=$D1"
+            echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "--- legacy-access-diagnostic ---"
             cat /tmp/d1.log 2>/dev/null || true
-            echo "--- worker-secret-list-raw ---"
-            cat /tmp/secrets.raw 2>/dev/null || true
-            echo "--- worker-secret-names ---"
-            cat /tmp/secrets.log 2>/dev/null || true
-          } > .deploy/bardo-d1-diagnostic.txt
+          } > .deploy/bardo-legacy-docs-diagnostic.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/bardo-d1-diagnostic.txt
-          git commit -m "chore(docs): record D1 and OAuth diagnostic [skip ci]" || true
+          git add .deploy/bardo-legacy-docs-diagnostic.txt
+          git commit -m "chore(docs): record legacy document access diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
           test "$D1" = "success"
