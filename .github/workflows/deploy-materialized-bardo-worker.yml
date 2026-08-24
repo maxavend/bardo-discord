@@ -6,6 +6,7 @@ on:
       - module/bardo-docs
     paths:
       - '.github/workflows/deploy-materialized-bardo-worker.yml'
+      - 'diagnostics/materialized-deploy-trigger.txt'
   workflow_dispatch:
 
 concurrency:
