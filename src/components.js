@@ -68,26 +68,19 @@ export function createDocumentPreview(markdown, limit = PREVIEW_LIMIT) {
   return preview;
 }
 
-function buildActivityDeepLink(applicationId, documentId) {
-  const customId = `${BARDO_OPEN_PREFIX}${documentId}`;
-  const url = new URL(`https://discord.com/activities/${encodeURIComponent(applicationId)}`);
-  url.searchParams.set('custom_id', customId);
-  return url.toString();
-}
-
-export function buildDocumentPayload(document, { applicationId, documentId }) {
+export function buildDocumentPayload(document, { documentId }) {
   const previewSource = document.pages?.[0] || document.originalMarkdown || '';
   const preview = createDocumentPreview(previewSource);
   const cleanId = normalizeDocumentId(documentId) || documentId;
 
-  // A Discord Activity deep-link is more robust than a MESSAGE_COMPONENT callback:
-  // Discord launches the Activity directly, so the button cannot time out waiting
-  // for the Worker to acknowledge an interaction within three seconds.
+  // Use a real Discord message component again. The Worker acknowledges this
+  // interaction inline with LAUNCH_ACTIVITY (type 12), preserving guild/channel
+  // context for the embedded Activity without relying on an external deep-link.
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setLabel('📖 Mostrar más')
-      .setStyle(ButtonStyle.Link)
-      .setURL(buildActivityDeepLink(applicationId, cleanId)),
+      .setStyle(ButtonStyle.Primary)
+      .setCustomId(`${BARDO_OPEN_PREFIX}${cleanId}`),
   );
 
   const container = new ContainerBuilder()
