@@ -1,1 +1,1 @@
-Trigger production deploy after refreshing DISCORD_PUBLIC_KEY in Cloudflare. Validate tests, D1 migrations, Worker deploy, live health, Discord Activity configuration, and public key match. Requested 2026-08-24.
+Trigger production deploy after adding migration 0007_repair_document_guild_access.sql. Validate tests, apply D1 migration, deploy Worker, verify live health, and confirm canonical document_guild_access schema. Requested 2026-08-24.
