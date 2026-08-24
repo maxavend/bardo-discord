@@ -195,3 +195,5 @@ jobs:
           [ ! -f .deploy/emergency-wrangler-deploy.log ] || git add .deploy/emergency-wrangler-deploy.log
           git commit -m "chore(docs): record emergency Activity diagnosis [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
+
+# rerun marker: inline tests updated
