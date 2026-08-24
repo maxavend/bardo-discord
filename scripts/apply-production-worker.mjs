@@ -28,7 +28,14 @@ if (!source.includes(uploadGrant.trim())) {
   source = source.replace(uploadAnchor, `${uploadAnchor}${uploadGrant}`);
 }
 
-const clickGrant = `\n  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;\n  if (interaction.guild_id) {\n    await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);\n    await saveDocsLaunchIntent(env.DB, invokingUserId, interaction.guild_id, documentId);\n  }\n\n`;
+const legacyGuard = `  if (!customId.startsWith(BARDO_OPEN_PREFIX)) {\n    return jsonResponse({\n      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,\n      data: {\n        content: 'Acción no reconocida.',\n        flags: InteractionResponseFlags.EPHEMERAL,\n      },\n    });\n  }\n\n  const documentId = normalizeDocumentId(customId);\n`;
+const legacyGuardReplacement = `  const legacyPageInteraction = customId.startsWith('bardo:page:');\n\n  if (!legacyPageInteraction && !customId.startsWith(BARDO_OPEN_PREFIX)) {\n    return jsonResponse({\n      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,\n      data: {\n        content: 'Acción no reconocida.',\n        flags: InteractionResponseFlags.EPHEMERAL,\n      },\n    });\n  }\n\n  const documentId = legacyPageInteraction\n    ? normalizeDocumentId(interaction.message?.id)\n    : normalizeDocumentId(customId);\n`;
+if (!source.includes("const legacyPageInteraction = customId.startsWith('bardo:page:')")) {
+  if (!source.includes(legacyGuard)) throw new Error('No encontré el guard de component interaction');
+  source = source.replace(legacyGuard, legacyGuardReplacement);
+}
+
+const clickGrant = `\n  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;\n  if (interaction.guild_id) {\n    if (legacyPageInteraction) {\n      const legacyAccessSummary = await env.DB.prepare('SELECT COUNT(*) AS count FROM document_guild_access').first();\n      if (Number(legacyAccessSummary?.count || 0) === 0) {\n        const legacyAddedAt = new Date().toISOString();\n        await env.DB.prepare('INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by) SELECT d.id, ?, ?, ? FROM documents d WHERE d.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id)')\n          .bind(interaction.guild_id, legacyAddedAt, invokingUserId)\n          .run();\n      }\n    }\n    await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);\n    await saveDocsLaunchIntent(env.DB, invokingUserId, interaction.guild_id, documentId);\n  }\n\n`;
 const callbackAnchor = '  const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;\n';
 if (!source.includes('await saveDocsLaunchIntent(env.DB, invokingUserId')) {
   if (source.includes('const invokingUserId = interaction.member?.user?.id')) {
@@ -54,4 +61,4 @@ if (!source.includes('const authApiResponse = await handleDiscordAuthApi')) {
 }
 
 writeFileSync(filePath, source);
-console.log(`Production Docs guild auth wired into ${filePath}`);
+console.log(`Production Docs guild auth + legacy document compatibility wired into ${filePath}`);
