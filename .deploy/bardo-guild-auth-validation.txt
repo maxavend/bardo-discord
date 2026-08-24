@@ -5,5 +5,5 @@ guild_acl=compiled
 signed_launch_intent=compiled
 tests=success
 docs_build=success
-source_commit=84874a9e7e9870d47b2baf6b705f9dd944d19b16
-checked_at=2026-08-23T21:42:53Z
+source_commit=b5802880e521a2c07fb2268ee3e75ad20c53dfa9
+checked_at=2026-08-24T00:50:36Z
