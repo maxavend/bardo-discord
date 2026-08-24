@@ -45,6 +45,12 @@ jobs:
           fi
           node --check src/worker.js
 
+      - name: Add temporary Activity configuration diagnostic
+        run: |
+          node scripts/apply-activity-diagnostic-route.mjs src/worker.js
+          grep -q '__bardo_diag_activity_20260823' src/worker.js
+          node --check src/worker.js
+
       - name: Test Worker
         run: npm test
 
@@ -58,21 +64,25 @@ jobs:
           test -f activity/index.html
           grep -q 'docs-current-document-only-v1' activity/index.html
 
-      - name: Deploy exactly materialized Worker
+      - name: Deploy exactly materialized Worker plus diagnostic
         run: npx --yes wrangler@4.124.0 deploy --keep-vars
 
-      - name: Verify live origin
+      - name: Verify live origin and read Discord application configuration
+        shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
             if curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?materialized=$GITHUB_SHA&attempt=$attempt" -o /tmp/live.html && grep -q 'docs-current-document-only-v1' /tmp/live.html; then
-              exit 0
+              break
             fi
             sleep 5
           done
-          exit 1
+          HTTP=$(curl -sS -o /tmp/discord-app.json -w '%{http_code}' "$WORKER_ORIGIN/__bardo_diag_activity_20260823")
+          echo "diag_http=$HTTP" > /tmp/runtime.txt
+          cat /tmp/discord-app.json >> /tmp/runtime.txt
+          cat /tmp/runtime.txt
 
-      - name: Record deterministic deploy
+      - name: Record deterministic deploy and Discord configuration
         if: always()
         run: |
           mkdir -p .deploy
@@ -82,8 +92,10 @@ jobs:
           inline_launch=true
           completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
+          if [ -f /tmp/runtime.txt ]; then cp /tmp/runtime.txt .deploy/discord-activity-runtime.txt; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-materialized-worker-status.txt
-          git commit -m "chore(docs): record materialized Worker deploy [skip ci]" || true
+          [ ! -f .deploy/discord-activity-runtime.txt ] || git add .deploy/discord-activity-runtime.txt
+          git commit -m "chore(docs): record live Discord Activity configuration [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
