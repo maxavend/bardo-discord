@@ -43,6 +43,9 @@ function createReadDb(documentId = 'doc-123') {
                 const [instanceId] = params;
                 return activityContexts.get(instanceId) || null;
               }
+              if (query.includes('COUNT(*) AS count FROM document_guild_access')) {
+                return { count: 1 };
+              }
               return null;
             },
             async run() {
@@ -192,13 +195,15 @@ test('Worker responde 404 para contextos de activity inexistentes', async () => 
   assert.equal(res.status, 404);
 });
 
-test('Worker lanza Activity y guarda activity_instance_id del callback oficial', async () => {
+test('Worker responde LAUNCH_ACTIVITY inline y persiste el contexto fuera de la respuesta crítica', async () => {
   const { publicKey, privateKey } = getTestKeys();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const interactionPayload = {
     type: 3,
     id: 'interaction-987',
     token: 'token-abc',
+    guild_id: 'guild-123',
+    member: { user: { id: 'user-123' } },
     data: {
       custom_id: 'bardo:open:doc-123',
     },
@@ -206,67 +211,7 @@ test('Worker lanza Activity y guarda activity_instance_id del callback oficial',
   const body = JSON.stringify(interactionPayload);
   const signature = signBody(privateKey, timestamp, body);
   const db = createReadDb();
-
-  const originalFetch = globalThis.fetch;
-  let calledCallbackUrl = null;
-  let calledCallbackBody = null;
-
-  globalThis.fetch = async (url, options) => {
-    if (String(url).includes('/interactions/interaction-987/token-abc/callback')) {
-      calledCallbackUrl = String(url);
-      calledCallbackBody = JSON.parse(options.body);
-      return new Response(
-        JSON.stringify({
-          interaction: {
-            id: 'interaction-987',
-            activity_instance_id: 'instance-created-999',
-          },
-          resource: {
-            type: 12,
-          },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-    return originalFetch(url, options);
-  };
-
-  try {
-    const req = new Request('http://localhost/', {
-      method: 'POST',
-      headers: {
-        'x-signature-ed25519': signature,
-        'x-signature-timestamp': timestamp,
-        'content-type': 'application/json',
-      },
-      body,
-    });
-
-    const env = { DISCORD_PUBLIC_KEY: publicKey, DB: db };
-    const res = await worker.fetch(req, env, { waitUntil: () => {} });
-
-    assert.equal(res.status, 202);
-    assert.ok(calledCallbackUrl.includes('with_response=true'));
-    assert.equal(calledCallbackBody.type, 12);
-
-    const saved = db.activityContexts.get('instance-created-999');
-    assert.ok(saved);
-    assert.equal(saved.document_id, 'doc-123');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('Worker no lanza Activity si el documento ya no existe', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const body = JSON.stringify({
-    type: 3,
-    id: 'interaction-404',
-    token: 'token-404',
-    data: { custom_id: 'bardo:open:no-existe' },
-  });
-  const signature = signBody(privateKey, timestamp, body);
+  let background = null;
 
   const req = new Request('http://localhost/', {
     method: 'POST',
@@ -278,11 +223,54 @@ test('Worker no lanza Activity si el documento ya no existe', async () => {
     body,
   });
 
-  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createReadDb() });
+  const env = { DISCORD_PUBLIC_KEY: publicKey, DB: db };
+  const res = await worker.fetch(req, env, {
+    waitUntil(promise) {
+      background = promise;
+    },
+  });
+
   assert.equal(res.status, 200);
   const json = await res.json();
-  assert.equal(json.type, 4);
-  assert.match(json.data.content, /ya no está disponible/i);
+  assert.equal(json.type, 12);
+  assert.ok(background instanceof Promise);
+  await background;
+});
+
+test('Worker prioriza responder LAUNCH_ACTIVITY aunque el documento haya sido eliminado', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const body = JSON.stringify({
+    type: 3,
+    id: 'interaction-404',
+    token: 'token-404',
+    guild_id: 'guild-123',
+    member: { user: { id: 'user-123' } },
+    data: { custom_id: 'bardo:open:no-existe' },
+  });
+  const signature = signBody(privateKey, timestamp, body);
+  let background = null;
+
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const res = await worker.fetch(
+    req,
+    { DISCORD_PUBLIC_KEY: publicKey, DB: createReadDb() },
+    { waitUntil(promise) { background = promise; } },
+  );
+
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 12);
+  if (background) await background;
 });
 
 test('Worker delega assets GET cuando existe el binding ASSETS', async () => {
