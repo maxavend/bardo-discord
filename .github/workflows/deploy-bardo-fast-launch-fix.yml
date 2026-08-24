@@ -31,11 +31,16 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Apply production Worker patch
+      - name: Apply production Worker patches
         run: |
           node scripts/apply-production-worker.mjs src/worker.js
-          grep -q "persistLaunchContext" src/worker.js
+          node scripts/apply-inline-activity-launch.mjs src/worker.js
+          grep -q "return jsonResponse({ type: 12 });" src/worker.js
           grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
+          if grep -q "callback?with_response=true" src/worker.js; then
+            echo "Remote interaction callback still present" >&2
+            exit 1
+          fi
           node --check src/worker.js
 
       - name: Run tests
@@ -47,7 +52,7 @@ jobs:
       - name: Verify live origin
         run: |
           set -euo pipefail
-          curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?fast-launch=$GITHUB_SHA" -o /tmp/live.html
+          curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?inline-launch=$GITHUB_SHA" -o /tmp/live.html
           grep -q 'docs-current-document-only-v1' /tmp/live.html
 
       - name: Record status
@@ -56,10 +61,11 @@ jobs:
           mkdir -p .deploy
           cat > .deploy/bardo-fast-launch-status.txt <<EOF
           source_commit=$GITHUB_SHA
+          inline_launch=true
           completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-fast-launch-status.txt
-          git commit -m "chore(docs): record fast Activity launch deploy [skip ci]" || true
+          git commit -m "chore(docs): record inline Activity launch deploy [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
