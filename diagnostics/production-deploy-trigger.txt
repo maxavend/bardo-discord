@@ -1,0 +1,1 @@
+Deploy the current materialized Bardo Docs Worker and capture Discord Activity configuration after fixing inline launch tests.
