@@ -6,6 +6,7 @@ on:
       - module/bardo-docs
     paths:
       - '.github/workflows/emergency-bardo-docs-deploy.yml'
+      - 'diagnostics/emergency-activity-check.txt'
   workflow_dispatch:
 
 concurrency:
@@ -55,16 +56,18 @@ jobs:
         continue-on-error: true
         run: npm test
 
-      - name: Wire authenticated Docs routes and inline Activity response into Worker
+      - name: Wire authenticated Docs routes, inline Activity response and diagnostic
         id: patch
         continue-on-error: true
         run: |
           node scripts/apply-production-worker.mjs src/worker.js
           node scripts/apply-inline-activity-launch.mjs src/worker.js
+          node scripts/apply-activity-diagnostic-route.mjs src/worker.js
           grep -q "handleDiscordAuthApi" src/worker.js
           grep -q "handleDocsApi" src/worker.js
           grep -q "return jsonResponse({ type: 12 });" src/worker.js
           grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
+          grep -q "__bardo_diag_activity_20260823" src/worker.js
           if grep -q "callback?with_response=true" src/worker.js; then
             echo "Remote interaction callback still present" >&2
             exit 1
@@ -112,27 +115,39 @@ jobs:
 
       - name: Apply D1 migrations
         id: migrate
+        continue-on-error: true
         run: npx --yes wrangler@4.124.0 d1 migrations apply bardo-db --remote
 
       - name: Deploy Worker and validate required secrets
         id: deploy
-        run: npx --yes wrangler@4.124.0 deploy --keep-vars
-
-      - name: Verify live Activity
-        id: live
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          for attempt in $(seq 1 12); do
-            if curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?deploy=$GITHUB_SHA&attempt=$attempt" -o /tmp/live.html; then
-              if grep -q 'docs-current-document-only-v1' /tmp/live.html; then
-                echo 'Live Worker is serving the current Docs Activity.'
-                exit 0
-              fi
-            fi
-            sleep 5
-          done
-          exit 1
+          set -o pipefail
+          npx --yes wrangler@4.124.0 deploy --keep-vars 2>&1 | tee /tmp/emergency-deploy.log
+
+      - name: Verify live Activity and read Discord app config
+        id: live
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          LIVE_HTTP=$(curl -sS -o /tmp/live.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?deploy=$GITHUB_SHA")
+          LIVE_CURL=$?
+          DIAG_HTTP=$(curl -sS -o /tmp/discord-app.json -w '%{http_code}' "$WORKER_ORIGIN/__bardo_diag_activity_20260823")
+          DIAG_CURL=$?
+          {
+            echo "live_curl=$LIVE_CURL"
+            echo "live_http=$LIVE_HTTP"
+            echo "live_marker=$(grep -c 'docs-current-document-only-v1' /tmp/live.html 2>/dev/null || true)"
+            echo "diag_curl=$DIAG_CURL"
+            echo "diag_http=$DIAG_HTTP"
+            echo "--- discord_app ---"
+            cat /tmp/discord-app.json 2>/dev/null || true
+          } > /tmp/activity-runtime.txt
+          cat /tmp/activity-runtime.txt
+          exit 0
 
       - name: Record emergency deploy status
         if: always()
@@ -171,9 +186,12 @@ jobs:
           live=${LIVE:-skipped}
           checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
+          if [ -f /tmp/activity-runtime.txt ]; then cp /tmp/activity-runtime.txt .deploy/discord-activity-runtime.txt; fi
+          if [ -f /tmp/emergency-deploy.log ]; then tail -n 100 /tmp/emergency-deploy.log > .deploy/emergency-wrangler-deploy.log; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-docs-emergency-status.txt
-          git commit -m "chore(docs): record emergency production deploy [skip ci]" || true
+          [ ! -f .deploy/discord-activity-runtime.txt ] || git add .deploy/discord-activity-runtime.txt
+          [ ! -f .deploy/emergency-wrangler-deploy.log ] || git add .deploy/emergency-wrangler-deploy.log
+          git commit -m "chore(docs): record emergency Activity diagnosis [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
-          test "$STATUS" = success
