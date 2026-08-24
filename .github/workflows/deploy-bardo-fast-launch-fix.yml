@@ -35,8 +35,10 @@ jobs:
         run: |
           node scripts/apply-production-worker.mjs src/worker.js
           node scripts/apply-inline-activity-launch.mjs src/worker.js
+          node scripts/apply-activity-diagnostic-route.mjs src/worker.js
           grep -q "return jsonResponse({ type: 12 });" src/worker.js
           grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
+          grep -q "__bardo_diag_activity_20260823" src/worker.js
           if grep -q "callback?with_response=true" src/worker.js; then
             echo "Remote interaction callback still present" >&2
             exit 1
@@ -54,6 +56,8 @@ jobs:
           set -euo pipefail
           curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?inline-launch=$GITHUB_SHA" -o /tmp/live.html
           grep -q 'docs-current-document-only-v1' /tmp/live.html
+          curl -fsSL "$WORKER_ORIGIN/__bardo_diag_activity_20260823" -o /tmp/activity-config.json
+          grep -q 'inline-launch-diag-v1' /tmp/activity-config.json
 
       - name: Record status
         if: always()
