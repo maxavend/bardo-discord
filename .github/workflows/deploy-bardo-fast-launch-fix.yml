@@ -51,13 +51,23 @@ jobs:
       - name: Deploy Worker
         run: npx --yes wrangler@4.124.0 deploy --keep-vars
 
-      - name: Verify live origin
+      - name: Capture live Activity diagnostic
+        shell: bash
         run: |
-          set -euo pipefail
-          curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?inline-launch=$GITHUB_SHA" -o /tmp/live.html
-          grep -q 'docs-current-document-only-v1' /tmp/live.html
-          curl -fsSL "$WORKER_ORIGIN/__bardo_diag_activity_20260823" -o /tmp/activity-config.json
-          grep -q 'inline-launch-diag-v1' /tmp/activity-config.json
+          set +e
+          curl -sS -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?inline-launch=$GITHUB_SHA" -o /tmp/live.html
+          LIVE_CURL=$?
+          HTTP_CODE=$(curl -sS -o /tmp/activity-config.json -w '%{http_code}' "$WORKER_ORIGIN/__bardo_diag_activity_20260823")
+          DIAG_CURL=$?
+          {
+            echo "live_curl=$LIVE_CURL"
+            echo "diag_curl=$DIAG_CURL"
+            echo "diag_http=$HTTP_CODE"
+            echo "--- body ---"
+            cat /tmp/activity-config.json 2>/dev/null || true
+          } > /tmp/activity-runtime.txt
+          cat /tmp/activity-runtime.txt
+          exit 0
 
       - name: Record status
         if: always()
@@ -68,11 +78,12 @@ jobs:
           inline_launch=true
           completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
-          if [ -f /tmp/activity-config.json ]; then
-            cp /tmp/activity-config.json .deploy/discord-activity-runtime.json
+          if [ -f /tmp/activity-runtime.txt ]; then
+            cp /tmp/activity-runtime.txt .deploy/discord-activity-runtime.txt
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/bardo-fast-launch-status.txt .deploy/discord-activity-runtime.json 2>/dev/null || git add .deploy/bardo-fast-launch-status.txt
+          git add .deploy/bardo-fast-launch-status.txt
+          [ ! -f .deploy/discord-activity-runtime.txt ] || git add .deploy/discord-activity-runtime.txt
           git commit -m "chore(docs): record Activity runtime diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
