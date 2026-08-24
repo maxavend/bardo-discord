@@ -1,0 +1,173 @@
+name: Emergency deploy Bardo Docs
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/emergency-bardo-docs-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: emergency-bardo-docs-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_ORIGIN: https://bardo-discord.bardo-discord.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install root dependencies
+        id: rootdeps
+        continue-on-error: true
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify Worker secrets
+        id: secrets
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.124.0 secret list --json > /tmp/secrets.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/secrets.json','utf8'));
+          const names = new Set((Array.isArray(data) ? data : []).map(x => x.name));
+          for (const required of ['DISCORD_PUBLIC_KEY','DISCORD_TOKEN','DISCORD_CLIENT_SECRET']) {
+            if (!names.has(required)) throw new Error(`Missing Worker secret: ${required}`);
+          }
+          console.log('All required Discord secrets are configured.');
+          NODE
+
+      - name: Run Bardo tests
+        id: tests
+        continue-on-error: true
+        run: npm test
+
+      - name: Wire authenticated Docs routes into Worker
+        id: patch
+        continue-on-error: true
+        run: |
+          node scripts/apply-production-worker.mjs src/worker.js
+          grep -q "handleDiscordAuthApi" src/worker.js
+          grep -q "handleDocsApi" src/worker.js
+          node --check src/worker.js
+
+      - name: Install Docs app dependencies
+        id: docsdeps
+        continue-on-error: true
+        run: npm install --prefix prototypes/docs-app --no-audit --no-fund
+
+      - name: Build Docs Activity
+        id: docsbuild
+        continue-on-error: true
+        run: npm run build --prefix prototypes/docs-app
+
+      - name: Install Activity assets
+        id: assets
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf activity
+          mkdir -p activity
+          cp -R prototypes/docs-app/dist/. activity/
+          test -f activity/index.html
+          grep -q 'docs-current-document-only-v1' activity/index.html
+
+      - name: Preflight gate
+        id: preflight
+        if: always()
+        shell: bash
+        env:
+          ROOTDEPS: ${{ steps.rootdeps.outcome }}
+          SECRETS: ${{ steps.secrets.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          PATCH: ${{ steps.patch.outcome }}
+          DOCSDEPS: ${{ steps.docsdeps.outcome }}
+          DOCSBUILD: ${{ steps.docsbuild.outcome }}
+          ASSETS: ${{ steps.assets.outcome }}
+        run: |
+          set -euo pipefail
+          for VALUE in "$ROOTDEPS" "$SECRETS" "$TESTS" "$PATCH" "$DOCSDEPS" "$DOCSBUILD" "$ASSETS"; do
+            test "$VALUE" = success
+          done
+
+      - name: Apply D1 migrations
+        id: migrate
+        run: npx --yes wrangler@4.124.0 d1 migrations apply bardo-db --remote
+
+      - name: Deploy Worker
+        id: deploy
+        run: npx --yes wrangler@4.124.0 deploy --keep-vars
+
+      - name: Verify live Activity
+        id: live
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?deploy=$GITHUB_SHA&attempt=$attempt" -o /tmp/live.html; then
+              if grep -q 'docs-current-document-only-v1' /tmp/live.html; then
+                echo 'Live Worker is serving the current Docs Activity.'
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Record emergency deploy status
+        if: always()
+        shell: bash
+        env:
+          ROOTDEPS: ${{ steps.rootdeps.outcome }}
+          SECRETS: ${{ steps.secrets.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          PATCH: ${{ steps.patch.outcome }}
+          DOCSDEPS: ${{ steps.docsdeps.outcome }}
+          DOCSBUILD: ${{ steps.docsbuild.outcome }}
+          ASSETS: ${{ steps.assets.outcome }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          MIGRATE: ${{ steps.migrate.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          LIVE: ${{ steps.live.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          STATUS=failure
+          if [ "$DEPLOY" = success ] && [ "$LIVE" = success ]; then STATUS=success; fi
+          cat > .deploy/bardo-docs-emergency-status.txt <<EOF
+          status=$STATUS
+          source_commit=$GITHUB_SHA
+          rootdeps=$ROOTDEPS
+          secrets=$SECRETS
+          tests=$TESTS
+          patch=$PATCH
+          docsdeps=$DOCSDEPS
+          docsbuild=$DOCSBUILD
+          assets=$ASSETS
+          preflight=$PREFLIGHT
+          migration=${MIGRATE:-skipped}
+          deploy=${DEPLOY:-skipped}
+          live=${LIVE:-skipped}
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/bardo-docs-emergency-status.txt
+          git commit -m "chore(docs): record emergency production deploy [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
+          test "$STATUS" = success
