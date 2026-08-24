@@ -115,3 +115,5 @@ jobs:
           [ ! -f .deploy/bardo-fast-launch-deploy.log ] || git add .deploy/bardo-fast-launch-deploy.log
           git commit -m "chore(docs): record deploy diagnostics [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
+
+# diagnostic rerun marker: corrected Discord oauth2 application endpoint
