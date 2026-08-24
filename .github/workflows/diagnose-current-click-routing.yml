@@ -1,0 +1,38 @@
+name: Diagnose current Bardo click routing
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/diagnose-current-click-routing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read current routing evidence from D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --json --command "SELECT COUNT(*) AS access_rows FROM document_guild_access; SELECT COUNT(*) AS launch_intents FROM docs_launch_intents; SELECT COUNT(*) AS sessions FROM docs_sessions; SELECT guild_id, COUNT(*) AS docs FROM document_guild_access GROUP BY guild_id; SELECT guild_id, COUNT(*) AS intents FROM docs_launch_intents GROUP BY guild_id;" > .deploy/current-click-routing.json
+      - name: Persist diagnostic
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/current-click-routing.json
+          git commit -m "chore(docs): record current click routing diagnostic [skip ci]" || true
+          git push origin HEAD:module/bardo-docs || true
