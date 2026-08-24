@@ -1,9 +1,10 @@
 status=success
-source_commit=9b4ab360c41443b7bc656b06d75a57031a8edfa5
+source_commit=66a5c3dfbbf19c99b023077e6ed88ddfb7628bec
 rootdeps=success
 secrets_observation=failure
 tests=success
 patch=success
+inline_launch=true
 docsdeps=success
 docsbuild=success
 assets=success
@@ -11,4 +12,4 @@ preflight=success
 migration=success
 deploy=success
 live=success
-checked_at=2026-08-24T01:36:07Z
+checked_at=2026-08-24T02:16:41Z
