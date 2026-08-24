@@ -199,3 +199,5 @@ jobs:
           [ ! -f .deploy/discord-activity-runtime.txt ] || git add .deploy/discord-activity-runtime.txt
           git commit -m "chore(docs): record deterministic production deployment [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
+
+# Forced rerun for D1 ACL schema repair 2026-08-24
