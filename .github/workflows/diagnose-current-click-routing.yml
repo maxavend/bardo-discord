@@ -1,4 +1,4 @@
-name: Diagnose current Bardo click routing
+name: Diagnose and deploy current Bardo click routing
 
 on:
   push:
@@ -17,24 +17,121 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_ORIGIN: https://bardo-discord.bardo-discord.workers.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Install dependencies
+        id: deps
+        continue-on-error: true
+        run: npm ci --no-audit --no-fund
+
+      - name: Run current Worker tests
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/routing-tests.log
+
+      - name: Verify inline Activity handler
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "async function handleComponentInteraction(interaction, env, ctx)" src/worker.js
+          grep -q "return handleComponentInteraction(interaction, env, ctx);" src/worker.js
+          grep -q "return jsonResponse({ type: 12 });" src/worker.js
+          grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
+          if grep -q "callback?with_response=true" src/worker.js; then
+            echo "Legacy callback still present" >&2
+            exit 1
+          fi
+          node --check src/worker.js
+
+      - name: Build current Docs Activity
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix prototypes/docs-app --no-audit --no-fund
+          npm run build --prefix prototypes/docs-app
+          rm -rf activity
+          mkdir -p activity
+          cp -R prototypes/docs-app/dist/. activity/
+          test -f activity/index.html
+          grep -q 'docs-current-document-only-v1' activity/index.html
+
+      - name: Deploy current Worker
+        id: deploy
+        if: steps.deps.outcome == 'success' && steps.tests.outcome == 'success' && steps.verify.outcome == 'success' && steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.124.0 deploy --keep-vars 2>&1 | tee /tmp/routing-deploy.log
+
+      - name: Verify live Worker
+        id: live
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          HTTP=$(curl -sS -o /tmp/live.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?routing-deploy=$GITHUB_SHA")
+          MARKER=$(grep -c 'docs-current-document-only-v1' /tmp/live.html 2>/dev/null || true)
+          echo "http=$HTTP marker=$MARKER"
+          test "$HTTP" = 200
+          test "$MARKER" -gt 0
+
       - name: Read current routing evidence from D1
+        id: d1
+        if: always()
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .deploy
-          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --json --command "SELECT COUNT(*) AS access_rows FROM document_guild_access; SELECT COUNT(*) AS launch_intents FROM docs_launch_intents; SELECT COUNT(*) AS sessions FROM docs_sessions; SELECT guild_id, COUNT(*) AS docs FROM document_guild_access GROUP BY guild_id; SELECT guild_id, COUNT(*) AS intents FROM docs_launch_intents GROUP BY guild_id;" > .deploy/current-click-routing.json
-      - name: Persist diagnostic
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --json --command "SELECT COUNT(*) AS access_rows FROM document_guild_access; SELECT COUNT(*) AS launch_intents FROM docs_launch_intents; SELECT COUNT(*) AS sessions FROM docs_sessions; SELECT guild_id, COUNT(*) AS docs FROM document_guild_access GROUP BY guild_id; SELECT guild_id, COUNT(*) AS intents FROM docs_launch_intents GROUP BY guild_id; SELECT guild_id, COUNT(*) AS sessions_by_guild FROM docs_sessions GROUP BY guild_id;" > .deploy/current-click-routing.json
+
+      - name: Persist deploy and diagnostic
+        if: always()
+        env:
+          DEPS: ${{ steps.deps.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          LIVE: ${{ steps.live.outcome }}
+          D1: ${{ steps.d1.outcome }}
         shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          cat > .deploy/current-click-deploy-status.txt <<EOF
+          source_commit=$GITHUB_SHA
+          deps=$DEPS
+          tests=$TESTS
+          verify=$VERIFY
+          build=$BUILD
+          deploy=${DEPLOY:-skipped}
+          live=$LIVE
+          d1=$D1
+          inline_launch=true
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+          [ ! -f /tmp/routing-tests.log ] || tail -n 100 /tmp/routing-tests.log > .deploy/current-click-tests.log
+          [ ! -f /tmp/routing-deploy.log ] || tail -n 100 /tmp/routing-deploy.log > .deploy/current-click-deploy.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/current-click-routing.json
-          git commit -m "chore(docs): record current click routing diagnostic [skip ci]" || true
+          git add .deploy/current-click-deploy-status.txt
+          [ ! -f .deploy/current-click-routing.json ] || git add .deploy/current-click-routing.json
+          [ ! -f .deploy/current-click-tests.log ] || git add .deploy/current-click-tests.log
+          [ ! -f .deploy/current-click-deploy.log ] || git add .deploy/current-click-deploy.log
+          git commit -m "chore(docs): record reliable click deploy [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
-
-# rerun after repeated live Mostrar más timeout
