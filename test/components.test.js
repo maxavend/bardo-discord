@@ -39,7 +39,7 @@ test('createDocumentPreview reemplaza tablas Markdown por un fallback limpio', (
   assert.equal(preview, '*Tabla disponible en el documento completo.*');
 });
 
-test('buildDocumentPayload produce preview Components V2 con botón interactivo Mostrar más', () => {
+test('buildDocumentPayload produce preview Components V2 con deep-link nativo a la Activity', () => {
   const document = {
     title: 'Minuta Test',
     originalMarkdown: '# Minuta Test\n\nContenido completo',
@@ -57,10 +57,13 @@ test('buildDocumentPayload produce preview Components V2 con botón interactivo 
 
   const actionRow = payload.components[0].components.at(-1);
   const button = actionRow.components[0];
-  assert.equal(button.style, 1); // ButtonStyle.Primary
+  assert.equal(button.style, 5); // ButtonStyle.Link
   assert.equal(button.label, '📖 Mostrar más');
-  assert.equal(button.custom_id, 'bardo:open:doc-abc');
-  assert.equal(button.url, undefined);
+  assert.equal(button.custom_id, undefined);
+  const url = new URL(button.url);
+  assert.equal(url.origin, 'https://discord.com');
+  assert.equal(url.pathname, '/activities/123456789');
+  assert.equal(url.searchParams.get('custom_id'), 'bardo:open:doc-abc');
 });
 
 test('buildErrorPayload produce contenedor con mensaje de error', () => {
