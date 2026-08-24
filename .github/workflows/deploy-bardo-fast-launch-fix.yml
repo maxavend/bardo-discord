@@ -29,9 +29,13 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
+        id: deps
+        continue-on-error: true
         run: npm ci --no-audit --no-fund
 
       - name: Apply production Worker patches
+        id: patch
+        continue-on-error: true
         run: |
           node scripts/apply-production-worker.mjs src/worker.js
           node scripts/apply-inline-activity-launch.mjs src/worker.js
@@ -46,12 +50,21 @@ jobs:
           node --check src/worker.js
 
       - name: Run tests
+        id: tests
+        continue-on-error: true
         run: npm test
 
       - name: Deploy Worker
-        run: npx --yes wrangler@4.124.0 deploy --keep-vars
+        id: deploy_worker
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.124.0 deploy --keep-vars 2>&1 | tee /tmp/deploy.log
 
       - name: Capture live Activity diagnostic
+        id: runtime
+        if: always()
         shell: bash
         run: |
           set +e
@@ -71,19 +84,34 @@ jobs:
 
       - name: Record status
         if: always()
+        env:
+          DEPS: ${{ steps.deps.outcome }}
+          PATCH: ${{ steps.patch.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          DEPLOY: ${{ steps.deploy_worker.outcome }}
+          RUNTIME: ${{ steps.runtime.outcome }}
         run: |
           mkdir -p .deploy
           cat > .deploy/bardo-fast-launch-status.txt <<EOF
           source_commit=$GITHUB_SHA
           inline_launch=true
+          deps=$DEPS
+          patch=$PATCH
+          tests=$TESTS
+          deploy=$DEPLOY
+          runtime=$RUNTIME
           completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
           if [ -f /tmp/activity-runtime.txt ]; then
             cp /tmp/activity-runtime.txt .deploy/discord-activity-runtime.txt
           fi
+          if [ -f /tmp/deploy.log ]; then
+            tail -n 120 /tmp/deploy.log > .deploy/bardo-fast-launch-deploy.log
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-fast-launch-status.txt
           [ ! -f .deploy/discord-activity-runtime.txt ] || git add .deploy/discord-activity-runtime.txt
-          git commit -m "chore(docs): record Activity runtime diagnostic [skip ci]" || true
+          [ ! -f .deploy/bardo-fast-launch-deploy.log ] || git add .deploy/bardo-fast-launch-deploy.log
+          git commit -m "chore(docs): record deploy diagnostics [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
