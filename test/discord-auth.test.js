@@ -78,7 +78,7 @@ test('handleDiscordAuthApi devuelve 503 si falta DISCORD_CLIENT_SECRET', async (
   const req = new Request('http://localhost/api/auth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: 'auth-code-123', guildId: 'guild-123' }),
+    body: JSON.stringify({ code: 'auth-code-123', guildId: 'guild-123', channelId: 'channel-123' }),
   });
   const url = new URL(req.url);
   const res = await handleDiscordAuthApi(req, url, { DB: createAuthMockDb() });

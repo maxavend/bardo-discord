@@ -7,6 +7,30 @@ function hashTokenSync(token) {
   return `hash_${token}`;
 }
 
+function discordFetch(input) {
+  const url = new URL(input);
+  if (url.pathname === '/api/v10/guilds/guild-123') {
+    return Promise.resolve(new Response(JSON.stringify({owner_id: 'owner-1'}), {status: 200}));
+  }
+  if (url.pathname === '/api/v10/guilds/guild-123/members/user-123') {
+    return Promise.resolve(new Response(JSON.stringify({user: {id: 'user-123'}, roles: ['role-1']}), {status: 200}));
+  }
+  if (url.pathname === '/api/v10/guilds/guild-123/roles') {
+    return Promise.resolve(new Response(JSON.stringify([
+      {id: 'guild-123', permissions: '1024'},
+      {id: 'role-1', permissions: '0'},
+    ]), {status: 200}));
+  }
+  if (url.pathname === '/api/v10/channels/channel-123') {
+    return Promise.resolve(new Response(JSON.stringify({guild_id: 'guild-123', permission_overwrites: []}), {status: 200}));
+  }
+  return Promise.resolve(new Response('{}', {status: 404}));
+}
+
+function createEnv(db) {
+  return {DB: db, DISCORD_TOKEN: 'test-bot-token', DISCORD_FETCH: discordFetch};
+}
+
 function createDocsMockDb() {
   const documents = new Map([
     ['doc-1', {
@@ -47,8 +71,12 @@ function createDocsMockDb() {
     ['doc-1:guild-123', { document_id: 'doc-1', guild_id: 'guild-123' }],
   ]);
 
+  const channelAccess = new Map([
+    ['doc-1:channel-123', { document_id: 'doc-1', guild_id: 'guild-123', channel_id: 'channel-123' }],
+  ]);
+
   const launchIntents = new Map([
-    ['user-123:guild-123', { user_id: 'user-123', guild_id: 'guild-123', document_id: 'doc-1', created_at: new Date().toISOString() }],
+    ['user-123:guild-123', { user_id: 'user-123', guild_id: 'guild-123', document_id: 'doc-1', channel_id: 'channel-123', created_at: new Date().toISOString() }],
   ]);
 
   // Valid active session token
@@ -62,6 +90,7 @@ function createDocsMockDb() {
           token_hash: hash,
           user_id: 'user-123',
           guild_id: 'guild-123',
+          channel_id: 'channel-123',
           username: 'TestUser',
           avatar: null,
           created_at: '2026-08-24T10:00:00.000Z',
@@ -75,6 +104,11 @@ function createDocsMockDb() {
       if (query.includes('FROM document_guild_access WHERE document_id = ? AND guild_id = ?')) {
         const [docId, guildId] = params;
         return guildAccess.has(`${docId}:${guildId}`) ? { allowed: 1 } : null;
+      }
+      if (query.includes('FROM document_channel_access') && query.includes('WHERE document_id = ? AND guild_id = ?')) {
+        const [docId, guildId] = params;
+        return [...channelAccess.values()].some(access => access.document_id === docId && access.guild_id === guildId)
+          ? { allowed: 1 } : null;
       }
       if (query.includes('FROM docs_launch_intents')) {
         const [userId, guildId] = params;
@@ -102,6 +136,24 @@ function createDocsMockDb() {
         }
         return { results };
       }
+      if (query.includes('FROM documents d') && query.includes('INNER JOIN document_channel_access a')) {
+        const [guildId] = params;
+        const results = [];
+        for (const access of channelAccess.values()) {
+          if (access.guild_id !== guildId) continue;
+          const doc = documents.get(access.document_id);
+          if (!doc || doc.archived_at) continue;
+          if (results.some(item => item.id === doc.id)) continue;
+          results.push({...doc, access_channel_ids: access.channel_id});
+        }
+        return { results };
+      }
+      if (query.includes('FROM document_channel_access') && query.includes('SELECT channel_id')) {
+        const [docId, guildId] = params;
+        return {results: [...channelAccess.values()]
+          .filter(access => access.document_id === docId && access.guild_id === guildId)
+          .map(access => ({channel_id: access.channel_id}))};
+      }
       return { results: [] };
     },
     async run() {
@@ -117,21 +169,26 @@ function createDocsMockDb() {
         guildAccess.set(`${document_id}:${guild_id}`, { document_id, guild_id });
         return { meta: { changes: 1 } };
       }
+      if (query.includes('INSERT INTO document_channel_access')) {
+        const [document_id, guild_id, channel_id, added_at, added_by] = params;
+        channelAccess.set(`${document_id}:${channel_id}`, { document_id, guild_id, channel_id, added_at, added_by });
+        return { meta: { changes: 1 } };
+      }
       if (query.includes('INSERT INTO documents')) {
-        const [id, title, original_markdown, pages, source_name, created_at, created_by] = params;
-        documents.set(id, { id, title, original_markdown, pages, created_at, created_by });
+        const [id, title, original_markdown, pages, source_name, created_at, created_by, created_by_name, updated_at, updated_by, updated_by_name] = params;
+        documents.set(id, { id, title, original_markdown, pages, source_name, created_at, created_by, created_by_name, updated_at, updated_by, updated_by_name });
         return { meta: { changes: 1 } };
       }
       if (query.includes('UPDATE documents') && query.includes('title = ?')) {
-        const [title, description, original_markdown, pages, updated_at, documentId] = params;
+        const [title, description, original_markdown, pages, updated_at, updated_by, updated_by_name, documentId] = params;
         const existing = documents.get(documentId) || {};
-        documents.set(documentId, { ...existing, title, description, original_markdown, pages, updated_at });
+        documents.set(documentId, { ...existing, title, description, original_markdown, pages, updated_at, updated_by, updated_by_name });
         return { meta: { changes: 1 } };
       }
       if (query.includes('UPDATE documents') && query.includes('archived_at = ?')) {
-        const [archivedAt, updatedAt, documentId] = params;
+        const [archivedAt, updatedAt, updated_by, updated_by_name, documentId] = params;
         const existing = documents.get(documentId) || {};
-        documents.set(documentId, { ...existing, archived_at: archivedAt, updated_at: updatedAt });
+        documents.set(documentId, { ...existing, archived_at: archivedAt, updated_at: updatedAt, updated_by, updated_by_name });
         return { meta: { changes: 1 } };
       }
       return { meta: { changes: 1 } };
@@ -141,6 +198,7 @@ function createDocsMockDb() {
   return {
     documents,
     guildAccess,
+    channelAccess,
     launchIntents,
     validToken,
     prepare(query) {
@@ -159,7 +217,7 @@ test('handleDocsApi rechaza requests sin sesión autenticada', async () => {
   const req = new Request('http://localhost/api/docs');
   const url = new URL(req.url);
   const db = createDocsMockDb();
-  const res = await handleDocsApi(req, url, { DB: db });
+  const res = await handleDocsApi(req, url, createEnv(db));
   assert.equal(res.status, 401);
 });
 
@@ -169,7 +227,7 @@ test('handleDocsApi devuelve la lista de documentos accesibles para el guild de 
     headers: { Authorization: `Bearer ${db.validToken}` },
   });
   const url = new URL(req.url);
-  const res = await handleDocsApi(req, url, { DB: db });
+  const res = await handleDocsApi(req, url, createEnv(db));
   assert.equal(res.status, 200);
 
   const data = await res.json();
@@ -177,6 +235,41 @@ test('handleDocsApi devuelve la lista de documentos accesibles para el guild de 
   assert.equal(data.guildId, 'guild-123');
   assert.equal(data.user.id, 'user-123');
   assert.ok(data.documents.some(d => d.id === 'doc-1'));
+});
+
+test('handleDocsApi no lista un documento compartido únicamente en otro canal', async () => {
+  const db = createDocsMockDb();
+  db.documents.set('doc-other-channel', {
+    id: 'doc-other-channel',
+    title: 'Solo otro canal',
+    description: '',
+    original_markdown: '# Solo otro canal',
+    pages: JSON.stringify(['']),
+    source_name: null,
+    created_at: '2026-08-20T10:00:00.000Z',
+    updated_at: '2026-08-20T10:00:00.000Z',
+    archived_at: null,
+    created_by: 'user-1',
+    source_mime: null,
+    source_type: 'markdown',
+    import_status: 'ready',
+    has_source: 0,
+  });
+  db.channelAccess.set('doc-other-channel:channel-999', {
+    document_id: 'doc-other-channel',
+    guild_id: 'guild-123',
+    channel_id: 'channel-999',
+  });
+
+  const req = new Request('http://localhost/api/docs', {
+    headers: { Authorization: `Bearer ${db.validToken}` },
+  });
+  const res = await handleDocsApi(req, new URL(req.url), createEnv(db));
+  assert.equal(res.status, 200);
+
+  const data = await res.json();
+  assert.ok(data.documents.some(document => document.id === 'doc-1'));
+  assert.equal(data.documents.some(document => document.id === 'doc-other-channel'), false);
 });
 
 test('handleDocsApi resuelve contextDocumentId desde header x-bardo-custom-id', async () => {
@@ -188,7 +281,7 @@ test('handleDocsApi resuelve contextDocumentId desde header x-bardo-custom-id', 
     },
   });
   const url = new URL(req.url);
-  const res = await handleDocsApi(req, url, { DB: db });
+  const res = await handleDocsApi(req, url, createEnv(db));
   assert.equal(res.status, 200);
 
   const data = await res.json();
@@ -210,13 +303,16 @@ test('handleDocsApi crea un nuevo documento vía POST y le otorga acceso al guil
     body: JSON.stringify(newDoc),
   });
   const url = new URL(req.url);
-  const res = await handleDocsApi(req, url, { DB: db });
+  const res = await handleDocsApi(req, url, createEnv(db));
   assert.equal(res.status, 201);
 
   const created = await res.json();
   assert.equal(created.title, 'Nuevo Documento');
+  assert.equal(created.createdByName, 'TestUser');
+  assert.equal(created.updatedByName, 'TestUser');
   assert.ok(created.id);
   assert.ok(db.guildAccess.has(`${created.id}:guild-123`));
+  assert.ok(db.channelAccess.has(`${created.id}:channel-123`));
 });
 
 test('handleDocsApi actualiza un documento existente vía PATCH si el guild tiene acceso', async () => {
@@ -234,7 +330,7 @@ test('handleDocsApi actualiza un documento existente vía PATCH si el guild tien
     body: JSON.stringify(updatePayload),
   });
   const url = new URL(req.url);
-  const res = await handleDocsApi(req, url, { DB: db });
+  const res = await handleDocsApi(req, url, createEnv(db));
   assert.equal(res.status, 200);
 
   const updated = await res.json();
@@ -249,6 +345,6 @@ test('handleDocsApi rechaza acceso a documento no compartido con el guild', asyn
     },
   });
   const url = new URL(req.url);
-  const res = await handleDocsApi(req, url, { DB: db });
+  const res = await handleDocsApi(req, url, createEnv(db));
   assert.equal(res.status, 403);
 });

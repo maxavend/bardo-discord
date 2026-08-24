@@ -34,6 +34,9 @@ function mapDocumentRow(row) {
     updatedAt: row.updated_at || row.created_at,
     archivedAt: row.archived_at || null,
     createdBy: row.created_by,
+    createdByName: row.created_by_name || null,
+    updatedBy: row.updated_by || null,
+    updatedByName: row.updated_by_name || null,
     sourceMime: row.source_mime || null,
     sourceType: row.source_type || 'markdown',
     importStatus: row.import_status || 'ready',
@@ -44,15 +47,22 @@ function mapDocumentRow(row) {
 export async function saveDocument(db, messageId, document) {
   await db
     .prepare(
-      `INSERT INTO documents (id, title, original_markdown, pages, source_name, created_at, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO documents (
+         id, title, original_markdown, pages, source_name, created_at, created_by,
+         created_by_name, updated_at, updated_by, updated_by_name
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          title = excluded.title,
          original_markdown = excluded.original_markdown,
          pages = excluded.pages,
          source_name = excluded.source_name,
-         created_at = excluded.created_at,
-         created_by = excluded.created_by`,
+         created_at = COALESCE(documents.created_at, excluded.created_at),
+         created_by = COALESCE(documents.created_by, excluded.created_by),
+         created_by_name = COALESCE(documents.created_by_name, excluded.created_by_name),
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by,
+         updated_by_name = excluded.updated_by_name`,
     )
     .bind(
       messageId,
@@ -62,6 +72,10 @@ export async function saveDocument(db, messageId, document) {
       document.sourceName || null,
       document.createdAt,
       document.createdBy,
+      document.createdByName || null,
+      document.updatedAt || document.createdAt,
+      document.updatedBy || document.createdBy || null,
+      document.updatedByName || document.createdByName || null,
     )
     .run();
 }
@@ -83,7 +97,8 @@ export async function loadDocument(db, messageId) {
   const row = await db
     .prepare(
       `SELECT id, title, description, original_markdown, pages, source_name, created_at, updated_at,
-              archived_at, created_by, source_mime, source_type, import_status,
+              archived_at, created_by, created_by_name, updated_by, updated_by_name,
+              source_mime, source_type, import_status,
               CASE WHEN source_blob IS NULL THEN 0 ELSE 1 END AS has_source
        FROM documents WHERE id = ?`,
     )
@@ -98,7 +113,8 @@ export async function listDocuments(db, limit = 100) {
   const result = await db
     .prepare(
       `SELECT id, title, description, original_markdown, pages, source_name, created_at, updated_at,
-              archived_at, created_by, source_mime, source_type, import_status,
+              archived_at, created_by, created_by_name, updated_by, updated_by_name,
+              source_mime, source_type, import_status,
               CASE WHEN source_blob IS NULL THEN 0 ELSE 1 END AS has_source
        FROM documents
        WHERE archived_at IS NULL
@@ -116,7 +132,8 @@ export async function listDocumentsForGuild(db, guildId, limit = 100) {
   const result = await db
     .prepare(
       `SELECT d.id, d.title, d.description, d.original_markdown, d.pages, d.source_name,
-              d.created_at, d.updated_at, d.archived_at, d.created_by, d.source_mime,
+              d.created_at, d.updated_at, d.archived_at, d.created_by, d.created_by_name,
+              d.updated_by, d.updated_by_name, d.source_mime,
               d.source_type, d.import_status,
               CASE WHEN d.source_blob IS NULL THEN 0 ELSE 1 END AS has_source
        FROM documents d
@@ -131,12 +148,40 @@ export async function listDocumentsForGuild(db, guildId, limit = 100) {
   return (result?.results || []).map(mapDocumentRow).filter(Boolean);
 }
 
+export async function listDocumentsWithChannelAccessForGuild(db, guildId, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 250));
+  const result = await db
+    .prepare(
+      `SELECT d.id, d.title, d.description, d.original_markdown, d.pages, d.source_name,
+              d.created_at, d.updated_at, d.archived_at, d.created_by, d.source_mime,
+              d.source_type, d.import_status,
+              CASE WHEN d.source_blob IS NULL THEN 0 ELSE 1 END AS has_source,
+              GROUP_CONCAT(DISTINCT a.channel_id) AS access_channel_ids
+       FROM documents d
+       INNER JOIN document_channel_access a ON a.document_id = d.id
+       WHERE a.guild_id = ? AND d.archived_at IS NULL
+       GROUP BY d.id, d.title, d.description, d.original_markdown, d.pages, d.source_name,
+                d.created_at, d.updated_at, d.archived_at, d.created_by, d.source_mime,
+                d.source_type, d.import_status, d.source_blob
+       ORDER BY COALESCE(d.updated_at, d.created_at) DESC
+       LIMIT ?`,
+    )
+    .bind(guildId, safeLimit)
+    .all();
+
+  return (result?.results || []).map(row => ({
+    ...mapDocumentRow(row),
+    accessChannels: String(row.access_channel_ids || '').split(',').filter(Boolean),
+  })).filter(Boolean);
+}
+
 export async function updateDocumentContent(db, documentId, document) {
   const updatedAt = document.updatedAt || new Date().toISOString();
   await db
     .prepare(
       `UPDATE documents
-       SET title = ?, description = ?, original_markdown = ?, pages = ?, updated_at = ?, archived_at = NULL
+       SET title = ?, description = ?, original_markdown = ?, pages = ?, updated_at = ?,
+           updated_by = ?, updated_by_name = ?, archived_at = NULL
        WHERE id = ?`,
     )
     .bind(
@@ -145,15 +190,27 @@ export async function updateDocumentContent(db, documentId, document) {
       document.originalMarkdown || '',
       JSON.stringify(document.pages || []),
       updatedAt,
+      document.updatedBy || null,
+      document.updatedByName || null,
       documentId,
     )
     .run();
 }
 
-export async function archiveDocument(db, documentId, archivedAt = new Date().toISOString()) {
+export async function archiveDocument(
+  db,
+  documentId,
+  archivedAt = new Date().toISOString(),
+  updatedBy = null,
+  updatedByName = null,
+) {
   await db
-    .prepare('UPDATE documents SET archived_at = ?, updated_at = ? WHERE id = ?')
-    .bind(archivedAt, archivedAt, documentId)
+    .prepare(
+      `UPDATE documents
+       SET archived_at = ?, updated_at = ?, updated_by = ?, updated_by_name = ?
+       WHERE id = ?`,
+    )
+    .bind(archivedAt, archivedAt, updatedBy, updatedByName, documentId)
     .run();
 }
 
@@ -184,15 +241,23 @@ export async function loadDocumentSource(db, documentId) {
   };
 }
 
-export async function cacheNormalizedDocument(db, documentId, markdown, pages) {
+export async function cacheNormalizedDocument(db, documentId, markdown, pages, metadata = {}) {
+  const updatedAt = metadata.updatedAt || new Date().toISOString();
   await db
     .prepare(
       `UPDATE documents
        SET original_markdown = ?, pages = ?, import_status = 'ready', source_blob = NULL,
-           updated_at = COALESCE(updated_at, created_at)
+           updated_at = ?, updated_by = ?, updated_by_name = ?
        WHERE id = ?`,
     )
-    .bind(markdown, JSON.stringify(pages), documentId)
+    .bind(
+      markdown,
+      JSON.stringify(pages),
+      updatedAt,
+      metadata.updatedBy || null,
+      metadata.updatedByName || null,
+      documentId,
+    )
     .run();
 }
 
@@ -207,6 +272,47 @@ export async function grantDocumentGuildAccess(db, documentId, guildId, addedBy 
     )
     .bind(documentId, guildId, addedAt, addedBy || null)
     .run();
+}
+
+export async function grantDocumentChannelAccess(db, documentId, guildId, channelId, addedBy = null) {
+  if (!documentId || !guildId || !channelId) return;
+  const addedAt = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO document_channel_access (document_id, guild_id, channel_id, added_at, added_by)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(document_id, channel_id) DO NOTHING`,
+    )
+    .bind(documentId, guildId, channelId, addedAt, addedBy || null)
+    .run();
+}
+
+export async function listDocumentChannelAccess(db, documentId, guildId) {
+  if (!documentId || !guildId) return [];
+  const result = await db
+    .prepare(
+      `SELECT channel_id
+       FROM document_channel_access
+       WHERE document_id = ? AND guild_id = ?
+       ORDER BY added_at ASC`,
+    )
+    .bind(documentId, guildId)
+    .all();
+  return (result?.results || []).map(row => String(row.channel_id || '')).filter(Boolean);
+}
+
+export async function documentHasChannelAccess(db, documentId, guildId, channelId) {
+  if (!documentId || !guildId || !channelId) return false;
+  const row = await db
+    .prepare(
+      `SELECT 1 AS allowed
+       FROM document_channel_access
+       WHERE document_id = ? AND guild_id = ? AND channel_id = ?
+       LIMIT 1`,
+    )
+    .bind(documentId, guildId, channelId)
+    .first();
+  return Boolean(row?.allowed);
 }
 
 export async function adoptLegacyDocumentsForGuild(db, guildId, userId = null) {
@@ -241,18 +347,19 @@ export async function documentHasGuildAccess(db, documentId, guildId) {
   return Boolean(row?.allowed);
 }
 
-export async function saveDocsLaunchIntent(db, userId, guildId, documentId) {
+export async function saveDocsLaunchIntent(db, userId, guildId, documentId, channelId = null) {
   if (!userId || !guildId || !documentId) return;
   const createdAt = new Date().toISOString();
   await db
     .prepare(
-      `INSERT INTO docs_launch_intents (user_id, guild_id, document_id, created_at)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO docs_launch_intents (user_id, guild_id, document_id, channel_id, created_at)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(user_id, guild_id) DO UPDATE SET
          document_id = excluded.document_id,
+         channel_id = excluded.channel_id,
          created_at = excluded.created_at`,
     )
-    .bind(userId, guildId, documentId, createdAt)
+    .bind(userId, guildId, documentId, channelId || null, createdAt)
     .run();
 }
 
@@ -261,7 +368,7 @@ export async function loadRecentDocsLaunchIntent(db, userId, guildId, maxAgeMs =
   const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
   const row = await db
     .prepare(
-      `SELECT user_id, guild_id, document_id, created_at
+      `SELECT user_id, guild_id, document_id, channel_id, created_at
        FROM docs_launch_intents
        WHERE user_id = ? AND guild_id = ? AND created_at >= ?
        LIMIT 1`,
@@ -274,6 +381,7 @@ export async function loadRecentDocsLaunchIntent(db, userId, guildId, maxAgeMs =
     userId: row.user_id,
     guildId: row.guild_id,
     documentId: row.document_id,
+    channelId: row.channel_id || null,
     createdAt: row.created_at,
   };
 }
@@ -281,11 +389,12 @@ export async function loadRecentDocsLaunchIntent(db, userId, guildId, maxAgeMs =
 export async function saveDocsSession(db, tokenHash, session) {
   await db
     .prepare(
-      `INSERT INTO docs_sessions (token_hash, user_id, guild_id, username, avatar, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO docs_sessions (token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(token_hash) DO UPDATE SET
          user_id = excluded.user_id,
          guild_id = excluded.guild_id,
+         channel_id = excluded.channel_id,
          username = excluded.username,
          avatar = excluded.avatar,
          created_at = excluded.created_at,
@@ -295,6 +404,7 @@ export async function saveDocsSession(db, tokenHash, session) {
       tokenHash,
       session.userId,
       session.guildId,
+      session.channelId || null,
       session.username || null,
       session.avatar || null,
       session.createdAt,
@@ -306,7 +416,7 @@ export async function saveDocsSession(db, tokenHash, session) {
 export async function loadDocsSession(db, tokenHash) {
   const row = await db
     .prepare(
-      `SELECT token_hash, user_id, guild_id, username, avatar, created_at, expires_at
+      `SELECT token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at
        FROM docs_sessions WHERE token_hash = ?`,
     )
     .bind(tokenHash)
@@ -317,6 +427,7 @@ export async function loadDocsSession(db, tokenHash) {
     tokenHash: row.token_hash,
     userId: row.user_id,
     guildId: row.guild_id,
+    channelId: row.channel_id || null,
     username: row.username || null,
     avatar: row.avatar || null,
     createdAt: row.created_at,

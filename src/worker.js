@@ -9,15 +9,18 @@ import { generateDocxDocument, generatePdfDocument, sanitizeExportFileName } fro
 import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
 import { normalizeDocumentId } from './document-id.js';
 import { handleDocsApi } from './docs-api.js';
-import { handleDiscordAuthApi } from './discord-auth.js';
+import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
+import { sessionCanAccessDocument } from './document-access.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
 import {
   adoptLegacyDocumentsForGuild,
   cacheNormalizedDocument,
   grantDocumentGuildAccess,
+  grantDocumentChannelAccess,
   loadActivityContext,
   loadDocument,
   loadDocumentSource,
+  listDocumentChannelAccess,
   saveActivityContext,
   saveDocsLaunchIntent,
   saveDocument,
@@ -90,7 +93,9 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
   try {
     const sourceType = validateAttachment(attachment);
     const downloaded = await downloadAttachment(attachment, sourceType);
-    const createdBy = interaction.member?.user?.id || interaction.user?.id || 'unknown';
+    const discordUser = interaction.member?.user || interaction.user || null;
+    const createdBy = discordUser?.id || 'unknown';
+    const createdByName = discordUser?.global_name || discordUser?.username || 'Usuario de Discord';
     const documentId = crypto.randomUUID();
     const sourceName = attachmentName(attachment) || null;
 
@@ -121,17 +126,24 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       sourceName,
       createdAt: new Date().toISOString(),
       createdBy,
+      createdByName,
+      updatedAt: new Date().toISOString(),
+      updatedBy: createdBy,
+      updatedByName: createdByName,
     };
 
     if (!env.DB) {
       throw new Error('La base de datos de Bardo no está disponible.');
     }
 
+    if (!interaction.guild_id || !interaction.channel_id) {
+      throw new Error('Bardo solo puede compartir documentos desde un canal de servidor de Discord.');
+    }
+
     await saveDocument(env.DB, documentId, document);
 
-    if (interaction.guild_id) {
-      await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, createdBy);
-    }
+    await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, createdBy);
+    await grantDocumentChannelAccess(env.DB, documentId, interaction.guild_id, interaction.channel_id, createdBy);
 
     if (!isTextSourceType(sourceType)) {
       await saveDocumentSource(env.DB, documentId, {
@@ -265,7 +277,28 @@ async function handleComponentInteraction(interaction, env, ctx) {
       if (interaction.guild_id) {
         await adoptLegacyDocumentsForGuild(env.DB, interaction.guild_id, invokingUserId);
         await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);
-        await saveDocsLaunchIntent(env.DB, invokingUserId, interaction.guild_id, documentId);
+        if (interaction.channel_id) {
+          const sharedChannels = await listDocumentChannelAccess(env.DB, documentId, interaction.guild_id);
+          // A legacy document has no channel ACL yet, so its first component
+          // launch establishes the original channel. Once it has one, merely
+          // opening the Activity must not expand its audience to another channel.
+          if (!sharedChannels.length) {
+            await grantDocumentChannelAccess(
+              env.DB,
+              documentId,
+              interaction.guild_id,
+              interaction.channel_id,
+              invokingUserId,
+            );
+          }
+          await saveDocsLaunchIntent(
+            env.DB,
+            invokingUserId,
+            interaction.guild_id,
+            documentId,
+            interaction.channel_id,
+          );
+        }
       }
     } catch (error) {
       console.error('Error persisting Bardo Activity launch context:', error);
@@ -305,6 +338,13 @@ function parseDocumentApiPath(pathname) {
 }
 
 async function verifyActivityDocumentAccess(request, env, documentId) {
+  const auth = await requireDocsSession(request, env);
+  if (auth.error) return auth.error;
+
+  if (!(await sessionCanAccessDocument(env, auth.session, documentId))) {
+    return jsonResponse({ error: 'Document is not shared with this Discord channel' }, 403);
+  }
+
   const instanceId = request.headers.get('x-bardo-instance-id')?.trim();
   if (!instanceId) {
     return jsonResponse({ error: 'Activity instance required' }, 401);
@@ -319,10 +359,13 @@ async function verifyActivityDocumentAccess(request, env, documentId) {
 }
 
 
-async function handleDocumentExportApi(url, documentId, env) {
+async function handleDocumentExportApi(request, url, documentId, env) {
   if (!env.DB) {
     return jsonResponse({ error: "Database unavailable" }, 503);
   }
+
+  const accessError = await verifyActivityDocumentAccess(request, env, documentId);
+  if (accessError) return accessError;
 
   const document = await loadDocument(env.DB, documentId);
   if (!document) {
@@ -374,10 +417,13 @@ async function handleDocumentExportApi(url, documentId, env) {
   });
 }
 
-async function handleDocumentApi(documentId, env) {
+async function handleDocumentApi(request, documentId, env) {
   if (!env.DB) {
     return jsonResponse({ error: 'Database unavailable' }, 503);
   }
+
+  const accessError = await verifyActivityDocumentAccess(request, env, documentId);
+  if (accessError) return accessError;
 
   const document = await loadDocument(env.DB, documentId);
   if (!document) {
@@ -395,6 +441,9 @@ async function handleDocumentApi(documentId, env) {
       importStatus: document.importStatus,
       hasSource: document.hasSource,
       createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+      createdByName: document.createdByName,
+      updatedByName: document.updatedByName,
     },
     200,
     {
@@ -468,7 +517,13 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
     return jsonResponse({ error: 'Normalized document is empty' }, 400);
   }
 
-  await cacheNormalizedDocument(env.DB, documentId, markdown, pages);
+  const auth = await requireDocsSession(request, env);
+  if (auth.error) return auth.error;
+  await cacheNormalizedDocument(env.DB, documentId, markdown, pages, {
+    updatedAt: new Date().toISOString(),
+    updatedBy: auth.session.userId,
+    updatedByName: auth.session.username || 'Usuario de Discord',
+  });
   return jsonResponse({ ok: true });
 }
 
@@ -572,11 +627,11 @@ export default {
       if (!route) return jsonResponse({ error: 'Invalid document route' }, 400);
 
       if (request.method === 'GET' && route.action === null) {
-        return handleDocumentApi(route.documentId, env);
+        return handleDocumentApi(request, route.documentId, env);
       }
 
       if (request.method === 'GET' && (route.action === 'export' || route.action === 'download')) {
-        return handleDocumentExportApi(url, route.documentId, env);
+        return handleDocumentExportApi(request, url, route.documentId, env);
       }
 
       if (request.method === 'GET' && route.action === 'source') {

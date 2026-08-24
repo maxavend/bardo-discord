@@ -20,7 +20,19 @@ class MockD1PreparedStatement {
 
   async run() {
     if (this.query.includes('INSERT INTO documents')) {
-      const [id, title, original_markdown, pages, source_name, created_at, created_by] = this.params;
+      const [
+        id,
+        title,
+        original_markdown,
+        pages,
+        source_name,
+        created_at,
+        created_by,
+        created_by_name,
+        updated_at,
+        updated_by,
+        updated_by_name,
+      ] = this.params;
       this.db.storage.set(id, {
         id,
         title,
@@ -29,6 +41,10 @@ class MockD1PreparedStatement {
         source_name,
         created_at,
         created_by,
+        created_by_name,
+        updated_at,
+        updated_by,
+        updated_by_name,
       });
       return { success: true };
     }
@@ -77,6 +93,10 @@ test('saveDocument y loadDocument persisten y recuperan el documento correctamen
     sourceName: 'minuta.md',
     createdAt: new Date().toISOString(),
     createdBy: 'user123',
+    createdByName: 'Maximiliano',
+    updatedAt: new Date().toISOString(),
+    updatedBy: 'user123',
+    updatedByName: 'Maximiliano',
   };
 
   await saveDocument(db, 'msg-123456', document);
@@ -89,6 +109,8 @@ test('saveDocument y loadDocument persisten y recuperan el documento correctamen
   assert.deepEqual(loaded.pages, ['Texto original.']);
   assert.equal(loaded.sourceName, 'minuta.md');
   assert.equal(loaded.createdBy, 'user123');
+  assert.equal(loaded.createdByName, 'Maximiliano');
+  assert.equal(loaded.updatedByName, 'Maximiliano');
 });
 
 test('loadDocument devuelve null si el documento no existe', async () => {

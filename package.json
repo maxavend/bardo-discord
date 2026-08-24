@@ -12,7 +12,7 @@
     "deploy": "npm run build:activity && wrangler deploy",
     "register": "node --env-file=.env scripts/register-commands.js",
     "test": "npm run build:activity && node --test",
-    "check": "npm run build:activity && node --check src/worker.js && node --check src/components.js && node --check src/document-id.js && node --check src/export-format.js && node --check src/import-format.js && node --check src/pagination.js && node --check src/db.js && node --check src/discord-auth.js && node --check src/docs-api.js && node --check scripts/register-commands.js && node --check scripts/build-activity.js"
+    "check": "npm run build:activity && node --check src/worker.js && node --check src/components.js && node --check src/document-id.js && node --check src/export-format.js && node --check src/import-format.js && node --check src/pagination.js && node --check src/db.js && node --check src/discord-auth.js && node --check src/discord-permissions.js && node --check src/document-access.js && node --check src/docs-api.js && node --check scripts/register-commands.js && node --check scripts/build-activity.js"
   },
   "engines": {
     "node": ">=22.12.0"

@@ -4,6 +4,7 @@ import {
   loadDocsSession,
   saveDocsSession,
 } from './db.js';
+import {canUserViewChannel} from './discord-permissions.js';
 
 const AUTH_TOKEN_PATH = '/api/auth/token';
 const DISCORD_CLIENT_ID = '1539704001535156254';
@@ -84,7 +85,7 @@ async function exchangeCode(code, env) {
   return payload;
 }
 
-async function createAuthenticatedSession(code, guildId, env) {
+async function createAuthenticatedSession(code, guildId, channelId, env) {
   if (!env.DB) throw new Error('Database unavailable');
   if (!guildId) {
     const error = new Error('Guild context required');
@@ -104,6 +105,12 @@ async function createAuthenticatedSession(code, guildId, env) {
     throw error;
   }
 
+  if (!channelId || !(await canUserViewChannel(env, guildId, user.id, channelId))) {
+    const error = new Error('Discord user cannot view this channel');
+    error.code = 'channel_access_required';
+    throw error;
+  }
+
   const token = newSessionToken();
   const tokenHash = await hashToken(token);
   const createdAt = new Date();
@@ -113,6 +120,7 @@ async function createAuthenticatedSession(code, guildId, env) {
   await saveDocsSession(env.DB, tokenHash, {
     userId: user.id,
     guildId,
+    channelId,
     username: user.global_name || user.username || null,
     avatar: user.avatar || null,
     createdAt: createdAt.toISOString(),
@@ -125,6 +133,7 @@ async function createAuthenticatedSession(code, guildId, env) {
     expiresAt: expiresAt.toISOString(),
     user,
     guildId,
+    channelId,
   };
 }
 
@@ -162,16 +171,19 @@ export async function handleDiscordAuthApi(request, url, env) {
 
   const code = typeof payload?.code === 'string' ? payload.code.trim() : '';
   const guildId = typeof payload?.guildId === 'string' ? payload.guildId.trim() : '';
+  const channelId = typeof payload?.channelId === 'string' ? payload.channelId.trim() : '';
   if (!code) return json({ error: 'Discord authorization code required' }, 400);
   if (!guildId) return json({ error: 'Discord guild required' }, 400);
+  if (!channelId) return json({ error: 'Discord channel required' }, 400);
 
   try {
-    const auth = await createAuthenticatedSession(code, guildId, env);
+    const auth = await createAuthenticatedSession(code, guildId, channelId, env);
     return json({
       access_token: auth.accessToken,
       bardo_token: auth.token,
       expires_at: auth.expiresAt,
       guild_id: auth.guildId,
+      channel_id: auth.channelId,
       user: {
         id: auth.user.id,
         username: auth.user.username,
@@ -189,6 +201,9 @@ export async function handleDiscordAuthApi(request, url, env) {
     }
     if (error?.code === 'guild_required') {
       return json({ error: 'Open Bardo Docs from a Discord server' }, 400);
+    }
+    if (error?.code === 'channel_access_required') {
+      return json({ error: 'You cannot view this Discord channel' }, 403);
     }
     return json({ error: 'Discord authentication failed' }, 401);
   }

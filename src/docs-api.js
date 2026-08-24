@@ -1,19 +1,21 @@
 import { requireDocsSession } from './discord-auth.js';
+import {filterDocumentsBySessionAccess, sessionCanAccessDocument} from './document-access.js';
 import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
   adoptLegacyDocumentsForGuild,
   archiveDocument,
   cacheNormalizedDocument,
-  documentHasGuildAccess,
   grantDocumentGuildAccess,
-  listDocumentsForGuild,
+  grantDocumentChannelAccess,
+  listDocumentsWithChannelAccessForGuild,
   loadDocument,
   loadDocumentSource,
   loadRecentDocsLaunchIntent,
   saveDocument,
   updateDocumentContent,
 } from './db.js';
+import {createDiscordPermissionChecker} from './discord-permissions.js';
 
 const DOCS_API_PREFIX = '/api/docs';
 const MAX_DOCUMENT_BYTES = 1_800_000;
@@ -45,7 +47,13 @@ function serialize(document) {
     updatedAt: document.updatedAt || document.createdAt,
     archivedAt: document.archivedAt || null,
     createdBy: document.createdBy || null,
+    createdByName: document.createdByName || null,
+    updatedByName: document.updatedByName || null,
   };
+}
+
+function sessionDisplayName(session) {
+  return String(session?.username || '').trim() || 'Usuario de Discord';
 }
 
 function launchDocumentId(request) {
@@ -121,20 +129,26 @@ async function adoptLegacyLibraryIfSafe(env, session) {
   }
 }
 
-async function requireDocumentAccess(env, documentId, guildId) {
-  const allowed = await documentHasGuildAccess(env.DB, documentId, guildId);
-  if (!allowed) return { error: json({ error: 'Document is not shared with this Discord server' }, 403) };
+async function requireDocumentAccess(env, documentId, session) {
+  const allowed = await sessionCanAccessDocument(env, session, documentId);
+  if (!allowed) return { error: json({ error: 'Document is not shared with this Discord channel' }, 403) };
   const document = await loadDocument(env.DB, documentId);
   if (!document) return { error: json({ error: 'Document not found' }, 404) };
   return { document };
 }
 
+async function sessionCanViewCurrentChannel(env, session) {
+  if (!session?.channelId) return false;
+  return createDiscordPermissionChecker(env, session.guildId, session.userId)
+    .canViewChannel(session.channelId);
+}
+
 async function resolveContextDocument(request, env, session) {
   const requested = launchDocumentId(request);
-  if (requested && await documentHasGuildAccess(env.DB, requested, session.guildId)) return requested;
+  if (requested && await sessionCanAccessDocument(env, session, requested)) return requested;
 
   const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
-  if (intent?.documentId && await documentHasGuildAccess(env.DB, intent.documentId, session.guildId)) {
+  if (intent?.documentId && await sessionCanAccessDocument(env, session, intent.documentId)) {
     return intent.documentId;
   }
   return null;
@@ -142,7 +156,7 @@ async function resolveContextDocument(request, env, session) {
 
 async function handleSource(route, request, env, session) {
   if (request.method !== 'GET') return new Response('Method not allowed', {status:405});
-  const access = await requireDocumentAccess(env, route.id, session.guildId);
+  const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
   const source = await loadDocumentSource(env.DB, route.id);
   if (!source) return json({error:'Document source not found'}, 404);
@@ -160,7 +174,7 @@ async function handleSource(route, request, env, session) {
 
 async function handleNormalize(route, request, env, session) {
   if (request.method !== 'POST') return new Response('Method not allowed', {status:405});
-  const access = await requireDocumentAccess(env, route.id, session.guildId);
+  const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
 
   let payload;
@@ -173,7 +187,11 @@ async function handleNormalize(route, request, env, session) {
   const pages = paginateMarkdown(body || markdown).slice(0, 1);
   if (!pages.length) return json({error:'Normalized document is empty'}, 400);
 
-  await cacheNormalizedDocument(env.DB, route.id, markdown, pages);
+  await cacheNormalizedDocument(env.DB, route.id, markdown, pages, {
+    updatedAt: new Date().toISOString(),
+    updatedBy: session.userId,
+    updatedByName: sessionDisplayName(session),
+  });
   return json({ok:true, document:serialize(await loadDocument(env.DB, route.id))});
 }
 
@@ -195,7 +213,11 @@ export async function handleDocsApi(request, url, env) {
   if (!route.collection && route.action === 'normalize') return handleNormalize(route, request, env, session);
 
   if (route.collection && request.method === 'GET') {
-    const documents = await listDocumentsForGuild(env.DB, session.guildId, 150);
+    const documents = await filterDocumentsBySessionAccess(
+      env,
+      session,
+      await listDocumentsWithChannelAccessForGuild(env.DB, session.guildId, 150),
+    );
     const contextDocumentId = await resolveContextDocument(request, env, session);
 
     if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
@@ -227,6 +249,10 @@ export async function handleDocsApi(request, url, env) {
     const normalized = normalizeEditorPayload(payload);
     if (normalized.error) return json({ error: normalized.error }, normalized.status || 400);
 
+    if (!session.channelId || !(await sessionCanViewCurrentChannel(env, session))) {
+      return json({ error: 'Discord channel context required to create a document' }, 403);
+    }
+
     const now = new Date().toISOString();
     await saveDocument(env.DB, documentId, {
       title: normalized.title,
@@ -235,17 +261,24 @@ export async function handleDocsApi(request, url, env) {
       sourceName: null,
       createdAt: now,
       createdBy: session.userId,
+      createdByName: sessionDisplayName(session),
+      updatedAt: now,
+      updatedBy: session.userId,
+      updatedByName: sessionDisplayName(session),
     });
     await updateDocumentContent(env.DB, documentId, {
       ...normalized,
       updatedAt: now,
+      updatedBy: session.userId,
+      updatedByName: sessionDisplayName(session),
     });
     await grantDocumentGuildAccess(env.DB, documentId, session.guildId, session.userId);
+    await grantDocumentChannelAccess(env.DB, documentId, session.guildId, session.channelId, session.userId);
 
     return json(serialize(await loadDocument(env.DB, documentId)), 201);
   }
 
-  const access = await requireDocumentAccess(env, route.id, session.guildId);
+  const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
   const existing = access.document;
 
@@ -258,12 +291,22 @@ export async function handleDocsApi(request, url, env) {
     const normalized = normalizeEditorPayload(payload, existing);
     if (normalized.error) return json({ error: normalized.error }, normalized.status || 400);
 
-    await updateDocumentContent(env.DB, route.id, normalized);
+    await updateDocumentContent(env.DB, route.id, {
+      ...normalized,
+      updatedBy: session.userId,
+      updatedByName: sessionDisplayName(session),
+    });
     return json(serialize(await loadDocument(env.DB, route.id)));
   }
 
   if (request.method === 'DELETE') {
-    await archiveDocument(env.DB, route.id);
+    await archiveDocument(
+      env.DB,
+      route.id,
+      new Date().toISOString(),
+      session.userId,
+      sessionDisplayName(session),
+    );
     return json({ ok: true, archived: true, id: route.id });
   }
 

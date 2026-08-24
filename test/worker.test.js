@@ -14,9 +14,43 @@ function signBody(privateKey, timestamp, body) {
   return sign(null, message, privateKey).toString('hex');
 }
 
+function discordFetch(input) {
+  const url = new URL(input);
+  if (url.pathname === '/api/v10/guilds/guild-123') {
+    return Promise.resolve(new Response(JSON.stringify({owner_id: 'owner-1'}), {status: 200}));
+  }
+  if (url.pathname === '/api/v10/guilds/guild-123/members/user-123') {
+    return Promise.resolve(new Response(JSON.stringify({roles: []}), {status: 200}));
+  }
+  if (url.pathname === '/api/v10/guilds/guild-123/roles') {
+    return Promise.resolve(new Response(JSON.stringify([{id: 'guild-123', permissions: '1024'}]), {status: 200}));
+  }
+  if (url.pathname === '/api/v10/channels/channel-123') {
+    return Promise.resolve(new Response(JSON.stringify({guild_id: 'guild-123', permission_overwrites: []}), {status: 200}));
+  }
+  return Promise.resolve(new Response('{}', {status: 404}));
+}
+
+function authenticatedActivityHeaders() {
+  return {
+    Authorization: 'Bearer valid-token',
+    'x-bardo-instance-id': 'inst-123',
+  };
+}
+
+function createWorkerEnv(db, extra = {}) {
+  return {
+    DB: db,
+    DISCORD_TOKEN: 'test-bot-token',
+    DISCORD_FETCH: discordFetch,
+    ...extra,
+  };
+}
+
 function createMockDb(initialDocs = []) {
   const documents = new Map();
   const guildAccess = new Map();
+  const channelAccess = new Map();
   const launchIntents = new Map();
   const sessions = new Map();
   const activityContexts = new Map([
@@ -25,11 +59,29 @@ function createMockDb(initialDocs = []) {
 
   for (const doc of initialDocs) {
     documents.set(doc.id, doc);
+    guildAccess.set(`${doc.id}:guild-123`, {document_id: doc.id, guild_id: 'guild-123'});
+    channelAccess.set(`${doc.id}:channel-123`, {
+      document_id: doc.id,
+      guild_id: 'guild-123',
+      channel_id: 'channel-123',
+    });
   }
+
+  sessions.set('397a2a9c5bf5e2ccec38c2596b682bb1bd05fe6e4ecea6c10cf42755ff225403', {
+    token_hash: '397a2a9c5bf5e2ccec38c2596b682bb1bd05fe6e4ecea6c10cf42755ff225403',
+    user_id: 'user-123',
+    guild_id: 'guild-123',
+    channel_id: 'channel-123',
+    username: 'TestUser',
+    avatar: null,
+    created_at: '2026-08-19T12:00:00.000Z',
+    expires_at: '2026-08-25T12:00:00.000Z',
+  });
 
   return {
     documents,
     guildAccess,
+    channelAccess,
     launchIntents,
     sessions,
     activityContexts,
@@ -66,6 +118,11 @@ function createMockDb(initialDocs = []) {
                 const [docId, guildId] = params;
                 const key = `${docId}:${guildId}`;
                 return guildAccess.has(key) ? { allowed: 1 } : null;
+              }
+              if (query.includes('FROM document_channel_access') && query.includes('WHERE document_id = ? AND guild_id = ?')) {
+                const [docId, guildId] = params;
+                return [...channelAccess.values()].some(access => access.document_id === docId && access.guild_id === guildId)
+                  ? { allowed: 1 } : null;
               }
               if (query.includes('FROM docs_sessions WHERE token_hash = ?')) {
                 const [hash] = params;
@@ -109,6 +166,12 @@ function createMockDb(initialDocs = []) {
                 }
                 return { results };
               }
+              if (query.includes('FROM document_channel_access') && query.includes('SELECT channel_id')) {
+                const [docId, guildId] = params;
+                return {results: [...channelAccess.values()]
+                  .filter(access => access.document_id === docId && access.guild_id === guildId)
+                  .map(access => ({channel_id: access.channel_id}))};
+              }
               return { results: [] };
             },
             async run() {
@@ -134,14 +197,19 @@ function createMockDb(initialDocs = []) {
                 guildAccess.set(`${document_id}:${guild_id}`, { document_id, guild_id, added_at, added_by });
                 return { meta: { changes: 1 } };
               }
+              if (query.includes('INSERT INTO document_channel_access')) {
+                const [document_id, guild_id, channel_id, added_at, added_by] = params;
+                channelAccess.set(`${document_id}:${channel_id}`, { document_id, guild_id, channel_id, added_at, added_by });
+                return { meta: { changes: 1 } };
+              }
               if (query.includes('INSERT INTO docs_launch_intents')) {
-                const [user_id, guild_id, document_id, created_at] = params;
-                launchIntents.set(`${user_id}:${guild_id}`, { user_id, guild_id, document_id, created_at });
+                const [user_id, guild_id, document_id, channel_id, created_at] = params;
+                launchIntents.set(`${user_id}:${guild_id}`, { user_id, guild_id, document_id, channel_id, created_at });
                 return { meta: { changes: 1 } };
               }
               if (query.includes('INSERT INTO docs_sessions')) {
-                const [token_hash, user_id, guild_id, username, avatar, created_at, expires_at] = params;
-                sessions.set(token_hash, { token_hash, user_id, guild_id, username, avatar, created_at, expires_at });
+                const [token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at] = params;
+                sessions.set(token_hash, { token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at });
                 return { meta: { changes: 1 } };
               }
               return { meta: { changes: 1 } };
@@ -232,7 +300,7 @@ test('Worker responde inmediatamente con DEFERRED (type 5) para comando /doc', a
     body,
   });
 
-  const env = { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() };
+  const env = { DISCORD_PUBLIC_KEY: publicKey, ...createWorkerEnv(createMockDb()) };
   const res = await worker.fetch(req, env, {
     waitUntil(p) { backgroundTask = p; },
   });
@@ -269,7 +337,7 @@ test('Worker responde con error ephemeral si /doc no tiene archivo adjunto', asy
     body,
   });
 
-  const env = { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() };
+  const env = { DISCORD_PUBLIC_KEY: publicKey, ...createWorkerEnv(createMockDb()) };
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
   const json = await res.json();
@@ -284,8 +352,11 @@ test('Worker expone el documento completo para el lector embebido', async () => 
     original_markdown: '# Documento Test\n\nContenido completo',
     pages: ['Contenido completo'],
   }]);
-  const req = new Request('http://localhost/api/documents/doc-123', { method: 'GET' });
-  const env = { DB: db };
+  const req = new Request('http://localhost/api/documents/doc-123', {
+    method: 'GET',
+    headers: authenticatedActivityHeaders(),
+  });
+  const env = createWorkerEnv(db);
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -303,8 +374,11 @@ test('Worker normaliza bardo:open: también en la API de documentos', async () =
     title: 'Documento Test',
     original_markdown: '# Documento Test\n\nContenido completo',
   }]);
-  const req = new Request('http://localhost/api/documents/bardo%3Aopen%3Adoc-123', { method: 'GET' });
-  const env = { DB: db };
+  const req = new Request('http://localhost/api/documents/bardo%3Aopen%3Adoc-123', {
+    method: 'GET',
+    headers: authenticatedActivityHeaders(),
+  });
+  const env = createWorkerEnv(db);
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -318,8 +392,11 @@ test('Worker exporta documento como markdown attachment', async () => {
     title: 'Documento Test',
     original_markdown: '# Documento Test\n\nContenido completo',
   }]);
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=markdown', { method: 'GET' });
-  const env = { DB: db };
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=markdown', {
+    method: 'GET',
+    headers: authenticatedActivityHeaders(),
+  });
+  const env = createWorkerEnv(db);
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -335,8 +412,11 @@ test('Worker exporta documento como docx attachment', async () => {
     title: 'Documento Test',
     original_markdown: '# Documento Test\n\nContenido completo',
   }]);
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=docx', { method: 'GET' });
-  const env = { DB: db };
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=docx', {
+    method: 'GET',
+    headers: authenticatedActivityHeaders(),
+  });
+  const env = createWorkerEnv(db);
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -352,8 +432,11 @@ test('Worker exporta documento como pdf attachment', async () => {
     title: 'Documento Test',
     original_markdown: '# Documento Test\n\nContenido completo',
   }]);
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=pdf', { method: 'GET' });
-  const env = { DB: db };
+  const req = new Request('http://localhost/api/documents/doc-123/export?format=pdf', {
+    method: 'GET',
+    headers: authenticatedActivityHeaders(),
+  });
+  const env = createWorkerEnv(db);
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 200);
@@ -363,12 +446,15 @@ test('Worker exporta documento como pdf attachment', async () => {
   assert.ok(buffer.byteLength > 500);
 });
 
-test('Worker responde 404 para documentos inexistentes', async () => {
-  const req = new Request('http://localhost/api/documents/no-existe', { method: 'GET' });
-  const env = { DB: createMockDb() };
+test('Worker no revela documentos inexistentes sin acceso verificable', async () => {
+  const req = new Request('http://localhost/api/documents/no-existe', {
+    method: 'GET',
+    headers: authenticatedActivityHeaders(),
+  });
+  const env = createWorkerEnv(createMockDb());
 
   const res = await worker.fetch(req, env);
-  assert.equal(res.status, 404);
+  assert.equal(res.status, 403);
 });
 
 test('Worker expone el contexto de activity por instanceId', async () => {
@@ -400,6 +486,7 @@ test('Worker responde LAUNCH_ACTIVITY inline y persiste el contexto fuera de la 
     id: 'interaction-987',
     token: 'token-abc',
     guild_id: 'guild-123',
+    channel_id: 'channel-123',
     member: { user: { id: 'user-123' } },
     data: {
       custom_id: 'bardo:open:doc-123',
@@ -424,7 +511,7 @@ test('Worker responde LAUNCH_ACTIVITY inline y persiste el contexto fuera de la 
     body,
   });
 
-  const env = { DISCORD_PUBLIC_KEY: publicKey, DB: db };
+  const env = { DISCORD_PUBLIC_KEY: publicKey, ...createWorkerEnv(db) };
   const res = await worker.fetch(req, env, {
     waitUntil(promise) {
       background = promise;

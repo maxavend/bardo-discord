@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = resolve(__dirname, '..');
-const docsAppDir = resolve(rootDir, 'prototypes/docs-app');
+const docsAppDir = resolve(rootDir, 'activity-app');
 
 console.log('📦 Construyendo Activity React frontend (HeroUI) en ./activity...');
 
