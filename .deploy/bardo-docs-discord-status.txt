@@ -1,5 +1,5 @@
 status=success
-source_commit=19c2a6d8e1fe1572d581a6060c182dd17c029582
+source_commit=bf67a9befaafdb7f3b497319661eb49d2def9fb2
 deps=success
 tests=success
 worker=success
@@ -12,4 +12,4 @@ deploy=success
 live=success
 inline_launch=true
 worker_origin=https://bardo-discord.bardo-discord.workers.dev
-checked_at=2026-08-24T13:14:13Z
+checked_at=2026-08-24T13:39:11Z
