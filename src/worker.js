@@ -8,13 +8,17 @@ import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import { generateDocxDocument, generatePdfDocument, sanitizeExportFileName } from './export-format.js';
 import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
 import { normalizeDocumentId } from './document-id.js';
+import { handleDocsApi } from './docs-api.js';
+import { handleDiscordAuthApi } from './discord-auth.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
 import {
   cacheNormalizedDocument,
+  grantDocumentGuildAccess,
   loadActivityContext,
   loadDocument,
   loadDocumentSource,
   saveActivityContext,
+  saveDocsLaunchIntent,
   saveDocument,
   saveDocumentSource,
 } from './db.js';
@@ -124,6 +128,10 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 
     await saveDocument(env.DB, documentId, document);
 
+    if (interaction.guild_id) {
+      await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, createdBy);
+    }
+
     if (!isTextSourceType(sourceType)) {
       await saveDocumentSource(env.DB, documentId, {
         bytes: downloaded.bytes,
@@ -215,10 +223,12 @@ function extractActivityInstanceIds(callbackData) {
   ].filter((value, index, values) => typeof value === 'string' && value && values.indexOf(value) === index);
 }
 
-async function handleComponentInteraction(interaction, env) {
+async function handleComponentInteraction(interaction, env, ctx) {
   const customId = interaction.data?.custom_id || '';
 
-  if (!customId.startsWith(BARDO_OPEN_PREFIX)) {
+  const legacyPageInteraction = customId.startsWith('bardo:page:');
+
+  if (!legacyPageInteraction && !customId.startsWith(BARDO_OPEN_PREFIX)) {
     return jsonResponse({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
@@ -228,7 +238,9 @@ async function handleComponentInteraction(interaction, env) {
     });
   }
 
-  const documentId = normalizeDocumentId(customId);
+  const documentId = legacyPageInteraction
+    ? normalizeDocumentId(interaction.message?.id)
+    : normalizeDocumentId(customId);
   if (!documentId || !env.DB) {
     return jsonResponse({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -239,48 +251,43 @@ async function handleComponentInteraction(interaction, env) {
     });
   }
 
-  const document = await loadDocument(env.DB, documentId);
-  if (!document) {
-    return jsonResponse({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'Este documento ya no está disponible.',
-        flags: InteractionResponseFlags.EPHEMERAL,
-      },
-    });
+  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;
+
+  const persistLaunchContext = async () => {
+    try {
+      const document = await loadDocument(env.DB, documentId);
+      if (!document) {
+        console.error('Bardo launch referenced a missing document.', { documentId });
+        return;
+      }
+
+      if (interaction.guild_id) {
+        const accessSummary = await env.DB.prepare('SELECT COUNT(*) AS count FROM document_guild_access').first();
+        if (Number(accessSummary?.count || 0) === 0) {
+          const legacyAddedAt = new Date().toISOString();
+          await env.DB.prepare('INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by) SELECT d.id, ?, ?, ? FROM documents d WHERE d.archived_at IS NULL AND NOT EXISTS (SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id)')
+            .bind(interaction.guild_id, legacyAddedAt, invokingUserId)
+            .run();
+        }
+
+        await grantDocumentGuildAccess(env.DB, documentId, interaction.guild_id, invokingUserId);
+        await saveDocsLaunchIntent(env.DB, invokingUserId, interaction.guild_id, documentId);
+      }
+    } catch (error) {
+      console.error('Error persisting Bardo Activity launch context:', error);
+    }
+  };
+
+  if (typeof ctx?.waitUntil === 'function') {
+    ctx.waitUntil(persistLaunchContext());
+  } else {
+    void persistLaunchContext();
   }
 
-  const callbackUrl = `https://discord.com/api/v10/interactions/${interaction.id}/${interaction.token}/callback?with_response=true`;
-
-  try {
-    const callbackRes = await fetch(callbackUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 12 }),
-    });
-
-    if (!callbackRes.ok) {
-      console.error('Discord callback error:', callbackRes.status, await callbackRes.text().catch(() => ''));
-      return new Response(null, { status: 202 });
-    }
-
-    const callbackData = await callbackRes.json().catch(() => null);
-    const instanceIds = extractActivityInstanceIds(callbackData);
-
-    if (instanceIds.length === 0) {
-      console.error('Discord launched the Activity without a readable instance id.', {
-        interaction: callbackData?.interaction,
-        resource: callbackData?.resource,
-      });
-    } else {
-      await Promise.all(instanceIds.map((instanceId) => saveActivityContext(env.DB, instanceId, documentId)));
-    }
-
-    return new Response(null, { status: 202 });
-  } catch (error) {
-    console.error('Error handling component interaction:', error);
-    return new Response(null, { status: 202 });
-  }
+  // Discord HTTP interactions support responding inline. LAUNCH_ACTIVITY must be
+  // the initial response and must arrive within 3 seconds. Returning it directly
+  // avoids an unnecessary second network hop to Discord's callback endpoint.
+  return jsonResponse({ type: 12 });
 }
 
 function parseDocumentApiPath(pathname) {
@@ -544,7 +551,7 @@ async function handleDiscordInteraction(request, env, ctx) {
   }
 
   if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
-    return handleComponentInteraction(interaction, env);
+    return handleComponentInteraction(interaction, env, ctx);
   }
 
   return jsonResponse({
@@ -559,6 +566,12 @@ async function handleDiscordInteraction(request, env, ctx) {
 export default {
   async fetch(request, env, ctx = { waitUntil: () => {} }) {
     const url = new URL(request.url);
+
+    const authApiResponse = await handleDiscordAuthApi(request, url, env);
+    if (authApiResponse) return authApiResponse;
+
+    const docsApiResponse = await handleDocsApi(request, url, env);
+    if (docsApiResponse) return docsApiResponse;
 
     if (url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
       const route = parseDocumentApiPath(url.pathname);

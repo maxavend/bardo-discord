@@ -3,6 +3,18 @@ import {readFileSync, writeFileSync} from 'node:fs';
 const filePath = process.argv[2] || 'src/worker.js';
 let source = readFileSync(filePath, 'utf8');
 
+// A materialized production Worker already contains every integration below.
+// Do not try to reconstruct the legacy remote-callback path on top of it.
+if (
+  source.includes('return jsonResponse({ type: 12 });') &&
+  source.includes('handleDiscordAuthApi') &&
+  source.includes('handleDocsApi') &&
+  source.includes('persistLaunchContext')
+) {
+  console.log('Production Worker already contains materialized inline Activity launch; no patch required.');
+  process.exit(0);
+}
+
 const docsImport = "import { handleDocsApi } from './docs-api.js';\n";
 const authImport = "import { handleDiscordAuthApi } from './discord-auth.js';\n";
 const importAnchor = "import { normalizeDocumentId } from './document-id.js';\n";
