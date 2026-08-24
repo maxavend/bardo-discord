@@ -1,0 +1,50 @@
+name: Materialize unified Bardo Worker
+
+on:
+  push:
+    branches:
+      - module/bardo-docs
+    paths:
+      - '.github/workflows/materialize-bardo-worker-fix.yml'
+      - 'scripts/make-production-patch-idempotent.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Make production patch idempotent
+        run: node scripts/make-production-patch-idempotent.mjs
+
+      - name: Materialize production integrations into Worker
+        run: |
+          node scripts/apply-production-worker.mjs src/worker.js
+          node scripts/apply-inline-activity-launch.mjs src/worker.js
+          grep -q "async function handleComponentInteraction(interaction, env, ctx)" src/worker.js
+          grep -q "return handleComponentInteraction(interaction, env, ctx);" src/worker.js
+          grep -q "return jsonResponse({ type: 12 });" src/worker.js
+          grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
+          grep -q "handleDiscordAuthApi" src/worker.js
+          grep -q "handleDocsApi" src/worker.js
+          if grep -q "callback?with_response=true" src/worker.js; then
+            echo "Legacy remote callback is still present" >&2
+            exit 1
+          fi
+          node --check src/worker.js
+          node --check scripts/apply-production-worker.mjs
+
+      - name: Persist unified Worker
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/worker.js scripts/apply-production-worker.mjs
+          git commit -m "fix(docs): materialize inline Activity Worker [skip ci]" || exit 0
+          git push origin HEAD:module/bardo-docs
