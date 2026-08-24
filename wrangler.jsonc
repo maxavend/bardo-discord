@@ -6,6 +6,13 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  "secrets": {
+    "required": [
+      "DISCORD_PUBLIC_KEY",
+      "DISCORD_TOKEN",
+      "DISCORD_CLIENT_SECRET"
+    ]
+  },
   "assets": {
     "directory": "./activity",
     "binding": "ASSETS",
