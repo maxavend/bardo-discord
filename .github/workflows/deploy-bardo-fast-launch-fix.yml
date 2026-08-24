@@ -68,8 +68,11 @@ jobs:
           inline_launch=true
           completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
+          if [ -f /tmp/activity-config.json ]; then
+            cp /tmp/activity-config.json .deploy/discord-activity-runtime.json
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/bardo-fast-launch-status.txt
-          git commit -m "chore(docs): record inline Activity launch deploy [skip ci]" || true
+          git add .deploy/bardo-fast-launch-status.txt .deploy/discord-activity-runtime.json 2>/dev/null || git add .deploy/bardo-fast-launch-status.txt
+          git commit -m "chore(docs): record Activity runtime diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
