@@ -4,4 +4,4 @@ live_marker=1
 diag_curl=0
 diag_http=200
 --- discord_app ---
-{"ok":true,"application_id":"1539704001535156254","embedded_flag":true,"flags":"2260992","interactions_endpoint_url":"https://bardo-discord.bardo-discord.workers.dev/","redirect_uris":["https://127.0.0.1/"],"guild_install":true,"user_install":true,"worker_marker":"inline-launch-diag-v2"}
+{"ok":true,"application_id":"1539704001535156254","embedded_flag":true,"flags":"2260992","interactions_endpoint_url":"https://bardo-discord.bardo-discord.workers.dev/","redirect_uris":["https://127.0.0.1/"],"guild_install":true,"user_install":true,"has_public_key":true,"discord_has_verify_key":true,"public_key_matches":false,"worker_marker":"inline-launch-diag-v3"}
