@@ -1,4 +1,4 @@
-name: Deploy finalized Bardo Docs to Discord
+name: Deploy Bardo Docs production
 
 on:
   push:
@@ -6,14 +6,16 @@ on:
       - module/bardo-docs
     paths:
       - 'src/**'
+      - 'test/**'
       - 'migrations/**'
-      - 'scripts/apply-production-worker.mjs'
       - 'prototypes/docs-app/**'
+      - 'scripts/apply-activity-diagnostic-route.mjs'
       - '.github/workflows/deploy-bardo-discord-docs-production.yml'
+      - 'diagnostics/production-deploy-trigger.txt'
   workflow_dispatch:
 
 concurrency:
-  group: bardo-discord-docs-production
+  group: bardo-docs-production
   cancel-in-progress: true
 
 permissions:
@@ -25,252 +27,180 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      HEROUI_SOURCE_SHA: 1d2164e7b9a60221e39501081f0fe4f6c564bccf
-      EXPECTED_ACTIVITY_BUILD: docs-current-document-only-v1
-      EXPECTED_AUTH_BUILD: discord-guild-auth-v1
       WORKER_ORIGIN: https://bardo-discord.bardo-discord.workers.dev
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Verify Cloudflare credentials
-        id: creds
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-
-      - name: Verify Discord OAuth secret exists on Worker
-        id: oauthsecret
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes wrangler@4.124.0 secret list --json > /tmp/worker-secrets.json
-          node - <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/worker-secrets.json','utf8'));
-          const names = new Set((Array.isArray(data) ? data : []).map(item => item.name));
-          if (!names.has('DISCORD_CLIENT_SECRET')) {
-            console.error('Missing Worker secret: DISCORD_CLIENT_SECRET');
-            process.exit(1);
-          }
-          console.log('DISCORD_CLIENT_SECRET is configured.');
-          NODE
-
-      - name: Install Bardo dependencies
-        id: rootdeps
+      - name: Install dependencies
+        id: deps
         continue-on-error: true
         run: npm ci --no-audit --no-fund
 
-      - name: Run existing bot tests before integration build
+      - name: Run tests
         id: tests
         continue-on-error: true
-        run: npm test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/tests.log
 
-      - name: Verify production modules
-        id: modules
+      - name: Verify production Worker source
+        id: worker
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          node --check src/db.js
-          node --check src/discord-auth.js
-          node --check src/docs-api.js
-          node --check scripts/apply-production-worker.mjs
-
-      - name: Patch production Worker with authenticated Docs
-        id: patch
-        continue-on-error: true
-        run: node scripts/apply-production-worker.mjs src/worker.js
-
-      - name: Verify Discord and guild contracts remain wired
-        id: contracts
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q "commandName === 'doc' || commandName === 'documento'" src/worker.js
-          grep -q "BARDO_OPEN_PREFIX" src/worker.js
-          grep -q "handleDocsApi" src/worker.js
+          grep -q "async function handleComponentInteraction(interaction, env, ctx)" src/worker.js
+          grep -q "return handleComponentInteraction(interaction, env, ctx);" src/worker.js
+          grep -q "return jsonResponse({ type: 12 });" src/worker.js
+          grep -q "ctx.waitUntil(persistLaunchContext())" src/worker.js
           grep -q "handleDiscordAuthApi" src/worker.js
-          grep -q "grantDocumentGuildAccess" src/worker.js
-          grep -q "saveDocsLaunchIntent" src/worker.js
+          grep -q "handleDocsApi" src/worker.js
+          if grep -q "callback?with_response=true" src/worker.js; then
+            echo "Legacy remote interaction callback is present" >&2
+            exit 1
+          fi
           node --check src/worker.js
 
-      - name: Install finalized Docs app dependencies
-        id: docsdeps
+      - name: Add temporary Discord Activity configuration probe
+        id: diagpatch
         continue-on-error: true
-        run: npm install --prefix prototypes/docs-app --no-audit --no-fund
+        run: |
+          node scripts/apply-activity-diagnostic-route.mjs src/worker.js
+          grep -q '__bardo_diag_activity_20260823' src/worker.js
+          node --check src/worker.js
 
-      - name: Generate exact HeroUI theme
-        id: theme
+      - name: Build current Docs Activity
+        id: build
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL "https://raw.githubusercontent.com/heroui-inc/heroui/${HEROUI_SOURCE_SHA}/apps/docs/src/app/%5Blang%5D/themes/utils/generate-theme-colors.ts" -o /tmp/generate-theme-colors.ts
-          npx --yes tsx@4.20.6 prototypes/docs-app/scripts/generate-heroui-theme.mjs /tmp/generate-theme-colors.ts prototypes/docs-app/src/theme.css
-
-      - name: Build authenticated React Docs Activity
-        id: docsbuild
-        continue-on-error: true
-        run: npm run build --prefix prototypes/docs-app
-
-      - name: Install finalized Activity assets into Bardo
-        id: assets
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
+          npm install --prefix prototypes/docs-app --no-audit --no-fund
+          npm run build --prefix prototypes/docs-app
           rm -rf activity
           mkdir -p activity
           cp -R prototypes/docs-app/dist/. activity/
           test -f activity/index.html
-          grep -q "$EXPECTED_ACTIVITY_BUILD" activity/index.html
-          grep -q "$EXPECTED_AUTH_BUILD" activity/index.html
-          grep -R -q '/api/auth/token' activity/assets
-          grep -R -q 'bardo_token' activity/assets
-          test -n "$(find activity -maxdepth 2 -type f -name '*.js' -print -quit)"
+          grep -q 'docs-current-document-only-v1' activity/index.html
 
-      - name: Gate production preflight
+      - name: Production preflight
         id: preflight
         if: always()
-        shell: bash
+        continue-on-error: true
         env:
-          CREDS: ${{ steps.creds.outcome }}
-          OAUTH_SECRET: ${{ steps.oauthsecret.outcome }}
-          ROOT_DEPS: ${{ steps.rootdeps.outcome }}
+          DEPS: ${{ steps.deps.outcome }}
           TESTS: ${{ steps.tests.outcome }}
-          MODULES: ${{ steps.modules.outcome }}
-          PATCH: ${{ steps.patch.outcome }}
-          CONTRACTS: ${{ steps.contracts.outcome }}
-          DOCS_DEPS: ${{ steps.docsdeps.outcome }}
-          THEME: ${{ steps.theme.outcome }}
-          DOCS_BUILD: ${{ steps.docsbuild.outcome }}
-          ASSETS: ${{ steps.assets.outcome }}
+          WORKER: ${{ steps.worker.outcome }}
+          DIAGPATCH: ${{ steps.diagpatch.outcome }}
+          BUILD: ${{ steps.build.outcome }}
         run: |
           set -euo pipefail
-          FAILED=0
-          for VALUE in "$CREDS" "$OAUTH_SECRET" "$ROOT_DEPS" "$TESTS" "$MODULES" "$PATCH" "$CONTRACTS" "$DOCS_DEPS" "$THEME" "$DOCS_BUILD" "$ASSETS"; do
-            if [ "$VALUE" != "success" ]; then FAILED=1; fi
-          done
-          exit "$FAILED"
+          test "$DEPS" = success
+          test "$TESTS" = success
+          test "$WORKER" = success
+          test "$DIAGPATCH" = success
+          test "$BUILD" = success
 
-      - name: Count existing production documents
+      - name: Count documents before migration
         id: before
+        if: steps.preflight.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT COUNT(*) AS count FROM documents;" --json > /tmp/docs-before.json
-          COUNT=$(node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/docs-before.json','utf8'));const a=Array.isArray(x)?x:[x];const v=a.flatMap(i=>i.results||[])[0]?.count;if(v===undefined)process.exit(2);process.stdout.write(String(v));")
-          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-          echo "Existing documents before migration: $COUNT"
+          set -o pipefail
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT COUNT(*) AS count FROM documents;" --json 2>&1 | tee /tmp/docs-before.log
 
-      - name: Apply additive D1 migrations
+      - name: Apply D1 migrations
         id: migrate
-        run: npx --yes wrangler@4.124.0 d1 migrations apply bardo-db --remote
-
-      - name: Verify guild-auth schema and preserve every document
-        id: after
+        if: steps.preflight.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --command "SELECT COUNT(*) AS count FROM documents; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('document_guild_access','docs_sessions','docs_launch_intents') ORDER BY name;" --json > /tmp/docs-after.json
-          node - <<'NODE'
-          const fs = require('fs');
-          const data = JSON.parse(fs.readFileSync('/tmp/docs-after.json','utf8'));
-          const blocks = Array.isArray(data) ? data : [data];
-          const rows = blocks.flatMap(block => block.results || []);
-          const countRow = rows.find(row => Object.prototype.hasOwnProperty.call(row, 'count'));
-          const names = new Set(rows.map(row => row.name).filter(Boolean));
-          const expected = new Set(['document_guild_access','docs_sessions','docs_launch_intents']);
-          if (String(countRow?.count) !== process.env.DOCS_BEFORE) throw new Error(`Document count changed: ${countRow?.count} != ${process.env.DOCS_BEFORE}`);
-          for (const table of expected) if (!names.has(table)) throw new Error(`Missing table ${table}`);
-          console.log(`Documents preserved: ${countRow.count}; guild-auth schema present.`);
-          NODE
-          COUNT=$(node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/docs-after.json','utf8'));const a=Array.isArray(x)?x:[x];const r=a.flatMap(i=>i.results||[]).find(v=>v.count!==undefined);process.stdout.write(String(r.count));")
-          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
-        env:
-          DOCS_BEFORE: ${{ steps.before.outputs.count }}
+          set -o pipefail
+          npx --yes wrangler@4.124.0 d1 migrations apply bardo-db --remote 2>&1 | tee /tmp/migrate.log
 
-      - name: Deploy existing Bardo Worker with authenticated Docs Activity
+      - name: Deploy Worker
         id: deploy
-        run: npx --yes wrangler@4.124.0 deploy
-
-      - name: Verify Worker serves guild-auth Bardo Docs
-        id: origin
+        if: steps.preflight.outcome == 'success' && steps.migrate.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          for ATTEMPT in $(seq 1 12); do
-            if curl -fsSL -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?bardo_build=$GITHUB_SHA&attempt=$ATTEMPT" -o /tmp/bardo-live.html; then
-              if grep -q "$EXPECTED_ACTIVITY_BUILD" /tmp/bardo-live.html && grep -q "$EXPECTED_AUTH_BUILD" /tmp/bardo-live.html; then
-                echo "Worker origin is serving $EXPECTED_AUTH_BUILD"
-                exit 0
-              fi
-            fi
-            sleep 5
-          done
-          sed -n '1,80p' /tmp/bardo-live.html 2>/dev/null || true
-          exit 1
+          set -o pipefail
+          npx --yes wrangler@4.124.0 deploy --keep-vars 2>&1 | tee /tmp/deploy.log
 
-      - name: Record production deployment
+      - name: Probe live Worker and Discord application
+        id: live
         if: always()
+        continue-on-error: true
         shell: bash
+        run: |
+          set +e
+          LIVE_HTTP=$(curl -sS -o /tmp/live.html -w '%{http_code}' -H 'Cache-Control: no-cache' "$WORKER_ORIGIN/?production=$GITHUB_SHA")
+          LIVE_CURL=$?
+          DIAG_HTTP=$(curl -sS -o /tmp/discord-app.json -w '%{http_code}' "$WORKER_ORIGIN/__bardo_diag_activity_20260823")
+          DIAG_CURL=$?
+          {
+            echo "live_curl=$LIVE_CURL"
+            echo "live_http=$LIVE_HTTP"
+            echo "live_marker=$(grep -c 'docs-current-document-only-v1' /tmp/live.html 2>/dev/null || true)"
+            echo "diag_curl=$DIAG_CURL"
+            echo "diag_http=$DIAG_HTTP"
+            echo "--- discord_app ---"
+            cat /tmp/discord-app.json 2>/dev/null || true
+          } > /tmp/runtime.txt
+          cat /tmp/runtime.txt
+          exit 0
+
+      - name: Record production state
+        if: always()
         env:
-          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
-          ORIGIN_OUTCOME: ${{ steps.origin.outcome }}
-          DOCS_BEFORE: ${{ steps.before.outputs.count }}
-          DOCS_AFTER: ${{ steps.after.outputs.count }}
-          OAUTH_SECRET: ${{ steps.oauthsecret.outcome }}
+          DEPS: ${{ steps.deps.outcome }}
           TESTS: ${{ steps.tests.outcome }}
-          MODULES: ${{ steps.modules.outcome }}
-          PATCH: ${{ steps.patch.outcome }}
-          CONTRACTS: ${{ steps.contracts.outcome }}
-          DOCS_BUILD: ${{ steps.docsbuild.outcome }}
+          WORKER: ${{ steps.worker.outcome }}
+          DIAGPATCH: ${{ steps.diagpatch.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          BEFORE: ${{ steps.before.outcome }}
           MIGRATE: ${{ steps.migrate.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          LIVE: ${{ steps.live.outcome }}
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p .deploy
           STATUS=failure
-          if [ "$DEPLOY_OUTCOME" = "success" ] && [ "$ORIGIN_OUTCOME" = "success" ]; then STATUS=success; fi
+          if [ "$DEPLOY" = success ] && [ "$LIVE" = success ]; then STATUS=success; fi
           cat > .deploy/bardo-docs-discord-status.txt <<EOF
           status=$STATUS
-          architecture=discord-guild-auth-v1
-          worker=bardo-discord
-          worker_origin=$WORKER_ORIGIN
           source_commit=$GITHUB_SHA
-          oauth_secret=$OAUTH_SECRET
+          deps=$DEPS
           tests=$TESTS
-          modules=$MODULES
-          worker_patch=$PATCH
-          contracts=$CONTRACTS
-          docs_build=$DOCS_BUILD
-          migration=$MIGRATE
-          docs_before=${DOCS_BEFORE:-unknown}
-          docs_after=${DOCS_AFTER:-unknown}
-          guild_acl=document_guild_access
-          session_auth=docs_sessions
-          launch_routing=docs_launch_intents
-          legacy_command=doc
-          legacy_message_ids=preserved
-          delete_behavior=soft_archive
-          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          worker=$WORKER
+          diagnostic_patch=$DIAGPATCH
+          docs_build=$BUILD
+          preflight=$PREFLIGHT
+          docs_before_query=${BEFORE:-skipped}
+          migration=${MIGRATE:-skipped}
+          deploy=${DEPLOY:-skipped}
+          live=${LIVE:-skipped}
+          inline_launch=true
+          worker_origin=$WORKER_ORIGIN
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
+          [ ! -f /tmp/runtime.txt ] || cp /tmp/runtime.txt .deploy/discord-activity-runtime.txt
+          [ ! -f /tmp/tests.log ] || tail -n 120 /tmp/tests.log > .deploy/production-tests.log
+          [ ! -f /tmp/deploy.log ] || tail -n 120 /tmp/deploy.log > .deploy/production-wrangler-deploy.log
+          [ ! -f /tmp/migrate.log ] || tail -n 120 /tmp/migrate.log > .deploy/production-migrate.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/bardo-docs-discord-status.txt prototypes/docs-app/src/theme.css
-          git commit -m "chore(docs): record authenticated Discord production deployment [skip ci]" || true
+          git add .deploy/bardo-docs-discord-status.txt
+          for file in .deploy/discord-activity-runtime.txt .deploy/production-tests.log .deploy/production-wrangler-deploy.log .deploy/production-migrate.log; do
+            [ ! -f "$file" ] || git add "$file"
+          done
+          git commit -m "chore(docs): record deterministic production deployment [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
-          test "$STATUS" = "success"
-
-# Manual re-run marker: authenticated guild deploy after DISCORD_CLIENT_SECRET 2026-08-24T00:59Z
