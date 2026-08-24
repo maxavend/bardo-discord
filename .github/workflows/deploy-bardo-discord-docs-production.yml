@@ -193,14 +193,9 @@ jobs:
           checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
           [ ! -f /tmp/runtime.txt ] || cp /tmp/runtime.txt .deploy/discord-activity-runtime.txt
-          [ ! -f /tmp/tests.log ] || tail -n 120 /tmp/tests.log > .deploy/production-tests.log
-          [ ! -f /tmp/deploy.log ] || tail -n 120 /tmp/deploy.log > .deploy/production-wrangler-deploy.log
-          [ ! -f /tmp/migrate.log ] || tail -n 120 /tmp/migrate.log > .deploy/production-migrate.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/bardo-docs-discord-status.txt
-          for file in .deploy/discord-activity-runtime.txt .deploy/production-tests.log .deploy/production-wrangler-deploy.log .deploy/production-migrate.log; do
-            [ ! -f "$file" ] || git add "$file"
-          done
+          [ ! -f .deploy/discord-activity-runtime.txt ] || git add .deploy/discord-activity-runtime.txt
           git commit -m "chore(docs): record deterministic production deployment [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
