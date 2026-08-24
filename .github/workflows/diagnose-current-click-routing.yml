@@ -89,7 +89,7 @@ jobs:
           test "$HTTP" = 200
           test "$MARKER" -gt 0
 
-      - name: Read current routing evidence from D1
+      - name: Read current routing evidence and ACL schema from D1
         id: d1
         if: always()
         continue-on-error: true
@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .deploy
-          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --json --command "SELECT COUNT(*) AS access_rows FROM document_guild_access; SELECT COUNT(*) AS launch_intents FROM docs_launch_intents; SELECT COUNT(*) AS sessions FROM docs_sessions; SELECT guild_id, COUNT(*) AS docs FROM document_guild_access GROUP BY guild_id; SELECT guild_id, COUNT(*) AS intents FROM docs_launch_intents GROUP BY guild_id; SELECT guild_id, COUNT(*) AS sessions_by_guild FROM docs_sessions GROUP BY guild_id;" > .deploy/current-click-routing.json
+          npx --yes wrangler@4.124.0 d1 execute bardo-db --remote --json --command "PRAGMA table_info(document_guild_access); SELECT sql FROM sqlite_master WHERE type='table' AND name='document_guild_access'; SELECT COUNT(*) AS access_rows FROM document_guild_access; SELECT COUNT(*) AS launch_intents FROM docs_launch_intents; SELECT COUNT(*) AS sessions FROM docs_sessions; SELECT guild_id, COUNT(*) AS docs FROM document_guild_access GROUP BY guild_id; SELECT guild_id, COUNT(*) AS intents FROM docs_launch_intents GROUP BY guild_id; SELECT guild_id, COUNT(*) AS sessions_by_guild FROM docs_sessions GROUP BY guild_id;" > .deploy/current-click-routing.json
 
       - name: Persist deploy and diagnostic
         if: always()
@@ -125,13 +125,9 @@ jobs:
           inline_launch=true
           checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           EOF
-          [ ! -f /tmp/routing-tests.log ] || tail -n 100 /tmp/routing-tests.log > .deploy/current-click-tests.log
-          [ ! -f /tmp/routing-deploy.log ] || tail -n 100 /tmp/routing-deploy.log > .deploy/current-click-deploy.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/current-click-deploy-status.txt
           [ ! -f .deploy/current-click-routing.json ] || git add .deploy/current-click-routing.json
-          [ ! -f .deploy/current-click-tests.log ] || git add .deploy/current-click-tests.log
-          [ ! -f .deploy/current-click-deploy.log ] || git add .deploy/current-click-deploy.log
-          git commit -m "chore(docs): record reliable click deploy [skip ci]" || true
+          git commit -m "chore(docs): record ACL schema diagnostic [skip ci]" || true
           git push origin HEAD:module/bardo-docs || true
