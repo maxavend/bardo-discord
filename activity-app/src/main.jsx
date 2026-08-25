@@ -51,7 +51,12 @@ function ActivityBootShell() {
           </div>
           <div className="boot-copy">
             <span key={messageIndex} className="boot-stage">{BOOT_PERSONALITY_MESSAGES[messageIndex]}</span>
-            <p className="boot-hint boot-hint-reveal">Estamos preparando todo para que puedas continuar</p>
+            <p
+              className="boot-hint t-shimmer"
+              data-text="Estamos preparando todo para que puedas continuar"
+            >
+              Estamos preparando todo para que puedas continuar
+            </p>
           </div>
         </div>
       </section>
