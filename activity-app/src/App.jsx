@@ -840,6 +840,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const [saveState, setSaveState] = useState(isNew ? 'Borrador guardado' : 'Guardado');
   const [isDirty, setIsDirty] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [metaRevealShown, setMetaRevealShown] = useState(false);
   const [blockValue, setBlockValue] = useState('p');
   const [inlineState, setInlineState] = useState({
     bold: false,
@@ -1040,6 +1041,11 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
       input.style.height = `${input.scrollHeight}px`;
     });
   }, [title, description]);
+
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => setMetaRevealShown(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => () => {
     clearTimeout(saveTimer.current);
@@ -1435,6 +1441,20 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
         <div ref={dropLineRef} className="block-drop-line" style={{display: 'none', transform: 'translate3d(0, 0, 0)'}} />
 
         <header className="doc-intro">
+          <div className={`doc-meta editor-meta-reveal t-stagger ${isExiting ? 'is-hiding' : metaRevealShown ? 'is-shown' : ''}`}>
+            <span className="t-stagger-line t-stagger-line--1">
+              <Chip size="sm" variant="soft" color="default" className="text-xs">
+                {isNew ? 'Borrador privado' : (doc?.origin || 'Creado en Bardo')}
+              </Chip>
+            </span>
+            {!isNew && (
+              <span className="t-stagger-line t-stagger-line--2">
+                <span className="text-xs text-muted">
+                  Último cambio realizado por {changeActorName(doc)} · {formatChangeTime(doc)}
+                </span>
+              </span>
+            )}
+          </div>
           <textarea
             ref={titleInputRef}
             className="doc-title doc-title-input"
@@ -1467,16 +1487,6 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
             onKeyDown={handleDescriptionKey}
             onPaste={singleLinePaste}
           />
-          <div className="doc-meta mt-3 flex items-center gap-2 flex-wrap">
-            <Chip size="sm" variant="soft" color="default" className="text-xs">
-              {isNew ? 'Borrador privado' : (doc?.origin || 'Creado en Bardo')}
-            </Chip>
-            {!isNew && (
-              <span className="text-xs text-muted">
-                Último cambio realizado por {changeActorName(doc)} · {formatChangeTime(doc)}
-              </span>
-            )}
-          </div>
         </header>
 
         <div
