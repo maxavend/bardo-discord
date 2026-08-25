@@ -465,29 +465,6 @@ button { font-size: 14px; }
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@supports (view-transition-name: document-intro) {
-  @media (prefers-reduced-motion: no-preference) {
-    ::view-transition-group(document-intro) {
-      /* The intro stays mounted conceptually; only its layout position changes
-         when the editor toolbar is inserted or removed. */
-      animation-duration: 180ms;
-      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-    }
-    ::view-transition-old(document-intro),
-    ::view-transition-new(document-intro) {
-      /* Keep the content stable while the native view-transition group
-         interpolates its position. No fade, blur, scale, or reveal. */
-      animation: none;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    ::view-transition-group(document-intro),
-    ::view-transition-old(document-intro),
-    ::view-transition-new(document-intro) {
-      animation-duration: 0.001ms !important;
-    }
-  }
-}
 /* Keep the sticky editor header anchored while switching between reader and editor. */
 .editing-route { animation: none !important; }
 .route-no-transition { animation: none !important; }
@@ -560,7 +537,6 @@ button { font-size: 14px; }
 .doc-intro {
   display: grid;
   align-items: start;
-  view-transition-name: document-intro;
 }
 .doc-title {
   margin: 0;
