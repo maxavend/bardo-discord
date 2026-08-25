@@ -1374,7 +1374,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   };
 
   return (
-    <section className={`doc-route route-active editing-route ${isExiting ? 'toolbar-is-exiting' : ''}`}>
+    <section className={`doc-route route-active editing-route ${isExiting ? 'editor-transition-is-exiting' : ''}`}>
       <header className="doc-topbar glass-header app-host-header">
         <div className="topbar-left flex items-center gap-2">
           <Button
