@@ -370,7 +370,7 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
       >
         <EllipsisVertical width={16} height={16} />
       </Button>
-      <Dropdown.Popover placement="bottom end" isNonModal>
+      <Dropdown.Popover placement="bottom end">
         <Dropdown.Menu onAction={(key) => onAction(key, doc)}>
           <Dropdown.Item id="open" textValue="Abrir">
             <Eye width={15} height={15} className="text-muted" />
@@ -493,6 +493,56 @@ function DocsHeader({children, actions, className = ''}) {
   );
 }
 
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload}) {
+  const fileInputRef = useRef(null);
+  const isLibrary = route.type === 'library';
+
+  return (
+    <DocsHeader
+      className={isLibrary ? 'library-header' : ''}
+      actions={isLibrary ? (
+        <div key="library-actions" className="header-slot-enter">
+          <input
+            ref={fileInputRef}
+            className="library-file-input"
+            type="file"
+            accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            aria-label="Seleccionar documento para subir"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) onUpload(file);
+            }}
+          />
+          <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="font-medium">
+            <FileArrowUp width={16} height={16} /> Subir
+          </Button>
+          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Nuevo documento" className="new-button">
+            <Plus width={18} height={18} />
+          </Button>
+        </div>
+      ) : doc ? (
+        <div key="document-actions" className="header-slot-enter">
+          <Button variant="primary" size="sm" onPress={onEdit}>
+            <Pencil width={14} height={14} /> Editar
+          </Button>
+          <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
+        </div>
+      ) : null}
+    >
+      {isLibrary ? (
+        <span key="library-title" className="topbar-title header-slot-enter">
+          <span>Bardo</span>
+        </span>
+      ) : (
+        <Button key="document-title" variant="ghost" size="sm" onPress={onBack} className="back-button">
+          <ChevronLeft width={16} height={16} /> Docs
+        </Button>
+      )}
+    </DocsHeader>
+  );
+}
+
 function Library({
   docs,
   total,
@@ -505,47 +555,8 @@ function Library({
   onUpload,
   onDocAction,
 }) {
-  const fileInputRef = useRef(null);
-
   return (
     <section className="library route-active">
-      <DocsHeader
-        className="library-header"
-        actions={(
-          <>
-            <input
-              ref={fileInputRef}
-              className="library-file-input"
-              type="file"
-              accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              aria-label="Seleccionar documento para subir"
-              onChange={event => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                if (file) onUpload(file);
-              }}
-            />
-            <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="font-medium">
-              <FileArrowUp width={16} height={16} /> Subir
-            </Button>
-            <Button
-              isIconOnly
-              variant="primary"
-              size="sm"
-              onPress={onNew}
-              aria-label="Nuevo documento"
-              className="new-button"
-            >
-              <Plus width={18} height={18} />
-            </Button>
-          </>
-        )}
-      >
-        <span className="topbar-title">
-          <FileText width={17} height={17} aria-hidden="true" />
-          <span>Docs</span>
-        </span>
-      </DocsHeader>
       <div className="library-inner">
         <SearchField
           aria-label="Buscar documentos"
@@ -619,27 +630,9 @@ function Library({
   );
 }
 
-function Reader({doc, onBack, onEdit, onAction, onChecklistChange}) {
+function Reader({doc, onBack, onEdit, onAction, onChecklistChange, skipTransition = false}) {
   return (
-    <section className="doc-route route-active">
-      <DocsHeader
-        actions={(
-          <>
-            <Button variant="primary" size="sm" onPress={onEdit}>
-              <Pencil width={14} height={14} /> Editar
-            </Button>
-            <DocActionMenu
-              doc={doc}
-              triggerLabel="Acciones del documento"
-              onAction={onAction}
-            />
-          </>
-        )}
-      >
-          <Button variant="ghost" size="sm" onPress={onBack} className="back-button">
-            <ChevronLeft width={16} height={16} /> Docs
-          </Button>
-      </DocsHeader>
+    <section className={`doc-route route-active ${skipTransition ? 'route-no-transition' : ''}`.trim()}>
       <article className="document-shell">
         <header className="doc-intro">
           <div className="flex items-center gap-2 mb-3">
@@ -672,7 +665,6 @@ function BlockTypeDropdown({value, onSelect}) {
       </Button>
       <Dropdown.Popover
         placement="bottom start"
-        isNonModal
         className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain"
       >
         <Dropdown.Menu onAction={onSelect}>
@@ -781,7 +773,6 @@ function MoreActionsMenu({onAction, visibleActions}) {
       </Button>
       <Dropdown.Popover
         placement="bottom end"
-        isNonModal
         className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain"
       >
         <Dropdown.Menu onAction={handleAction}>
@@ -1384,18 +1375,21 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
             <ChevronLeft width={16} height={16} /> Docs
           </Button>
           <Chip
+            key={saveState}
             size="sm"
             variant="soft"
             color={isDirty ? 'warning' : 'success'}
             className="save-state text-xs"
+            data-dirty={isDirty ? 'true' : 'false'}
           >
-            <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
-            {saveState}
-        </Chip>
+            <span key={saveState} className="save-state-label">{saveState}</span>
+          </Chip>
         </div>
         <div className="topbar-right flex items-center gap-2">
-          <Button variant="primary" size="sm" onPress={finish}>
-            {isDirty ? 'Guardar' : 'Listo'}
+          <Button variant="primary" size="sm" onPress={finish} className="save-action-button">
+            <span key={isDirty ? 'dirty' : 'saved'} className="save-action-label">
+              {isDirty ? 'Guardar' : 'Listo'}
+            </span>
           </Button>
         </div>
       </header>
@@ -1812,6 +1806,7 @@ function App() {
   const scrollMemory = useRef(new Map());
   const routeRef = useRef(route);
   const pendingRestore = useRef(null);
+  const skipNextRouteAnimation = useRef(false);
 
   const docs = store.docs;
   const sortedDocs = useMemo(() => [...docs].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)), [docs]);
@@ -1831,8 +1826,9 @@ function App() {
     return window.scrollY - bodyTop;
   }, []);
 
-  const go = useCallback((hash, {preserveBody = false, restore = null} = {}) => {
+  const go = useCallback((hash, {preserveBody = false, restore = null, skipTransition = false} = {}) => {
     scrollMemory.current.set(routeRef.current.key, window.scrollY);
+    skipNextRouteAnimation.current = skipTransition;
     if (preserveBody) pendingRestore.current = {kind: 'body', target: hash.replace(/^#/, ''), offset: captureBodyOffset() ?? 0};
     else if (restore) pendingRestore.current = {kind: 'absolute', target: hash.replace(/^#/, ''), y: restore};
     else pendingRestore.current = {kind: 'absolute', target: hash.replace(/^#/, ''), y: 0};
@@ -1870,6 +1866,7 @@ function App() {
       const saved = scrollMemory.current.get(route.key);
       window.scrollTo(0, saved ?? 0);
     });
+    skipNextRouteAnimation.current = false;
   }, [route]);
 
   useEffect(() => {
@@ -2048,6 +2045,17 @@ function App() {
 
   return (
     <main className="app-root">
+      {(route.type === 'library' || (route.type === 'doc' && currentDoc)) && (
+        <PersistentHeader
+          route={route}
+          doc={currentDoc}
+          onBack={() => go('#docs', {restore: scrollMemory.current.get('library') || 0})}
+          onEdit={() => go(`#edit-${currentDoc.id}`, {preserveBody: true})}
+          onAction={docAction}
+          onNew={() => go('#new')}
+          onUpload={uploadDocument}
+        />
+      )}
       {route.type === 'library' && (
         <Library
           docs={filteredDocs}
@@ -2066,6 +2074,7 @@ function App() {
       {route.type === 'doc' && currentDoc && (
         <Reader
           doc={currentDoc}
+          skipTransition={skipNextRouteAnimation.current}
           onBack={() => go('#docs', {restore: scrollMemory.current.get('library') || 0})}
           onEdit={() => go(`#edit-${currentDoc.id}`, {preserveBody: true})}
           onAction={docAction}
@@ -2078,7 +2087,7 @@ function App() {
           key={route.type === 'new' ? 'new' : currentDoc?.id}
           doc={route.type === 'new' ? null : currentDoc}
           isNew={route.type === 'new'}
-          onBack={() => route.type === 'new' ? go('#docs') : go(`#doc-${currentDoc.id}`, {preserveBody: true})}
+          onBack={() => route.type === 'new' ? go('#docs') : go(`#doc-${currentDoc.id}`, {preserveBody: true, skipTransition: true})}
           onFinish={(snapshot) => {
             if (route.type === 'new') {
               const doc = {
@@ -2101,7 +2110,7 @@ function App() {
               go(`#doc-${doc.id}`);
             } else {
               updateDoc(currentDoc.id, snapshot);
-              go(`#doc-${currentDoc.id}`, {preserveBody: true});
+              go(`#doc-${currentDoc.id}`, {preserveBody: true, skipTransition: true});
             }
           }}
           onAutosave={(snapshot) => {

@@ -13,19 +13,11 @@ import './keyboard-sticky.css';
 import './production-document-only.css';
 import './keyboard-sticky.js';
 
-const STAGE_LABELS = {
-  activity_boot_started: 'Afinando los instrumentos…',
-  sdk_ready: 'Conectando con Discord...',
-  guild_context_ready: 'Abriendo el espacio de tu servidor…',
-  authorize_started: 'Confirmando tu acceso…',
-  authorize_success: 'Acceso confirmado',
-  token_exchange_success: 'Validando tu sesión…',
-  authenticate_success: 'Sesión lista',
-  docs_hydrated: 'Cargando tus documentos…',
-  document_resolved: 'Abriendo tu documento…',
-  render_ready: 'Casi listo…',
-  session_cache_restored: 'Recuperando tu sesión…',
-};
+const BOOT_PERSONALITY_MESSAGES = [
+  'Ponemos tus ideas en su sitio…',
+  'Bardo está preparando la mesa…',
+  'Ya casi: abrimos tu espacio…',
+];
 
 const App = lazy(() => import('./App.jsx'));
 
@@ -35,18 +27,30 @@ function resolveBootTheme() {
 }
 
 // ── Boot loading screen — HeroUI themed and reassuring ───────────────────────
-function ActivityBootShell({stage}) {
+function ActivityBootShell() {
   const theme = resolveBootTheme();
-  const label = STAGE_LABELS[stage] || 'Afinando los instrumentos…';
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setMessageIndex(index => (index + 1) % BOOT_PERSONALITY_MESSAGES.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <main className="boot-screen" data-theme={theme} aria-live="polite">
       <section className="boot-content" aria-label="Cargando Bardo">
         <div className="boot-loader" role="status">
-          <span className="boot-native-spinner" aria-label="Cargando Bardo" />
+          <div className="bardo-loader" role="img" aria-label="Cargando Bardo">
+            <div className="bardo-loader__eyes" aria-hidden="true">
+              <span className="bardo-loader__eye" />
+              <span className="bardo-loader__eye" />
+            </div>
+          </div>
           <div className="boot-copy">
-            <span key={stage} className="boot-stage">{label}</span>
-            <p className="boot-hint">Estamos preparando todo para que puedas continuar</p>
+            <span key={messageIndex} className="boot-stage">{BOOT_PERSONALITY_MESSAGES[messageIndex]}</span>
+            <p className="boot-hint boot-hint-reveal">Estamos preparando todo para que puedas continuar</p>
           </div>
         </div>
       </section>
@@ -121,6 +125,7 @@ function ActivityRoot() {
   const [stage, setStage] = useState('activity_boot_started');
   const [errorMessage, setErrorMessage] = useState('');
   const [productionState, setProductionState] = useState({active: false, ready: true, documentId: null});
+  const loadingPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).get('bardo_loading') === '1';
 
   const runBootstrap = useCallback(async () => {
     applyDiscordTheme({allowSystem: false});
@@ -188,6 +193,10 @@ function ActivityRoot() {
   useEffect(() => {
     runBootstrap();
   }, [runBootstrap]);
+
+  if (loadingPreview) {
+    return <><ActivityBootShell stage="activity_boot_started" /><ThemeDiagnosticsOverlay /></>;
+  }
 
   if (status === 'booting') {
     return <><ActivityBootShell stage={stage} /><ThemeDiagnosticsOverlay /></>;
