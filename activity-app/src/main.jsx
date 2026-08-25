@@ -28,7 +28,7 @@ function resolveBootTheme() {
 }
 
 // ── Boot loading screen — HeroUI themed and reassuring ───────────────────────
-function ActivityBootShell() {
+function ActivityBootShell({leaving = false}) {
   const theme = resolveBootTheme();
   const [messageIndex, setMessageIndex] = useState(0);
 
@@ -40,7 +40,7 @@ function ActivityBootShell() {
   }, []);
 
   return (
-    <main className="boot-screen" data-theme={theme} aria-live="polite">
+    <main className={`boot-screen${leaving ? ' boot-screen--leaving' : ''}`} data-theme={theme} aria-live="polite">
       <section className="boot-content" aria-label="Cargando Bardo">
         <div className="boot-loader" role="status">
           <div className="bardo-loader" role="img" aria-label="Cargando Bardo">
@@ -128,6 +128,7 @@ function ThemedApp({productionState, onRetry}) {
 
 function ActivityRoot() {
   const [status, setStatus] = useState('booting');
+  const [bootLeaving, setBootLeaving] = useState(false);
   const [stage, setStage] = useState('activity_boot_started');
   const [errorMessage, setErrorMessage] = useState('');
   const [productionState, setProductionState] = useState({active: false, ready: true, documentId: null});
@@ -136,6 +137,7 @@ function ActivityRoot() {
   const runBootstrap = useCallback(async () => {
     applyDiscordTheme({allowSystem: false});
     setStatus('booting');
+    setBootLeaving(false);
     setErrorMessage('');
 
     try {
@@ -189,6 +191,9 @@ function ActivityRoot() {
       // Keep the boot shell mounted until the app chunk is ready too. This
       // avoids a second visible loading pass from Suspense after bootstrap.
       await appModulePromise;
+      setBootLeaving(true);
+      const exitDuration = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 1 : 280;
+      await new Promise((resolve) => window.setTimeout(resolve, exitDuration));
       setStatus('ready');
     } catch (error) {
       console.error('Bardo Activity bootstrap failed:', error);
@@ -208,7 +213,7 @@ function ActivityRoot() {
   }
 
   if (status === 'booting') {
-    return <><ActivityBootShell stage={stage} /><ThemeDiagnosticsOverlay /></>;
+    return <><ActivityBootShell leaving={bootLeaving} stage={stage} /><ThemeDiagnosticsOverlay /></>;
   }
 
   if (status === 'error') {

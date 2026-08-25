@@ -54,6 +54,7 @@ button { font-size: 14px; }
 }
 .app-root {
   color: var(--foreground);
+  animation: app-root-enter 280ms var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
   padding-block-start: var(--bardo-safe-top);
   padding-block-end: var(--bardo-safe-bottom);
   padding-inline-start: var(--bardo-safe-left);
@@ -69,6 +70,12 @@ button { font-size: 14px; }
   background: var(--background);
   color: var(--foreground);
   user-select: none;
+  animation: boot-screen-enter 280ms var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+.boot-screen--leaving {
+  animation: boot-screen-exit 280ms var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  pointer-events: none;
 }
 
 .boot-content {
@@ -223,6 +230,21 @@ button { font-size: 14px; }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes boot-screen-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes boot-screen-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes app-root-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes boot-stage-enter {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
@@ -252,6 +274,11 @@ button { font-size: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .boot-screen,
+  .boot-screen--leaving {
+    animation-duration: 1ms !important;
+  }
+  .app-root { animation-duration: 1ms !important; }
   .t-shimmer::before { animation: none !important; }
 }
 
