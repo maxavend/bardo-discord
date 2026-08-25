@@ -8,7 +8,9 @@ import {canUserViewChannel} from './discord-permissions.js';
 
 const AUTH_TOKEN_PATH = '/api/auth/token';
 const DISCORD_CLIENT_ID = '1539704001535156254';
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+// Keep the Activity session long-lived. Access is still checked against the
+// current Discord guild/channel permissions on every Docs request.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {

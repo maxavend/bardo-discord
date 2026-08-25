@@ -4,7 +4,9 @@ import {installBardoApiSession} from './production-launch-auth.js';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const AUTH_TIMEOUT_MS = 15000;
 const SDK_READY_TIMEOUT_MS = 10000;
-const SESSION_CACHE_KEY = 'bardo_session_v1';
+const SESSION_CACHE_KEY = 'bardo_sessions_v2';
+const LEGACY_SESSION_CACHE_KEY = 'bardo_session_v1';
+const MAX_SESSION_CACHE_ENTRIES = 12;
 
 export function logBreadcrumb(stage, detail = null) {
   try {
@@ -53,17 +55,41 @@ function withTimeout(promise, ms, label) {
 
 function saveSessionCache(token, expiresAt, user, guildId, channelId) {
   try {
-    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
-      token, expiresAt, user, guildId, channelId,
-    }));
+    const raw = localStorage.getItem(SESSION_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const sessions = parsed?.version === 2 && parsed.sessions && typeof parsed.sessions === 'object'
+      ? parsed.sessions
+      : {};
+    const key = sessionCacheKey(guildId, channelId);
+    sessions[key] = {token, expiresAt, user, guildId, channelId, savedAt: Date.now()};
+
+    const entries = Object.entries(sessions)
+      .sort(([, left], [, right]) => (right?.savedAt || 0) - (left?.savedAt || 0))
+      .slice(0, MAX_SESSION_CACHE_ENTRIES);
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({version: 2, sessions: Object.fromEntries(entries)}));
+    localStorage.removeItem(LEGACY_SESSION_CACHE_KEY);
   } catch {}
+}
+
+function sessionCacheKey(guildId, channelId) {
+  return `${guildId || 'unknown'}:${channelId || 'unknown'}`;
 }
 
 function loadSessionCache(guildId, channelId) {
   try {
     const raw = localStorage.getItem(SESSION_CACHE_KEY);
-    if (!raw) return null;
-    const cached = JSON.parse(raw);
+    const parsed = raw ? JSON.parse(raw) : null;
+    let cached = parsed?.version === 2
+      ? parsed.sessions?.[sessionCacheKey(guildId, channelId)]
+      : null;
+
+    // Migrate the original single-session cache without making the user log in again.
+    if (!cached) {
+      const legacyRaw = localStorage.getItem(LEGACY_SESSION_CACHE_KEY);
+      const legacy = legacyRaw ? JSON.parse(legacyRaw) : null;
+      if (legacy?.guildId === guildId && legacy?.channelId === channelId) cached = legacy;
+    }
+
     if (!cached?.token || !cached?.expiresAt) return null;
     // Must match the same guild (different servers = different sessions)
     if (guildId && cached.guildId && cached.guildId !== guildId) return null;
@@ -78,8 +104,21 @@ function loadSessionCache(guildId, channelId) {
   }
 }
 
-function clearSessionCache() {
-  try { localStorage.removeItem(SESSION_CACHE_KEY); } catch {}
+function clearSessionCache(guildId, channelId) {
+  try {
+    const raw = localStorage.getItem(SESSION_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed?.version === 2 && parsed.sessions && typeof parsed.sessions === 'object') {
+      delete parsed.sessions[sessionCacheKey(guildId, channelId)];
+      localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(parsed));
+    }
+
+    const legacyRaw = localStorage.getItem(LEGACY_SESSION_CACHE_KEY);
+    const legacy = legacyRaw ? JSON.parse(legacyRaw) : null;
+    if (!guildId || (legacy?.guildId === guildId && legacy?.channelId === channelId)) {
+      localStorage.removeItem(LEGACY_SESSION_CACHE_KEY);
+    }
+  } catch {}
 }
 
 async function verifySessionToken(token) {
@@ -112,6 +151,9 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
     };
   }
 
+  let activeGuildId = null;
+  let activeChannelId = null;
+
   try {
     const clientId = resolveClientId();
     const sdk = new DiscordSDK(clientId);
@@ -123,6 +165,8 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
     onStageChange('guild_context_ready');
     const guildId = sdk.guildId || new URLSearchParams(window.location.search).get('guild_id') || null;
     const channelId = sdk.channelId || new URLSearchParams(window.location.search).get('channel_id') || null;
+    activeGuildId = guildId;
+    activeChannelId = channelId;
     if (!guildId) {
       logBreadcrumb('guild_context_missing');
       return {
@@ -211,7 +255,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
       }
       // Cache was stale — clear and do full auth
       logBreadcrumb('session_cache_expired');
-      clearSessionCache();
+      clearSessionCache(guildId, channelId);
     }
 
     // ── Full OAuth flow ───────────────────────────────────────────────────
@@ -296,7 +340,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
     const errorMsg = error instanceof Error ? error.message : String(error);
     logBreadcrumb('bootstrap_error', {error: errorMsg});
     console.error('Bardo Docs: autenticación Discord falló', error);
-    clearSessionCache();
+    clearSessionCache(activeGuildId, activeChannelId);
     return {
       embedded: true,
       ready: false,
