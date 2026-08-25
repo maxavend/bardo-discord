@@ -19,7 +19,8 @@ const BOOT_PERSONALITY_MESSAGES = [
   'Ya casi: abrimos tu espacio…',
 ];
 
-const App = lazy(() => import('./App.jsx'));
+const appModulePromise = import('./App.jsx');
+const App = lazy(() => appModulePromise);
 
 // ── Detect Discord theme before React mounts ─────────────────────────────────
 function resolveBootTheme() {
@@ -180,6 +181,9 @@ function ActivityRoot() {
         setProductionState({active: false, ready: true, documentId: null});
       }
 
+      // Keep the boot shell mounted until the app chunk is ready too. This
+      // avoids a second visible loading pass from Suspense after bootstrap.
+      await appModulePromise;
       setStatus('ready');
     } catch (error) {
       console.error('Bardo Activity bootstrap failed:', error);
