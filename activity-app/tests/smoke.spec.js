@@ -29,7 +29,10 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
     const group = input?.closest('[data-slot="input-group"]') || input?.closest('.search-field__group') || input?.parentElement;
     const groupStyle = group ? getComputedStyle(group) : null;
     const bodyStyle = getComputedStyle(document.body);
-    const libraryHeader = document.querySelector('.library-header')?.getBoundingClientRect();
+    const libraryHeaderElement = document.querySelector('.library-header');
+    const libraryHeader = libraryHeaderElement?.getBoundingClientRect();
+    const libraryHeaderStyle = libraryHeaderElement ? getComputedStyle(libraryHeaderElement) : null;
+    const docsBrandIcon = libraryHeaderElement?.querySelector('.topbar-title > svg');
     const searchRect = group?.getBoundingClientRect();
     const nativeMenus = [...document.querySelectorAll('.native-menu select')].map(el => el.getBoundingClientRect());
     return {
@@ -46,6 +49,8 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
       groupHeight: searchRect?.height,
       headerLeft: libraryHeader?.left,
       headerRight: libraryHeader?.right,
+      headerPosition: libraryHeaderStyle?.position,
+      hasDocsBrandIcon: Boolean(docsBrandIcon),
       viewportWidth: document.documentElement.clientWidth,
       contentInset: searchRect?.left,
       nativeMenus: nativeMenus.map(r => ({w:r.width,h:r.height})),
@@ -64,6 +69,8 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(audit.groupHeight).toBeGreaterThanOrEqual(36);
   expect(Math.abs(audit.headerLeft)).toBeLessThanOrEqual(1);
   expect(Math.abs(audit.viewportWidth - audit.headerRight)).toBeLessThanOrEqual(1);
+  expect(audit.headerPosition).toBe('sticky');
+  expect(audit.hasDocsBrandIcon).toBeTruthy();
   expect(audit.contentInset).toBeGreaterThanOrEqual(12);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);

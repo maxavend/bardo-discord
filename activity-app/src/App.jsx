@@ -668,7 +668,10 @@ function Library({
           </>
         )}
       >
-        <span className="topbar-title">Docs</span>
+        <span className="topbar-title">
+          <FileText width={17} height={17} aria-hidden="true" />
+          <span>Docs</span>
+        </span>
       </DocsHeader>
       <div className="library-inner">
         <SearchField
