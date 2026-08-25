@@ -839,6 +839,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const [description, setDescription] = useState(doc?.description ?? initialDraft?.description ?? '');
   const [saveState, setSaveState] = useState(isNew ? 'Borrador guardado' : 'Guardado');
   const [isDirty, setIsDirty] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   const [blockValue, setBlockValue] = useState('p');
   const [inlineState, setInlineState] = useState({
     bold: false,
@@ -863,6 +864,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const lastRange = useRef(null);
   const activeEditable = useRef(null);
   const saveTimer = useRef(null);
+  const exitTimer = useRef(null);
   const titleRef = useRef(title);
   const descriptionRef = useRef(description);
   const loadedKey = useRef(null);
@@ -1039,7 +1041,19 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     });
   }, [title, description]);
 
-  useEffect(() => () => clearTimeout(saveTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(saveTimer.current);
+    clearTimeout(exitTimer.current);
+  }, []);
+
+  const leaveEditor = useCallback((callback) => {
+    if (exitTimer.current) return;
+    setIsExiting(true);
+    exitTimer.current = setTimeout(() => {
+      exitTimer.current = null;
+      callback();
+    }, 150);
+  }, []);
 
   const rememberSelection = useCallback(({preserveNonCollapsed = false} = {}) => {
     const sel = window.getSelection();
@@ -1284,7 +1298,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
 
   const finish = () => {
     const snap = flushSave();
-    onFinish(snap);
+    leaveEditor(() => onFinish(snap));
   };
 
   const selectedInlineKeys = useMemo(() => {
@@ -1360,15 +1374,16 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   };
 
   return (
-    <section className="doc-route route-active editing-route">
+    <section className={`doc-route route-active editing-route ${isExiting ? 'toolbar-is-exiting' : ''}`}>
       <header className="doc-topbar glass-header app-host-header">
         <div className="topbar-left flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             onPress={() => {
+              if (isExiting) return;
               flushSave();
-              onBack();
+              leaveEditor(onBack);
             }}
             className="back-button"
           >

@@ -645,6 +645,25 @@ button { font-size: 14px; }
   max-width: 100%;
   box-sizing: border-box;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .editor-toolbar-container {
+    transform-origin: left center;
+    animation: editor-toolbar-enter 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity, filter;
+  }
+  .toolbar-is-exiting .editor-toolbar-container {
+    animation: editor-toolbar-exit 150ms ease-in both;
+    pointer-events: none;
+  }
+}
+@keyframes editor-toolbar-enter {
+  from { opacity: 0; transform: translateY(-8px) scale(0.99); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes editor-toolbar-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  to { opacity: 0; transform: translateY(-4px) scale(0.99); filter: blur(2px); }
+}
 .editor-toolbar-container .toolbar {
   display: flex !important;
   align-items: center;
