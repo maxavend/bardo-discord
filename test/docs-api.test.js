@@ -94,7 +94,7 @@ function createDocsMockDb() {
           username: 'TestUser',
           avatar: null,
           created_at: '2026-08-24T10:00:00.000Z',
-          expires_at: '2026-08-25T10:00:00.000Z',
+          expires_at: '2030-08-25T10:00:00.000Z',
         };
       }
       if (query.includes('FROM documents WHERE id = ?')) {
@@ -286,6 +286,30 @@ test('handleDocsApi resuelve contextDocumentId desde header x-bardo-custom-id', 
 
   const data = await res.json();
   assert.equal(data.contextDocumentId, 'doc-1');
+});
+
+test('handleDocsApi puede reenviar un documento únicamente al canal de la sesión', async () => {
+  const db = createDocsMockDb();
+  let postedPath = '';
+  const env = {
+    ...createEnv(db),
+    DISCORD_FETCH(input) {
+      const url = new URL(input);
+      if (url.pathname === '/api/v10/channels/channel-123/messages') {
+        postedPath = url.pathname;
+        return Promise.resolve(new Response(JSON.stringify({id: 'message-1'}), {status: 200}));
+      }
+      return discordFetch(input);
+    },
+  };
+  const req = new Request('http://localhost/api/docs/doc-1/message', {
+    method: 'POST',
+    headers: {Authorization: `Bearer ${db.validToken}`},
+  });
+  const res = await handleDocsApi(req, new URL(req.url), env);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {ok: true, messageId: 'message-1'});
+  assert.equal(postedPath, '/api/v10/channels/channel-123/messages');
 });
 
 test('handleDocsApi crea un nuevo documento vía POST y le otorga acceso al guild', async () => {

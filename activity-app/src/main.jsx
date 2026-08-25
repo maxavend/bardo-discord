@@ -4,7 +4,6 @@ import {createRoot} from 'react-dom/client';
 import App, {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './App.jsx';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
-import {activateBardoDocumentOnlyMode} from './production-document-only.js';
 import {installProductionImportNormalizer} from './production-import-normalizer.js';
 import '@fontsource-variable/inter';
 import './styles.css';
@@ -163,11 +162,13 @@ function ActivityRoot() {
 
         setStage('document_resolved');
         logBreadcrumb('document_resolved');
-        const prodState = await activateBardoDocumentOnlyMode();
-
         setStage('render_ready');
         logBreadcrumb('render_ready');
-        setProductionState(prodState);
+        setProductionState({
+          active: true,
+          ready: true,
+          documentId: window.__BARDO_DOCUMENT_ID__ || null,
+        });
       } else {
         setProductionState({active: false, ready: true, documentId: null});
       }

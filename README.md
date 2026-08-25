@@ -2,11 +2,12 @@
 
 Bardo convierte archivos de documentación en una experiencia de lectura unificada dentro de Discord.
 
-1. `/doc` recibe Markdown, TXT, PDF o Word (`.docx`).
+1. `/upload-docs` recibe Markdown, TXT, PDF o Word (`.docx`) y lo comparte en el canal actual.
 2. Publica un **preview corto** mediante Components V2.
 3. **📖 Mostrar más** abre el documento completo como una **Discord Activity**.
 4. Todos los formatos terminan usando el mismo renderer visual de Bardo.
 5. El lector permite copiar todo y exportar a PDF, Markdown o Word.
+6. La biblioteca de Docs muestra únicamente los documentos compartidos en el canal actual.
 
 No hay paginación manual ni proceso Node permanente: la Activity usa scroll continuo.
 
@@ -22,7 +23,7 @@ Los PDF escaneados sin texto seleccionable todavía requieren OCR y se muestran 
 
 ## Arquitectura
 
-- **Discord HTTP Interactions**: recibe `/doc` sin Gateway persistente.
+- **Discord HTTP Interactions**: recibe `/upload-docs` sin Gateway persistente.
 - **Components V2**: muestra la vista previa en el canal.
 - **Discord Activity**: lector embebido del documento completo.
 - **Cloudflare Workers Static Assets**: sirve el lector y los parsers lazy de PDF/DOCX.
@@ -50,13 +51,13 @@ DISCORD_TOKEN=pega_aqui_el_token_del_bot
 DISCORD_GUILD_ID=pega_aqui_el_id_de_tu_servidor
 ```
 
-## Registrar `/doc`
+## Registrar `/upload-docs`
 
 ```bash
 npm run register
 ```
 
-El registro usa `PUT` sobre los comandos del guild, por lo que `/doc` reemplaza al antiguo `/documento`.
+El registro usa `PUT` sobre los comandos del guild, por lo que deja un único comando activo: `/upload-docs`.
 
 ## Cloudflare
 
@@ -98,12 +99,14 @@ Target: bardo-discord.bardo-discord.workers.dev
 
 ## Publicar un documento
 
-1. Escribe `/doc`.
+1. Escribe `/upload-docs`.
 2. Adjunta `.md`, `.markdown`, `.txt`, `.pdf` o `.docx`.
 3. `titulo` es opcional.
 4. Envía.
 5. Bardo publica el preview y **📖 Mostrar más**.
 6. El lector muestra todo con el mismo sistema visual, sin importar el formato de origen.
+
+Desde el home de Docs también puedes crear documentos, subir archivos, buscar entre los documentos del canal y usar **Enviar como mensaje** para publicar nuevamente la tarjeta de vista previa en ese mismo canal.
 
 Por ahora el límite de archivo para importación es **1,8 MB** para mantener cada documento dentro de los límites de almacenamiento usados por la versión gratuita.
 

@@ -32,6 +32,7 @@ import {
   EllipsisVertical,
   Eye,
   File,
+  FileArrowUp,
   FileText,
   Grip,
   Heading1,
@@ -53,6 +54,8 @@ import {
   TrashBin,
   Underline,
 } from '@gravity-ui/icons';
+import {convertDocumentFile} from './production-import-normalizer.js';
+import {markdownToHtml} from './production-bridge.js';
 
 const STORE_KEY = 'bardo.docs.heroui.v1';
 const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
@@ -298,6 +301,25 @@ function documentFileStem(doc) {
   return doc?.title?.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-|-$/g, '') || 'documento';
 }
 
+function escapeHtmlText(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function documentHtml(doc) {
+  const title = escapeHtmlText(doc?.title || 'Sin título');
+  const description = doc?.description ? `<p>${escapeHtmlText(doc.description)}</p>` : '';
+  return `<!doctype html><meta charset="utf-8"><title>${title}</title><article><h1>${title}</h1>${description}${sanitizeRichHtml(doc?.body || '')}</article>`;
+}
+
+function isMobileViewport() {
+  return window.matchMedia?.('(max-width: 759px)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
+}
+
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -493,6 +515,10 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
             <FileText width={15} height={15} className="text-muted" />
             <Label>Copiar texto</Label>
           </Dropdown.Item>
+          <Dropdown.Item id="publish" textValue="Enviar como mensaje">
+            <ArrowUturnCwRight width={15} height={15} className="text-muted" />
+            <Label>Enviar como mensaje</Label>
+          </Dropdown.Item>
       <Dropdown.Section>
         <Header>Exportar</Header>
             <Dropdown.Item id="markdown-preview" textValue="Ver Markdown">
@@ -531,36 +557,6 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
   );
 }
 
-function LibraryActionMenu({hasDraft, hasQuery, onAction}) {
-  return (
-    <Dropdown>
-      <Button
-        isIconOnly
-        size="sm"
-        variant="ghost"
-        aria-label="Más opciones de biblioteca"
-        className="text-muted hover:text-foreground"
-      >
-        <EllipsisVertical width={16} height={16} />
-      </Button>
-      <Dropdown.Popover placement="bottom end" isNonModal>
-        <Dropdown.Menu onAction={onAction}>
-          {hasQuery && (
-            <Dropdown.Item id="clear-search" textValue="Limpiar búsqueda">
-              <Label>Limpiar búsqueda</Label>
-            </Dropdown.Item>
-          )}
-          {hasDraft && (
-            <Dropdown.Item id="discard-draft" textValue="Descartar borrador" variant="danger">
-              <Label>Descartar borrador</Label>
-            </Dropdown.Item>
-          )}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
-  );
-}
-
 function RichBody({html, onChecklistChange, className = ''}) {
   const ref = useRef(null);
   const rendered = useMemo(() => enhanceChecklistHtml(html), [html]);
@@ -583,7 +579,7 @@ function RichBody({html, onChecklistChange, className = ''}) {
   );
 }
 
-function EmptyState({query, onClearSearch, onNewDoc}) {
+function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       <div className="w-12 h-12 rounded-2xl bg-default dark:bg-default/50 border border-border flex items-center justify-center text-muted mb-3.5">
@@ -602,11 +598,25 @@ function EmptyState({query, onClearSearch, onNewDoc}) {
           Limpiar búsqueda
         </Button>
       ) : (
-        <Button variant="primary" size="sm" onPress={onNewDoc}>
-          <Plus width={16} height={16} /> Crear primer documento
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="primary" size="sm" onPress={onNewDoc}>
+            <Plus width={16} height={16} /> Crear documento
+          </Button>
+          <Button variant="secondary" size="sm" onPress={onUpload}>
+            <File width={16} height={16} /> Subir documento
+          </Button>
+        </div>
       )}
     </div>
+  );
+}
+
+function DocsHeader({children, actions, className = ''}) {
+  return (
+    <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
+      <div className="topbar-left">{children}</div>
+      <div className="topbar-right header-actions">{actions}</div>
+    </header>
   );
 }
 
@@ -619,34 +629,48 @@ function Library({
   onContinue,
   onOpen,
   onNew,
+  onUpload,
   onDocAction,
-  onLibraryAction,
 }) {
-  const hasDraft = (() => {
-    try {
-      return !!localStorage.getItem(DRAFT_KEY);
-    } catch {
-      return false;
-    }
-  })();
+  const fileInputRef = useRef(null);
 
   return (
     <section className="library route-active">
-      <div className="library-inner">
-        <header className="library-header glass-header">
-          <strong className="library-title">Docs</strong>
-          <div className="header-actions flex items-center gap-2">
-            <Button variant="primary" size="sm" onPress={onNew} className="new-button font-medium">
-              <Plus width={16} height={16} /> Nuevo
-            </Button>
-            <LibraryActionMenu
-              hasDraft={hasDraft}
-              hasQuery={!!query}
-              onAction={onLibraryAction}
+      <DocsHeader
+        className="library-header"
+        actions={(
+          <>
+            <input
+              ref={fileInputRef}
+              className="library-file-input"
+              type="file"
+              accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="Seleccionar documento para subir"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) onUpload(file);
+              }}
             />
-          </div>
-        </header>
-
+            <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="font-medium">
+              <FileArrowUp width={16} height={16} /> Subir
+            </Button>
+            <Button
+              isIconOnly
+              variant="primary"
+              size="sm"
+              onPress={onNew}
+              aria-label="Nuevo documento"
+              className="new-button"
+            >
+              <Plus width={18} height={18} />
+            </Button>
+          </>
+        )}
+      >
+        <span className="topbar-title">Docs</span>
+      </DocsHeader>
+      <div className="library-inner">
         <SearchField
           aria-label="Buscar documentos"
           fullWidth
@@ -710,6 +734,7 @@ function Library({
               query={query}
               onClearSearch={() => setQuery('')}
               onNewDoc={onNew}
+              onUpload={() => fileInputRef.current?.click()}
             />
           )}
         </section>
@@ -721,23 +746,24 @@ function Library({
 function Reader({doc, onBack, onEdit, onAction, onChecklistChange}) {
   return (
     <section className="doc-route route-active">
-      <header className="doc-topbar glass-header app-host-header">
-        <div className="topbar-left flex items-center gap-2">
+      <DocsHeader
+        actions={(
+          <>
+            <Button variant="primary" size="sm" onPress={onEdit}>
+              <Pencil width={14} height={14} /> Editar
+            </Button>
+            <DocActionMenu
+              doc={doc}
+              triggerLabel="Acciones del documento"
+              onAction={onAction}
+            />
+          </>
+        )}
+      >
           <Button variant="ghost" size="sm" onPress={onBack} className="back-button">
             <ChevronLeft width={16} height={16} /> Docs
           </Button>
-        </div>
-        <div className="topbar-right flex items-center gap-2">
-          <Button variant="primary" size="sm" onPress={onEdit}>
-            <Pencil width={14} height={14} /> Editar
-          </Button>
-          <DocActionMenu
-            doc={doc}
-            triggerLabel="Acciones del documento"
-            onAction={onAction}
-          />
-        </div>
-      </header>
+      </DocsHeader>
       <article className="document-shell">
         <header className="doc-intro">
           <div className="flex items-center gap-2 mb-3">
@@ -1834,6 +1860,65 @@ function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
   );
 }
 
+function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
+  return (
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
+      <Modal.Container placement="auto" size="lg">
+        <Modal.Dialog aria-label="Vista previa HTML">
+          <Modal.Header>
+            <Modal.Heading>Vista previa HTML</Modal.Heading>
+            <p className="text-sm text-muted truncate">{doc?.title || 'Sin título'}</p>
+          </Modal.Header>
+          <Modal.Body>
+            <div className="export-html-preview">
+              <h1>{doc?.title || 'Sin título'}</h1>
+              {doc?.description && <p className="text-muted">{doc.description}</p>}
+              <RichBody html={doc?.body || ''} />
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="ghost" onPress={onCancel}>
+              <ChevronLeft width={15} height={15} /> Atrás
+            </Button>
+            <Button variant="primary" onPress={() => onCopy(documentHtml(doc))}>
+              <Copy width={15} height={15} /> Copiar HTML
+            </Button>
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  );
+}
+
+function PdfPreviewModal({isOpen, file, onCancel}) {
+  return (
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
+      <Modal.Container placement="auto" size="lg">
+        <Modal.Dialog aria-label="Vista previa de PDF">
+          <Modal.Header>
+            <Modal.Heading>Vista previa de PDF</Modal.Heading>
+            <p className="text-sm text-muted truncate">{file?.filename || 'documento.pdf'}</p>
+          </Modal.Header>
+          <Modal.Body>
+            {file?.url && (
+              <iframe
+                className="export-pdf-preview"
+                src={file.url}
+                title={file.filename || 'Vista previa de PDF'}
+              />
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="ghost" onPress={onCancel}>
+              <ChevronLeft width={15} height={15} /> Atrás
+            </Button>
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  );
+}
+
 function App() {
   const [store, setStore] = useState(loadStore);
   const [route, setRoute] = useState(parseRoute);
@@ -1958,6 +2043,34 @@ function App() {
     go(`#doc-${copy.id}`);
   }, [docsById, go, showToast]);
 
+  const uploadDocument = useCallback(async file => {
+    try {
+      showToast('Preparando documento…');
+      const imported = await convertDocumentFile(file);
+      const now = new Date().toISOString();
+      const doc = {
+        id: `local-${Date.now().toString(36)}`,
+        title: imported.title,
+        description: '',
+        body: markdownToHtml(imported.markdown, imported.title),
+        origin: 'Subido a Bardo',
+        sourceName: imported.sourceName,
+        createdAt: now,
+        updatedAt: now,
+        createdByName: currentEditorName(),
+        updatedByName: currentEditorName(),
+        builtin: false,
+        stress: false,
+      };
+      setStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
+      showToast('Documento listo');
+      go(`#doc-${doc.id}`);
+    } catch (error) {
+      console.error('Bardo Docs: no se pudo subir el documento', error);
+      showToast(error instanceof Error ? error.message : 'No se pudo subir el documento');
+    }
+  }, [go, showToast]);
+
   const deleteDoc = useCallback(id => {
     setStore(prev => ({
       ...prev,
@@ -2000,29 +2113,55 @@ function App() {
         showToast('No se pudo copiar');
       }
     }
+    if (action === 'publish') {
+      if (!window.__bardoPublishDocument) {
+        showToast('Esta acción está disponible dentro de Discord');
+      } else {
+        try {
+          await window.__bardoPublishDocument(doc.id);
+          showToast('Documento enviado al canal');
+        } catch (error) {
+          console.error('Bardo Docs: no se pudo enviar el documento al canal', error);
+          showToast('No se pudo enviar el documento al canal');
+        }
+      }
+    }
     if (action === 'markdown-preview') {
       setModal({type: 'markdown-preview', docId: doc.id});
     }
     if (action === 'markdown') {
-      downloadFile(
-        `${documentFileStem(doc)}.md`,
-        'text/markdown;charset=utf-8',
-        documentMarkdown(doc)
-      );
-      showToast('Markdown descargado');
+      if (isMobileViewport()) {
+        setModal({type: 'markdown-preview', docId: doc.id});
+      } else {
+        downloadFile(
+          `${documentFileStem(doc)}.md`,
+          'text/markdown;charset=utf-8',
+          documentMarkdown(doc)
+        );
+        showToast('Markdown descargado');
+      }
     }
     if (action === 'html') {
-      downloadFile(
-        `${doc.title.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-|-$/g, '') || 'documento'}.html`,
-        'text/html;charset=utf-8',
-        `<!doctype html><meta charset="utf-8"><title>${doc.title}</title><article><h1>${doc.title}</h1><p>${doc.description}</p>${sanitizeRichHtml(doc.body)}</article>`
-      );
-      showToast('HTML descargado');
+      if (isMobileViewport()) {
+        setModal({type: 'html-preview', docId: doc.id});
+      } else {
+        downloadFile(
+          `${documentFileStem(doc)}.html`,
+          'text/html;charset=utf-8',
+          documentHtml(doc)
+        );
+        showToast('HTML descargado');
+      }
     }
     if ((action === 'pdf' || action === 'docx') && window.__bardoExportDocument) {
       try {
-        await window.__bardoExportDocument(doc.id, action);
-        showToast(action === 'pdf' ? 'PDF descargado' : 'Word descargado');
+        const shouldPreviewPdf = action === 'pdf' && isMobileViewport();
+        const file = await window.__bardoExportDocument(doc.id, action, {preview: shouldPreviewPdf});
+        if (shouldPreviewPdf && file?.url) {
+          setModal({type: 'pdf-preview', file});
+        } else {
+          showToast(action === 'pdf' ? 'PDF descargado' : 'Word descargado');
+        }
       } catch (error) {
         console.error(`Bardo Docs: no se pudo descargar ${action}`, error);
         showToast(`No se pudo descargar ${action === 'pdf' ? 'el PDF' : 'el archivo Word'}`);
@@ -2043,16 +2182,8 @@ function App() {
           onContinue={() => continueDoc && openDoc(continueDoc.id, true)}
           onOpen={openDoc}
           onNew={() => go('#new')}
+          onUpload={uploadDocument}
           onDocAction={docAction}
-          onLibraryAction={action => {
-            if (action === 'clear-search') setQuery('');
-            if (action === 'discard-draft') {
-              try {
-                localStorage.removeItem(DRAFT_KEY);
-              } catch {}
-              showToast('Borrador descartado');
-            }
-          }}
         />
       )}
 
@@ -2153,6 +2284,29 @@ function App() {
           }
         }}
         onCancel={() => setModal(null)}
+      />
+
+      <HtmlPreviewModal
+        isOpen={modal?.type === 'html-preview'}
+        doc={modal?.type === 'html-preview' ? docsById.get(modal.docId) : null}
+        onCopy={async html => {
+          try {
+            await copyText(html);
+            showToast('HTML copiado al portapapeles');
+          } catch {
+            showToast('No se pudo copiar el HTML');
+          }
+        }}
+        onCancel={() => setModal(null)}
+      />
+
+      <PdfPreviewModal
+        isOpen={modal?.type === 'pdf-preview'}
+        file={modal?.type === 'pdf-preview' ? modal.file : null}
+        onCancel={() => {
+          if (modal?.type === 'pdf-preview') URL.revokeObjectURL(modal.file?.url);
+          setModal(null);
+        }}
       />
 
       <ToastProvider placement="bottom" />

@@ -15,6 +15,11 @@
 }
 
 .library {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.library-inner {
   padding-left: var(--bardo-gutter);
   padding-right: var(--bardo-gutter);
 }

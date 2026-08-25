@@ -188,9 +188,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 async function handleCommandInteraction(interaction, env, ctx) {
   const commandName = interaction.data?.name;
 
-  // `documento` se conserva temporalmente para mensajes/comandos cacheados mientras
-  // Discord propaga el nuevo trigger `/doc`.
-  if (commandName === 'doc' || commandName === 'documento') {
+  if (commandName === 'upload-docs') {
     const options = interaction.data?.options || [];
     const archivoOption = options.find((opt) => opt.name === 'archivo');
     const tituloOption = options.find((opt) => opt.name === 'titulo');

@@ -51,7 +51,7 @@ function stripLeadingTitle(markdown, title) {
   return lines.join('\n').trim();
 }
 
-function markdownToHtml(markdown, title) {
+export function markdownToHtml(markdown, title) {
   const lines = stripLeadingTitle(markdown, title).replace(/\r\n?/g, '\n').split('\n');
   const html = [];
   let index = 0;
@@ -194,8 +194,10 @@ function responseFileName(response, fallback) {
   return disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallback;
 }
 
-function triggerBlobDownload(blob, filename) {
+function triggerBlobDownload(blob, filename, {preview = false} = {}) {
   const objectUrl = URL.createObjectURL(blob);
+  if (preview) return {url: objectUrl, filename, mime: blob.type || 'application/octet-stream'};
+
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
   anchor.download = filename;
@@ -254,7 +256,7 @@ export async function prepareBardoProduction(options = {}) {
   const sdk = options.sdk || window.__BARDO_DISCORD_SDK__ || await initSdk();
   if (sdk) window.__BARDO_DISCORD_SDK__ = sdk;
 
-  window.__bardoExportDocument = async (documentId, format) => {
+  window.__bardoExportDocument = async (documentId, format, options = {}) => {
     const url = `${window.location.origin}/api/documents/${encodeURIComponent(documentId)}/export?format=${encodeURIComponent(format)}`;
     const headers = {'Accept': 'application/octet-stream'};
     if (window.__BARDO_SESSION_TOKEN__) headers['Authorization'] = `Bearer ${window.__BARDO_SESSION_TOKEN__}`;
@@ -266,7 +268,7 @@ export async function prepareBardoProduction(options = {}) {
 
     const blob = await response.blob();
     const fallbackName = `${documentId}.${format === 'word' ? 'docx' : format}`;
-    triggerBlobDownload(blob, responseFileName(response, fallbackName));
+    return triggerBlobDownload(blob, responseFileName(response, fallbackName), options);
   };
 
   const headers = {'Accept':'application/json'};
@@ -311,20 +313,22 @@ export async function prepareBardoProduction(options = {}) {
   const explicitCustomId = window.__BARDO_CUSTOM_ID__?.startsWith('bardo:open:')
     ? window.__BARDO_CUSTOM_ID__.slice('bardo:open:'.length)
     : window.__BARDO_CUSTOM_ID__;
+  // Prefer the explicit component custom id. On Discord mobile the SDK can
+  // omit it, in which case the API returns the short-lived launch intent.
   const contextId = payload.contextDocumentId || explicitCustomId;
 
   if (contextId && docs.some(doc => doc.id === contextId)) {
     localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:contextId, offset:0, at:Date.now()}));
     window.__BARDO_DOCUMENT_ID__ = contextId;
     history.replaceState(null, '', `#doc-${encodeURIComponent(contextId)}`);
-  } else if (docs.length > 0) {
-    const targetId = docs[0].id;
-    localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:targetId, offset:0, at:Date.now()}));
-    window.__BARDO_DOCUMENT_ID__ = targetId;
+  } else {
+    window.__BARDO_DOCUMENT_ID__ = null;
     if (!location.hash || location.hash === '#docs') {
-      history.replaceState(null, '', `#doc-${encodeURIComponent(targetId)}`);
+      history.replaceState(null, '', '#docs');
     }
-  } else if (!location.hash) {
+  }
+
+  if (!location.hash) {
     history.replaceState(null, '', '#docs');
   }
 
@@ -348,6 +352,10 @@ export async function prepareBardoProduction(options = {}) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.status === 204 ? null : response.json();
+  };
+
+  window.__bardoPublishDocument = async documentId => {
+    return request(`/api/docs/${encodeURIComponent(documentId)}/message`, {method:'POST'});
   };
 
   async function syncStore(nextJson) {

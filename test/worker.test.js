@@ -260,7 +260,7 @@ test('Worker responde a PING con PONG', async () => {
   assert.equal(json.type, 1);
 });
 
-test('Worker responde inmediatamente con DEFERRED (type 5) para comando /doc', async () => {
+test('Worker responde inmediatamente con DEFERRED (type 5) para comando /upload-docs', async () => {
   const { publicKey, privateKey } = getTestKeys();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const interactionPayload = {
@@ -271,7 +271,7 @@ test('Worker responde inmediatamente con DEFERRED (type 5) para comando /doc', a
     guild_id: 'guild-123',
     member: { user: { id: 'user-123' } },
     data: {
-      name: 'doc',
+      name: 'upload-docs',
       options: [{ name: 'archivo', value: 'att-1' }],
       resolved: {
         attachments: {
@@ -311,7 +311,7 @@ test('Worker responde inmediatamente con DEFERRED (type 5) para comando /doc', a
   assert.ok(backgroundTask instanceof Promise);
 });
 
-test('Worker responde con error ephemeral si /doc no tiene archivo adjunto', async () => {
+test('Worker responde con error ephemeral si /upload-docs no tiene archivo adjunto', async () => {
   const { publicKey, privateKey } = getTestKeys();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const interactionPayload = {
@@ -319,7 +319,7 @@ test('Worker responde con error ephemeral si /doc no tiene archivo adjunto', asy
     id: 'cmd-interaction-2',
     token: 'token-cmd-2',
     data: {
-      name: 'doc',
+      name: 'upload-docs',
       options: [],
     },
   };

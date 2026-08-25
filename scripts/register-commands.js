@@ -9,8 +9,8 @@ if (!DISCORD_TOKEN || !DISCORD_GUILD_ID) {
 }
 
 const documentCommand = new SlashCommandBuilder()
-  .setName('doc')
-  .setDescription('Publica y abre documentos en el lector de Bardo.')
+  .setName('upload-docs')
+  .setDescription('Sube un documento al espacio de Docs de este canal.')
   .addAttachmentOption((option) =>
     option
       .setName('archivo')
@@ -37,7 +37,7 @@ async function registerCommands() {
   const app = await appRes.json();
   const applicationId = app.id;
 
-  console.log(`Registrando comando /doc en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
+  console.log(`Registrando comando /upload-docs en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
 
   const regRes = await fetch(
     `https://discord.com/api/v10/applications/${applicationId}/guilds/${DISCORD_GUILD_ID}/commands`,
@@ -57,7 +57,7 @@ async function registerCommands() {
   }
 
   const registered = await regRes.json();
-  console.log(`✅ Comando /doc registrado exitosamente (${registered.length} comandos activos en guild).`);
+  console.log(`✅ Comando /upload-docs registrado exitosamente (${registered.length} comandos activos en guild).`);
 }
 
 registerCommands().catch((err) => {

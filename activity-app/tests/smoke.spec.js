@@ -29,7 +29,7 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
     const group = input?.closest('[data-slot="input-group"]') || input?.closest('.search-field__group') || input?.parentElement;
     const groupStyle = group ? getComputedStyle(group) : null;
     const bodyStyle = getComputedStyle(document.body);
-    const libraryTitle = document.querySelector('.library-title')?.getBoundingClientRect();
+    const libraryHeader = document.querySelector('.library-header')?.getBoundingClientRect();
     const searchRect = group?.getBoundingClientRect();
     const nativeMenus = [...document.querySelectorAll('.native-menu select')].map(el => el.getBoundingClientRect());
     return {
@@ -44,7 +44,10 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
       bodyBackground: bodyStyle.backgroundColor,
       groupShadow: groupStyle?.boxShadow,
       groupHeight: searchRect?.height,
-      leftDelta: libraryTitle && searchRect ? Math.abs(libraryTitle.left - searchRect.left) : 99,
+      headerLeft: libraryHeader?.left,
+      headerRight: libraryHeader?.right,
+      viewportWidth: document.documentElement.clientWidth,
+      contentInset: searchRect?.left,
       nativeMenus: nativeMenus.map(r => ({w:r.width,h:r.height})),
     };
   });
@@ -59,7 +62,9 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(audit.fieldBackground).not.toBe('');
   expect(audit.scrollOverflow).toBeLessThanOrEqual(0);
   expect(audit.groupHeight).toBeGreaterThanOrEqual(36);
-  expect(audit.leftDelta).toBeLessThanOrEqual(1);
+  expect(Math.abs(audit.headerLeft)).toBeLessThanOrEqual(1);
+  expect(Math.abs(audit.viewportWidth - audit.headerRight)).toBeLessThanOrEqual(1);
+  expect(audit.contentInset).toBeGreaterThanOrEqual(12);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
   expect(audit.nativeMenus.every(({w,h}) => w >= 44 && h >= 44)).toBeTruthy();
@@ -425,6 +430,10 @@ test('adaptive toolbar uses spare width and rounds a standalone group control', 
   await expect(page.getByRole('button', {name:'Cursiva'})).toBeVisible();
   await expect(page.getByRole('button', {name:'Subrayado'})).toBeVisible();
   await expect(page.getByRole('button', {name:'Enlace'})).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const toolbar = document.querySelector('.editor-toolbar-container');
+    return toolbar ? toolbar.scrollWidth - toolbar.clientWidth : 999;
+  })).toBeLessThanOrEqual(1);
   const compactMetrics = await page.evaluate(() => {
     const toolbar = document.querySelector('.editor-toolbar-container');
     const textButton = document.querySelector('[aria-label="Tipo de texto"]');
@@ -451,10 +460,16 @@ test('document actions separate markdown preview from markdown download', async 
   await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeHidden();
 
   await row.getByRole('button', {name:/Acciones de Stress test/}).click();
-  const downloadPromise = page.waitForEvent('download');
   await page.getByRole('menuitem', {name:'Descargar Markdown'}).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/\.md$/);
+  await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeVisible();
+  await page.getByRole('button', {name:'Atrás'}).click();
+
+  await row.getByRole('button', {name:/Acciones de Stress test/}).click();
+  await page.getByRole('menuitem', {name:'HTML (.html)'}).click();
+  await expect(page.getByRole('dialog', {name:'Vista previa HTML'})).toBeVisible();
+  await expect(page.locator('.export-html-preview')).toContainText(monsterTitle);
+  await expect(page.getByRole('button', {name:'Copiar HTML'})).toBeVisible();
+  await page.getByRole('button', {name:'Atrás'}).click();
 });
 
 test('complete editing and CRUD flow remains functional', async ({page}, testInfo) => {

@@ -1,6 +1,7 @@
 import { requireDocsSession } from './discord-auth.js';
 import {filterDocumentsBySessionAccess, sessionCanAccessDocument} from './document-access.js';
 import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
+import { buildDocumentPayload } from './components.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
   adoptLegacyDocumentsForGuild,
@@ -89,7 +90,7 @@ function parsePath(pathname) {
   const rest = pathname.slice(DOCS_API_PREFIX.length + 1);
   const [encodedId, action, extra] = rest.split('/');
   if (!encodedId || extra) return null;
-  if (action && action !== 'source' && action !== 'normalize') return null;
+  if (action && !['source', 'normalize', 'message'].includes(action)) return null;
 
   try {
     const id = normalizeDocumentId(decodeURIComponent(encodedId));
@@ -147,10 +148,16 @@ async function resolveContextDocument(request, env, session) {
   const requested = launchDocumentId(request);
   if (requested && await sessionCanAccessDocument(env, session, requested)) return requested;
 
+  // Some Discord mobile clients launch the Activity without forwarding the
+  // originating custom_id. The component handler stores a short-lived intent
+  // for this exact user/guild/channel, which is safe to use as a fallback.
   const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
-  if (intent?.documentId && await sessionCanAccessDocument(env, session, intent.documentId)) {
-    return intent.documentId;
-  }
+  if (
+    intent?.documentId
+    && (!intent.channelId || intent.channelId === session.channelId)
+    && await sessionCanAccessDocument(env, session, intent.documentId)
+  ) return intent.documentId;
+
   return null;
 }
 
@@ -195,6 +202,36 @@ async function handleNormalize(route, request, env, session) {
   return json({ok:true, document:serialize(await loadDocument(env.DB, route.id))});
 }
 
+async function handleMessage(route, request, env, session) {
+  if (request.method !== 'POST') return new Response('Method not allowed', {status:405});
+  if (!session.channelId) return json({error:'Discord channel context required'}, 403);
+
+  const botToken = String(env.DISCORD_TOKEN || '').trim();
+  if (!botToken) return json({error:'Discord bot messaging is not configured'}, 503);
+
+  const access = await requireDocumentAccess(env, route.id, session);
+  if (access.error) return access.error;
+
+  const discordFetch = env.DISCORD_FETCH || fetch;
+  const response = await discordFetch(`https://discord.com/api/v10/channels/${encodeURIComponent(session.channelId)}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(buildDocumentPayload(access.document, {documentId: route.id})),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    console.error('Discord publish failed', response.status, detail.slice(0, 500));
+    return json({error:'Bardo no pudo enviar el documento a este canal'}, response.status === 403 ? 403 : 502);
+  }
+
+  const message = await response.json().catch(() => null);
+  return json({ok:true, messageId:message?.id || null});
+}
+
 export async function handleDocsApi(request, url, env) {
   const route = parsePath(url.pathname);
   if (!route) return null;
@@ -211,6 +248,7 @@ export async function handleDocsApi(request, url, env) {
 
   if (!route.collection && route.action === 'source') return handleSource(route, request, env, session);
   if (!route.collection && route.action === 'normalize') return handleNormalize(route, request, env, session);
+  if (!route.collection && route.action === 'message') return handleMessage(route, request, env, session);
 
   if (route.collection && request.method === 'GET') {
     const documents = await filterDocumentsBySessionAccess(

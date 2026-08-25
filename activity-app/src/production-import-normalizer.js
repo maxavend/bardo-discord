@@ -105,6 +105,33 @@ async function importDocx(arrayBuffer, title) {
     : `# ${title}\n\n> Bardo no encontró contenido de texto que pudiera convertir en este documento Word.`;
 }
 
+function fileTitle(name) {
+  return String(name || 'Documento')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[._-]+/g, ' ')
+    .trim()
+    .slice(0, 200) || 'Documento';
+}
+
+export async function convertDocumentFile(file) {
+  const name = String(file?.name || '').trim();
+  const lowerName = name.toLocaleLowerCase('es');
+  const title = fileTitle(name);
+  if (!file || !name) throw new Error('Selecciona un archivo para subir.');
+
+  if (/\.(?:md|markdown|txt)$/i.test(lowerName)) {
+    const markdown = await file.text();
+    return {title, markdown: ensureDocumentTitle(markdown, title), sourceName:name};
+  }
+  if (/\.pdf$/i.test(lowerName)) {
+    return {title, markdown: await importPdf(await file.arrayBuffer(), title), sourceName:name};
+  }
+  if (/\.docx$/i.test(lowerName)) {
+    return {title, markdown: await importDocx(await file.arrayBuffer(), title), sourceName:name};
+  }
+  throw new Error('Usa un archivo .md, .markdown, .txt, .pdf o .docx.');
+}
+
 async function normalizeDocument(doc, authenticatedFetch) {
   if (doc?.importStatus !== 'pending' || !doc?.hasSource) return doc;
   if (doc.sourceType !== 'pdf' && doc.sourceType !== 'docx') return doc;
@@ -147,14 +174,15 @@ export function installProductionImportNormalizer() {
 
     try {
       const payload = await response.clone().json();
-      const contextId = payload?.contextDocumentId;
-      if (!contextId || !Array.isArray(payload?.documents)) return response;
-      const index = payload.documents.findIndex(doc => doc.id === contextId);
-      if (index < 0) return response;
-      const current = payload.documents[index];
-      if (current?.importStatus !== 'pending' || !current?.hasSource) return response;
+      if (!Array.isArray(payload?.documents)) return response;
+      const pending = payload.documents
+        .map((doc, index) => ({doc, index}))
+        .filter(({doc}) => doc?.importStatus === 'pending' && doc?.hasSource);
+      if (!pending.length) return response;
 
-      payload.documents[index] = await normalizeDocument(current, authenticatedFetch);
+      for (const {doc, index} of pending) {
+        payload.documents[index] = await normalizeDocument(doc, authenticatedFetch);
+      }
       const headers = new Headers(response.headers);
       headers.set('Content-Type', 'application/json; charset=utf-8');
       headers.set('Cache-Control', 'private, no-store');
