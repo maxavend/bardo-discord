@@ -1,4 +1,4 @@
-import React, {lazy, Suspense, useState, useEffect, useCallback} from 'react';
+import React, {lazy, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
 import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
 import {prepareBardoProduction} from './production-bridge.js';
@@ -118,7 +118,7 @@ function ThemedApp({productionState, onRetry}) {
   if (productionState?.active && !productionState?.ready) {
     return <DocumentOnlyUnavailable message={productionState.message || 'No se pudo cargar el documento.'} onRetry={onRetry} />;
   }
-  return <Suspense fallback={<ActivityBootShell stage="render_ready" />}><App /></Suspense>;
+  return <App />;
 }
 
 function ActivityRoot() {
