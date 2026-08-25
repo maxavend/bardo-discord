@@ -176,21 +176,23 @@ export function installProductionImportNormalizer() {
       const payload = await response.clone().json();
       if (!Array.isArray(payload?.documents)) return response;
       const pending = payload.documents
-        .map((doc, index) => ({doc, index}))
-        .filter(({doc}) => doc?.importStatus === 'pending' && doc?.hasSource);
+        .filter(doc => doc?.importStatus === 'pending' && doc?.hasSource);
       if (!pending.length) return response;
 
-      for (const {doc, index} of pending) {
-        payload.documents[index] = await normalizeDocument(doc, authenticatedFetch);
-      }
-      const headers = new Headers(response.headers);
-      headers.set('Content-Type', 'application/json; charset=utf-8');
-      headers.set('Cache-Control', 'private, no-store');
-      return new Response(JSON.stringify(payload), {
-        status:response.status,
-        statusText:response.statusText,
-        headers,
-      });
+      // File conversion can download megabytes and consume significant CPU on
+      // mobile. Let the library render first and finish pending imports in the
+      // background instead of delaying every /api/docs response.
+      window.setTimeout(async () => {
+        for (const doc of pending) {
+          try {
+            await normalizeDocument(doc, authenticatedFetch);
+          } catch (error) {
+            console.error(`Bardo Docs: no se pudo normalizar ${doc.id}`, error);
+          }
+        }
+        window.dispatchEvent(new CustomEvent('bardo-documents-normalized'));
+      }, 0);
+      return response;
     } catch (error) {
       console.error('Bardo Docs: no se pudo normalizar el archivo real', error);
       return response;

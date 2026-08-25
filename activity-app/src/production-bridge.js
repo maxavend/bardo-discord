@@ -1,5 +1,3 @@
-import {DiscordSDK} from '@discord/embedded-app-sdk';
-
 const STORE_KEY = 'bardo.docs.heroui.v1';
 const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
@@ -235,6 +233,7 @@ async function initSdk() {
   const params = new URLSearchParams(window.location.search);
   if (!params.has('instance_id')) return null;
   try {
+    const {DiscordSDK} = await import('@discord/embedded-app-sdk');
     const sdk = new DiscordSDK(resolveClientId());
     await sdk.ready();
     return sdk;
@@ -276,13 +275,15 @@ export async function prepareBardoProduction(options = {}) {
   if (window.__BARDO_CUSTOM_ID__) headers['x-bardo-custom-id'] = window.__BARDO_CUSTOM_ID__;
   if (instanceId) headers['x-bardo-instance-id'] = instanceId;
 
-  let payload = {documents:[], contextDocumentId:null};
-  try {
-    const response = await fetch('/api/docs', {headers, cache:'no-store'});
-    if (response.ok) payload = await response.json();
-    else console.warn('Bardo Docs: library API unavailable', response.status);
-  } catch (error) {
-    console.warn('Bardo Docs: no se pudo hidratar la biblioteca', error);
+  let payload = options.initialDocsPayload || {documents:[], contextDocumentId:null};
+  if (!options.initialDocsPayload) {
+    try {
+      const response = await fetch('/api/docs', {headers, cache:'no-store'});
+      if (response.ok) payload = await response.json();
+      else console.warn('Bardo Docs: library API unavailable', response.status);
+    } catch (error) {
+      console.warn('Bardo Docs: no se pudo hidratar la biblioteca', error);
+    }
   }
 
   const remote = new Map();

@@ -1,7 +1,6 @@
-import React, {useState, useEffect, useCallback} from 'react';
-import {Button, Spinner} from '@heroui/react';
+import React, {lazy, Suspense, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
-import App, {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './App.jsx';
+import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
 import {installProductionImportNormalizer} from './production-import-normalizer.js';
@@ -28,6 +27,8 @@ const STAGE_LABELS = {
   session_cache_restored: 'Recuperando tu sesión…',
 };
 
+const App = lazy(() => import('./App.jsx'));
+
 // ── Detect Discord theme before React mounts ─────────────────────────────────
 function resolveBootTheme() {
   return resolveDiscordTheme() || 'light';
@@ -42,7 +43,7 @@ function ActivityBootShell({stage}) {
     <main className="boot-screen" data-theme={theme} aria-live="polite">
       <section className="boot-content" aria-label="Cargando Bardo">
         <div className="boot-loader" role="status">
-          <Spinner size="lg" color="current" aria-label="Cargando Bardo" />
+          <span className="boot-native-spinner" aria-label="Cargando Bardo" />
           <div className="boot-copy">
             <span key={stage} className="boot-stage">{label}</span>
             <p className="boot-hint">Estamos preparando todo para que puedas continuar</p>
@@ -81,9 +82,9 @@ function ActivityErrorShell({message, onRetry}) {
         <p className="boot-eyebrow">No pudimos abrir tu espacio</p>
         <h1>Algo se interrumpió</h1>
         <p className="boot-error-message">{message}</p>
-        <Button variant="primary" size="sm" onPress={onRetry}>
+        <button className="boot-retry-button" type="button" onClick={onRetry}>
           Intentar de nuevo
-        </Button>
+        </button>
       </section>
     </main>
   );
@@ -98,9 +99,9 @@ function DocumentOnlyUnavailable({message, onRetry}) {
         </div>
         <p className="text-sm text-muted">{message}</p>
         {onRetry && (
-          <Button variant="secondary" size="sm" onPress={onRetry}>
+          <button className="boot-retry-button" type="button" onClick={onRetry}>
             Reintentar
-          </Button>
+          </button>
         )}
       </div>
     </main>
@@ -112,7 +113,7 @@ function ThemedApp({productionState, onRetry}) {
   if (productionState?.active && !productionState?.ready) {
     return <DocumentOnlyUnavailable message={productionState.message || 'No se pudo cargar el documento.'} onRetry={onRetry} />;
   }
-  return <App />;
+  return <Suspense fallback={<ActivityBootShell stage="render_ready" />}><App /></Suspense>;
 }
 
 function ActivityRoot() {
@@ -158,6 +159,7 @@ function ActivityRoot() {
           sdk: auth.sdk,
           guildId: auth.guildId,
           instanceId: auth.instanceId,
+          initialDocsPayload: auth.initialDocsPayload,
         });
 
         setStage('document_resolved');

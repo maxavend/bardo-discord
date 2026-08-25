@@ -10,6 +10,7 @@ import {
   grantDocumentGuildAccess,
   grantDocumentChannelAccess,
   listDocumentsWithChannelAccessForGuild,
+  listDocumentChannelAccess,
   loadDocument,
   loadDocumentSource,
   loadRecentDocsLaunchIntent,
@@ -146,7 +147,10 @@ async function sessionCanViewCurrentChannel(env, session) {
 
 async function resolveContextDocument(request, env, session) {
   const requested = launchDocumentId(request);
-  if (requested && await sessionCanAccessDocument(env, session, requested)) return requested;
+  if (requested) {
+    const channels = await listDocumentChannelAccess(env.DB, requested, session.guildId);
+    if (channels.includes(session.channelId)) return requested;
+  }
 
   // Some Discord mobile clients launch the Activity without forwarding the
   // originating custom_id. The component handler stores a short-lived intent
@@ -155,8 +159,10 @@ async function resolveContextDocument(request, env, session) {
   if (
     intent?.documentId
     && (!intent.channelId || intent.channelId === session.channelId)
-    && await sessionCanAccessDocument(env, session, intent.documentId)
-  ) return intent.documentId;
+  ) {
+    const channels = await listDocumentChannelAccess(env.DB, intent.documentId, session.guildId);
+    if (channels.includes(session.channelId)) return intent.documentId;
+  }
 
   return null;
 }

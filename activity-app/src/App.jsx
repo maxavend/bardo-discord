@@ -56,6 +56,7 @@ import {
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
+export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
 
 const STORE_KEY = 'bardo.docs.heroui.v1';
 const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
@@ -355,134 +356,6 @@ function saveStore(store) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   } catch {}
-}
-
-export function resolveDiscordTheme({allowSystem = true} = {}) {
-  if (typeof window === 'undefined') return 'dark';
-
-  const normalizeTheme = (value) => {
-    const normalized = String(value || '').trim().toLowerCase().replace(/^['"]|['"]$/g, '');
-    return normalized === 'dark' || normalized === 'light' ? normalized : null;
-  };
-
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const queryTheme = normalizeTheme(params.get('theme'));
-    if (queryTheme) return queryTheme;
-  } catch {}
-
-  // Discord mobile can expose the Activity theme on the host/body rather than
-  // as a URL parameter or prefers-color-scheme media query. Read all supported
-  // host signals before falling back to the device preference.
-  try {
-    const elements = [document.body, document.documentElement].filter(Boolean);
-    for (const element of elements) {
-      const datasetTheme = normalizeTheme(element.dataset?.theme || element.dataset?.colorScheme);
-      if (datasetTheme) return datasetTheme;
-
-      const classTheme = element.classList?.contains('theme-dark')
-        ? 'dark'
-        : element.classList?.contains('theme-light')
-          ? 'light'
-          : null;
-      if (classTheme) return classTheme;
-
-      const styles = getComputedStyle(element);
-      for (const property of ['--discord-theme', '--discord-color-scheme', '--color-scheme']) {
-        const customTheme = normalizeTheme(styles.getPropertyValue(property));
-        if (customTheme) return customTheme;
-      }
-    }
-  } catch {}
-
-  if (!allowSystem) return null;
-
-  // In an embedded Activity, Discord propagates its app color scheme through
-  // the iframe media query. This is intentionally read only after the SDK
-  // handshake so the host theme, not the device default, wins on mobile.
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-export function collectDiscordThemeDiagnostics() {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return null;
-
-  const customProperties = ['--discord-theme', '--discord-color-scheme', '--color-scheme'];
-  const inspect = (element) => {
-    const styles = getComputedStyle(element);
-    return {
-      className: typeof element.className === 'string' ? element.className : '',
-      dataTheme: element.dataset?.theme || null,
-      dataColorScheme: element.dataset?.colorScheme || null,
-      colorScheme: styles.colorScheme || null,
-      customProperties: Object.fromEntries(customProperties.map(property => [
-        property,
-        styles.getPropertyValue(property).trim() || null,
-      ])),
-    };
-  };
-
-  const params = new URLSearchParams(window.location.search);
-  const diagnostics = {
-    capturedAt: new Date().toISOString(),
-    resolvedTheme: document.documentElement.dataset.theme || null,
-    query: Object.fromEntries(['theme', 'frame_id', 'instance_id', 'platform'].map(key => [key, params.get(key)])),
-    media: {
-      dark: Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches),
-      light: Boolean(window.matchMedia?.('(prefers-color-scheme: light)').matches),
-    },
-    userAgent: navigator.userAgent,
-    html: inspect(document.documentElement),
-    body: inspect(document.body),
-  };
-
-  window.__BARDO_THEME_DIAGNOSTICS__ = diagnostics;
-  if (params.get('bardo_theme_debug') === '1') {
-    console.info('[Bardo theme diagnostics]', diagnostics);
-  }
-  return diagnostics;
-}
-
-function applyTheme(targetTheme) {
-  const resolved = targetTheme === 'dark' ? 'dark' : 'light';
-  const root = document.documentElement;
-  root.classList.remove('light', 'dark');
-  root.classList.add(resolved);
-  root.setAttribute('data-theme', resolved);
-  root.style.colorScheme = resolved;
-  return resolved;
-}
-
-export function applyDiscordTheme(options = {}) {
-  const resolved = resolveDiscordTheme(options);
-  const applied = resolved ? applyTheme(resolved) : (document.documentElement.dataset.theme || 'light');
-  collectDiscordThemeDiagnostics();
-  return applied;
-}
-
-// Apply HeroUI's theme before the first React render to avoid a light/dark flash
-// while the Activity boot screen is still connecting to Discord. If Discord
-// has not supplied a host theme yet, leave the media query unlocked until the
-// SDK handshake completes.
-if (typeof document !== 'undefined') applyDiscordTheme({allowSystem: false});
-
-export function useThemeMode() {
-  const [resolvedTheme, setResolvedTheme] = useState(() => applyDiscordTheme());
-
-  useEffect(() => {
-    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
-    const syncTheme = () => setResolvedTheme(applyDiscordTheme());
-
-    media?.addEventListener?.('change', syncTheme);
-    window.addEventListener('discord-theme-change', syncTheme);
-    syncTheme();
-
-    return () => {
-      media?.removeEventListener?.('change', syncTheme);
-      window.removeEventListener('discord-theme-change', syncTheme);
-    };
-  }, []);
-
-  return {theme: resolvedTheme, resolvedTheme};
 }
 
 function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {

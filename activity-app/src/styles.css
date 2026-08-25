@@ -15,27 +15,43 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; width: 100%; min-height: 100%; }
+html, body, #root {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+  background-color: var(--background);
+}
 html {
-  background: var(--background);
+  isolation: isolate;
   overflow-x: clip;
+  overscroll-behavior-y: none;
   scrollbar-gutter: stable;
   scroll-padding-top: calc(var(--bardo-safe-top) + var(--bardo-topbar) + 20px);
 }
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--background);
+}
 body {
   min-height: 100dvh;
-  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-synthesis: none;
   overflow-x: clip;
+  overscroll-behavior-y: none;
   overscroll-behavior-x: none;
   touch-action: pan-y;
 }
 button, input, select { font: inherit; }
-.app-root, .route-active { min-height: 100dvh; }
+.app-root, .route-active {
+  min-height: 100dvh;
+  background-color: var(--background);
+}
 .app-root {
-  background: var(--background);
   color: var(--foreground);
   padding-block-start: var(--bardo-safe-top);
   padding-block-end: var(--bardo-safe-bottom);
@@ -89,6 +105,28 @@ button, input, select { font: inherit; }
   color: var(--foreground);
 }
 
+.boot-native-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-top-color: currentColor;
+  border-radius: 999px;
+  animation: boot-spinner 700ms linear infinite;
+}
+
+.boot-retry-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--field-radius);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .boot-copy {
   display: grid;
   justify-items: center;
@@ -133,6 +171,10 @@ button, input, select { font: inherit; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes boot-spinner {
+  to { transform: rotate(360deg); }
+}
+
 .glass-header {
   background: color-mix(in oklab, var(--surface) 84%, transparent);
   backdrop-filter: blur(18px) saturate(145%);
@@ -146,11 +188,9 @@ button, input, select { font: inherit; }
   position: sticky;
   top: calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top));
   height: var(--bardo-topbar);
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-bottom-color: transparent;
-  box-shadow: none;
+  background: color-mix(in oklab, var(--surface) 64%, transparent);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
   isolation: isolate;
   overflow: visible;
 }
@@ -161,9 +201,9 @@ button, input, select { font: inherit; }
   position: absolute;
   z-index: 0;
   inset: calc(-1 * var(--bardo-safe-top)) calc(-1 * var(--bardo-safe-right)) 0 calc(-1 * var(--bardo-safe-left));
-  background: color-mix(in oklab, var(--background) 80%, transparent);
-  backdrop-filter: blur(92px);
-  -webkit-backdrop-filter: blur(92px);
+  background: color-mix(in oklab, var(--background) 52%, transparent);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
   pointer-events: none;
 }
 

@@ -1,4 +1,3 @@
-import {DiscordSDK} from '@discord/embedded-app-sdk';
 import {installBardoApiSession} from './production-launch-auth.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
@@ -127,9 +126,52 @@ async function verifySessionToken(token) {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });
-    return res.status !== 401 && res.status !== 403;
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
-    return false;
+    return null;
+  }
+}
+
+async function refreshDiscordSessionInBackground({sdk, clientId, guildId, channelId, cached, customId}) {
+  try {
+    const authResult = await withTimeout(
+      sdk.commands.authorize({
+        client_id: clientId,
+        response_type: 'code',
+        state: '',
+        scope: ['identify', 'guilds'],
+        prompt: 'none',
+      }),
+      AUTH_TIMEOUT_MS,
+      'Discord silent authorize',
+    );
+    if (!authResult?.code) return;
+
+    const tokenResponse = await fetch('/api/auth/token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: JSON.stringify({code: authResult.code, guildId, channelId}),
+      cache: 'no-store',
+    });
+    const tokenPayload = await tokenResponse.json().catch(() => null);
+    if (!tokenResponse.ok || !tokenPayload?.access_token) return;
+
+    await withTimeout(
+      sdk.commands.authenticate({access_token: tokenPayload.access_token}),
+      AUTH_TIMEOUT_MS,
+      'Discord silent authenticate',
+    );
+    if (tokenPayload.bardo_token) {
+      saveSessionCache(tokenPayload.bardo_token, tokenPayload.expires_at, cached.user, guildId, channelId);
+      installBardoApiSession({token: tokenPayload.bardo_token, customId});
+      window.__BARDO_SESSION_TOKEN__ = tokenPayload.bardo_token;
+      logBreadcrumb('session_refresh_success');
+    }
+  } catch (error) {
+    // Refreshing a still-valid Bardo session is best-effort and must never hold
+    // the first render hostage.
+    logBreadcrumb('silent_authorize_skipped', {reason: error?.message});
   }
 }
 
@@ -156,6 +198,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
 
   try {
     const clientId = resolveClientId();
+    const {DiscordSDK} = await import('@discord/embedded-app-sdk');
     const sdk = new DiscordSDK(clientId);
 
     onStageChange('sdk_ready');
@@ -185,51 +228,11 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
     const cached = loadSessionCache(guildId, channelId);
     if (cached) {
       logBreadcrumb('session_cache_found');
-      const stillValid = await verifySessionToken(cached.token);
-      if (stillValid) {
+      const initialDocsPayload = await verifySessionToken(cached.token);
+      if (initialDocsPayload) {
         logBreadcrumb('session_cache_restored', {userId: cached.user?.id});
         const customId = launchCustomId(sdk);
         installBardoApiSession({token: cached.token, customId});
-
-        // Re-authenticate the Discord SDK silently (prompt: 'none' = no popup)
-        try {
-          const authResult = await withTimeout(
-            sdk.commands.authorize({
-              client_id: clientId,
-              response_type: 'code',
-              state: '',
-              scope: ['identify', 'guilds'],
-              prompt: 'none',
-            }),
-            AUTH_TIMEOUT_MS,
-            'Discord silent authorize',
-          );
-          if (authResult?.code) {
-            const tokenResponse = await fetch('/api/auth/token', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-              body: JSON.stringify({code: authResult.code, guildId, channelId}),
-              cache: 'no-store',
-            });
-            const tokenPayload = await tokenResponse.json().catch(() => null);
-            if (tokenResponse.ok && tokenPayload?.access_token) {
-              await withTimeout(
-                sdk.commands.authenticate({access_token: tokenPayload.access_token}),
-                AUTH_TIMEOUT_MS,
-                'Discord silent authenticate',
-              );
-              // Refresh cache with new token
-              if (tokenPayload.bardo_token) {
-                saveSessionCache(tokenPayload.bardo_token, tokenPayload.expires_at, cached.user, guildId, channelId);
-                installBardoApiSession({token: tokenPayload.bardo_token, customId});
-                window.__BARDO_SESSION_TOKEN__ = tokenPayload.bardo_token;
-              }
-            }
-          }
-        } catch (silentErr) {
-          // Silent authorize is best-effort — bardo session is still valid
-          logBreadcrumb('silent_authorize_skipped', {reason: silentErr?.message});
-        }
 
         window.__BARDO_PRODUCTION__ = true;
         window.__BARDO_DISCORD_SDK__ = sdk;
@@ -239,6 +242,8 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
         window.__BARDO_USER__ = cached.user;
         window.__BARDO_CUSTOM_ID__ = customId;
         window.__BARDO_INSTANCE_ID__ = sdk.instanceId || new URLSearchParams(window.location.search).get('instance_id') || null;
+
+        void refreshDiscordSessionInBackground({sdk, clientId, guildId, channelId, cached, customId});
 
         onStageChange('render_ready');
         return {
@@ -251,6 +256,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
           customId,
           sessionToken: window.__BARDO_SESSION_TOKEN__,
           instanceId: window.__BARDO_INSTANCE_ID__,
+          initialDocsPayload,
         };
       }
       // Cache was stale — clear and do full auth
