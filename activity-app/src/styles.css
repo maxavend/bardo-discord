@@ -435,6 +435,31 @@ button { font-size: 14px; }
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@supports (view-transition-name: document-intro) {
+  @media (prefers-reduced-motion: no-preference) {
+    ::view-transition-group(document-intro) {
+      animation-duration: 250ms;
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    ::view-transition-old(document-intro),
+    ::view-transition-new(document-intro) {
+      animation-name: document-intro-persist;
+      animation-duration: 250ms;
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(document-intro),
+    ::view-transition-old(document-intro),
+    ::view-transition-new(document-intro) {
+      animation-duration: 0.001ms !important;
+    }
+  }
+}
+@keyframes document-intro-persist {
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
 /* Keep the sticky editor header anchored while switching between reader and editor. */
 .editing-route { animation: none !important; }
 .route-no-transition { animation: none !important; }
@@ -504,7 +529,11 @@ button { font-size: 14px; }
   margin: 0 auto;
   padding: 24px 0 max(104px, calc(var(--bardo-safe-bottom) + 84px));
 }
-.doc-intro { display: grid; align-items: start; }
+.doc-intro {
+  display: grid;
+  align-items: start;
+  view-transition-name: document-intro;
+}
 .doc-title {
   margin: 0;
   color: var(--foreground);
@@ -532,39 +561,6 @@ button { font-size: 14px; }
 .doc-meta { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .editor-shell .doc-meta { margin-top: 0; }
 
-.editor-meta-reveal {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.t-stagger-line {
-  display: block;
-  opacity: 0;
-  transform: translateY(12px);
-  filter: blur(3px);
-  transition:
-    opacity 500ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 500ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform, opacity, filter;
-}
-.t-stagger-line--2 { transition-delay: 40ms; }
-.t-stagger.is-shown .t-stagger-line {
-  opacity: 1;
-  transform: translateY(0);
-  filter: blur(0);
-}
-.t-stagger.is-hiding .t-stagger-line {
-  opacity: 0;
-  transform: translateY(0);
-  filter: blur(0);
-  transition: opacity 150ms ease-in, transform 0s linear, filter 0s linear;
-  transition-delay: 0s;
-}
-@media (prefers-reduced-motion: reduce) {
-  .t-stagger-line { transition: none !important; }
-}
 
 /* Title/description are editorial controls. */
 .doc-title-input,
@@ -681,7 +677,6 @@ button { font-size: 14px; }
   box-sizing: border-box;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .editing-route .doc-intro,
   .editing-route .editor-toolbar-sticky {
     transform-origin: left center;
     animation: editor-content-enter 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -690,7 +685,6 @@ button { font-size: 14px; }
   .editing-route .editor-toolbar-sticky {
     animation-delay: 40ms;
   }
-  .editor-transition-is-exiting .doc-intro,
   .editor-transition-is-exiting .editor-toolbar-sticky {
     animation: editor-content-exit 150ms ease-in both;
     animation-delay: 0ms;
