@@ -217,6 +217,10 @@ function changeActorName(doc) {
   return doc?.updatedByName || doc?.createdByName || 'alguien';
 }
 
+function createdActorName(doc) {
+  return doc?.createdByName || 'alguien';
+}
+
 function formatChangeTime(doc) {
   const stamp = new Date(doc?.updatedAt || doc?.createdAt || Date.now()).getTime();
   if (!Number.isFinite(stamp)) return 'ahora';
@@ -1437,7 +1441,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
         <header className="doc-intro">
           <div className="doc-meta flex items-center gap-2 flex-wrap">
             <Chip size="sm" variant="soft" color="default" className="text-xs">
-              {isNew ? 'Borrador privado' : (doc?.origin || 'Creado en Bardo')}
+              {isNew ? 'Borrador privado' : `Creado por ${createdActorName(doc)}`}
             </Chip>
             {!isNew && (
               <span className="text-xs text-muted">
