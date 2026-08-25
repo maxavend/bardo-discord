@@ -559,7 +559,7 @@ button { font-size: 14px; }
   display: block;
 }
 .doc-meta { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
-.editor-shell .doc-meta { margin-top: 0; }
+.editor-shell .doc-meta { margin-top: 0; margin-bottom: 12px; }
 
 
 /* Title/description are editorial controls. */
