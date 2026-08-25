@@ -11,18 +11,18 @@ html[data-editor-keyboard="open"] .editing-route .editor-toolbar-sticky {
   z-index: 50;
 }
 
-html[data-editor-keyboard="open"] .editing-route .editor-toolbar {
+html[data-editor-keyboard="open"] .editing-route .editor-toolbar-container {
   position: fixed;
-  top: calc(var(--bardo-safe-top) + var(--bardo-topbar) + var(--bardo-toolbar-gap));
-  left: 50%;
-  width: min(590px, calc(100vw - 28px));
+  top: calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + var(--bardo-toolbar-gap));
+  left: calc(50% + var(--bardo-visual-viewport-left));
+  width: min(var(--bardo-content), calc(100vw - var(--bardo-safe-left) - var(--bardo-safe-right) - 28px));
   transform: translateX(-50%) translateZ(0);
   z-index: 90;
   pointer-events: auto;
 }
 
 @media (min-width: 760px) {
-  html[data-editor-keyboard="open"] .editing-route .editor-toolbar {
-    width: min(590px, calc(100vw - 48px));
+  html[data-editor-keyboard="open"] .editing-route .editor-toolbar-container {
+    width: min(var(--bardo-content), calc(100vw - 48px));
   }
 }

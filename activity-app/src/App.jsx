@@ -708,7 +708,7 @@ function Library({
 function Reader({doc, onBack, onEdit, onAction, onChecklistChange}) {
   return (
     <section className="doc-route route-active">
-      <header className="doc-topbar glass-header">
+      <header className="doc-topbar glass-header app-host-header">
         <div className="topbar-left flex items-center gap-2">
           <Button variant="ghost" size="sm" onPress={onBack} className="back-button">
             <ChevronLeft width={16} height={16} /> Docs
@@ -932,6 +932,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const [title, setTitle] = useState(doc?.title ?? initialDraft?.title ?? '');
   const [description, setDescription] = useState(doc?.description ?? initialDraft?.description ?? '');
   const [saveState, setSaveState] = useState(isNew ? 'Borrador guardado' : 'Guardado');
+  const [isDirty, setIsDirty] = useState(false);
   const [blockValue, setBlockValue] = useState('p');
   const [inlineState, setInlineState] = useState({
     bold: false,
@@ -942,6 +943,8 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     insertOrderedList: false,
   });
   const bodyRef = useRef(null);
+  const titleInputRef = useRef(null);
+  const descriptionInputRef = useRef(null);
   const toolbarContainerRef = useRef(null);
   const visibleToolbarActions = useAdaptiveToolbar(toolbarContainerRef);
   const isToolbarActionVisible = action => visibleToolbarActions.has(action);
@@ -1013,7 +1016,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     const shellRect = shellRef.current.getBoundingClientRect();
     const isAfter = e.clientY > (blockRect.top + blockRect.height / 2);
     const lineY = (isAfter ? blockRect.bottom : blockRect.top) - shellRect.top;
-    dropLineRef.current.style.transform = `translate3d(0, ${lineY}px, 0)`;
+    dropLineRef.current.style.transform = `translate3d(0, ${lineY}px, 0) translateY(-50%)`;
     dropLineRef.current.style.display = 'block';
     dropTargetRef.current = { block, isAfter };
   }, [getDirectBlock]);
@@ -1101,14 +1104,16 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     clearTimeout(saveTimer.current);
     const snap = snapshot();
     onAutosave(snap);
+    setIsDirty(false);
     setSaveState(isNew ? 'Borrador guardado' : 'Guardado');
     return snap;
   }, [isNew, onAutosave, snapshot]);
 
   const markDirty = useCallback(() => {
-    setSaveState(isNew ? 'Guardando borrador…' : 'Guardando…');
+    setIsDirty(true);
+    setSaveState('Cambios sin guardar');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSave, 600);
+    saveTimer.current = setTimeout(flushSave, 30000);
   }, [flushSave, isNew]);
 
   useLayoutEffect(() => {
@@ -1119,6 +1124,14 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     hydrateChecklistControls(bodyRef.current);
     resetHistory();
   }, [doc?.id, doc?.body, initialDraft?.body, isNew, resetHistory]);
+
+  useLayoutEffect(() => {
+    [titleInputRef.current, descriptionInputRef.current].forEach(input => {
+      if (!input) return;
+      input.style.height = 'auto';
+      input.style.height = `${input.scrollHeight}px`;
+    });
+  }, [title, description]);
 
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
@@ -1248,122 +1261,6 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     document.addEventListener('pointermove', onMove);
     return () => document.removeEventListener('pointermove', onMove);
   }, [getDirectBlock]);
-
-  // ── Mobile long-press drag ────────────────────────────────────────────────
-  useEffect(() => {
-    const LONG_PRESS_MS = 480;
-    let pressTimer = null;
-    let touchDragBlock = null;
-    let isTouchDragging = false;
-    let ghostEl = null;
-    let startY = 0;
-
-    const cancelPress = () => {
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    };
-
-    const cleanupGhost = () => {
-      if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-    };
-
-    const endTouchDrag = () => {
-      if (touchDragBlock) {
-        touchDragBlock.classList.remove('is-dragging-block', 'is-touch-lifted');
-      }
-      cleanupGhost();
-      if (dropLineRef.current) dropLineRef.current.style.display = 'none';
-      draggedBlockRef.current = null;
-      dropTargetRef.current = null;
-      touchDragBlock = null;
-      isTouchDragging = false;
-    };
-
-    const onTouchStart = (e) => {
-      if (!bodyRef.current) return;
-      const block = getDirectBlock(e.target);
-      if (!block) return;
-      startY = e.touches[0].clientY;
-      cancelPress();
-      pressTimer = setTimeout(() => {
-        // Long press confirmed — lift the block
-        touchDragBlock = block;
-        isTouchDragging = true;
-        draggedBlockRef.current = block;
-        block.classList.add('is-dragging-block', 'is-touch-lifted');
-        // Light haptic if available
-        navigator.vibrate?.(40);
-        // Create ghost label
-        ghostEl = document.createElement('div');
-        ghostEl.className = 'block-drag-ghost';
-        const ghostLabel = document.createElement('span');
-        ghostLabel.textContent = block.textContent?.trim().slice(0, 40) || '…';
-        ghostEl.appendChild(ghostLabel);
-        ghostEl.style.cssText = `position:fixed;z-index:9999;pointer-events:none;padding:6px 12px;border-radius:10px;font-size:13px;font-weight:500;max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:var(--overlay);color:var(--overlay-foreground);box-shadow:none;top:0;left:50%;transform:translate3d(-50%, ${startY - 20}px, 0)`;
-        document.body.appendChild(ghostEl);
-      }, LONG_PRESS_MS);
-    };
-
-    const onTouchMove = (e) => {
-      const touch = e.touches[0];
-      const dy = Math.abs(touch.clientY - startY);
-      // If moved >8px before long press fires, cancel
-      if (!isTouchDragging && dy > 8) { cancelPress(); return; }
-      if (!isTouchDragging || !touchDragBlock || !shellRef.current || !bodyRef.current) return;
-      e.preventDefault(); // prevent page scroll while dragging
-      const cy = touch.clientY;
-      // Move ghost
-      if (ghostEl) ghostEl.style.transform = `translate3d(-50%, ${cy - 20}px, 0)`;
-      // Find drop target
-      const block = getDirectBlock(document.elementFromPoint(touch.clientX, cy));
-      if (!block || block === touchDragBlock) {
-        if (dropLineRef.current) dropLineRef.current.style.display = 'none';
-        dropTargetRef.current = null;
-        return;
-      }
-      const blockRect = block.getBoundingClientRect();
-      const shellRect = shellRef.current.getBoundingClientRect();
-      const isAfter = cy > (blockRect.top + blockRect.height / 2);
-      const lineY = (isAfter ? blockRect.bottom : blockRect.top) - shellRect.top;
-      if (dropLineRef.current) {
-        dropLineRef.current.style.transform = `translate3d(0, ${lineY}px, 0)`;
-        dropLineRef.current.style.display = 'block';
-      }
-      dropTargetRef.current = { block, isAfter };
-    };
-
-    const onTouchEnd = () => {
-      cancelPress();
-      if (!isTouchDragging) return;
-      const dragged = touchDragBlock;
-      const targetInfo = dropTargetRef.current;
-      if (dragged && targetInfo?.block && dragged !== targetInfo.block && bodyRef.current) {
-        commitMutation(() => {
-          if (targetInfo.isAfter) {
-            bodyRef.current.insertBefore(dragged, targetInfo.block.nextSibling);
-          } else {
-            bodyRef.current.insertBefore(dragged, targetInfo.block);
-          }
-        }, {kind: 'reorder'});
-      }
-      endTouchDrag();
-    };
-
-    const body = bodyRef.current;
-    if (!body) return;
-    body.addEventListener('touchstart', onTouchStart, { passive: true });
-    body.addEventListener('touchmove', onTouchMove, { passive: false });
-    body.addEventListener('touchend', onTouchEnd);
-    body.addEventListener('touchcancel', endTouchDrag);
-    return () => {
-      cancelPress();
-      body.removeEventListener('touchstart', onTouchStart);
-      body.removeEventListener('touchmove', onTouchMove);
-      body.removeEventListener('touchend', onTouchEnd);
-      body.removeEventListener('touchcancel', endTouchDrag);
-      cleanupGhost();
-    };
-  }, [commitMutation, getDirectBlock]);
 
   const runFormat = useCallback(format => {
     const body = bodyRef.current;
@@ -1558,7 +1455,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
 
   return (
     <section className="doc-route route-active editing-route">
-      <header className="doc-topbar glass-header">
+      <header className="doc-topbar glass-header app-host-header">
         <div className="topbar-left flex items-center gap-2">
           <Button
             variant="ghost"
@@ -1574,8 +1471,8 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
           <Chip
             size="sm"
             variant="soft"
-            color={saveState.includes('Guardando') ? 'warning' : 'success'}
-            className="text-xs"
+            color={isDirty ? 'warning' : 'success'}
+            className="save-state text-xs"
           >
             <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
             {saveState}
@@ -1583,7 +1480,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
         </div>
         <div className="topbar-right flex items-center gap-2">
           <Button variant="primary" size="sm" onPress={finish}>
-            Listo
+            {isDirty ? 'Guardar' : 'Listo'}
           </Button>
         </div>
       </header>
@@ -1615,6 +1512,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
 
         <header className="doc-intro">
           <textarea
+            ref={titleInputRef}
             className="doc-title doc-title-input"
             aria-label="Título"
             rows={1}
@@ -1630,6 +1528,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
             onPaste={singleLinePaste}
           />
           <textarea
+            ref={descriptionInputRef}
             className="doc-description doc-description-input"
             aria-label="Descripción"
             rows={1}

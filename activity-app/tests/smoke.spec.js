@@ -466,7 +466,7 @@ test('complete editing and CRUD flow remains functional', async ({page}, testInf
   await page.getByRole('button', {name:'Negrita'}).click();
   expect(await page.evaluate(() => !!document.querySelector('.editable-body p strong'))).toBeTruthy();
 
-  await page.getByRole('button', {name:'Listo'}).click();
+  await page.getByRole('button', {name:/Guardar|Listo/}).click();
   await expect(page.getByRole('button', {name:'Editar'})).toBeVisible();
   await page.getByRole('button', {name:/Docs/}).click();
   await expect(page.getByText('Resultados (1)', {exact:true})).toBeVisible();
@@ -482,7 +482,7 @@ test('complete editing and CRUD flow remains functional', async ({page}, testInf
   await page.getByRole('menuitem', {name:'Lista de tareas'}).click();
   await expect(page.locator('.editable-body ul.checklist')).toHaveCount(1);
 
-  await page.getByRole('button', {name:'Listo'}).click();
+  await page.getByRole('button', {name:/Guardar|Listo/}).click();
   await expect(page.locator('.doc-title')).toHaveText('Prueba React HeroUI');
   await page.getByRole('button', {name:/Docs/}).click();
   await page.getByPlaceholder('Buscar').fill('Prueba React HeroUI');

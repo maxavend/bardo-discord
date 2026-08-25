@@ -18,9 +18,14 @@ function rememberBaseline() {
 
 function syncKeyboardState() {
   if (!viewport) {
+    root.style.setProperty('--bardo-visual-viewport-top', '0px');
+    root.style.setProperty('--bardo-visual-viewport-left', '0px');
     root.removeAttribute('data-editor-keyboard');
     return;
   }
+
+  root.style.setProperty('--bardo-visual-viewport-top', `${Math.max(0, viewport.offsetTop)}px`);
+  root.style.setProperty('--bardo-visual-viewport-left', `${Math.max(0, viewport.offsetLeft)}px`);
 
   const focused = editingTextIsFocused();
   const reduction = Math.max(0, baselineHeight - viewport.height);
@@ -45,6 +50,8 @@ function scheduleSync() {
 rememberBaseline();
 
 viewport?.addEventListener('resize', scheduleSync, {passive: true});
+viewport?.addEventListener('scroll', scheduleSync, {passive: true});
+window.addEventListener('resize', scheduleSync, {passive: true});
 document.addEventListener('focusin', () => {
   // focusin usually fires before the keyboard finishes animating, which makes
   // it the safest moment to preserve the keyboard-free baseline.
