@@ -290,6 +290,14 @@ function downloadFile(filename, mime, content) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function documentMarkdown(doc) {
+  return `# ${doc?.title || 'Sin título'}\n\n${doc?.description ? `${doc.description}\n\n` : ''}${markdownFromHtml(doc?.body || '')}`;
+}
+
+function documentFileStem(doc) {
+  return doc?.title?.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-|-$/g, '') || 'documento';
+}
+
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -487,8 +495,13 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
           </Dropdown.Item>
       <Dropdown.Section>
         <Header>Exportar</Header>
-            <Dropdown.Item id="markdown" textValue="Markdown (.md)">
-              <Label>Markdown (.md)</Label>
+            <Dropdown.Item id="markdown-preview" textValue="Ver Markdown">
+              <Eye width={15} height={15} className="text-muted" />
+              <Label>Ver Markdown</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="markdown" textValue="Descargar Markdown (.md)">
+              <FileText width={15} height={15} className="text-muted" />
+              <Label>Descargar Markdown</Label>
             </Dropdown.Item>
             <Dropdown.Item id="html" textValue="HTML (.html)">
               <Label>HTML (.html)</Label>
@@ -1793,6 +1806,34 @@ function InsertLinkModal({isOpen, linkValue, setLinkValue, onApply, onCancel}) {
   );
 }
 
+function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
+  const markdown = doc ? documentMarkdown(doc) : '';
+
+  return (
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
+      <Modal.Container placement="auto" size="lg">
+        <Modal.Dialog aria-label="Vista previa de Markdown">
+          <Modal.Header>
+            <Modal.Heading>Vista previa de Markdown</Modal.Heading>
+            <p className="text-sm text-muted truncate">{doc?.title || 'Sin título'}</p>
+          </Modal.Header>
+          <Modal.Body>
+            <pre className="markdown-preview-content" tabIndex="0">{markdown}</pre>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="ghost" onPress={onCancel}>
+              <ChevronLeft width={15} height={15} /> Atrás
+            </Button>
+            <Button variant="primary" onPress={() => onCopy(markdown)}>
+              <Copy width={15} height={15} /> Copiar Markdown
+            </Button>
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  );
+}
+
 function App() {
   const [store, setStore] = useState(loadStore);
   const [route, setRoute] = useState(parseRoute);
@@ -1959,11 +2000,14 @@ function App() {
         showToast('No se pudo copiar');
       }
     }
+    if (action === 'markdown-preview') {
+      setModal({type: 'markdown-preview', docId: doc.id});
+    }
     if (action === 'markdown') {
       downloadFile(
-        `${doc.title.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-|-$/g, '') || 'documento'}.md`,
+        `${documentFileStem(doc)}.md`,
         'text/markdown;charset=utf-8',
-        `# ${doc.title}\n\n${doc.description ? `${doc.description}\n\n` : ''}${markdownFromHtml(doc.body)}`
+        documentMarkdown(doc)
       );
       showToast('Markdown descargado');
     }
@@ -1976,8 +2020,13 @@ function App() {
       showToast('HTML descargado');
     }
     if ((action === 'pdf' || action === 'docx') && window.__bardoExportDocument) {
-      await window.__bardoExportDocument(doc.id, action);
-      showToast(action === 'pdf' ? 'PDF generado' : 'Word generado');
+      try {
+        await window.__bardoExportDocument(doc.id, action);
+        showToast(action === 'pdf' ? 'PDF descargado' : 'Word descargado');
+      } catch (error) {
+        console.error(`Bardo Docs: no se pudo descargar ${action}`, error);
+        showToast(`No se pudo descargar ${action === 'pdf' ? 'el PDF' : 'el archivo Word'}`);
+      }
     }
     if (action === 'print') window.print();
   }, [docsById, duplicateDoc, go, openDoc, route.type, showToast]);
@@ -2090,6 +2139,20 @@ function App() {
           modal?.api?.cancel?.();
           setModal(null);
         }}
+      />
+
+      <MarkdownPreviewModal
+        isOpen={modal?.type === 'markdown-preview'}
+        doc={modal?.type === 'markdown-preview' ? docsById.get(modal.docId) : null}
+        onCopy={async markdown => {
+          try {
+            await copyText(markdown);
+            showToast('Markdown copiado al portapapeles');
+          } catch {
+            showToast('No se pudo copiar el Markdown');
+          }
+        }}
+        onCancel={() => setModal(null)}
       />
 
       <ToastProvider placement="bottom" />

@@ -185,6 +185,28 @@ function htmlToMarkdown(html = '') {
   return walk(doc.body).replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function responseFileName(response, fallback) {
+  const disposition = response.headers.get('content-disposition') || '';
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try { return decodeURIComponent(encoded); } catch {}
+  }
+  return disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallback;
+}
+
+function triggerBlobDownload(blob, filename) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
 function toRemotePayload(doc) {
   const body = htmlToMarkdown(doc.body || '');
   const title = String(doc.title || 'Sin título').trim() || 'Sin título';
@@ -243,12 +265,8 @@ export async function prepareBardoProduction(options = {}) {
     if (!response.ok) throw new Error(`Export HTTP ${response.status}`);
 
     const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = `${documentId}.${format === 'word' ? 'docx' : format}`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    const fallbackName = `${documentId}.${format === 'word' ? 'docx' : format}`;
+    triggerBlobDownload(blob, responseFileName(response, fallbackName));
   };
 
   const headers = {'Accept':'application/json'};

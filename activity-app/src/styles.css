@@ -190,6 +190,21 @@ button, input, select { font: inherit; }
   pointer-events: none;
 }
 
+.markdown-preview-content {
+  max-height: min(60dvh, 520px);
+  overflow: auto;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-secondary);
+  color: var(--surface-secondary-foreground);
+  font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+
 /* Library: centered column with consistent gutters */
 .library { width: 100%; padding: 0 16px max(84px, calc(var(--bardo-safe-bottom) + 68px)); }
 .library-inner { width: min(100%, 760px); margin: 0 auto; }

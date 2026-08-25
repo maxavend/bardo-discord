@@ -438,6 +438,25 @@ test('adaptive toolbar uses spare width and rounds a standalone group control', 
   expect(compactMetrics.textWidth).toBeLessThanOrEqual(200);
 });
 
+test('document actions separate markdown preview from markdown download', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-standard', 'Run the document action flow once.');
+
+  const row = page.locator('.doc-row').filter({hasText:monsterTitle});
+  await row.getByRole('button', {name:/Acciones de Stress test/}).click();
+  await page.getByRole('menuitem', {name:'Ver Markdown'}).click();
+  await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeVisible();
+  await expect(page.locator('.markdown-preview-content')).toContainText(`# ${monsterTitle}`);
+  await expect(page.getByRole('button', {name:'Copiar Markdown'})).toBeVisible();
+  await page.getByRole('button', {name:'Atrás'}).click();
+  await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeHidden();
+
+  await row.getByRole('button', {name:/Acciones de Stress test/}).click();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('menuitem', {name:'Descargar Markdown'}).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.md$/);
+});
+
 test('complete editing and CRUD flow remains functional', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Full behavior matrix runs once; geometry runs in every viewport.');
   const errors = collectRuntimeErrors(page);
