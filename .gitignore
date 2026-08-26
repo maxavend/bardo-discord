@@ -5,3 +5,5 @@ data/
 .DS_Store
 .wrangler/
 prototypes/docs-app/dist/
+.agents/
+skills-lock.json
