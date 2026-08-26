@@ -24,6 +24,7 @@ import {
   ArrowUturnCcwLeft,
   ArrowUturnCwRight,
   Bold,
+  Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -56,6 +57,7 @@ import {
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
+import {PlannerModule} from './planner/PlannerModule.jsx';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
 
 const STORE_KEY = 'bardo.docs.heroui.v1';
@@ -74,6 +76,10 @@ const BLOCK_TYPES = [
 
 function parseRoute() {
   const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
+  if (raw === 'planner' || raw.startsWith('planner-')) {
+    const tab = raw.replace(/^planner-?/, '') || 'agenda';
+    return {type: 'planner', tab: tab === 'planner' ? 'agenda' : tab, key: raw};
+  }
   if (!raw || raw === 'docs') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
   if (raw.startsWith('edit-')) return {type: 'edit', id: raw.slice(5), key: raw};
@@ -497,15 +503,35 @@ function DocsHeader({children, actions, className = ''}) {
   );
 }
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
+  const isPlanner = route.type === 'planner';
 
   return (
     <DocsHeader
-      className={isLibrary ? 'library-header' : ''}
-      actions={isLibrary ? (
-        <div key="library-actions" className="header-slot-enter">
+      className={isLibrary || isPlanner ? 'library-header' : ''}
+      actions={isPlanner ? (
+        <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={() => onNavigateModule?.('docs')}
+            className="font-medium"
+          >
+            <FileText width={14} height={14} /> Ir a Docs
+          </Button>
+        </div>
+      ) : isLibrary ? (
+        <div key="library-actions" className="header-slot-enter flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onPress={() => onNavigateModule?.('planner')}
+            className="font-medium"
+          >
+            <Calendar width={14} height={14} /> Planner
+          </Button>
           <input
             ref={fileInputRef}
             className="library-file-input"
@@ -534,7 +560,14 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : null}
     >
-      {isLibrary ? (
+      {isPlanner ? (
+        <div key="planner-brand" className="flex items-center gap-2 header-slot-enter">
+          <span className="topbar-title">Bardo Planner</span>
+          <Chip size="sm" variant="soft" color="accent" className="font-semibold text-[11px]">
+            Release 2.0
+          </Chip>
+        </div>
+      ) : isLibrary ? (
         <span key="library-title" className="topbar-title header-slot-enter">
           <span>Bardo</span>
         </span>
@@ -559,9 +592,22 @@ function Library({
   onUpload,
   onDocAction,
 }) {
+  const fileInputRef = useRef(null);
   return (
     <section className="library route-active">
       <div className="library-inner">
+        <input
+          ref={fileInputRef}
+          className="library-file-input"
+          type="file"
+          accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          aria-label="Seleccionar documento para subir"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) onUpload(file);
+          }}
+        />
         <SearchField
           aria-label="Buscar documentos"
           fullWidth
@@ -634,7 +680,7 @@ function Library({
   );
 }
 
-function Reader({doc, onBack, onEdit, onAction, onChecklistChange, skipTransition = false}) {
+function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onChecklistChange, skipTransition = false}) {
   return (
     <section className={`doc-route route-active ${skipTransition ? 'route-no-transition' : ''}`.trim()}>
       <article className="document-shell">
@@ -2081,7 +2127,7 @@ function App() {
 
   return (
     <main className="app-root">
-      {(route.type === 'library' || (route.type === 'doc' && currentDoc)) && (
+      {(route.type === 'library' || route.type === 'planner' || (route.type === 'doc' && currentDoc)) && (
         <PersistentHeader
           route={route}
           doc={currentDoc}
@@ -2090,6 +2136,13 @@ function App() {
           onAction={docAction}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
+          onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
+        />
+      )}
+      {route.type === 'planner' && (
+        <PlannerModule
+          initialTab={route.tab || 'agenda'}
+          onSwitchTab={(tab) => go(tab === 'agenda' ? '#planner' : `#planner-${tab}`, {skipTransition: true})}
         />
       )}
       {route.type === 'library' && (
