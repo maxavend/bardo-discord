@@ -1861,7 +1861,14 @@ function App() {
       const nextRoute = parseRoute();
       if (nextRoute.type === 'library' && lastOpenedRef.current) setLastOpened(lastOpenedRef.current);
       const applyRoute = () => setRoute(nextRoute);
+      const currentRoute = routeRef.current;
+      const isDocumentModeSwitch = currentRoute.id
+        && nextRoute.id
+        && currentRoute.id === nextRoute.id
+        && ((currentRoute.type === 'doc' && nextRoute.type === 'edit')
+          || (currentRoute.type === 'edit' && nextRoute.type === 'doc'));
       const shouldAnimateRoute = !skipNextRouteAnimation.current
+        && !isDocumentModeSwitch
         && typeof document.startViewTransition === 'function'
         && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (shouldAnimateRoute) {
