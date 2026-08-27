@@ -2,7 +2,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Chip,
   Dropdown,
   Label,
   Description,
@@ -15,10 +14,8 @@ import {
   CircleCheck,
   Microphone,
 } from '@gravity-ui/icons';
-import {
-  clockToMinutes,
-  minutesToClock,
-} from './time-engine.js';
+import {clockToMinutes, minutesToClock} from './time-engine.js';
+import {POINT_STATUS} from './session-runner.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 
 export function PlannerAgendaView({
@@ -37,17 +34,14 @@ export function PlannerAgendaView({
   } = state;
 
   const liveActiveBlockId = sessionState?.liveActiveBlockId || state.liveActiveBlockId || null;
+  const liveActivePointId = sessionState?.liveActivePointId || null;
   let cursorMinutes = clockToMinutes(startTime);
 
   return (
     <div className="planner-agenda-container w-full max-w-4xl mx-auto pb-24 pt-2 flex flex-col gap-3">
-      {/* Top Content Row: SessionDock in live mode OR Session Description in idle mode */}
       {(dockSlot || description) && (
         <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start mb-1">
-          {/* Timeline Column Spacer */}
           <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-
-          {/* Content Column: SessionDock (Live) or Description (Idle) */}
           <div className="flex flex-col gap-2 min-w-0 w-full">
             {dockSlot}
             {!dockSlot && description && (
@@ -59,7 +53,6 @@ export function PlannerAgendaView({
         </div>
       )}
 
-      {/* Timeline de la Agenda */}
       {blocks.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
           <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
@@ -75,33 +68,29 @@ export function PlannerAgendaView({
         </div>
       ) : (
         <div className="relative flex flex-col gap-3 before:hidden sm:before:block before:absolute before:top-3 before:bottom-3 before:left-[31px] before:w-px before:bg-border/50">
-          {blocks.map((block, bIdx) => {
+          {blocks.map((block, blockIndex) => {
             const blockStart = minutesToClock(cursorMinutes);
-            const blockDur = block.durationMinutes || 30;
-            const blockEnd = minutesToClock(cursorMinutes + blockDur);
-            cursorMinutes += blockDur;
+            const blockDuration = block.durationMinutes || 30;
+            const blockEnd = minutesToClock(cursorMinutes + blockDuration);
+            cursorMinutes += blockDuration;
 
             const isLive = block.id === liveActiveBlockId;
             const isCompleted = (sessionState?.completedBlockIds || []).includes(block.id);
             const isSkipped = (sessionState?.skippedBlockIds || []).includes(block.id);
-            const isBreak = block.title.toLowerCase().includes('break') || block.title.toLowerCase().includes('receso') || block.title.toLowerCase().includes('pausa');
+            const lowerTitle = block.title.toLowerCase();
+            const isBreak = lowerTitle.includes('break') || lowerTitle.includes('receso') || lowerTitle.includes('pausa');
+            const blockRecordings = (sessionState?.recordings || []).filter((recording) => recording.blockId === block.id);
 
-            const blockRecordings = (sessionState?.recordings || []).filter(r => r.blockId === block.id);
-
-            // Tratamiento ligero para bloques de tipo Break / Pausa (salvo que sea el bloque activo en vivo)
             if (isBreak && !isLive && (block.subpoints || []).length === 0 && (block.decisions || []).length === 0) {
               return (
-                <div key={block.id || bIdx} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-center relative z-10">
-                  {/* Timeline Column */}
+                <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-center relative z-10">
                   <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start select-none pr-2 shrink-0">
                     <span className="text-xs font-semibold text-muted">{blockStart}</span>
                     <span className="text-[11px] text-muted/60 hidden sm:inline">{blockEnd}</span>
                   </div>
-
-                  {/* Content Column */}
                   <div className="min-w-0 w-full">
                     <div className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border text-xs ${
-                      isCompleted ? 'bg-surface-secondary/20 border-border/30 text-muted line-through opacity-70' : 'bg-surface-secondary/30 border-border/40 text-muted'
+                      isCompleted ? 'bg-surface-secondary/20 border-border/30 text-muted opacity-70' : 'bg-surface-secondary/30 border-border/40 text-muted'
                     }`}>
                       <div className="flex items-center gap-2 min-w-0">
                         <Cup width={13} height={13} className="text-muted/80 shrink-0" />
@@ -109,8 +98,8 @@ export function PlannerAgendaView({
                         {block.introDesc && <span className="text-muted/70 hidden sm:inline truncate">· {block.introDesc}</span>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {isCompleted && <span className="text-success text-[11px]">✓ Listo</span>}
-                        <span className="text-muted/80">{blockDur} min</span>
+                        {isCompleted && <span className="text-success text-[11px]">Listo</span>}
+                        <span className="text-muted/80">{blockDuration} min</span>
                       </div>
                     </div>
                   </div>
@@ -119,105 +108,84 @@ export function PlannerAgendaView({
             }
 
             return (
-              <div key={block.id || bIdx} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start relative z-10">
-                {/* Timeline Column */}
+              <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start relative z-10">
                 <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start pt-1.5 select-none pr-2 shrink-0">
                   <span className={`text-xs sm:text-sm font-bold leading-tight ${isLive ? 'text-accent' : 'text-foreground'}`}>{blockStart}</span>
                   <span className="text-[11px] text-muted/70 leading-tight">{blockEnd}</span>
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full mt-1 ${
-                    isLive ? 'text-accent bg-accent/20 font-bold' : isCompleted ? 'text-success bg-success/10' : 'text-muted bg-surface-secondary'
-                  }`}>
-                    {blockDur}m
-                  </span>
+                  <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
                 </div>
 
-                {/* Content Column: Tarjeta del Bloque */}
                 <div className="min-w-0 w-full">
                   <Card
                     className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-xl transition-all ${
                       isLive
-                        ? 'border-accent/60 ring-1 ring-accent/25 shadow-md bg-surface'
+                        ? 'border-accent/60 ring-1 ring-accent/20 shadow-sm bg-surface'
                         : isCompleted
-                        ? 'opacity-85 bg-surface border-border/40'
-                        : isSkipped
-                        ? 'opacity-60 bg-surface-secondary/30 border-border/30'
-                        : 'bg-surface border-border/60'
+                          ? 'opacity-85 bg-surface border-border/40'
+                          : isSkipped
+                            ? 'opacity-60 bg-surface-secondary/30 border-border/30'
+                            : 'bg-surface border-border/60'
                     }`}
                   >
-                    {/* Cabecera del Bloque */}
                     <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <h3 className={`text-base font-bold tracking-tight ${isLive ? 'text-foreground font-extrabold' : 'text-foreground'}`}>
-                          {block.title}
-                        </h3>
-                        {isLive && (
-                          <Chip size="sm" variant="soft" color="accent" className="font-bold text-[11px]">
-                            ● EN CURSO
-                          </Chip>
-                        )}
-                        {isCompleted && (
-                          <Chip size="sm" variant="secondary" className="text-success text-[11px] font-medium">
-                            ✓ Completado
-                          </Chip>
-                        )}
-                        {isSkipped && (
-                          <Chip size="sm" variant="secondary" className="text-muted text-[11px] font-medium">
-                            Saltado
-                          </Chip>
-                        )}
+                      <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+                        <h3 className="text-base font-bold tracking-tight text-foreground">{block.title}</h3>
+                        {isLive && <span className="text-[11px] font-semibold text-accent">En curso</span>}
+                        {isCompleted && <span className="text-[11px] font-medium text-success">Completado</span>}
+                        {isSkipped && <span className="text-[11px] font-medium text-muted">Saltado</span>}
                       </div>
-
-                      {/* Metadatos Rápidos */}
-                      <div className="flex items-center gap-2 text-xs text-muted font-normal flex-wrap">
+                      <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
                         {block.leader && <span>Líder: <strong className="font-medium text-foreground">{block.leader}</strong></span>}
-                        {block.participants && (
-                          <span className="hidden sm:inline">· {block.participants}</span>
-                        )}
+                        {block.participants && <span className="hidden sm:inline">· {block.participants}</span>}
                       </div>
                     </div>
 
-                    {/* Descripción de Introducción / Contexto */}
                     {block.introDesc && (
-                      <p className="text-xs text-muted leading-relaxed">
-                        {block.introDesc}
-                      </p>
+                      <p className="text-xs text-muted leading-relaxed">{block.introDesc}</p>
                     )}
 
-                    {/* Lista de Puntos / Subpuntos de la Agenda */}
                     {(block.subpoints || []).length > 0 && (
-                      <div className="flex flex-col gap-1.5 pt-1">
-                        {block.subpoints.map((p) => {
-                          const isDone = p.status === 'done';
+                      <div className="flex flex-col gap-1 pt-1">
+                        {block.subpoints.map((point, pointIndex) => {
+                          const storedStatus = sessionState?.pointStatuses?.[point.id] || point.status || POINT_STATUS.PENDING;
+                          const isPointActive = isLive && point.id === liveActivePointId;
+                          const isDone = storedStatus === POINT_STATUS.DONE;
+                          const isPointSkipped = storedStatus === POINT_STATUS.SKIPPED;
                           return (
                             <div
-                              key={p.id}
-                              className={`flex items-start justify-between gap-2.5 p-2 rounded-lg transition-colors ${
-                                isDone ? 'bg-surface-secondary/20 opacity-80' : 'bg-surface-secondary/40 hover:bg-surface-secondary/60'
+                              key={point.id}
+                              className={`flex items-start justify-between gap-2.5 px-2.5 py-2 rounded-lg transition-colors ${
+                                isPointActive
+                                  ? 'bg-accent/8 ring-1 ring-inset ring-accent/25'
+                                  : isDone || isPointSkipped
+                                    ? 'bg-surface-secondary/20'
+                                    : 'hover:bg-surface-secondary/45'
                               }`}
                             >
                               <label className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer select-none">
                                 <Checkbox
                                   size="sm"
                                   isSelected={isDone}
-                                  onChange={(e) => onToggleSubpointStatus(block.id, p.id, e.target.checked)}
+                                  onChange={(event) => onToggleSubpointStatus(block.id, point.id, event.target.checked)}
                                   className="mt-0.5 shrink-0"
                                 />
-                                <span className={`text-xs text-foreground leading-snug ${isDone ? 'line-through text-muted' : 'font-medium'}`}>
-                                  {p.title || '(Punto sin título)'}
+                                <span className="flex flex-col min-w-0">
+                                  <span className={`text-xs leading-snug ${
+                                    isDone ? 'line-through text-muted' : isPointSkipped ? 'text-muted' : isPointActive ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                                  }`}>
+                                    {point.title || '(Punto sin título)'}
+                                  </span>
+                                  {isPointActive && point.description && (
+                                    <span className="text-[11px] text-muted mt-0.5 line-clamp-2">{point.description}</span>
+                                  )}
                                 </span>
                               </label>
 
-                              <div className="flex items-center gap-2 text-xs text-muted shrink-0">
-                                {isDone && (
-                                  <span className="text-success text-xs font-medium mr-1">
-                                    Revisado
-                                  </span>
-                                )}
-                                {p.presenter && (
-                                  <span className="text-muted/80 text-xs font-medium">
-                                    · {p.presenter}
-                                  </span>
-                                )}
+                              <div className="flex items-center gap-2 text-[11px] text-muted shrink-0">
+                                {isPointActive && <span className="text-accent font-semibold">Punto {pointIndex + 1} · En curso</span>}
+                                {!isPointActive && isDone && <span className="text-success font-medium">Revisado</span>}
+                                {!isPointActive && isPointSkipped && <span className="font-medium">Saltado</span>}
+                                {point.presenter && <span className="text-muted/80">· {point.presenter}</span>}
                               </div>
                             </div>
                           );
@@ -225,50 +193,52 @@ export function PlannerAgendaView({
                       </div>
                     )}
 
-                    {/* Grabaciones de Audio Asociadas al Bloque */}
                     {blockRecordings.length > 0 && (
                       <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
                         <span className="text-[11px] font-semibold text-muted flex items-center gap-1">
                           <Microphone width={12} height={12} className="text-accent" />
-                          <span>Grabaciones ({blockRecordings.length})</span>
+                          Grabaciones ({blockRecordings.length})
                         </span>
                         <div className="flex flex-col gap-1.5">
-                          {blockRecordings.map((rec) => (
-                            <PlannerAudioPlayer key={rec.id} recording={rec} />
+                          {blockRecordings.map((recording) => (
+                            <PlannerAudioPlayer key={recording.id} recording={recording} />
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Acuerdos y Decisiones del Bloque */}
                     {(block.decisions || []).length > 0 && (
                       <div className="flex flex-col gap-1.5 pt-2 border-t border-border/40">
-                        {block.decisions.map((d) => (
-                          <div
-                            key={d.id}
-                            className="px-3 py-2 rounded-lg bg-surface-secondary/40 text-xs text-foreground flex items-center justify-between gap-2"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <CircleCheck width={14} height={14} className="text-success shrink-0" />
-                              <span className="font-medium truncate">{d.content}</span>
-                            </div>
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              isIconOnly
-                              aria-label="Eliminar acuerdo"
-                              className="h-6 w-6 text-muted hover:text-danger shrink-0"
-                              onPress={() => onDeleteDecision(block.id, d.id)}
+                        {block.decisions.map((decision) => {
+                          const point = (block.subpoints || []).find((candidate) => candidate.id === decision.pointId);
+                          return (
+                            <div
+                              key={decision.id}
+                              className="px-3 py-2 rounded-lg bg-surface-secondary/40 text-xs text-foreground flex items-center justify-between gap-2"
                             >
-                              <TrashBin width={12} height={12} />
-                            </Button>
-                          </div>
-                        ))}
+                              <div className="flex items-start gap-2 min-w-0">
+                                <CircleCheck width={14} height={14} className="text-success shrink-0 mt-0.5" />
+                                <span className="min-w-0">
+                                  <span className="font-medium break-words">{decision.content}</span>
+                                  {point && <span className="block text-[11px] text-muted mt-0.5">{point.title}</span>}
+                                </span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                isIconOnly
+                                aria-label="Eliminar acuerdo"
+                                className="h-6 w-6 text-muted hover:text-danger shrink-0"
+                                onPress={() => onDeleteDecision(block.id, decision.id)}
+                              >
+                                <TrashBin width={12} height={12} />
+                              </Button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Acciones del Bloque */}
                     <div className="flex items-center justify-between pt-1 border-t border-border/30 text-xs text-muted">
                       <div className="flex items-center gap-2">
                         {block.phases && (
@@ -277,7 +247,6 @@ export function PlannerAgendaView({
                           </span>
                         )}
                       </div>
-
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
@@ -285,31 +254,19 @@ export function PlannerAgendaView({
                           onPress={() => onOpenCapture('decision', block.id)}
                           className="h-7 text-xs text-muted hover:text-foreground"
                         >
-                          <Plus width={12} height={12} />
-                          <span>Acuerdo</span>
+                          <Plus width={12} height={12} /> Acuerdo
                         </Button>
-
                         <Dropdown>
                           <Dropdown.Trigger>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              isIconOnly
-                              aria-label="Opciones del bloque"
-                              className="h-7 w-7 text-muted hover:text-foreground"
-                            >
+                            <Button variant="ghost" size="sm" isIconOnly aria-label="Opciones del bloque" className="h-7 w-7 text-muted hover:text-foreground">
                               <EllipsisVertical width={13} height={13} />
                             </Button>
                           </Dropdown.Trigger>
                           <Dropdown.Popover>
-                            <Dropdown.Menu
-                              onAction={(key) => {
-                                if (key === 'edit') onOpenEditor();
-                              }}
-                            >
+                            <Dropdown.Menu onAction={(key) => key === 'edit' && onOpenEditor()}>
                               <Dropdown.Item id="edit" textValue="Editar bloque en la agenda">
                                 <Label>Editar bloque</Label>
-                                <Description>Modificar tiempos o subpuntos</Description>
+                                <Description>Modificar tiempos o puntos</Description>
                               </Dropdown.Item>
                             </Dropdown.Menu>
                           </Dropdown.Popover>
