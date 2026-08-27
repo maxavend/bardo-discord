@@ -2,18 +2,21 @@ import {useState, useEffect} from 'react';
 import {
   AlertDialog,
   Button,
+  Calendar,
   Card,
+  DateField,
+  DatePicker,
+  TimeField,
   Input,
   TextArea,
   TextField,
   Label,
   ProgressBar,
-  ToggleButtonGroup,
-  ToggleButton,
   Dropdown,
   Description,
   toast,
 } from '@heroui/react';
+import {parseDate, parseTime} from '@internationalized/date';
 import {
   Plus,
   TrashBin,
@@ -21,14 +24,15 @@ import {
   ChevronUp,
   ChevronDown,
   EllipsisVertical,
+  Clock,
+  TriangleExclamation,
 } from '@gravity-ui/icons';
 import {
   computePlannerTimes,
   parseSmartDuration,
   formatShortDuration,
 } from './time-engine.js';
-
-const PRESET_DURATIONS = ['10m', '15m', '20m', '30m'];
+import {PlannerMemberPicker} from './PlannerMemberPicker.jsx';
 
 export function PlannerEditorView({
   initialState,
@@ -71,13 +75,12 @@ export function PlannerEditorView({
     });
   };
 
-  const updateBlockManualDuration = (bIdx, value) => {
+  const updateBlockDuration = (bIdx, value) => {
     const parsed = parseSmartDuration(value);
     setFormData((prev) => {
       const nextBlocks = [...prev.blocks];
       nextBlocks[bIdx] = {
         ...nextBlocks[bIdx],
-        manualDuration: parsed || 30,
         durationMinutes: parsed || 30,
       };
       return computePlannerTimes({...prev, blocks: nextBlocks});
@@ -85,18 +88,16 @@ export function PlannerEditorView({
   };
 
   const addBlock = () => {
+    const newId = `b-${Date.now()}`;
     setFormData((prev) => {
       const nextBlocks = [
         ...prev.blocks,
         {
-          id: `b-${Date.now()}`,
-          emoji: '📌',
+          id: newId,
           title: `Bloque #${prev.blocks.length + 1}`,
           durationMinutes: 30,
-          manualDuration: 30,
           leader: '',
           participants: '',
-          phases: {context: 5, review: 20, closing: 5},
           subpoints: [],
           decisions: [],
           tasks: [],
@@ -126,15 +127,14 @@ export function PlannerEditorView({
   };
 
   const addSubpoint = (bIdx) => {
+    const newPointId = `p-${Date.now()}`;
     setFormData((prev) => {
       const nextBlocks = [...prev.blocks];
       const subpoints = [
         ...(nextBlocks[bIdx].subpoints || []),
         {
-          id: `p-${Date.now()}`,
+          id: newPointId,
           title: '',
-          rawTime: '15m',
-          durationMinutes: 15,
           presenter: '',
           status: 'pending',
         },
@@ -154,10 +154,6 @@ export function PlannerEditorView({
     });
   };
 
-  const setQuickSubpointTime = (bIdx, pIdx, timeStr) => {
-    updateSubpointField(bIdx, pIdx, 'rawTime', timeStr);
-  };
-
   const removeSubpoint = (bIdx, pIdx) => {
     const target = formData.blocks[bIdx]?.subpoints?.[pIdx];
     setFormData((prev) => {
@@ -167,7 +163,7 @@ export function PlannerEditorView({
       return computePlannerTimes({...prev, blocks: nextBlocks});
     });
     if (target?.title) {
-      toast(`Punto eliminado`);
+      toast('Punto eliminado');
     }
   };
 
@@ -197,11 +193,11 @@ export function PlannerEditorView({
   const diffMinutes = Math.abs(targetDuration - totalAllocated);
 
   return (
-    <div className="flex flex-col gap-5 w-full max-w-4xl mx-auto pb-12">
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface/40 p-3 rounded-xl border border-border">
+    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto pb-12">
+      {/* Header bar (no contained) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Editor de Sesión & Agenda</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Editor de sesión</h1>
           <p className="text-xs text-muted">
             Configura los detalles de la reunión, bloques de tiempo y participantes.
           </p>
@@ -210,22 +206,22 @@ export function PlannerEditorView({
           <Button variant="ghost" size="sm" onPress={onCancel}>
             Cancelar
           </Button>
-          <Button variant="primary" size="sm" onPress={handleSave} className="font-semibold">
-            <Check width={14} height={14} /> Guardar Cambios
+          <Button variant="primary" size="sm" onPress={handleSave}>
+            <Check width={14} height={14} /> Guardar cambios
           </Button>
         </div>
       </div>
 
-      {/* 1. Metadatos de la Sesión */}
-      <Card className="p-4 sm:p-5 bg-surface border border-border rounded-xl flex flex-col gap-3.5">
-        <h2 className="text-xs font-bold text-foreground uppercase tracking-wider">
-          Información General
+      {/* 1. Información General */}
+      <Card className="p-4 sm:p-5 flex flex-col gap-3.5">
+        <h2 className="text-sm font-semibold text-foreground">
+          Información general
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <TextField className="w-full">
-            <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Título de la Sesión
+            <Label className="text-xs font-medium text-muted">
+              Título de la sesión
             </Label>
             <Input
               value={formData.title}
@@ -235,7 +231,7 @@ export function PlannerEditorView({
           </TextField>
 
           <TextField className="w-full">
-            <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
+            <Label className="text-xs font-medium text-muted">
               Organizador / Conduce
             </Label>
             <Input
@@ -246,46 +242,106 @@ export function PlannerEditorView({
           </TextField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <TextField className="w-full">
-            <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Fecha
-            </Label>
-            <Input
-              type="date"
-              value={formData.date || ''}
-              onChange={(e) => updateHeaderField('date', e.target.value)}
-            />
-          </TextField>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <DatePicker
+            className="w-full"
+            value={formData.date ? (() => {
+              try {
+                return parseDate(formData.date);
+              } catch {
+                return null;
+              }
+            })() : null}
+            onChange={(val) => {
+              if (val) {
+                updateHeaderField(
+                  'date',
+                  `${val.year}-${String(val.month).padStart(2, '0')}-${String(val.day).padStart(2, '0')}`
+                );
+              } else {
+                updateHeaderField('date', '');
+              }
+            }}
+          >
+            <Label className="text-xs font-medium text-muted">Fecha</Label>
+            <DateField.Group fullWidth>
+              <DateField.Input>
+                {(segment) => <DateField.Segment segment={segment} />}
+              </DateField.Input>
+              <DateField.Suffix>
+                <DatePicker.Trigger>
+                  <DatePicker.TriggerIndicator />
+                </DatePicker.Trigger>
+              </DateField.Suffix>
+            </DateField.Group>
+            <DatePicker.Popover>
+              <Calendar aria-label="Fecha de la sesión">
+                <Calendar.Header>
+                  <Calendar.YearPickerTrigger>
+                    <Calendar.YearPickerTriggerHeading />
+                    <Calendar.YearPickerTriggerIndicator />
+                  </Calendar.YearPickerTrigger>
+                  <Calendar.NavButton slot="previous" />
+                  <Calendar.NavButton slot="next" />
+                </Calendar.Header>
+                <Calendar.Grid>
+                  <Calendar.GridHeader>
+                    {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+                  </Calendar.GridHeader>
+                  <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+                </Calendar.Grid>
+                <Calendar.YearPickerGrid>
+                  <Calendar.YearPickerGridBody>
+                    {({year}) => <Calendar.YearPickerCell year={year} />}
+                  </Calendar.YearPickerGridBody>
+                </Calendar.YearPickerGrid>
+              </Calendar>
+            </DatePicker.Popover>
+          </DatePicker>
+
+          <TimeField
+            className="w-full"
+            value={formData.startTime ? (() => {
+              try {
+                return parseTime(formData.startTime);
+              } catch {
+                return null;
+              }
+            })() : null}
+            onChange={(val) => {
+              if (val) {
+                updateHeaderField(
+                  'startTime',
+                  `${String(val.hour).padStart(2, '0')}:${String(val.minute).padStart(2, '0')}`
+                );
+              } else {
+                updateHeaderField('startTime', '10:00');
+              }
+            }}
+          >
+            <Label className="text-xs font-medium text-muted">Hora de inicio</Label>
+            <TimeField.Group fullWidth>
+              <TimeField.Input>
+                {(segment) => <TimeField.Segment segment={segment} />}
+              </TimeField.Input>
+            </TimeField.Group>
+          </TimeField>
 
           <TextField className="w-full">
-            <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Hora de Inicio
-            </Label>
-            <Input
-              type="time"
-              value={formData.startTime || '10:00'}
-              onChange={(e) => updateHeaderField('startTime', e.target.value)}
-              className="font-mono"
-            />
-          </TextField>
-
-          <TextField className="w-full">
-            <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Presupuesto Objetivo
+            <Label className="text-xs font-medium text-muted">
+              Presupuesto objetivo
             </Label>
             <Input
               value={targetDurationInput}
               onChange={(e) => handleTargetDurationChange(e.target.value)}
               placeholder="ej: 1h, 60m, 3h"
-              className="font-mono"
             />
           </TextField>
         </div>
 
         <TextField className="w-full">
-          <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Contexto y Objetivos (Opcional)
+          <Label className="text-xs font-medium text-muted">
+            Contexto y objetivos (opcional)
           </Label>
           <TextArea
             value={formData.description || ''}
@@ -294,30 +350,33 @@ export function PlannerEditorView({
           />
         </TextField>
 
-        <TextField className="w-full">
-          <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-            Participantes Convocados (@menciones de Discord)
+        <div className="flex flex-col gap-1.5 w-full">
+          <Label className="text-xs font-medium text-muted">
+            Participantes convocados (@menciones de Discord)
           </Label>
-          <Input
+          <PlannerMemberPicker
             value={formData.mentions || ''}
-            onChange={(e) => updateHeaderField('mentions', e.target.value)}
-            placeholder="@Usuario1 @Usuario2"
-            className="font-mono"
+            onChange={(val) => updateHeaderField('mentions', val)}
           />
-        </TextField>
+        </div>
       </Card>
 
-      {/* 2. Time Budget Bar (Using Native HeroUI v3 ProgressBar Anatomy) */}
-      <Card className="p-4 bg-surface border border-border rounded-xl">
-        <div className="flex items-center justify-between gap-4 mb-2 text-xs font-medium">
+      {/* 2. Presupuesto de Tiempo */}
+      <Card className="p-4 flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-4 text-xs font-medium">
           <div className="flex items-center gap-1.5">
-            <span>⏱️</span>
-            <strong className="text-foreground">Presupuesto de Tiempo</strong>
+            <Clock width={14} height={14} className="text-muted" />
+            <strong className="text-foreground">Presupuesto de tiempo</strong>
           </div>
-          <div className="font-mono text-muted text-xs">
-            <strong className="text-foreground">{totalAllocated}m</strong> / {targetDuration}m ({budgetPercentage}%)
+          <div className="text-muted text-xs flex items-center gap-1.5">
+            <strong className="text-foreground">{totalAllocated}m</strong> / {targetDuration}m
             {isOverBudget ? (
-              <span className="text-danger font-bold ml-2">⚠️ Excedido en {diffMinutes}m</span>
+              <span className="text-danger font-semibold ml-2 flex items-center gap-1">
+                <TriangleExclamation width={12} height={12} />
+                <span>Excedido en {diffMinutes}m</span>
+              </span>
+            ) : diffMinutes === 0 ? (
+              <span className="text-success font-medium ml-2">· Tiempo exacto</span>
             ) : (
               <span className="text-muted ml-2">· {diffMinutes}m disponibles</span>
             )}
@@ -337,17 +396,17 @@ export function PlannerEditorView({
         </ProgressBar>
       </Card>
 
-      {/* 3. Bloques y Puntos de Revisión */}
-      <div className="flex flex-col gap-3.5">
+      {/* 3. Bloques de la Agenda */}
+      <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Bloques de la Agenda</h2>
+            <h2 className="text-base font-bold text-foreground">Bloques de la agenda</h2>
             <p className="text-xs text-muted">
-              Organiza los temas en bloques secuenciales.
+              Organiza los temas en bloques secuenciales con su respectiva duración.
             </p>
           </div>
           <Button variant="secondary" size="sm" onPress={addBlock}>
-            <Plus width={14} height={14} /> Añadir Bloque
+            <Plus width={14} height={14} /> Añadir bloque
           </Button>
         </div>
 
@@ -360,30 +419,28 @@ export function PlannerEditorView({
           </div>
         ) : (
           formData.blocks.map((block, bIdx) => {
-            const hasPoints = (block.subpoints || []).length > 0;
             return (
-              <Card key={block.id || bIdx} className="p-4 bg-surface border border-border rounded-xl flex flex-col gap-3">
+              <Card key={block.id || bIdx} className="p-4 sm:p-5 flex flex-col gap-3.5">
+                {/* Header del bloque */}
                 <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-0.5 rounded uppercase tracking-wider">
-                      Bloque #{bIdx + 1}
+                    <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-0.5 rounded">
+                      Bloque 0{bIdx + 1}
                     </span>
-                    <span className="text-xs text-muted font-mono font-medium">
-                      {block.durationMinutes} min {block.isAutoCalculated && '(suma automática)'}
+                    <span className="text-xs text-muted font-medium">
+                      {block.durationMinutes} min
                     </span>
                   </div>
 
                   <Dropdown>
-                    <Dropdown.Trigger>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        isIconOnly
-                        aria-label={`Opciones del bloque ${block.title}`}
-                      >
-                        <EllipsisVertical width={14} height={14} />
-                      </Button>
-                    </Dropdown.Trigger>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      isIconOnly
+                      aria-label={`Opciones del bloque ${block.title}`}
+                    >
+                      <EllipsisVertical width={14} height={14} />
+                    </Button>
                     <Dropdown.Popover>
                       <Dropdown.Menu
                         onAction={(key) => {
@@ -400,83 +457,78 @@ export function PlannerEditorView({
                   </Dropdown>
                 </div>
 
-                {/* Title */}
-                <TextField className="w-full">
-                  <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                    Título del Bloque
-                  </Label>
-                  <Input
-                    value={block.title}
-                    onChange={(e) => updateBlockField(bIdx, 'title', e.target.value)}
-                    placeholder="Título del bloque..."
-                    className="font-semibold text-foreground"
-                  />
-                </TextField>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Título y metadatos principales */}
+                <div className="flex flex-col gap-2.5">
                   <TextField className="w-full">
-                    <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                      Conduce
+                    <Label className="text-xs font-medium text-muted">
+                      Título del bloque
                     </Label>
                     <Input
-                      value={block.leader || ''}
-                      onChange={(e) => updateBlockField(bIdx, 'leader', e.target.value)}
-                      placeholder="Ej: Paula, Cami"
+                      value={block.title}
+                      onChange={(e) => updateBlockField(bIdx, 'title', e.target.value)}
+                      placeholder="Título del bloque..."
+                      className="font-semibold text-foreground text-sm"
                     />
                   </TextField>
 
-                  <TextField className="w-full">
-                    <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                      Participantes
-                    </Label>
-                    <Input
-                      value={block.participants || ''}
-                      onChange={(e) => updateBlockField(bIdx, 'participants', e.target.value)}
-                      placeholder="Ej: Todo el equipo"
-                    />
-                  </TextField>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <TextField className="w-full">
+                      <Label className="text-xs font-medium text-muted">
+                        Conduce
+                      </Label>
+                      <Input
+                        value={block.leader || ''}
+                        onChange={(e) => updateBlockField(bIdx, 'leader', e.target.value)}
+                        placeholder="Ej: Paula, Cami"
+                      />
+                    </TextField>
 
-                  <TextField className="w-full">
-                    <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                      Duración Manual
-                    </Label>
-                    <Input
-                      value={hasPoints ? `${block.durationMinutes} min (auto)` : `${block.manualDuration || block.durationMinutes} min`}
-                      disabled={hasPoints}
-                      onChange={(e) => updateBlockManualDuration(bIdx, e.target.value)}
-                      className="font-mono text-center"
-                      title={hasPoints ? 'La duración se calcula automáticamente con la suma de los puntos' : 'Duración asignada manualmente'}
-                    />
-                  </TextField>
+                    <TextField className="w-full">
+                      <Label className="text-xs font-medium text-muted">
+                        Participantes
+                      </Label>
+                      <Input
+                        value={block.participants || ''}
+                        onChange={(e) => updateBlockField(bIdx, 'participants', e.target.value)}
+                        placeholder="Ej: Todo el equipo"
+                      />
+                    </TextField>
+
+                    <TextField className="w-full">
+                      <Label className="text-xs font-medium text-muted">
+                        Duración del bloque
+                      </Label>
+                      <Input
+                        value={`${block.durationMinutes}m`}
+                        onChange={(e) => updateBlockDuration(bIdx, e.target.value)}
+                        placeholder="ej: 30m, 1h"
+                        className="text-center font-medium"
+                      />
+                    </TextField>
+                  </div>
                 </div>
 
-                {/* Subpoints section */}
+                {/* Sección de Puntos de Revisión con Progressive Disclosure (sin tiempo individual) */}
                 <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                  <div className="flex items-center justify-between text-xs text-muted font-semibold uppercase tracking-wider">
-                    <span>Puntos de Revisión ({block.subpoints?.length || 0})</span>
+                  <div className="flex items-center justify-between text-xs text-muted font-medium">
+                    <span>Puntos de revisión ({block.subpoints?.length || 0})</span>
                   </div>
 
                   <div className="flex flex-col gap-2">
                     {(block.subpoints || []).map((p, pIdx) => {
-                      const currentRaw = (p.rawTime || '').trim().toLowerCase();
-                      const matchedPreset = PRESET_DURATIONS.find(
-                        (pr) => currentRaw === pr || currentRaw === `${pr.replace('m', '')} min`
-                      );
-
                       return (
                         <div
                           key={p.id || pIdx}
-                          className="flex items-start gap-2 p-2.5 rounded-lg bg-surface-secondary/40 border border-border"
+                          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 rounded-lg bg-surface-secondary/40"
                         >
-                          {/* Reorder controls */}
-                          <div className="flex flex-col gap-0.5 pt-0.5 shrink-0">
+                          {/* Flechitas directas para cambiar de posición */}
+                          <div className="flex items-center gap-0.5 shrink-0 self-end sm:self-center">
                             <Button
                               variant="ghost"
                               size="sm"
                               isIconOnly
                               onPress={() => moveSubpoint(bIdx, pIdx, -1)}
-                              disabled={pIdx === 0}
-                              className="h-6 w-6 p-0 min-w-0 text-muted hover:text-foreground disabled:opacity-20"
+                              isDisabled={pIdx === 0}
                               aria-label="Subir punto"
                             >
                               <ChevronUp width={14} height={14} />
@@ -486,91 +538,64 @@ export function PlannerEditorView({
                               size="sm"
                               isIconOnly
                               onPress={() => moveSubpoint(bIdx, pIdx, 1)}
-                              disabled={pIdx === (block.subpoints.length - 1)}
-                              className="h-6 w-6 p-0 min-w-0 text-muted hover:text-foreground disabled:opacity-20"
+                              isDisabled={pIdx === (block.subpoints.length - 1)}
                               aria-label="Bajar punto"
                             >
                               <ChevronDown width={14} height={14} />
                             </Button>
                           </div>
 
-                          <div className="flex-1 flex flex-col gap-2">
-                            <TextField className="w-full">
-                              <Input
-                                value={p.title}
-                                onChange={(e) => updateSubpointField(bIdx, pIdx, 'title', e.target.value)}
-                                placeholder="Tema a revisar (ej: Prototipo navegable)..."
-                                aria-label={`Tema del punto ${pIdx + 1}`}
-                                className="w-full font-medium text-foreground bg-transparent"
-                              />
-                            </TextField>
-
-                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border text-xs">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs text-muted font-medium">Presets:</span>
-                                <ToggleButtonGroup
-                                  selectionMode="single"
-                                  size="sm"
-                                  selectedKeys={matchedPreset ? [matchedPreset] : []}
-                                  onSelectionChange={(keys) => {
-                                    const selected = [...keys][0];
-                                    if (selected) {
-                                      setQuickSubpointTime(bIdx, pIdx, String(selected));
-                                    }
-                                  }}
-                                >
-                                  {PRESET_DURATIONS.map((timePreset, i) => (
-                                    <ToggleButton key={timePreset} id={timePreset} aria-label={timePreset}>
-                                      {i > 0 && <ToggleButtonGroup.Separator />}
-                                      {timePreset}
-                                    </ToggleButton>
-                                  ))}
-                                </ToggleButtonGroup>
-
-                                <TextField className="w-20">
-                                  <Input
-                                    value={p.rawTime || ''}
-                                    onChange={(e) => updateSubpointField(bIdx, pIdx, 'rawTime', e.target.value)}
-                                    placeholder="Tiempo"
-                                    aria-label="Tiempo personalizado"
-                                    className="font-mono text-center"
-                                  />
-                                </TextField>
-
-                                <TextField className="w-32">
-                                  <Input
-                                    value={p.presenter || ''}
-                                    onChange={(e) => updateSubpointField(bIdx, pIdx, 'presenter', e.target.value)}
-                                    placeholder="👤 Presentador"
-                                    aria-label="Presentador asignado"
-                                  />
-                                </TextField>
-                              </div>
-
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                isIconOnly
-                                onPress={() => removeSubpoint(bIdx, pIdx)}
-                                className="text-danger hover:text-danger h-7 w-7 p-0 min-w-0"
-                                aria-label={`Eliminar punto ${p.title || pIdx + 1}`}
-                              >
-                                <TrashBin width={14} height={14} />
-                              </Button>
-                            </div>
+                          {/* Input del Título del punto */}
+                          <div className="flex-1 min-w-0">
+                            <Input
+                              value={p.title}
+                              onChange={(e) => updateSubpointField(bIdx, pIdx, 'title', e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addSubpoint(bIdx);
+                                }
+                              }}
+                              placeholder="Tema a revisar... [Enter para añadir siguiente]"
+                              className="font-medium text-foreground text-sm w-full"
+                              aria-label={`Tema del punto ${pIdx + 1}`}
+                            />
                           </div>
+
+                          {/* Input del Responsable */}
+                          <div className="w-full sm:w-48 shrink-0">
+                            <Input
+                              value={p.presenter || ''}
+                              onChange={(e) => updateSubpointField(bIdx, pIdx, 'presenter', e.target.value)}
+                              placeholder="Responsable (@Nombre)"
+                              className="text-xs w-full"
+                              aria-label="Responsable asignado"
+                            />
+                          </div>
+
+                          {/* Botón Eliminar */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            isIconOnly
+                            onPress={() => removeSubpoint(bIdx, pIdx)}
+                            aria-label={`Eliminar punto ${p.title || pIdx + 1}`}
+                            className="text-danger shrink-0 self-end sm:self-center"
+                          >
+                            <TrashBin width={14} height={14} />
+                          </Button>
                         </div>
                       );
                     })}
                   </div>
 
                   <Button
-                    variant="secondary"
+                    variant="ghost"
                     size="sm"
                     onPress={() => addSubpoint(bIdx)}
-                    className="w-full border-dashed mt-1"
+                    className="w-full justify-start text-xs text-muted hover:text-foreground mt-1"
                   >
-                    <Plus width={14} height={14} /> Añadir Punto de Revisión
+                    <Plus width={13} height={13} /> Añadir punto de revisión
                   </Button>
                 </div>
               </Card>
@@ -582,47 +607,47 @@ export function PlannerEditorView({
           variant="secondary"
           size="md"
           onPress={addBlock}
-          className="w-full border-dashed py-3 font-semibold"
+          className="w-full py-3 font-semibold"
         >
-          <Plus width={16} height={16} /> Añadir Nuevo Bloque a la Agenda
+          <Plus width={15} height={15} /> Añadir nuevo bloque a la agenda
         </Button>
       </div>
 
-      {/* AlertDialog de confirmación destructiva oficial de HeroUI v3 */}
+      {/* AlertDialog de confirmación destructiva */}
       {blockToDelete && (
         <AlertDialog isOpen={!!blockToDelete} onOpenChange={(open) => !open && setBlockToDelete(null)}>
-          <AlertDialog.Backdrop />
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px] p-5 rounded-2xl bg-surface border border-border shadow-2xl">
-              <AlertDialog.CloseTrigger />
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading className="text-base font-bold text-foreground">
-                  ¿Eliminar este bloque de la agenda?
-                </AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="text-xs text-muted mt-2">
-                <p>
-                  Se eliminará <strong>&ldquo;{blockToDelete.title}&rdquo;</strong> con sus{' '}
-                  <strong>{blockToDelete.pointsCount} puntos de revisión</strong> y notas asociadas.
-                </p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="mt-4 flex items-center justify-end gap-2">
-                <Button slot="close" variant="ghost" size="sm" onPress={() => setBlockToDelete(null)}>
-                  Cancelar
-                </Button>
-                <Button
-                  slot="close"
-                  variant="danger"
-                  size="sm"
-                  className="font-semibold"
-                  onPress={() => executeDeleteBlock(blockToDelete.index)}
-                >
-                  Eliminar Bloque
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
+          <AlertDialog.Backdrop>
+            <AlertDialog.Container>
+              <AlertDialog.Dialog className="sm:max-w-[420px]">
+                <AlertDialog.CloseTrigger />
+                <AlertDialog.Header>
+                  <AlertDialog.Icon status="danger" />
+                  <AlertDialog.Heading className="text-base font-bold text-foreground">
+                    ¿Eliminar este bloque de la agenda?
+                  </AlertDialog.Heading>
+                </AlertDialog.Header>
+                <AlertDialog.Body className="text-xs text-muted mt-2">
+                  <p>
+                    Se eliminará <strong>&ldquo;{blockToDelete.title}&rdquo;</strong> con sus{' '}
+                    <strong>{blockToDelete.pointsCount} puntos de revisión</strong> y notas asociadas.
+                  </p>
+                </AlertDialog.Body>
+                <AlertDialog.Footer className="mt-4 flex items-center justify-end gap-2">
+                  <Button slot="close" variant="ghost" size="sm" onPress={() => setBlockToDelete(null)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    slot="close"
+                    variant="danger"
+                    size="sm"
+                    onPress={() => executeDeleteBlock(blockToDelete.index)}
+                  >
+                    Eliminar bloque
+                  </Button>
+                </AlertDialog.Footer>
+              </AlertDialog.Dialog>
+            </AlertDialog.Container>
+          </AlertDialog.Backdrop>
         </AlertDialog>
       )}
     </div>

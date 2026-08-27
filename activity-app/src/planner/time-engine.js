@@ -71,44 +71,19 @@ export function computePlannerTimes(plannerState) {
   let grandTotalMinutes = 0;
 
   const computedBlocks = (plannerState.blocks || []).map(block => {
-    let pointsSum = 0;
-    let pointsWithDuration = 0;
+    const duration = parseSmartDuration(block.durationMinutes ?? block.manualDuration) || 30;
+    grandTotalMinutes += duration;
 
-    const computedSubpoints = (block.subpoints || []).map(p => {
-      const parsed = parseSmartDuration(p.rawTime);
-      if (parsed && parsed > 0) {
-        pointsSum += parsed;
-        pointsWithDuration++;
-      }
-      return {
-        ...p,
-        durationMinutes: parsed || 0,
-      };
-    });
-
-    const context = Number(block.phases?.context || 0);
-    const closing = Number(block.phases?.closing || 0);
-
-    let durationMinutes = 0;
-    let isAutoCalculated = false;
-    const phases = block.phases ? {...block.phases} : {context: 5, review: 0, closing: 5};
-
-    if (pointsWithDuration > 0) {
-      phases.review = pointsSum;
-      durationMinutes = context + pointsSum + closing;
-      isAutoCalculated = true;
-    } else {
-      durationMinutes = Number(block.manualDuration || block.durationMinutes || 30);
-      isAutoCalculated = false;
-    }
-
-    grandTotalMinutes += durationMinutes;
+    const computedSubpoints = (block.subpoints || []).map(p => ({
+      ...p,
+      title: p.title || '',
+      presenter: p.presenter || '',
+      status: p.status || 'pending',
+    }));
 
     return {
       ...block,
-      durationMinutes,
-      isAutoCalculated,
-      phases,
+      durationMinutes: duration,
       subpoints: computedSubpoints,
     };
   });
