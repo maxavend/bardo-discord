@@ -21,6 +21,7 @@ import {
 } from '@gravity-ui/icons';
 import {
   SESSION_STATUS,
+  getPointCounts,
   recalculateEstimatedEndTime,
 } from './session-runner.js';
 import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
@@ -90,14 +91,24 @@ export function PlannerSessionHeader({
     totalCalculatedDuration = 0,
     host = '',
     mentions = '',
-    blocks = [],
   } = state;
 
-  const totalPoints = blocks.reduce((acc, b) => acc + (b.subpoints || []).length, 0);
-  const completedPoints = blocks.reduce(
-    (acc, b) => acc + (b.subpoints || []).filter((p) => p.status === 'done').length,
-    0
-  );
+  const pointCounts = sessionState?.status && sessionState.status !== SESSION_STATUS.IDLE
+    ? getPointCounts(state, sessionState)
+    : {
+        total: (state.blocks || []).reduce((acc, block) => acc + (block.subpoints || []).length, 0),
+        done: (state.blocks || []).reduce(
+          (acc, block) => acc + (block.subpoints || []).filter((point) => point.status === 'done').length,
+          0
+        ),
+        skipped: (state.blocks || []).reduce(
+          (acc, block) => acc + (block.subpoints || []).filter((point) => point.status === 'skipped').length,
+          0
+        ),
+      };
+  const totalPoints = pointCounts.total;
+  const completedPoints = pointCounts.done;
+  const skippedPoints = pointCounts.skipped || 0;
   const progressPercent = totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0;
 
   const isRunning = sessionState?.status === SESSION_STATUS.RUNNING;
@@ -110,15 +121,8 @@ export function PlannerSessionHeader({
   const formattedDuration = formatHeaderDuration(totalCalculatedDuration);
   const participantsList = parseMentions(mentions);
 
-  // Progressive sticky scroll detector
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 140) {
-        setIsSticky(true);
-      } else {
-        setIsSticky(false);
-      }
-    };
+    const handleScroll = () => setIsSticky(window.scrollY > 140);
     window.addEventListener('scroll', handleScroll, {passive: true});
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -126,16 +130,12 @@ export function PlannerSessionHeader({
   return (
     <header className="w-full max-w-4xl mx-auto pt-2 pb-3 animate-in fade-in duration-150">
       <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
-        {/* Timeline Column / Back Navigation on desktop */}
         <div className="hidden sm:flex items-center justify-end pr-2 pt-1 select-none">
           <button
             type="button"
             onClick={() => {
-              if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') {
-                onTabChange('agenda');
-              } else {
-                window.location.hash = '';
-              }
+              if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') onTabChange('agenda');
+              else window.location.hash = '';
             }}
             aria-label="Volver"
             className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary/60 transition-colors cursor-pointer"
@@ -144,18 +144,13 @@ export function PlannerSessionHeader({
           </button>
         </div>
 
-        {/* Content Column: Main Header Body */}
         <div className="flex flex-col gap-3 min-w-0 w-full">
-          {/* Mobile Back Button */}
           <div className="flex sm:hidden items-center justify-between">
             <button
               type="button"
               onClick={() => {
-                if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') {
-                  onTabChange('agenda');
-                } else {
-                  window.location.hash = '';
-                }
+                if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') onTabChange('agenda');
+                else window.location.hash = '';
               }}
               className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground font-medium transition-colors cursor-pointer"
             >
@@ -164,81 +159,49 @@ export function PlannerSessionHeader({
             </button>
           </div>
 
-          {/* 1. Title Row & Action Cluster */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border/40 pb-3">
             <div className="flex flex-col gap-1.5 flex-1 min-w-0">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">
-                  {title}
-                </h1>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">{title}</h1>
 
-                {/* Status Badges */}
                 {isRunning && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent/15 text-accent select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                    En curso
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" /> En curso
                   </span>
                 )}
                 {isPaused && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning select-none">
-                    En pausa
-                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning select-none">En pausa</span>
                 )}
                 {isCompleted && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success select-none">
-                    <Check width={11} height={11} />
-                    Finalizada
+                    <Check width={11} height={11} /> Finalizada
                   </span>
                 )}
                 {isInterrupted && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning select-none">
-                    Interrumpida
-                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning select-none">Interrumpida</span>
                 )}
                 {!isRunning && !isPaused && !isCompleted && !isInterrupted && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-secondary text-muted select-none">
-                    Próxima
-                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-secondary text-muted select-none">Próxima</span>
                 )}
               </div>
             </div>
 
-            {/* Header Action Cluster */}
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
               {!isRunning && !isPaused && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onPress={onCopyAnnouncement}
-                  className="text-xs text-muted hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
-                >
-                  <Copy width={13} height={13} />
-                  <span>Copiar anuncio</span>
+                <Button variant="ghost" size="sm" onPress={onCopyAnnouncement} className="text-xs text-muted hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium">
+                  <Copy width={13} height={13} /> <span>Copiar anuncio</span>
                 </Button>
               )}
 
               {!isRunning && !isPaused && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onPress={onOpenEditor}
-                  className="text-xs text-muted hover:text-foreground hidden md:inline-flex h-8 px-2.5 font-medium"
-                >
-                  <Pencil width={13} height={13} />
-                  <span>Editar</span>
+                <Button variant="ghost" size="sm" onPress={onOpenEditor} className="text-xs text-muted hover:text-foreground hidden md:inline-flex h-8 px-2.5 font-medium">
+                  <Pencil width={13} height={13} /> <span>Editar</span>
                 </Button>
               )}
 
-              {/* Overflow Dropdown */}
               <Dropdown>
                 <Dropdown.Trigger>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    isIconOnly
-                    aria-label="Más opciones de la sesión"
-                    className="h-8 w-8 text-muted hover:text-foreground"
-                  >
+                  <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones de la sesión" className="h-8 w-8 text-muted hover:text-foreground">
                     <EllipsisVertical width={14} height={14} />
                   </Button>
                 </Dropdown.Trigger>
@@ -297,73 +260,40 @@ export function PlannerSessionHeader({
                 </Dropdown.Popover>
               </Dropdown>
 
-              {/* Contextual Primary Action */}
               {isInterrupted && onResumeSession && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onPress={onResumeSession}
-                  className="font-medium h-8 px-3.5"
-                >
-                  <Play width={13} height={13} />
-                  <span>Reanudar sesión</span>
+                <Button variant="primary" size="sm" onPress={onResumeSession} className="font-medium h-8 px-3.5">
+                  <Play width={13} height={13} /> <span>Reanudar sesión</span>
                 </Button>
               )}
 
               {!isRunning && !isPaused && !isCompleted && !isInterrupted && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onPress={onStartSession}
-                  className="font-medium h-8 px-3.5"
-                >
-                  <Play width={13} height={13} />
-                  <span>Iniciar sesión</span>
+                <Button variant="primary" size="sm" onPress={onStartSession} className="font-medium h-8 px-3.5">
+                  <Play width={13} height={13} /> <span>Iniciar sesión</span>
                 </Button>
               )}
 
               {(isRunning || isPaused) && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => onTabChange('minutes')}
-                  className="font-medium h-8 px-3"
-                >
-                  <FileText width={13} height={13} />
-                  <span>Ver acta</span>
+                <Button variant="secondary" size="sm" onPress={() => onTabChange('minutes')} className="font-medium h-8 px-3">
+                  <FileText width={13} height={13} /> <span>Ver acta</span>
                 </Button>
               )}
 
               {isCompleted && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onPress={() => onTabChange('recap')}
-                  className="font-medium h-8 px-3.5"
-                >
-                  <FileText width={13} height={13} />
-                  <span>Ver resumen</span>
+                <Button variant="primary" size="sm" onPress={() => onTabChange('recap')} className="font-medium h-8 px-3.5">
+                  <FileText width={13} height={13} /> <span>Ver resumen</span>
                 </Button>
               )}
             </div>
           </div>
 
-          {/* 2. Metadata Line */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted font-normal">
             {formattedDate && <span>{formattedDate}</span>}
             {formattedDate && <span className="text-muted/40">·</span>}
-
             <span>{startTime}–{estimatedEndTime}</span>
             <span className="text-muted/40">·</span>
-
             <span>{formattedDuration}</span>
             {host && <span className="text-muted/40">·</span>}
-
-            {host && (
-              <span className="text-foreground/90 font-medium">
-                {host}
-              </span>
-            )}
+            {host && <span className="text-foreground/90 font-medium">{host}</span>}
 
             {participantsList.length > 0 && (
               <>
@@ -378,26 +308,21 @@ export function PlannerSessionHeader({
                       <div className="flex items-center -space-x-1.5">
                         {participantsList.slice(0, 3).map((tag, i) => {
                           const matched = DEFAULT_DISCORD_MEMBERS.find(
-                            (m) => m.tag.toLowerCase() === tag.toLowerCase() || `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                            (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
                           );
                           const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                          const initials = getInitials(matched?.globalName || tag);
                           return (
                             <div
                               key={i}
                               style={{backgroundColor: `${color}35`, color}}
                               className="w-5 h-5 rounded-full border border-background flex items-center justify-center text-[9px] font-bold shadow-2xs"
                             >
-                              {initials}
+                              {getInitials(matched?.globalName || tag)}
                             </div>
                           );
                         })}
                       </div>
-                      {participantsList.length > 3 && (
-                        <span className="text-[11px] font-medium text-muted">
-                          +{participantsList.length - 3}
-                        </span>
-                      )}
+                      {participantsList.length > 3 && <span className="text-[11px] font-medium text-muted">+{participantsList.length - 3}</span>}
                     </button>
                   </Popover.Trigger>
                   <Popover.Content className="w-64 p-3 rounded-xl bg-surface border border-border shadow-xl">
@@ -408,7 +333,7 @@ export function PlannerSessionHeader({
                       <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
                         {participantsList.map((tag, i) => {
                           const matched = DEFAULT_DISCORD_MEMBERS.find(
-                            (m) => m.tag.toLowerCase() === tag.toLowerCase() || `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                            (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
                           );
                           const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                           return (
@@ -419,9 +344,7 @@ export function PlannerSessionHeader({
                               >
                                 {getInitials(matched?.globalName || tag)}
                               </div>
-                              <span className="font-medium text-foreground truncate">
-                                {matched?.globalName || tag}
-                              </span>
+                              <span className="font-medium text-foreground truncate">{matched?.globalName || tag}</span>
                             </div>
                           );
                         })}
@@ -433,68 +356,45 @@ export function PlannerSessionHeader({
             )}
           </div>
 
-          {/* 3. Progress Bar (Solo en modo inactivo cuando hay puntos definidos) */}
           {!isRunning && !isPaused && totalPoints > 0 && (
             <div className="flex items-center justify-between gap-3 pt-1">
               <span className="text-xs font-medium text-foreground shrink-0">
-                {completedPoints} de {totalPoints} puntos revisados
+                {completedPoints} de {totalPoints} puntos tratados{skippedPoints > 0 ? ` · ${skippedPoints} saltados` : ''}
               </span>
-
-              <ProgressBar
-                aria-label="Progreso de temas revisados en la sesión"
-                value={progressPercent}
-                color="accent"
-                size="sm"
-                className="flex-1 max-w-sm"
-              >
-                <ProgressBar.Track>
-                  <ProgressBar.Fill />
-                </ProgressBar.Track>
+              <ProgressBar aria-label="Progreso de puntos tratados en la sesión" value={progressPercent} color="accent" size="sm" className="flex-1 max-w-sm">
+                <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
               </ProgressBar>
-
-              <span className="text-xs font-semibold text-muted shrink-0 tabular-nums">
-                {progressPercent}%
-              </span>
+              <span className="text-xs font-semibold text-muted shrink-0 tabular-nums">{progressPercent}%</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* 4. Progressive Sticky Header */}
       {isSticky && (
         <div className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border py-2.5 px-4 shadow-sm transition-all animate-in fade-in duration-200">
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-sm font-bold text-foreground truncate">
-                {title}
-              </span>
-              <span className="text-xs text-muted hidden sm:inline">·</span>
-              <span className="text-xs text-muted/90 font-medium shrink-0 hidden sm:inline">
-                {completedPoints}/{totalPoints} revisados ({progressPercent}%)
-              </span>
+              <span className="text-sm font-bold text-foreground truncate">{title}</span>
+              {totalPoints > 0 && <span className="text-xs text-muted hidden sm:inline">·</span>}
+              {totalPoints > 0 && (
+                <span className="text-xs text-muted/90 font-medium shrink-0 hidden sm:inline">
+                  {completedPoints}/{totalPoints} tratados{skippedPoints > 0 ? ` · ${skippedPoints} saltados` : ''}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               {!isRunning && !isPaused && !isCompleted && (
                 <Button variant="primary" size="sm" onPress={onStartSession}>
-                  <Play width={12} height={12} />
-                  <span>Iniciar</span>
+                  <Play width={12} height={12} /> <span>Iniciar</span>
                 </Button>
               )}
               {isCompleted && (
                 <Button variant="primary" size="sm" onPress={() => onTabChange('recap')}>
-                  <FileText width={12} height={12} />
-                  <span>Resumen</span>
+                  <FileText width={12} height={12} /> <span>Resumen</span>
                 </Button>
               )}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                onPress={onOpenEditor}
-                aria-label="Editar sesión"
-              >
+              <Button variant="ghost" size="sm" isIconOnly onPress={onOpenEditor} aria-label="Editar sesión">
                 <Pencil width={13} height={13} />
               </Button>
             </div>
