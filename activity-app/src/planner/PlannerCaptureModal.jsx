@@ -8,9 +8,7 @@ import {
   Select,
   ListBox,
 } from '@heroui/react';
-import {
-  CircleCheck,
-} from '@gravity-ui/icons';
+import {CircleCheck} from '@gravity-ui/icons';
 
 export function PlannerCaptureModal({
   isOpen,
@@ -18,6 +16,8 @@ export function PlannerCaptureModal({
   onSubmit,
   initialBlockId = null,
   blocks = [],
+  lockContext = false,
+  contextLabel = '',
 }) {
   const [content, setContent] = useState('');
   const [selectedBlockId, setSelectedBlockId] = useState(() => initialBlockId || blocks[0]?.id || '');
@@ -31,8 +31,8 @@ export function PlannerCaptureModal({
     }
   }, [isOpen, initialBlockId, blocks]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = (event) => {
+    event.preventDefault();
     if (!content.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
@@ -56,46 +56,49 @@ export function PlannerCaptureModal({
             <Modal.Header>
               <Modal.Heading className="text-base font-semibold text-foreground flex items-center gap-2">
                 <CircleCheck width={16} height={16} className="text-success" />
-                <span>Registrar acuerdo / decisión</span>
+                Registrar acuerdo / decisión
               </Modal.Heading>
             </Modal.Header>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <Modal.Body className="flex flex-col gap-3.5">
-                {blocks.length > 0 && (
+                {lockContext ? (
+                  contextLabel && (
+                    <div className="text-xs text-muted">
+                      Contexto actual
+                      <strong className="block text-foreground font-medium mt-0.5">{contextLabel}</strong>
+                    </div>
+                  )
+                ) : blocks.length > 0 ? (
                   <Select
                     fullWidth
                     selectedKey={selectedBlockId || blocks[0]?.id}
                     onSelectionChange={(key) => setSelectedBlockId(String(key))}
                     variant="secondary"
                   >
-                    <Label className="text-xs font-medium text-muted">
-                      Bloque asociado
-                    </Label>
+                    <Label className="text-xs font-medium text-muted">Bloque asociado</Label>
                     <Select.Trigger>
                       <Select.Value />
                       <Select.Indicator />
                     </Select.Trigger>
                     <Select.Popover>
                       <ListBox>
-                        {blocks.map((b, idx) => (
-                          <ListBox.Item key={b.id} id={b.id} textValue={`Bloque 0${idx + 1}: ${b.title}`}>
-                            Bloque 0{idx + 1}: {b.title}
+                        {blocks.map((block, index) => (
+                          <ListBox.Item key={block.id} id={block.id} textValue={`Bloque 0${index + 1}: ${block.title}`}>
+                            Bloque 0{index + 1}: {block.title}
                             <ListBox.ItemIndicator />
                           </ListBox.Item>
                         ))}
                       </ListBox>
                     </Select.Popover>
                   </Select>
-                )}
+                ) : null}
 
                 <TextField isRequired className="w-full">
-                  <Label className="text-xs font-medium text-muted">
-                    Detalle del acuerdo o decisión
-                  </Label>
+                  <Label className="text-xs font-medium text-muted">Detalle del acuerdo o decisión</Label>
                   <TextArea
                     value={content}
-                    onChange={(e) => setContent(e.target.value)}
+                    onChange={(event) => setContent(event.target.value)}
                     placeholder="Ej: Se aprueba la propuesta de navegación y se definen los siguientes pasos..."
                     autoFocus
                   />
@@ -103,9 +106,7 @@ export function PlannerCaptureModal({
               </Modal.Body>
 
               <Modal.Footer className="flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" size="sm" onPress={onClose} isDisabled={isSubmitting}>
-                  Cancelar
-                </Button>
+                <Button type="button" variant="ghost" size="sm" onPress={onClose} isDisabled={isSubmitting}>Cancelar</Button>
                 <Button type="submit" variant="primary" size="sm" isDisabled={!content.trim() || isSubmitting}>
                   {isSubmitting ? 'Guardando…' : 'Guardar acuerdo'}
                 </Button>
