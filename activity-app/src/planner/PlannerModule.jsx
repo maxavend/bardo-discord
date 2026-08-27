@@ -23,10 +23,12 @@ import {
 import {computePlannerTimes} from './time-engine.js';
 import {
   SESSION_STATUS,
+  POINT_STATUS,
   createLiveSession,
   pauseLiveSession,
   resumeLiveSession,
-  advanceToNextBlock,
+  advanceLiveSession,
+  skipActivePoint,
   skipActiveBlock,
   extendActiveBlock,
   setUnlimitedActiveBlock,
@@ -36,79 +38,123 @@ import {
   saveFinalizedRecording,
   renameRecordingInSession,
   deleteRecordingFromSession,
-  dismissBlockRecordingPrompt,
+  dismissRecordingPrompt,
   getElapsedSessionMs,
+  setPointStatus,
+  getActiveBlock,
+  getActivePoint,
 } from './session-runner.js';
 import {
   evaluateSessionAssistant,
   ASSISTANT_EVENT,
   formatMsToClock,
 } from './session-assistant-engine.js';
+import {RecordingController, RECORDING_STATUS} from './recording-controller.js';
 import {
-  RecordingController,
-  RECORDING_STATUS,
-} from './recording-controller.js';
+  recordingStorage,
+  persistRecordingBinary,
+  hydrateRecordingBinary,
+} from './recording-storage.js';
 
 export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
-  const [sessionState, setSessionState] = useState(loadLiveSessionState);
+  const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [activeTab, setActiveTab] = useState(initialTab);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
   const [recordingStatus, setRecordingStatus] = useState(RECORDING_STATUS.IDLE);
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [dismissedUpcomingBanner, setDismissedUpcomingBanner] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Modals
-  const [captureModal, setCaptureModal] = useState({
-    isOpen: false,
-    blockId: null,
-  });
-
-  const [saveRecordingModal, setSaveRecordingModal] = useState({
-    isOpen: false,
-    recordingEntity: null,
-  });
-
-  const [interruptModal, setInterruptModal] = useState({
-    isOpen: false,
-  });
+  const [captureModal, setCaptureModal] = useState({isOpen: false, blockId: null});
+  const [saveRecordingModal, setSaveRecordingModal] = useState({isOpen: false, recordingEntity: null});
+  const [interruptModal, setInterruptModal] = useState({isOpen: false});
 
   const recordingControllerRef = useRef(null);
   const warned5MinBlockIdsRef = useRef(new Set());
+  const transitionLockRef = useRef(false);
+  const sessionStateRef = useRef(sessionState);
+  const plannerStateRef = useRef(plannerState);
+  const hydratedSessionIdsRef = useRef(new Set());
 
-  // Initialize Recording Controller singleton with cleanup
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+  }, [sessionState]);
+
+  useEffect(() => {
+    plannerStateRef.current = plannerState;
+  }, [plannerState]);
+
   useEffect(() => {
     const controller = new RecordingController({
-      onStatusChange: (status) => setRecordingStatus(status),
-      onError: (err) => {
-        toast(`Error en el micrófono: ${err.message || 'Permiso no otorgado'}`);
-      },
+      onStatusChange: setRecordingStatus,
+      onError: (error) => toast(`Error en el micrófono: ${error.message || 'Permiso no otorgado'}`),
     });
     recordingControllerRef.current = controller;
-
-    return () => {
-      controller.cleanup();
-    };
+    return () => controller.cleanup({clearContext: true});
   }, []);
 
-  // Real clock tick for UI updates (immune to sleep/throttling)
   useEffect(() => {
     const interval = setInterval(() => {
       const current = Date.now();
       setNowTimestamp(current);
-
       if (recordingControllerRef.current?.isActive()) {
         setRecordingElapsedMs(recordingControllerRef.current.getElapsedRecordingMs(current));
       }
     }, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
-  // Compute assistant state
+  // Restore binary audio from IndexedDB after metadata is loaded from localStorage.
+  useEffect(() => {
+    const sessionId = sessionState.sessionId;
+    if (!sessionId || hydratedSessionIdsRef.current.has(sessionId)) return;
+    hydratedSessionIdsRef.current.add(sessionId);
+    const candidates = (sessionState.recordings || []).filter(
+      (recording) => recording.binaryStorage === 'indexeddb' && !recording.blobUrl
+    );
+    if (candidates.length === 0) return;
+
+    let cancelled = false;
+    void Promise.all(candidates.map((recording) => hydrateRecordingBinary(recording))).then((hydrated) => {
+      if (cancelled) return;
+      setSessionState((previous) => {
+        const byId = new Map(hydrated.map((recording) => [recording.id, recording]));
+        const next = {
+          ...previous,
+          recordings: (previous.recordings || []).map((recording) => byId.get(recording.id) || recording),
+        };
+        sessionStateRef.current = next;
+        saveLiveSessionState(next);
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionState.sessionId]);
+
+  // MediaRecorder cannot survive reload. This is a best-effort pagehide flush only;
+  // the browser is not guaranteed to wait for asynchronous IndexedDB completion.
+  useEffect(() => {
+    const handlePageHide = () => {
+      const controller = recordingControllerRef.current;
+      if (!controller?.isActive()) return;
+      void controller.finalizeRecording().then(async (entity) => {
+        if (!entity) return;
+        const persisted = await persistRecordingBinary(entity);
+        const next = saveFinalizedRecording(sessionStateRef.current, persisted);
+        sessionStateRef.current = next;
+        saveLiveSessionState(next);
+      });
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, []);
+
   const assistantEvaluation = evaluateSessionAssistant(plannerState, sessionState, nowTimestamp);
 
-  // Discrete 5-min warning notification (emitted once per block cycle)
   useEffect(() => {
     if (
       assistantEvaluation.event === ASSISTANT_EVENT.BLOCK_5_MIN_REMAINING &&
@@ -116,397 +162,386 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
       !warned5MinBlockIdsRef.current.has(assistantEvaluation.activeBlock.id)
     ) {
       warned5MinBlockIdsRef.current.add(assistantEvaluation.activeBlock.id);
-      toast(`⏱ Quedan 5 minutos para terminar "${assistantEvaluation.activeBlock.title}"`);
+      toast(`⏱ Quedan 5 minutos en “${assistantEvaluation.activeBlock.title}”`);
     }
   }, [assistantEvaluation]);
 
-  // Tab switching helper
-  const handleTabChange = (key) => {
+  const handleTabChange = useCallback((key) => {
     setActiveTab(key);
     onSwitchTab?.(key);
-  };
+  }, [onSwitchTab]);
 
-  // State updates for planner schedule
+  const commitSessionState = useCallback((next) => {
+    sessionStateRef.current = next;
+    setSessionState(next);
+    saveLiveSessionState(next);
+  }, []);
+
+  const runAtomicTransition = useCallback(async (operation) => {
+    if (transitionLockRef.current) return;
+    transitionLockRef.current = true;
+    setIsTransitioning(true);
+    try {
+      await operation();
+    } finally {
+      transitionLockRef.current = false;
+      setIsTransitioning(false);
+    }
+  }, []);
+
+  const persistCapturedRecording = useCallback(async (entity) => {
+    if (!entity) return null;
+    const persisted = await persistRecordingBinary(entity);
+    if (persisted.status === 'error') {
+      toast('No se pudo persistir el audio. Sigue disponible en esta pestaña, pero no recargues hasta resolverlo.');
+    }
+    return persisted;
+  }, []);
+
+  const finalizeActiveRecording = useCallback(async () => {
+    const controller = recordingControllerRef.current;
+    if (!controller?.isActive()) return null;
+    const entity = await controller.finalizeRecording();
+    if (!entity) return null;
+    return persistCapturedRecording(entity);
+  }, [persistCapturedRecording]);
+
   const handlePlannerUpdate = useCallback((next) => {
     const computed = computePlannerTimes(next);
+    plannerStateRef.current = computed;
     setPlannerState(computed);
     savePlannerState(computed);
   }, []);
 
-  // Start Live Session
   const handleStartSession = useCallback(() => {
-    const newSession = createLiveSession(plannerState);
-    setSessionState(newSession);
-    saveLiveSessionState(newSession);
+    const next = createLiveSession(plannerStateRef.current);
+    commitSessionState(next);
     setActiveTab('agenda');
     toast('Sesión en vivo iniciada');
-  }, [plannerState]);
+  }, [commitSessionState]);
 
-  // Pause Session
   const handlePauseSession = useCallback(() => {
-    setSessionState((prev) => {
-      const next = pauseLiveSession(prev);
-      saveLiveSessionState(next);
-      return next;
-    });
+    const next = pauseLiveSession(sessionStateRef.current);
+    commitSessionState(next);
     if (recordingControllerRef.current?.isRecording()) {
       recordingControllerRef.current.pauseRecording();
     }
     toast('Sesión en pausa');
-  }, []);
+  }, [commitSessionState]);
 
-  // Resume Session
   const handleResumeSession = useCallback(() => {
-    setSessionState((prev) => {
-      let next;
-      if (prev.status === SESSION_STATUS.INTERRUPTED) {
-        next = resumeInterruptedSession(prev);
-      } else {
-        next = resumeLiveSession(prev);
-      }
-      saveLiveSessionState(next);
-      return next;
-    });
+    const current = sessionStateRef.current;
+    const next = current.status === SESSION_STATUS.INTERRUPTED
+      ? resumeInterruptedSession(current)
+      : resumeLiveSession(current);
+    commitSessionState(next);
     setActiveTab('agenda');
     toast('Sesión reanudada');
-  }, []);
+  }, [commitSessionState]);
 
-  // Internal Navigation Action: Advance to next block
-  const doAdvanceBlock = useCallback(() => {
-    setSessionState((prev) => {
-      const next = advanceToNextBlock(plannerState, prev);
-      saveLiveSessionState(next);
-      if (next.status === SESSION_STATUS.COMPLETED) {
-        setActiveTab('recap');
-        toast('Sesión finalizada. Mostrando resumen.');
-      } else {
-        const nextActive = (plannerState.blocks || []).find((b) => b.id === next.liveActiveBlockId);
-        toast(`Avanzado a: ${nextActive?.title || 'Siguiente bloque'}`);
-      }
-      return next;
-    });
-  }, [plannerState]);
+  const handleAdvance = useCallback(() => runAtomicTransition(async () => {
+    const outgoing = sessionStateRef.current;
+    const activePoint = getActivePoint(plannerStateRef.current, outgoing);
+    const activeBlock = getActiveBlock(plannerStateRef.current, outgoing);
+    const recording = await finalizeActiveRecording();
+    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
+    const next = advanceLiveSession(plannerStateRef.current, withRecording);
+    commitSessionState(next);
 
-  // Advance to next block with seamless auto-persist of active recording (zero friction)
-  const handleNextBlock = useCallback(async () => {
-    if (recordingControllerRef.current?.isActive()) {
-      const entity = await recordingControllerRef.current.finalizeRecording();
-      if (entity) {
-        setSessionState((prev) => {
-          const withRec = saveFinalizedRecording(prev, entity);
-          const next = advanceToNextBlock(plannerState, withRec);
-          saveLiveSessionState(next);
-          if (next.status === SESSION_STATUS.COMPLETED) {
-            setActiveTab('recap');
-          }
-          return next;
-        });
-        toast(`${entity.name} · ${formatMsToClock(entity.durationMs)} guardados`);
-        return;
-      }
+    if (recording) {
+      toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
     }
-    doAdvanceBlock();
-  }, [doAdvanceBlock, plannerState]);
-
-  // Skip block with seamless auto-persist of active recording
-  const handleSkipBlock = useCallback(async () => {
-    if (recordingControllerRef.current?.isActive()) {
-      const entity = await recordingControllerRef.current.finalizeRecording();
-      if (entity) {
-        setSessionState((prev) => {
-          const withRec = saveFinalizedRecording(prev, entity);
-          const next = skipActiveBlock(plannerState, withRec);
-          saveLiveSessionState(next);
-          if (next.status === SESSION_STATUS.COMPLETED) {
-            setActiveTab('recap');
-          }
-          return next;
-        });
-        toast(`${entity.name} · ${formatMsToClock(entity.durationMs)} guardados`);
-        return;
-      }
+    if (next.status === SESSION_STATUS.COMPLETED) {
+      setActiveTab('recap');
+      toast('Sesión finalizada. Mostrando resumen.');
+      return;
     }
-    setSessionState((prev) => {
-      const next = skipActiveBlock(plannerState, prev);
-      saveLiveSessionState(next);
-      if (next.status === SESSION_STATUS.COMPLETED) {
-        setActiveTab('recap');
-        toast('Sesión finalizada.');
-      } else {
-        toast('Bloque saltado');
-      }
-      return next;
-    });
-  }, [plannerState]);
 
-  // Extend block time
+    if (next.liveActiveBlockId === outgoing.liveActiveBlockId) {
+      const nextPoint = getActivePoint(plannerStateRef.current, next);
+      toast(`Siguiente punto: ${nextPoint?.title || 'Punto'}`);
+    } else {
+      const nextBlock = getActiveBlock(plannerStateRef.current, next);
+      toast(`Siguiente bloque: ${nextBlock?.title || activeBlock?.title || 'Bloque'}`);
+    }
+
+    // `activePoint` is intentionally captured before finalization: recording stays
+    // associated with the outgoing Point even after the runner advances.
+    void activePoint;
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+
+  const handleSkipPoint = useCallback(() => runAtomicTransition(async () => {
+    const outgoing = sessionStateRef.current;
+    const recording = await finalizeActiveRecording();
+    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
+    const next = skipActivePoint(plannerStateRef.current, withRecording);
+    commitSessionState(next);
+    if (next.status === SESSION_STATUS.COMPLETED) setActiveTab('recap');
+    toast('Punto saltado');
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+
+  const handleSkipBlock = useCallback(() => runAtomicTransition(async () => {
+    const outgoing = sessionStateRef.current;
+    const recording = await finalizeActiveRecording();
+    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
+    const next = skipActiveBlock(plannerStateRef.current, withRecording);
+    commitSessionState(next);
+    if (next.status === SESSION_STATUS.COMPLETED) setActiveTab('recap');
+    toast('Bloque saltado');
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+
   const handleExtendBlock = useCallback((blockId, minutes = 5) => {
-    setSessionState((prev) => {
-      const next = extendActiveBlock(prev, blockId, minutes);
-      saveLiveSessionState(next);
-      return next;
-    });
+    const next = extendActiveBlock(sessionStateRef.current, blockId, minutes);
+    commitSessionState(next);
     toast(`Bloque extendido +${minutes} min`);
-  }, []);
+  }, [commitSessionState]);
 
-  // Set unlimited overtime
   const handleSetUnlimited = useCallback((blockId) => {
-    setSessionState((prev) => {
-      const next = setUnlimitedActiveBlock(prev, blockId);
-      saveLiveSessionState(next);
-      return next;
-    });
-    toast('Tiempo extendido sin límite');
-  }, []);
+    const next = setUnlimitedActiveBlock(sessionStateRef.current, blockId);
+    commitSessionState(next);
+    toast('Tiempo del bloque sin límite');
+  }, [commitSessionState]);
 
-  // Finish entire session with seamless auto-persist of active recording
-  const handleFinishSession = useCallback(async () => {
-    if (recordingControllerRef.current?.isActive()) {
-      const entity = await recordingControllerRef.current.finalizeRecording();
-      if (entity) {
-        setSessionState((prev) => {
-          const withRec = saveFinalizedRecording(prev, entity);
-          const next = completeLiveSession(withRec);
-          saveLiveSessionState(next);
-          return next;
-        });
-        setActiveTab('recap');
-        toast(`${entity.name} · ${formatMsToClock(entity.durationMs)} guardados. Sesión finalizada.`);
-        return;
-      }
-    }
-    recordingControllerRef.current?.cleanup();
-    setSessionState((prev) => {
-      const next = completeLiveSession(prev);
-      saveLiveSessionState(next);
-      return next;
-    });
+  const handleFinishSession = useCallback(() => runAtomicTransition(async () => {
+    const outgoing = sessionStateRef.current;
+    const recording = await finalizeActiveRecording();
+    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
+    const next = completeLiveSession(withRecording);
+    commitSessionState(next);
     setActiveTab('recap');
     toast('Sesión finalizada. Mostrando resumen.');
-  }, []);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
 
-  // Session Interruption
-  const handleOpenInterrupt = useCallback(() => {
-    setInterruptModal({isOpen: true});
-  }, []);
+  const handleOpenInterrupt = useCallback(() => setInterruptModal({isOpen: true}), []);
 
-  const handleConfirmInterrupt = useCallback(async () => {
+  const handleConfirmInterrupt = useCallback(() => runAtomicTransition(async () => {
     setInterruptModal({isOpen: false});
-    if (recordingControllerRef.current?.isActive()) {
-      const recordingEntity = await recordingControllerRef.current.finalizeRecording();
-      if (recordingEntity) {
-        setSessionState((prev) => {
-          const withRec = saveFinalizedRecording(prev, recordingEntity);
-          const next = interruptLiveSession(withRec);
-          saveLiveSessionState(next);
-          return next;
-        });
-        setActiveTab('recap');
-        toast(`${recordingEntity.name} y sesión conservadas`);
-        return;
-      }
-    }
-    setSessionState((prev) => {
-      const next = interruptLiveSession(prev);
-      saveLiveSessionState(next);
-      return next;
-    });
+    const outgoing = sessionStateRef.current;
+    const recording = await finalizeActiveRecording();
+    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
+    const next = interruptLiveSession(withRecording);
+    commitSessionState(next);
     setActiveTab('recap');
-    toast('Sesión interrumpida. Todo el trabajo fue conservado.');
-  }, []);
+    toast(recording ? `${recording.name} y sesión conservadas` : 'Sesión interrumpida. Todo el trabajo fue conservado.');
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
 
-  // Recording Controls
-  const handleStartRecording = useCallback(async (blockId, blockTitle, pointId = null, pointTitle = null) => {
+  // Recording context is always resolved from the runner. The user never has to
+  // pick a Point that Bardo already knows is active.
+  const handleStartRecording = useCallback(async () => {
     if (!recordingControllerRef.current) return;
+    const currentSession = sessionStateRef.current;
+    const currentPlanner = plannerStateRef.current;
+    const block = getActiveBlock(currentPlanner, currentSession);
+    const point = getActivePoint(currentPlanner, currentSession);
+    if (!block) return;
+
     try {
       await recordingControllerRef.current.startRecording(
-        sessionState.sessionId || `session-${Date.now()}`,
-        blockId,
-        blockTitle,
-        pointId,
-        pointTitle
+        currentSession.sessionId || `session-${Date.now()}`,
+        block.id,
+        block.title,
+        point?.id || null,
+        point?.title || null
       );
-      toast(`Grabación iniciada: ${pointTitle || blockTitle}`);
+      setRecordingElapsedMs(0);
+      toast(`Grabación iniciada: ${point?.title || block.title}`);
     } catch {
-      // Error handled in callback
+      // Permission/runtime error is handled by RecordingController callback.
     }
-  }, [sessionState.sessionId]);
+  }, []);
 
-  // Explicit user finish -> opens RecordingSaveModal for review / renaming
   const handleFinalizeRecording = useCallback(async () => {
     if (!recordingControllerRef.current) return;
     const entity = await recordingControllerRef.current.finalizeRecording();
-    if (entity) {
-      setSaveRecordingModal({
-        isOpen: true,
-        recordingEntity: entity,
-      });
-    }
+    if (entity) setSaveRecordingModal({isOpen: true, recordingEntity: entity});
   }, []);
 
-  const handleSaveRecordingConfirmed = useCallback((finalizedEntity) => {
+  const handleSaveRecordingConfirmed = useCallback(async (finalizedEntity) => {
+    const persisted = await persistCapturedRecording(finalizedEntity);
     setSaveRecordingModal({isOpen: false, recordingEntity: null});
-    setSessionState((prev) => {
-      const next = saveFinalizedRecording(prev, finalizedEntity);
-      saveLiveSessionState(next);
-      return next;
-    });
-    toast('Grabación guardada en la sesión');
-  }, []);
+    if (!persisted) return;
+    const next = saveFinalizedRecording(sessionStateRef.current, persisted);
+    commitSessionState(next);
+    toast(persisted.status === 'saved' ? 'Grabación guardada en la sesión' : 'Grabación finalizada con error de persistencia');
+  }, [commitSessionState, persistCapturedRecording]);
 
   const handleDiscardRecording = useCallback(() => {
+    const entity = saveRecordingModal.recordingEntity;
+    if (entity?.blobUrl && typeof URL !== 'undefined') URL.revokeObjectURL(entity.blobUrl);
     setSaveRecordingModal({isOpen: false, recordingEntity: null});
     recordingControllerRef.current?.discardRecording();
     toast('Grabación descartada');
-  }, []);
+  }, [saveRecordingModal.recordingEntity]);
 
-  const handlePauseRecording = useCallback(() => {
-    recordingControllerRef.current?.pauseRecording();
-  }, []);
+  const handlePauseRecording = useCallback(() => recordingControllerRef.current?.pauseRecording(), []);
+  const handleResumeRecording = useCallback(() => recordingControllerRef.current?.resumeRecording(), []);
 
-  const handleResumeRecording = useCallback(() => {
-    recordingControllerRef.current?.resumeRecording();
-  }, []);
+  const handleDismissRecordingPrompt = useCallback(() => {
+    const next = dismissRecordingPrompt(sessionStateRef.current);
+    commitSessionState(next);
+  }, [commitSessionState]);
 
-  const handleDismissRecordingPrompt = useCallback((blockId) => {
-    setSessionState((prev) => {
-      const next = dismissBlockRecordingPrompt(prev, blockId);
-      saveLiveSessionState(next);
-      return next;
-    });
-  }, []);
-
-  // Rename & Delete recordings in session
   const handleRenameRecording = useCallback((recordingId, newName) => {
-    setSessionState((prev) => {
-      const next = renameRecordingInSession(prev, recordingId, newName);
-      saveLiveSessionState(next);
-      return next;
-    });
+    const next = renameRecordingInSession(sessionStateRef.current, recordingId, newName);
+    commitSessionState(next);
     toast('Grabación renombrada');
-  }, []);
+  }, [commitSessionState]);
 
-  const handleDeleteRecording = useCallback((recordingId) => {
-    setSessionState((prev) => {
-      const next = deleteRecordingFromSession(prev, recordingId);
-      saveLiveSessionState(next);
-      return next;
-    });
+  const handleDeleteRecording = useCallback(async (recordingId) => {
+    const recording = (sessionStateRef.current.recordings || []).find((item) => item.id === recordingId);
+    try {
+      await recordingStorage.delete(recordingId);
+    } catch {
+      toast('No se pudo borrar el binario local, pero se retirará de esta sesión.');
+    }
+    if (recording?.blobUrl && typeof URL !== 'undefined') URL.revokeObjectURL(recording.blobUrl);
+    const next = deleteRecordingFromSession(sessionStateRef.current, recordingId);
+    commitSessionState(next);
     toast('Grabación eliminada');
-  }, []);
+  }, [commitSessionState]);
 
-  // Toggle subpoint checkbox
-  const handleToggleSubpointStatus = useCallback((blockId, subpointId, checked) => {
-    setPlannerState((prev) => {
-      const nextBlocks = prev.blocks.map((b) => {
-        if (b.id !== blockId) return b;
-        const nextSubpoints = (b.subpoints || []).map((p) => {
-          if (p.id !== subpointId) return p;
-          return {...p, status: checked ? 'done' : 'pending'};
-        });
-        return {...b, subpoints: nextSubpoints};
+  const handleToggleSubpointStatus = useCallback((blockId, pointId, checked) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) => {
+        if (block.id !== blockId) return block;
+        return {
+          ...block,
+          subpoints: (block.subpoints || []).map((point) =>
+            point.id === pointId ? {...point, status: checked ? POINT_STATUS.DONE : POINT_STATUS.PENDING} : point
+          ),
+        };
       });
-      const next = computePlannerTimes({...prev, blocks: nextBlocks});
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
       savePlannerState(next);
       return next;
     });
-  }, []);
 
-  // Decision Capture
+    if (sessionStateRef.current.status !== SESSION_STATUS.IDLE) {
+      const nextSession = setPointStatus(
+        sessionStateRef.current,
+        pointId,
+        checked ? POINT_STATUS.DONE : POINT_STATUS.PENDING
+      );
+      commitSessionState(nextSession);
+    }
+  }, [commitSessionState]);
+
   const handleOpenDecisionCapture = useCallback((targetBlockId = null) => {
-    const resolvedBlockId = targetBlockId || sessionState.liveActiveBlockId || plannerState.blocks[0]?.id;
     setCaptureModal({
       isOpen: true,
-      blockId: resolvedBlockId,
+      blockId: sessionStateRef.current.liveActiveBlockId || targetBlockId || plannerStateRef.current.blocks[0]?.id,
     });
-  }, [sessionState.liveActiveBlockId, plannerState.blocks]);
-
-  const handleCaptureSubmit = useCallback(({blockId, content}) => {
-    const resolvedBlockId = blockId || sessionState.liveActiveBlockId || plannerState.blocks[0]?.id;
-
-    setPlannerState((prev) => {
-      const nextBlocks = prev.blocks.map((b) => {
-        if (b.id !== resolvedBlockId) return b;
-        const decisions = [...(b.decisions || []), {id: `d-${Date.now()}`, content}];
-        return {...b, decisions};
-      });
-      const next = computePlannerTimes({...prev, blocks: nextBlocks});
-      savePlannerState(next);
-      return next;
-    });
-
-    setSessionState((prev) => {
-      const next = {
-        ...prev,
-        decisions: [...(prev.decisions || []), {id: `d-${Date.now()}`, blockId: resolvedBlockId, content, timestamp: Date.now()}],
-      };
-      saveLiveSessionState(next);
-      return next;
-    });
-
-    toast('Acuerdo registrado en la minuta');
-  }, [sessionState.liveActiveBlockId, plannerState.blocks]);
-
-  const handleDeleteDecision = useCallback((blockId, decisionId) => {
-    setPlannerState((prev) => {
-      const nextBlocks = prev.blocks.map((b) => {
-        if (b.id !== blockId) return b;
-        const decisions = (b.decisions || []).filter((d) => d.id !== decisionId);
-        return {...b, decisions};
-      });
-      const next = computePlannerTimes({...prev, blocks: nextBlocks});
-      savePlannerState(next);
-      return next;
-    });
-    toast('Acuerdo eliminado');
   }, []);
 
+  const handleCaptureSubmit = useCallback(({blockId, content}) => {
+    const liveSession = sessionStateRef.current;
+    const isLiveContext = liveSession.status === SESSION_STATUS.RUNNING || liveSession.status === SESSION_STATUS.PAUSED;
+    const resolvedBlockId = isLiveContext
+      ? liveSession.liveActiveBlockId
+      : (blockId || plannerStateRef.current.blocks[0]?.id);
+    const pointId = isLiveContext ? liveSession.liveActivePointId : null;
+    const timestamp = Date.now();
+    const decision = {
+      id: `d-${timestamp}`,
+      sessionId: liveSession.sessionId || null,
+      blockId: resolvedBlockId,
+      pointId,
+      content,
+      timestamp,
+    };
+
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) =>
+        block.id === resolvedBlockId
+          ? {...block, decisions: [...(block.decisions || []), decision]}
+          : block
+      );
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+
+    const nextSession = {
+      ...liveSession,
+      decisions: [...(liveSession.decisions || []), decision],
+    };
+    commitSessionState(nextSession);
+    toast(pointId ? 'Decisión registrada en el punto actual' : 'Decisión registrada en el bloque actual');
+  }, [commitSessionState]);
+
+  const handleDeleteDecision = useCallback((blockId, decisionId) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) =>
+        block.id === blockId
+          ? {...block, decisions: (block.decisions || []).filter((decision) => decision.id !== decisionId)}
+          : block
+      );
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+    const nextSession = {
+      ...sessionStateRef.current,
+      decisions: (sessionStateRef.current.decisions || []).filter((decision) => decision.id !== decisionId),
+    };
+    commitSessionState(nextSession);
+    toast('Acuerdo eliminado');
+  }, [commitSessionState]);
+
   const handleCopyAnnouncement = useCallback(async () => {
-    const text = generateDiscordAnnouncement(plannerState);
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(generateDiscordAnnouncement(plannerStateRef.current));
       toast('Anuncio copiado al portapapeles');
     } catch {
       toast('No se pudo copiar el anuncio');
     }
-  }, [plannerState]);
+  }, []);
 
   const handleCopyMinutes = useCallback(async () => {
-    const text = generateMinutesMarkdown(plannerState, sessionState);
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(generateMinutesMarkdown(plannerStateRef.current, sessionStateRef.current));
       toast('Markdown de la minuta copiado al portapapeles');
     } catch {
       toast('No se pudo copiar la minuta');
     }
-  }, [plannerState, sessionState]);
+  }, []);
 
   const handleLoadDemo = useCallback(() => {
     const demo = resetToDemoFixture();
+    plannerStateRef.current = demo;
     setPlannerState(demo);
-    setSessionState(loadLiveSessionState());
+    const live = loadLiveSessionState(demo);
+    commitSessionState(live);
     toast('Datos de demostración cargados');
-  }, []);
+  }, [commitSessionState]);
 
   const handleCleanSession = useCallback(() => {
     const clean = resetToCleanSession();
+    plannerStateRef.current = clean;
     setPlannerState(clean);
-    setSessionState(loadLiveSessionState());
+    const live = loadLiveSessionState(clean);
+    commitSessionState(live);
     setActiveTab('agenda');
     toast('Sesión limpia iniciada');
-  }, []);
+  }, [commitSessionState]);
 
   const isLive = sessionState.status === SESSION_STATUS.RUNNING || sessionState.status === SESSION_STATUS.PAUSED;
-  const showUpcomingBanner = !isLive && sessionState.status === SESSION_STATUS.IDLE && !dismissedUpcomingBanner && assistantEvaluation.event === ASSISTANT_EVENT.SESSION_UPCOMING;
+  const showUpcomingBanner = !isLive &&
+    sessionState.status === SESSION_STATUS.IDLE &&
+    !dismissedUpcomingBanner &&
+    assistantEvaluation.event === ASSISTANT_EVENT.SESSION_UPCOMING;
   const recordingContext = recordingControllerRef.current?.getCurrentContext();
-
+  const activeBlock = getActiveBlock(plannerState, sessionState);
+  const activePoint = getActivePoint(plannerState, sessionState);
   const elapsedMinutes = Math.round(getElapsedSessionMs(sessionState, nowTimestamp) / (60 * 1000));
   const recordingsCount = (sessionState.recordings || []).length;
   const decisionsCount = (sessionState.decisions || []).length;
 
   return (
     <div className="planner-module-root w-full px-3 sm:px-4 pt-[calc(var(--bardo-topbar,52px)+12px)] relative min-h-screen">
-      {/* Upcoming Intelligent Session Banner */}
       {showUpcomingBanner && (
         <PlannerUpcomingBanner
           plannerState={plannerState}
@@ -515,7 +550,6 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         />
       )}
 
-      {/* Context Header */}
       {activeTab !== 'editor' && (
         <PlannerSessionHeader
           state={plannerState}
@@ -532,36 +566,35 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         />
       )}
 
-      {/* Main Views */}
       {activeTab === 'agenda' && (
         <PlannerAgendaView
           state={plannerState}
           sessionState={sessionState}
-          dockSlot={
-            isLive ? (
-              <SessionDock
-                plannerState={plannerState}
-                sessionState={sessionState}
-                recordingStatus={recordingStatus}
-                recordingElapsedMs={recordingElapsedMs}
-                recordingContext={recordingContext}
-                onPauseSession={handlePauseSession}
-                onResumeSession={handleResumeSession}
-                onNextBlock={handleNextBlock}
-                onSkipBlock={handleSkipBlock}
-                onExtendBlock={handleExtendBlock}
-                onSetUnlimited={handleSetUnlimited}
-                onStartRecording={handleStartRecording}
-                onFinalizeRecording={handleFinalizeRecording}
-                onPauseRecording={handlePauseRecording}
-                onResumeRecording={handleResumeRecording}
-                onDismissRecordingPrompt={handleDismissRecordingPrompt}
-                onOpenDecisionCapture={() => handleOpenDecisionCapture()}
-                onInterruptSession={handleOpenInterrupt}
-                onFinishSession={handleFinishSession}
-              />
-            ) : null
-          }
+          dockSlot={isLive ? (
+            <SessionDock
+              plannerState={plannerState}
+              sessionState={sessionState}
+              recordingStatus={recordingStatus}
+              recordingElapsedMs={recordingElapsedMs}
+              recordingContext={recordingContext}
+              isTransitioning={isTransitioning}
+              onPauseSession={handlePauseSession}
+              onResumeSession={handleResumeSession}
+              onAdvance={handleAdvance}
+              onSkipPoint={handleSkipPoint}
+              onSkipBlock={handleSkipBlock}
+              onExtendBlock={handleExtendBlock}
+              onSetUnlimited={handleSetUnlimited}
+              onStartRecording={handleStartRecording}
+              onFinalizeRecording={handleFinalizeRecording}
+              onPauseRecording={handlePauseRecording}
+              onResumeRecording={handleResumeRecording}
+              onDismissRecordingPrompt={handleDismissRecordingPrompt}
+              onOpenDecisionCapture={() => handleOpenDecisionCapture()}
+              onInterruptSession={handleOpenInterrupt}
+              onFinishSession={handleFinishSession}
+            />
+          ) : null}
           onOpenEditor={() => handleTabChange('editor')}
           onToggleSubpointStatus={handleToggleSubpointStatus}
           onOpenCapture={(kind, blockId) => handleOpenDecisionCapture(blockId)}
@@ -602,25 +635,24 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         />
       )}
 
-      {/* Inline Quick Capture Modal for Agreements */}
       <PlannerCaptureModal
         isOpen={captureModal.isOpen}
-        onClose={() => setCaptureModal((prev) => ({...prev, isOpen: false}))}
+        onClose={() => setCaptureModal((previous) => ({...previous, isOpen: false}))}
         onSubmit={handleCaptureSubmit}
         initialBlockId={captureModal.blockId}
         blocks={plannerState.blocks}
+        lockContext={isLive}
+        contextLabel={activePoint ? `${activeBlock?.title} → ${activePoint.title}` : activeBlock?.title}
       />
 
-      {/* Recording Save / Name Modal (Manual Finalize flow) */}
       <RecordingSaveModal
         isOpen={saveRecordingModal.isOpen}
         recordingEntity={saveRecordingModal.recordingEntity}
-        onClose={() => setSaveRecordingModal({isOpen: false, recordingEntity: null})}
+        onClose={handleDiscardRecording}
         onSave={handleSaveRecordingConfirmed}
         onDiscard={handleDiscardRecording}
       />
 
-      {/* Session Interruption Modal (Single-step safe confirmation) */}
       <SessionInterruptModal
         isOpen={interruptModal.isOpen}
         hasActiveRecording={recordingControllerRef.current?.isActive()}
