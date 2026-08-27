@@ -2,8 +2,19 @@ import {useState, useCallback} from 'react';
 import {
   Button,
   Tabs,
+  Dropdown,
+  Label,
+  Description,
   toast,
 } from '@heroui/react';
+import {
+  Calendar,
+  Pencil,
+  FileText,
+  Plus,
+  EllipsisVertical,
+  ArrowRotateLeft,
+} from '@gravity-ui/icons';
 import {
   PlannerAgendaView,
 } from './PlannerAgendaView.jsx';
@@ -19,6 +30,8 @@ import {
 import {
   loadPlannerState,
   savePlannerState,
+  resetToDemoFixture,
+  resetToCleanSession,
   generateDiscordAnnouncement,
   generateMinutesMarkdown,
 } from './planner-store.js';
@@ -106,7 +119,47 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
       savePlannerState(next);
       return next;
     });
-    toast(kind === 'decision' ? '🟢 Decisión guardada en la minuta' : '🟣 Tarea asignada guardada');
+    toast(kind === 'decision' ? '🟢 Decisión guardada en la minuta' : '🟣 Tarea guardada');
+  }, []);
+
+  const handleDeleteDecision = useCallback((blockId, decisionId) => {
+    setPlannerState((prev) => {
+      const nextBlocks = prev.blocks.map((b) => {
+        if (b.id !== blockId) return b;
+        const decisions = (b.decisions || []).filter((d) => d.id !== decisionId);
+        return {...b, decisions};
+      });
+      const next = computePlannerTimes({...prev, blocks: nextBlocks});
+      savePlannerState(next);
+      return next;
+    });
+    toast('Decisión eliminada');
+  }, []);
+
+  const handleDeleteTask = useCallback((blockId, taskId) => {
+    setPlannerState((prev) => {
+      const nextBlocks = prev.blocks.map((b) => {
+        if (b.id !== blockId) return b;
+        const tasks = (b.tasks || []).filter((t) => t.id !== taskId);
+        return {...b, tasks};
+      });
+      const next = computePlannerTimes({...prev, blocks: nextBlocks});
+      savePlannerState(next);
+      return next;
+    });
+    toast('Tarea eliminada');
+  }, []);
+
+  const handleLoadDemo = useCallback(() => {
+    const demo = resetToDemoFixture();
+    setPlannerState(demo);
+    toast('✨ Datos de demostración cargados');
+  }, []);
+
+  const handleCleanSession = useCallback(() => {
+    const clean = resetToCleanSession();
+    setPlannerState(clean);
+    toast('🧹 Sesión limpia iniciada');
   }, []);
 
   return (
@@ -120,50 +173,80 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         >
           <Tabs.ListContainer className="bg-surface-secondary/80 p-1 rounded-xl border border-border w-full sm:w-auto">
             <Tabs.List aria-label="Vistas del Planner" className="w-full sm:w-auto justify-between sm:justify-start">
-              <Tabs.Tab id="agenda" className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                <span>🗓️</span>
-                <span className="hidden xs:inline sm:inline">Agenda & Sesión</span>
-                <span className="inline xs:hidden sm:hidden">Agenda</span>
+              <Tabs.Tab id="agenda" className="text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <Calendar width={14} height={14} />
+                <span className="hidden xs:inline sm:inline">Agenda</span>
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="editor" className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                <span>✏️</span>
-                <span className="hidden xs:inline sm:inline">Editor de Evento</span>
-                <span className="inline xs:hidden sm:hidden">Editor</span>
+              <Tabs.Tab id="editor" className="text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <Pencil width={14} height={14} />
+                <span className="hidden xs:inline sm:inline">Editor</span>
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="minutes" className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                <span>📄</span>
-                <span className="hidden xs:inline sm:inline">Minuta Final</span>
-                <span className="inline xs:hidden sm:hidden">Minuta</span>
+              <Tabs.Tab id="minutes" className="text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <FileText width={14} height={14} />
+                <span className="hidden xs:inline sm:inline">Minuta</span>
                 <Tabs.Indicator />
               </Tabs.Tab>
             </Tabs.List>
           </Tabs.ListContainer>
         </Tabs>
 
-        {activeTab === 'agenda' && (
-          <div className="hidden sm:flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onPress={() => handleOpenCapture('decision', plannerState.blocks[0]?.id)}
-              className="text-xs h-8"
-              aria-label="Registrar decisión rápida"
-            >
-              + Decisión
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onPress={() => handleOpenCapture('task', plannerState.blocks[0]?.id)}
-              className="text-xs h-8"
-              aria-label="Asignar tarea rápida"
-            >
-              + Tarea
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {activeTab === 'agenda' && (
+            <div className="hidden sm:flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={() => handleOpenCapture('decision', plannerState.blocks[0]?.id)}
+                aria-label="Registrar decisión rápida"
+              >
+                <Plus width={12} height={12} /> Decisión
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={() => handleOpenCapture('task', plannerState.blocks[0]?.id)}
+                aria-label="Asignar tarea rápida"
+              >
+                <Plus width={12} height={12} /> Tarea
+              </Button>
+            </div>
+          )}
+
+          {/* Session Management Options */}
+          <Dropdown>
+            <Dropdown.Trigger>
+              <Button
+                variant="ghost"
+                size="sm"
+                isIconOnly
+                aria-label="Opciones de sesión"
+              >
+                <EllipsisVertical width={14} height={14} />
+              </Button>
+            </Dropdown.Trigger>
+            <Dropdown.Popover>
+              <Dropdown.Menu
+                onAction={(key) => {
+                  if (key === 'new-clean') handleCleanSession();
+                  if (key === 'load-demo') handleLoadDemo();
+                }}
+              >
+                <Dropdown.Item id="new-clean" textValue="Nueva sesión limpia">
+                  <Plus />
+                  <Label>Nueva sesión limpia</Label>
+                  <Description>Empezar una agenda desde cero</Description>
+                </Dropdown.Item>
+                <Dropdown.Item id="load-demo" textValue="Cargar datos de demo">
+                  <ArrowRotateLeft />
+                  <Label>Cargar demo semanal</Label>
+                  <Description>Ver ejemplo de weekly de diseño</Description>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+        </div>
       </div>
 
       {/* Main Views Container */}
@@ -175,6 +258,8 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
           onCopyAnnouncement={handleCopyAnnouncement}
           onToggleSubpointStatus={handleToggleSubpointStatus}
           onOpenCapture={handleOpenCapture}
+          onDeleteDecision={handleDeleteDecision}
+          onDeleteTask={handleDeleteTask}
         />
       )}
 

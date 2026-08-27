@@ -10,7 +10,14 @@ import {
   ListBox,
 } from '@heroui/react';
 
-export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision', initialBlockId = null, blocks = []}) {
+export function PlannerCaptureModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  kind = 'decision',
+  initialBlockId = null,
+  blocks = [],
+}) {
   const [content, setContent] = useState('');
   const [assignee, setAssignee] = useState('@Max Avendaño');
   const [selectedBlockId, setSelectedBlockId] = useState(() => initialBlockId || blocks[0]?.id || '');
@@ -48,8 +55,8 @@ export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision
       <Modal.Backdrop />
       <Modal.Container>
         <Modal.Dialog className="max-w-md w-full p-5 bg-surface border border-border rounded-2xl shadow-xl">
-          <Modal.Header className="flex items-center justify-between pb-3 border-b border-border/60">
-            <Modal.Heading className="text-base font-bold text-foreground flex items-center gap-2">
+          <Modal.Header className="flex items-center justify-between pb-3 border-b border-border">
+            <Modal.Heading className="text-base font-semibold text-foreground flex items-center gap-2">
               <span>{isDecision ? '🟢' : '🟣'}</span>
               <span>{isDecision ? 'Registrar Decisión' : 'Asignar Tarea'}</span>
             </Modal.Heading>
@@ -60,14 +67,14 @@ export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision
             {blocks.length > 0 && (
               <Select
                 fullWidth
-                selectedKey={selectedBlockId || blocks[0]?.id}
-                onSelectionChange={(key) => setSelectedBlockId(String(key))}
+                value={selectedBlockId || blocks[0]?.id}
+                onChange={(key) => setSelectedBlockId(String(key))}
                 variant="secondary"
               >
                 <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
                   Bloque Asociado
                 </Label>
-                <Select.Trigger className="h-9 text-xs">
+                <Select.Trigger>
                   <Select.Value />
                   <Select.Indicator />
                 </Select.Trigger>
@@ -92,7 +99,6 @@ export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={isDecision ? 'Ej: Se aprueba la propuesta de navegación móvil...' : 'Ej: Compartir prototipo en #orion...'}
-                className="min-h-[75px] text-xs"
                 autoFocus
               />
             </TextField>
@@ -106,12 +112,11 @@ export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision
                   value={assignee}
                   onChange={(e) => setAssignee(e.target.value)}
                   placeholder="@Nombre"
-                  className="text-xs h-9"
                 />
               </TextField>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40 mt-1">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border mt-1">
               <Button type="button" variant="ghost" size="sm" onPress={onClose} disabled={isSubmitting}>
                 Cancelar
               </Button>

@@ -1,11 +1,13 @@
 import {
   Button,
   Card,
+  Chip,
   toast,
 } from '@heroui/react';
 import {
   Copy,
   ArrowUturnCcwLeft,
+  ArrowUpRightFromSquare,
 } from '@gravity-ui/icons';
 import {
   generateMinutesMarkdown,
@@ -17,10 +19,10 @@ export function PlannerMinutesView({
   onCopyMarkdown,
 }) {
   const {
-    title,
-    date,
-    host,
-    totalCalculatedDuration,
+    title = 'Sesión',
+    date = '',
+    host = '',
+    totalCalculatedDuration = 0,
     blocks = [],
   } = state;
 
@@ -39,18 +41,18 @@ export function PlannerMinutesView({
       toast('📢 Minuta enviada al canal de Discord');
     } else {
       onCopyMarkdown();
-      toast('📋 Copiado al portapapeles (Disponible para envío directo dentro de Discord)');
+      toast('📋 Copiado al portapapeles (Listo para enviar en Discord)');
     }
   };
 
   return (
     <div className="flex flex-col gap-5 w-full max-w-4xl mx-auto pb-12">
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface/40 p-3 rounded-xl border border-border/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface/40 p-3 rounded-xl border border-border">
         <div>
           <div className="flex items-center gap-1.5 mb-1">
-            <Button variant="ghost" size="sm" onPress={onBack} className="text-xs h-7 px-2">
-              <ArrowUturnCcwLeft width={13} height={13} /> Volver a la Agenda
+            <Button variant="ghost" size="sm" onPress={onBack}>
+              <ArrowUturnCcwLeft width={14} height={14} /> Volver a la Agenda
             </Button>
           </div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">Acta y Minuta Oficial</h1>
@@ -60,29 +62,29 @@ export function PlannerMinutesView({
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onPress={onCopyMarkdown} className="font-medium text-xs h-8">
-            <Copy width={13} height={13} /> Copiar Markdown
+          <Button variant="secondary" size="sm" onPress={onCopyMarkdown}>
+            <Copy width={14} height={14} /> Copiar Markdown
           </Button>
           <Button
             variant="primary"
             size="sm"
             onPress={handlePublishDiscord}
-            className="font-semibold text-xs h-8"
+            className="font-semibold"
           >
-            📢 Publicar en Discord
+            <ArrowUpRightFromSquare width={14} height={14} /> Publicar en Discord
           </Button>
         </div>
       </div>
 
       {/* Main Minutes Canvas */}
-      <Card className="p-4 sm:p-5 bg-surface border border-border rounded-xl flex flex-col gap-5 shadow-none">
+      <Card className="p-4 sm:p-5 bg-surface border border-border rounded-xl flex flex-col gap-5">
         <div>
-          <h2 className="text-base font-bold text-foreground mb-0.5">Acta de Acuerdos · {title}</h2>
-          <div className="flex items-center gap-2 text-xs text-muted font-medium font-mono">
-            <span>Fecha: {date}</span>
-            <span>·</span>
-            <span>Conduce: {host}</span>
-            <span>·</span>
+          <h2 className="text-base font-bold text-foreground mb-1">Acta de Acuerdos · {title}</h2>
+          <div className="flex items-center gap-2 text-xs text-muted font-medium">
+            {date && <span>Fecha: {date}</span>}
+            {date && host && <span>·</span>}
+            {host && <span>Conduce: {host}</span>}
+            {host && <span>·</span>}
             <span>Duración: {totalCalculatedDuration} min</span>
           </div>
         </div>
@@ -100,7 +102,7 @@ export function PlannerMinutesView({
                   className="p-2.5 rounded-lg bg-success/10 border border-success/20 text-xs text-foreground leading-relaxed"
                 >
                   <strong className="text-foreground font-semibold">{d.content}</strong>
-                  <span className="text-muted block mt-0.5 text-[11px]">Ref. Bloque: {d.origin}</span>
+                  <span className="text-muted block mt-0.5 text-xs">Ref. Bloque: {d.origin}</span>
                 </div>
               ))}
             </div>
@@ -123,12 +125,12 @@ export function PlannerMinutesView({
                 >
                   <div>
                     <span className="font-semibold">{t.title}</span>
-                    <span className="text-muted block mt-0.5 text-[11px]">Ref. Bloque: {t.origin}</span>
+                    <span className="text-muted block mt-0.5 text-xs">Ref. Bloque: {t.origin}</span>
                   </div>
                   {t.assignee && (
-                    <span className="px-2 py-0.5 rounded bg-surface border border-border text-muted font-medium text-[10px] shrink-0">
+                    <Chip size="sm" variant="secondary" className="shrink-0 text-xs">
                       {t.assignee}
-                    </span>
+                    </Chip>
                   )}
                 </div>
               ))}
@@ -148,10 +150,10 @@ export function PlannerMinutesView({
           ) : (
             <div className="flex flex-col gap-2.5">
               {blocks.map((b, idx) => (
-                <div key={b.id || idx} className="text-xs bg-surface-secondary/20 p-2.5 rounded-lg border border-border/40">
+                <div key={b.id || idx} className="text-xs bg-surface-secondary/30 p-2.5 rounded-lg border border-border/40">
                   <div className="font-semibold text-foreground flex items-center gap-2">
                     <span>{b.title}</span>
-                    <span className="text-muted font-mono font-normal text-[11px]">({b.durationMinutes} min)</span>
+                    <span className="text-muted font-normal text-xs">({b.durationMinutes} min)</span>
                   </div>
                   {(b.subpoints || []).length > 0 && (
                     <ul className="pl-3.5 mt-1.5 space-y-1 text-muted">
@@ -164,10 +166,10 @@ export function PlannerMinutesView({
                             {p.title}
                           </span>
                           {p.durationMinutes > 0 && (
-                            <span className="font-mono text-[10px] text-muted">({p.durationMinutes}m)</span>
+                            <span className="text-xs text-muted font-mono">({p.durationMinutes}m)</span>
                           )}
                           {p.presenter && (
-                            <span className="text-muted text-[10px]">· {p.presenter}</span>
+                            <span className="text-xs text-muted">· {p.presenter}</span>
                           )}
                         </li>
                       ))}
@@ -182,4 +184,3 @@ export function PlannerMinutesView({
     </div>
   );
 }
-
