@@ -6,30 +6,39 @@ import {
   Label,
   Input,
   TextArea,
+  Select,
+  ListBox,
 } from '@heroui/react';
 
 export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision', initialBlockId = null, blocks = []}) {
   const [content, setContent] = useState('');
   const [assignee, setAssignee] = useState('@Max Avendaño');
-  const [selectedBlockId, setSelectedBlockId] = useState(initialBlockId || (blocks[0]?.id ?? ''));
+  const [selectedBlockId, setSelectedBlockId] = useState(() => initialBlockId || blocks[0]?.id || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setContent('');
-      setSelectedBlockId(initialBlockId || (blocks[0]?.id ?? ''));
+      setSelectedBlockId(initialBlockId || blocks[0]?.id || '');
+      setIsSubmitting(false);
     }
   }, [isOpen, initialBlockId, blocks]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!content.trim()) return;
-    onSubmit({
-      kind,
-      blockId: selectedBlockId,
-      content: content.trim(),
-      assignee: kind === 'task' ? assignee.trim() : undefined,
-    });
-    onClose();
+    if (!content.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      onSubmit({
+        kind,
+        blockId: selectedBlockId || blocks[0]?.id,
+        content: content.trim(),
+        assignee: kind === 'task' ? assignee.trim() : undefined,
+      });
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isDecision = kind === 'decision';
@@ -38,43 +47,52 @@ export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision
     <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Modal.Backdrop />
       <Modal.Container>
-        <Modal.Dialog className="max-w-md w-full p-6 bg-surface border border-border rounded-2xl shadow-2xl">
+        <Modal.Dialog className="max-w-md w-full p-5 bg-surface border border-border rounded-2xl shadow-xl">
           <Modal.Header className="flex items-center justify-between pb-3 border-b border-border/60">
-            <Modal.Heading className="text-lg font-bold text-foreground">
-              {isDecision ? '🟢 Registrar Decisión / Acuerdo' : '🟣 Asignar Tarea / Compromiso'}
+            <Modal.Heading className="text-base font-bold text-foreground flex items-center gap-2">
+              <span>{isDecision ? '🟢' : '🟣'}</span>
+              <span>{isDecision ? 'Registrar Decisión' : 'Asignar Tarea'}</span>
             </Modal.Heading>
-            <Modal.CloseButton onPress={onClose} />
+            <Modal.CloseTrigger />
           </Modal.Header>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-4">
-            {blocks.length > 1 && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                  Bloque asociado
-                </label>
-                <select
-                  value={selectedBlockId}
-                  onChange={(e) => setSelectedBlockId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl bg-field-background border border-border text-foreground text-sm focus:outline-none focus:border-accent"
-                >
-                  {blocks.map((b, idx) => (
-                    <option key={b.id} value={b.id}>
-                      Bloque #{idx + 1}: {b.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 mt-3.5">
+            {blocks.length > 0 && (
+              <Select
+                fullWidth
+                selectedKey={selectedBlockId || blocks[0]?.id}
+                onSelectionChange={(key) => setSelectedBlockId(String(key))}
+                variant="secondary"
+              >
+                <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
+                  Bloque Asociado
+                </Label>
+                <Select.Trigger className="h-9 text-xs">
+                  <Select.Value />
+                  <Select.Indicator />
+                </Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    {blocks.map((b, idx) => (
+                      <ListBox.Item key={b.id} id={b.id} textValue={`Bloque #${idx + 1}: ${b.title}`}>
+                        Bloque #{idx + 1}: {b.title}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </Select.Popover>
+              </Select>
             )}
 
             <TextField isRequired className="w-full">
               <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                {isDecision ? 'Detalle del acuerdo tomado' : 'Descripción de la tarea'}
+                {isDecision ? 'Detalle del Acuerdo' : 'Descripción de la Tarea'}
               </Label>
               <TextArea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={isDecision ? 'Ej: Se aprueba la propuesta de navegación móvil...' : 'Ej: Compartir prototipo en #orion...'}
-                className="min-h-[80px] text-sm"
+                className="min-h-[75px] text-xs"
                 autoFocus
               />
             </TextField>
@@ -82,23 +100,23 @@ export function PlannerCaptureModal({isOpen, onClose, onSubmit, kind = 'decision
             {!isDecision && (
               <TextField className="w-full">
                 <Label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                  Responsable asignado (@mención o nombre)
+                  Responsable Asignado (@mención o nombre)
                 </Label>
                 <Input
                   value={assignee}
                   onChange={(e) => setAssignee(e.target.value)}
                   placeholder="@Nombre"
-                  className="text-sm"
+                  className="text-xs h-9"
                 />
               </TextField>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40 mt-2">
-              <Button type="button" variant="ghost" size="sm" onPress={onClose}>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40 mt-1">
+              <Button type="button" variant="ghost" size="sm" onPress={onClose} disabled={isSubmitting}>
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" size="sm" className="font-semibold">
-                Guardar en Minuta
+              <Button type="submit" variant="primary" size="sm" className="font-semibold" disabled={!content.trim() || isSubmitting}>
+                {isSubmitting ? 'Guardando…' : 'Guardar en Minuta'}
               </Button>
             </div>
           </form>

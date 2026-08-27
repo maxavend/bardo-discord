@@ -2216,7 +2216,7 @@ function App() {
         />
       )}
 
-      {route.type !== 'library' && !currentDoc && route.type !== 'new' && (
+      {route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
         <div className="missing-state flex flex-col items-center justify-center py-20 text-center">
           <p className="text-base text-muted mb-4">Este documento ya no existe.</p>
           <Button variant="secondary" onPress={() => go('#docs')}>

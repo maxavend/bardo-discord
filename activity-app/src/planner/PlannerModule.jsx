@@ -110,26 +110,32 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
   }, []);
 
   return (
-    <div className="planner-module-root w-full px-4 pt-4">
+    <div className="planner-module-root w-full px-3 sm:px-4 pt-3 sm:pt-4">
       {/* Module Tabs Navigation */}
-      <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between gap-4">
+      <div className="max-w-4xl mx-auto mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-3">
         <Tabs
           selectedKey={activeTab}
           onSelectionChange={(k) => handleTabChange(String(k))}
           className="w-full sm:w-auto"
         >
-          <Tabs.ListContainer className="bg-surface-secondary/80 p-1 rounded-xl border border-border">
-            <Tabs.List aria-label="Planner Views">
-              <Tabs.Tab id="agenda" className="text-xs font-semibold px-3 py-1.5 rounded-lg">
-                🗓️ Agenda & Sesión
+          <Tabs.ListContainer className="bg-surface-secondary/80 p-1 rounded-xl border border-border w-full sm:w-auto">
+            <Tabs.List aria-label="Vistas del Planner" className="w-full sm:w-auto justify-between sm:justify-start">
+              <Tabs.Tab id="agenda" className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <span>🗓️</span>
+                <span className="hidden xs:inline sm:inline">Agenda & Sesión</span>
+                <span className="inline xs:hidden sm:hidden">Agenda</span>
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="editor" className="text-xs font-semibold px-3 py-1.5 rounded-lg">
-                ✏️ Editor de Evento
+              <Tabs.Tab id="editor" className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <span>✏️</span>
+                <span className="hidden xs:inline sm:inline">Editor de Evento</span>
+                <span className="inline xs:hidden sm:hidden">Editor</span>
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="minutes" className="text-xs font-semibold px-3 py-1.5 rounded-lg">
-                📄 Minuta Final
+              <Tabs.Tab id="minutes" className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <span>📄</span>
+                <span className="hidden xs:inline sm:inline">Minuta Final</span>
+                <span className="inline xs:hidden sm:hidden">Minuta</span>
                 <Tabs.Indicator />
               </Tabs.Tab>
             </Tabs.List>
@@ -142,7 +148,8 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
               variant="secondary"
               size="sm"
               onPress={() => handleOpenCapture('decision', plannerState.blocks[0]?.id)}
-              className="text-xs"
+              className="text-xs h-8"
+              aria-label="Registrar decisión rápida"
             >
               + Decisión
             </Button>
@@ -150,7 +157,8 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
               variant="secondary"
               size="sm"
               onPress={() => handleOpenCapture('task', plannerState.blocks[0]?.id)}
-              className="text-xs"
+              className="text-xs h-8"
+              aria-label="Asignar tarea rápida"
             >
               + Tarea
             </Button>

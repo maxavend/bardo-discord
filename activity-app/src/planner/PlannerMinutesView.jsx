@@ -1,6 +1,7 @@
 import {
   Button,
   Card,
+  toast,
 } from '@heroui/react';
 import {
   Copy,
@@ -31,38 +32,42 @@ export function PlannerMinutesView({
     (b.tasks || []).forEach((t) => tasks.push({...t, origin: b.title}));
   });
 
+  const handlePublishDiscord = () => {
+    if (window.__bardoPublishDocument) {
+      const md = generateMinutesMarkdown(state);
+      window.__bardoPublishDocument(`minutes-${Date.now()}`, {content: md});
+      toast('📢 Minuta enviada al canal de Discord');
+    } else {
+      onCopyMarkdown();
+      toast('📋 Copiado al portapapeles (Disponible para envío directo dentro de Discord)');
+    }
+  };
+
   return (
-    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto pb-12">
+    <div className="flex flex-col gap-5 w-full max-w-4xl mx-auto pb-12">
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface/40 p-3 rounded-xl border border-border/50">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-1.5 mb-1">
             <Button variant="ghost" size="sm" onPress={onBack} className="text-xs h-7 px-2">
               <ArrowUturnCcwLeft width={13} height={13} /> Volver a la Agenda
             </Button>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Acta y Minuta Oficial</h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Acta y Minuta Oficial</h1>
           <p className="text-xs text-muted">
-            Resumen consolidado de acuerdos tomados, tareas asignadas y temas tratados durante la sesión.
+            Resumen consolidado de acuerdos tomados, tareas asignadas y temas tratados.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onPress={onCopyMarkdown} className="font-medium">
-            <Copy width={14} height={14} /> Copiar Markdown
+          <Button variant="secondary" size="sm" onPress={onCopyMarkdown} className="font-medium text-xs h-8">
+            <Copy width={13} height={13} /> Copiar Markdown
           </Button>
           <Button
             variant="primary"
             size="sm"
-            onPress={() => {
-              if (window.__bardoPublishDocument) {
-                const md = generateMinutesMarkdown(state);
-                window.__bardoPublishDocument(`minutes-${Date.now()}`, {content: md});
-              } else {
-                onCopyMarkdown();
-              }
-            }}
-            className="font-semibold"
+            onPress={handlePublishDiscord}
+            className="font-semibold text-xs h-8"
           >
             📢 Publicar en Discord
           </Button>
@@ -70,10 +75,10 @@ export function PlannerMinutesView({
       </div>
 
       {/* Main Minutes Canvas */}
-      <Card className="p-6 bg-surface border border-border rounded-2xl flex flex-col gap-6 shadow-sm">
+      <Card className="p-4 sm:p-5 bg-surface border border-border rounded-xl flex flex-col gap-5 shadow-none">
         <div>
-          <h2 className="text-lg font-bold text-foreground mb-1">Acta de Acuerdos · {title}</h2>
-          <div className="flex items-center gap-3 text-xs text-muted font-medium font-mono">
+          <h2 className="text-base font-bold text-foreground mb-0.5">Acta de Acuerdos · {title}</h2>
+          <div className="flex items-center gap-2 text-xs text-muted font-medium font-mono">
             <span>Fecha: {date}</span>
             <span>·</span>
             <span>Conduce: {host}</span>
@@ -85,43 +90,43 @@ export function PlannerMinutesView({
         {/* 1. Decisiones */}
         <section className="flex flex-col gap-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-success flex items-center gap-1.5">
-            <span>🟢</span> 1. Decisiones y Acuerdos Tomados
+            <span>🟢</span> 1. Decisiones y Acuerdos Tomados ({decisions.length})
           </h3>
           {decisions.length > 0 ? (
-            <div className="flex flex-col gap-1.5 pl-2">
+            <div className="flex flex-col gap-1.5">
               {decisions.map((d, idx) => (
                 <div
                   key={d.id || idx}
-                  className="p-3 rounded-xl bg-success/10 border border-success/20 text-xs text-foreground leading-relaxed"
+                  className="p-2.5 rounded-lg bg-success/10 border border-success/20 text-xs text-foreground leading-relaxed"
                 >
                   <strong className="text-foreground font-semibold">{d.content}</strong>
-                  <span className="text-muted block mt-1 text-[11px]">Ref. Bloque: {d.origin}</span>
+                  <span className="text-muted block mt-0.5 text-[11px]">Ref. Bloque: {d.origin}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted italic pl-2">No se registraron decisiones formales.</p>
+            <p className="text-xs text-muted italic pl-1">No se registraron decisiones formales en esta sesión.</p>
           )}
         </section>
 
         {/* 2. Tareas */}
         <section className="flex flex-col gap-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
-            <span>🟣</span> 2. Compromisos y Tareas Asignadas
+            <span>🟣</span> 2. Compromisos y Tareas Asignadas ({tasks.length})
           </h3>
           {tasks.length > 0 ? (
-            <div className="flex flex-col gap-1.5 pl-2">
+            <div className="flex flex-col gap-1.5">
               {tasks.map((t, idx) => (
                 <div
                   key={t.id || idx}
-                  className="p-3 rounded-xl bg-accent/10 border border-accent/20 text-xs text-foreground flex items-start justify-between gap-3"
+                  className="p-2.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-foreground flex items-start justify-between gap-3"
                 >
                   <div>
                     <span className="font-semibold">{t.title}</span>
-                    <span className="text-muted block mt-1 text-[11px]">Ref. Bloque: {t.origin}</span>
+                    <span className="text-muted block mt-0.5 text-[11px]">Ref. Bloque: {t.origin}</span>
                   </div>
                   {t.assignee && (
-                    <span className="px-2 py-0.5 rounded bg-surface border border-border text-muted font-medium text-[11px] shrink-0">
+                    <span className="px-2 py-0.5 rounded bg-surface border border-border text-muted font-medium text-[10px] shrink-0">
                       {t.assignee}
                     </span>
                   )}
@@ -129,7 +134,7 @@ export function PlannerMinutesView({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted italic pl-2">No se asignaron tareas.</p>
+            <p className="text-xs text-muted italic pl-1">No se asignaron tareas en esta sesión.</p>
           )}
         </section>
 
@@ -138,38 +143,43 @@ export function PlannerMinutesView({
           <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
             <span>📋</span> 3. Resumen de Temas Tratados
           </h3>
-          <div className="flex flex-col gap-3 pl-2">
-            {blocks.map((b, idx) => (
-              <div key={b.id || idx} className="text-xs">
-                <div className="font-semibold text-foreground flex items-center gap-2">
-                  <span>{b.title}</span>
-                  <span className="text-muted font-mono font-normal">({b.durationMinutes} min)</span>
+          {blocks.length === 0 ? (
+            <p className="text-xs text-muted italic pl-1">Sin bloques registrados.</p>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {blocks.map((b, idx) => (
+                <div key={b.id || idx} className="text-xs bg-surface-secondary/20 p-2.5 rounded-lg border border-border/40">
+                  <div className="font-semibold text-foreground flex items-center gap-2">
+                    <span>{b.title}</span>
+                    <span className="text-muted font-mono font-normal text-[11px]">({b.durationMinutes} min)</span>
+                  </div>
+                  {(b.subpoints || []).length > 0 && (
+                    <ul className="pl-3.5 mt-1.5 space-y-1 text-muted">
+                      {b.subpoints.map((p, pIdx) => (
+                        <li key={p.id || pIdx} className="flex items-center gap-2">
+                          <span className={p.status === 'done' ? 'text-success font-bold text-xs' : 'text-muted text-xs'}>
+                            {p.status === 'done' ? '✓' : '•'}
+                          </span>
+                          <span className={p.status === 'done' ? 'line-through text-muted/80' : 'text-foreground'}>
+                            {p.title}
+                          </span>
+                          {p.durationMinutes > 0 && (
+                            <span className="font-mono text-[10px] text-muted">({p.durationMinutes}m)</span>
+                          )}
+                          {p.presenter && (
+                            <span className="text-muted text-[10px]">· {p.presenter}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {(b.subpoints || []).length > 0 && (
-                  <ul className="pl-4 mt-1.5 space-y-1 text-muted">
-                    {b.subpoints.map((p, pIdx) => (
-                      <li key={p.id || pIdx} className="flex items-center gap-2">
-                        <span className={p.status === 'done' ? 'text-success font-bold' : 'text-muted'}>
-                          {p.status === 'done' ? '✓' : '•'}
-                        </span>
-                        <span className={p.status === 'done' ? 'line-through text-muted/80' : 'text-foreground'}>
-                          {p.title}
-                        </span>
-                        {p.durationMinutes > 0 && (
-                          <span className="font-mono text-[11px] text-muted">({p.durationMinutes}m)</span>
-                        )}
-                        {p.presenter && (
-                          <span className="text-muted text-[11px]">· {p.presenter}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
       </Card>
     </div>
   );
 }
+
