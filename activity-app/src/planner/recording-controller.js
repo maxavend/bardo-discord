@@ -206,9 +206,11 @@ export class RecordingController {
     }
     if (this.status === RECORDING_STATUS.FINALIZING) return null;
 
-    this.setStatus(RECORDING_STATUS.FINALIZING);
+    // Compute duration before changing PAUSED -> FINALIZING so an outstanding
+    // paused interval never leaks into recorded duration.
     const endTime = Date.now();
     const durationMs = this.getElapsedRecordingMs(endTime);
+    this.setStatus(RECORDING_STATUS.FINALIZING);
 
     if (this.activeSegmentStartedAt) {
       this.segments.push({
@@ -260,7 +262,7 @@ export class RecordingController {
             status: 'pending',
             binaryStorage: null,
             blobUrl,
-            blob, // transient: stripped before metadata persistence
+            blob,
           };
           this.cleanup({clearContext: true});
           this.setStatus(RECORDING_STATUS.FINALIZED);
