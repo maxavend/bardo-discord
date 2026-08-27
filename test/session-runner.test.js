@@ -3,29 +3,28 @@ import assert from 'node:assert/strict';
 
 import {
   SESSION_STATUS,
+  POINT_STATUS,
   createLiveSession,
+  migrateLiveSessionState,
+  getActivePoint,
+  getPointStatus,
+  getPointCounts,
   getElapsedSessionMs,
   getElapsedActiveBlockMs,
   getBlockPlannedMs,
   getRemainingActiveBlockMs,
   pauseLiveSession,
   resumeLiveSession,
-  advanceToNextBlock,
+  advanceLiveSession,
+  skipActivePoint,
   skipActiveBlock,
   extendActiveBlock,
   setUnlimitedActiveBlock,
-  completeLiveSession,
   interruptLiveSession,
   resumeInterruptedSession,
   saveFinalizedRecording,
-  renameRecordingInSession,
-  deleteRecordingFromSession,
-  addRecordingToSession,
-  addDecisionToSession,
   recalculateEstimatedEndTime,
-  dismissBlockRecordingPrompt,
 } from '../activity-app/src/planner/session-runner.js';
-
 import {
   evaluateSessionAssistant,
   getAssistantContextDetails,
@@ -33,352 +32,533 @@ import {
   formatMsToClock,
   computeSessionRecap,
 } from '../activity-app/src/planner/session-assistant-engine.js';
+import {
+  persistRecordingBinary,
+  hydrateRecordingBinary,
+} from '../activity-app/src/planner/recording-storage.js';
+import {RecordingController, RECORDING_STATUS} from '../activity-app/src/planner/recording-controller.js';
+import {createSessionTransitionGuard} from '../activity-app/src/planner/session-transition-guard.js';
 
-const MOCK_PLANNER_STATE = {
+const START = 1_000_000;
+const MINUTE = 60_000;
+
+const PLANNER = {
   title: 'Weekly Diseño',
   startTime: '10:00',
   totalCalculatedDuration: 45,
   blocks: [
     {
       id: 'block-1',
-      title: 'Apertura',
+      title: 'Revisión ORION',
       durationMinutes: 15,
-      subpoints: [{id: 'p1', title: 'Contexto', status: 'pending'}],
+      introDesc: 'Revisión de los principales flujos.',
+      subpoints: [
+        {id: 'p1', title: 'Prototipo navegable', status: 'pending'},
+        {id: 'p2', title: 'Bloqueo SIM', status: 'pending'},
+        {id: 'p3', title: 'Mi Plan', status: 'pending'},
+      ],
       decisions: [],
     },
     {
       id: 'block-2',
-      title: 'Revisión ORION',
-      durationMinutes: 30,
-      subpoints: [{id: 'p2', title: 'Demo', status: 'pending'}],
+      title: 'Cierre',
+      durationMinutes: 20,
+      subpoints: [{id: 'p4', title: 'Feedback final', status: 'pending'}],
+      decisions: [],
+    },
+    {
+      id: 'block-3',
+      title: 'Break',
+      durationMinutes: 10,
+      subpoints: [],
       decisions: [],
     },
   ],
 };
 
-test('Session Runner: createLiveSession initializes with running status and first block', () => {
-  const now = 1000000;
-  const session = createLiveSession(MOCK_PLANNER_STATE, now);
+function createMemoryRecordingStorage() {
+  const data = new Map();
+  return {
+    data,
+    async save(id, blob) {
+      data.set(id, blob);
+      return id;
+    },
+    async get(id) {
+      return data.get(id) || null;
+    },
+    async delete(id) {
+      data.delete(id);
+    },
+  };
+}
 
+test('Active Point: start activates first block and first pending point', () => {
+  const session = createLiveSession(PLANNER, START);
   assert.equal(session.status, SESSION_STATUS.RUNNING);
-  assert.equal(session.sessionStartedAt, now);
   assert.equal(session.liveActiveBlockId, 'block-1');
-  assert.equal(session.activeBlockStartedAt, now);
-  assert.equal(session.accumulatedPausedMs, 0);
-  assert.deepEqual(session.completedBlockIds, []);
-  assert.deepEqual(session.skippedBlockIds, []);
+  assert.equal(session.liveActivePointId, 'p1');
+  assert.equal(getActivePoint(PLANNER, session)?.title, 'Prototipo navegable');
+  assert.equal(getPointStatus(session, 'p1'), POINT_STATUS.ACTIVE);
 });
 
-test('Session Runner: getElapsedActiveBlockMs and getRemainingActiveBlockMs calculate deterministically', () => {
-  const start = 1000000;
-  const session = createLiveSession(MOCK_PLANNER_STATE, start);
-  const block = MOCK_PLANNER_STATE.blocks[0]; // 15 min = 900,000 ms
+test('Active Point + Timer: next advances point without resetting block timer', () => {
+  const session = createLiveSession(PLANNER, START);
+  const blockStartedAt = session.activeBlockStartedAt;
+  const before = getElapsedActiveBlockMs(session, START + 5 * MINUTE);
 
-  const now5MinLater = start + 5 * 60 * 1000; // 300,000 ms later
-  const elapsed = getElapsedActiveBlockMs(session, now5MinLater);
-  const remaining = getRemainingActiveBlockMs(block, session, now5MinLater);
+  const next = advanceLiveSession(PLANNER, session, START + 5 * MINUTE);
 
-  assert.equal(elapsed, 300000);
-  assert.equal(remaining, 600000); // 10 minutes remaining
+  assert.equal(next.liveActiveBlockId, 'block-1');
+  assert.equal(next.liveActivePointId, 'p2');
+  assert.equal(next.activeBlockStartedAt, blockStartedAt);
+  assert.equal(next.pointStatuses.p1, POINT_STATUS.DONE);
+  assert.equal(getElapsedActiveBlockMs(next, START + 5 * MINUTE), before);
+  assert.deepEqual(next.completedBlockIds, []);
 });
 
-test('Session Runner: pause and resume freeze and restore elapsed time properly', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Active Point + Timer: last point starts next block and resets block timer', () => {
+  let session = createLiveSession(PLANNER, START);
+  session = advanceLiveSession(PLANNER, session, START + 2 * MINUTE);
+  session = advanceLiveSession(PLANNER, session, START + 4 * MINUTE);
 
-  // Run for 3 minutes (180,000 ms)
-  const pauseTime = start + 180000;
-  session = pauseLiveSession(session, pauseTime);
-  assert.equal(session.status, SESSION_STATUS.PAUSED);
-
-  // While paused for 5 minutes (300,000 ms), elapsed time should stay at 180,000 ms
-  const duringPause = pauseTime + 300000;
-  assert.equal(getElapsedActiveBlockMs(session, duringPause), 180000);
-
-  // Resume after 5 minutes pause
-  session = resumeLiveSession(session, duringPause);
-  assert.equal(session.status, SESSION_STATUS.RUNNING);
-  assert.equal(session.accumulatedPausedMs, 300000);
-
-  // Check 2 minutes after resume (total active run = 3m + 2m = 5m = 300,000 ms)
-  const afterResume = duringPause + 120000;
-  assert.equal(getElapsedActiveBlockMs(session, afterResume), 300000);
-});
-
-test('Session Runner: advanceToNextBlock marks current completed and activates next', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
-
-  const nextTime = start + 900000;
-  session = advanceToNextBlock(MOCK_PLANNER_STATE, session, nextTime);
+  const transitionAt = START + 7 * MINUTE;
+  session = advanceLiveSession(PLANNER, session, transitionAt);
 
   assert.equal(session.liveActiveBlockId, 'block-2');
-  assert.equal(session.activeBlockStartedAt, nextTime);
+  assert.equal(session.liveActivePointId, 'p4');
+  assert.equal(session.activeBlockStartedAt, transitionAt);
+  assert.equal(getElapsedActiveBlockMs(session, transitionAt), 0);
   assert.deepEqual(session.completedBlockIds, ['block-1']);
+  assert.equal(session.pointStatuses.p3, POINT_STATUS.DONE);
 });
 
-test('Session Runner: advancing after last block completes the session', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
-
-  // Advance to block 2
-  session = advanceToNextBlock(MOCK_PLANNER_STATE, session, start + 900000);
-  // Advance after block 2 (end of agenda)
-  const endTime = start + 2700000;
-  session = advanceToNextBlock(MOCK_PLANNER_STATE, session, endTime);
-
+test('Block with 0 Points: active point is null and next advances the block/session', () => {
+  const planner = {
+    title: 'Break only',
+    startTime: '10:00',
+    totalCalculatedDuration: 10,
+    blocks: [{id: 'break', title: 'Break', durationMinutes: 10, subpoints: []}],
+  };
+  let session = createLiveSession(planner, START);
+  assert.equal(session.liveActivePointId, null);
+  session = advanceLiveSession(planner, session, START + MINUTE);
   assert.equal(session.status, SESSION_STATUS.COMPLETED);
-  assert.equal(session.sessionEndedAt, endTime);
-  assert.equal(session.liveActiveBlockId, null);
-  assert.deepEqual(session.completedBlockIds, ['block-1', 'block-2']);
+  assert.deepEqual(session.completedBlockIds, ['break']);
 });
 
-test('Session Runner: skipActiveBlock records block in skippedBlockIds without marking completed', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Point Skip: skipped is distinct from done and block timer continues', () => {
+  let session = createLiveSession(PLANNER, START);
+  const blockStartedAt = session.activeBlockStartedAt;
+  session = skipActivePoint(PLANNER, session, START + 3 * MINUTE);
 
-  session = skipActiveBlock(MOCK_PLANNER_STATE, session, start + 60000);
-  assert.equal(session.liveActiveBlockId, 'block-2');
-  assert.deepEqual(session.skippedBlockIds, ['block-1']);
+  assert.equal(session.pointStatuses.p1, POINT_STATUS.SKIPPED);
+  assert.equal(getPointStatus(session, 'p1'), POINT_STATUS.SKIPPED);
+  assert.equal(session.liveActivePointId, 'p2');
+  assert.equal(session.activeBlockStartedAt, blockStartedAt);
   assert.deepEqual(session.completedBlockIds, []);
 });
 
-test('Session Runner: extendActiveBlock increases planned time and recalculates estimated end', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Block skip does not mark pending Points done', () => {
+  let session = createLiveSession(PLANNER, START);
+  session = skipActiveBlock(PLANNER, session, START + MINUTE);
+  assert.equal(session.liveActiveBlockId, 'block-2');
+  assert.equal(session.liveActivePointId, 'p4');
+  assert.deepEqual(session.skippedBlockIds, ['block-1']);
+  assert.equal(session.pointStatuses.p1, POINT_STATUS.PENDING);
+  assert.equal(session.pointStatuses.p2, POINT_STATUS.PENDING);
+  assert.equal(session.pointStatuses.p3, POINT_STATUS.PENDING);
+});
 
-  const block1 = MOCK_PLANNER_STATE.blocks[0]; // base 15m
-  assert.equal(getBlockPlannedMs(block1, session), 900000);
+test('Time model: extensions belong to Block and update estimated Session end', () => {
+  let session = createLiveSession(PLANNER, START);
+  const block = PLANNER.blocks[0];
+  assert.equal(getBlockPlannedMs(block, session), 15 * MINUTE);
 
   session = extendActiveBlock(session, 'block-1', 10);
-  assert.equal(getBlockPlannedMs(block1, session), 1500000); // 25m
-
-  // Original estimated end with 45m from 10:00 -> 10:45
-  // With +10m extension -> 10:55
-  const estimatedEnd = recalculateEstimatedEndTime(MOCK_PLANNER_STATE, session);
-  assert.equal(estimatedEnd, '10:55');
+  assert.equal(getBlockPlannedMs(block, session), 25 * MINUTE);
+  assert.equal(recalculateEstimatedEndTime(PLANNER, session), '10:55');
+  assert.equal(session.liveActivePointId, 'p1');
 });
 
-test('Session Runner: interruptLiveSession and resumeInterruptedSession manage lifecycle safely', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Time expired: does not auto-advance the active Point and overtime remains navigable', () => {
+  let session = createLiveSession(PLANNER, START);
+  const expiredAt = START + 16 * MINUTE;
+  const evaluation = evaluateSessionAssistant(PLANNER, session, expiredAt);
 
-  // Run for 10 minutes (600,000 ms) and interrupt
-  const interruptTime = start + 600000;
-  session = interruptLiveSession(session, interruptTime);
+  assert.equal(evaluation.event, ASSISTANT_EVENT.BLOCK_TIME_EXPIRED);
+  assert.equal(evaluation.isExpired, true);
+  assert.equal(evaluation.overtimeMs, MINUTE);
+  assert.equal(session.liveActivePointId, 'p1');
 
-  assert.equal(session.status, SESSION_STATUS.INTERRUPTED);
-  assert.equal(session.sessionEndedAt, interruptTime);
-  assert.equal(session.liveActiveBlockId, 'block-1'); // preserves block position
+  session = extendActiveBlock(session, 'block-1', 10);
+  assert.equal(session.liveActivePointId, 'p1');
+  assert.equal(getRemainingActiveBlockMs(PLANNER.blocks[0], session, expiredAt), 9 * MINUTE);
+});
 
-  // Interrupted for 15 minutes (900,000 ms), then resumed
-  const resumeTime = interruptTime + 900000;
-  session = resumeInterruptedSession(session, resumeTime);
+test('Unlimited time remains a Block setting without changing active Point', () => {
+  const session = createLiveSession(PLANNER, START);
+  const unlimited = setUnlimitedActiveBlock(session, 'block-1');
+  const evaluation = evaluateSessionAssistant(PLANNER, unlimited, START + 40 * MINUTE);
+  assert.equal(evaluation.event, ASSISTANT_EVENT.BLOCK_UNLIMITED);
+  assert.equal(evaluation.isExpired, false);
+  assert.equal(unlimited.liveActivePointId, 'p1');
+});
 
+test('Session pause/resume freezes Block timer and does not mutate Point', () => {
+  let session = createLiveSession(PLANNER, START);
+  session = pauseLiveSession(session, START + 3 * MINUTE);
+  assert.equal(session.status, SESSION_STATUS.PAUSED);
+  assert.equal(session.liveActivePointId, 'p1');
+  assert.equal(getElapsedActiveBlockMs(session, START + 8 * MINUTE), 3 * MINUTE);
+
+  session = resumeLiveSession(session, START + 8 * MINUTE);
   assert.equal(session.status, SESSION_STATUS.RUNNING);
-  assert.equal(session.sessionEndedAt, null);
-  assert.equal(session.accumulatedPausedMs, 900000);
-
-  // Check elapsed time 2 minutes after resumption (10m + 2m = 12m = 720,000 ms)
-  const afterResumeTime = resumeTime + 120000;
-  assert.equal(getElapsedSessionMs(session, afterResumeTime), 720000);
+  assert.equal(session.liveActivePointId, 'p1');
+  assert.equal(session.accumulatedPausedMs, 5 * MINUTE);
+  assert.equal(getElapsedActiveBlockMs(session, START + 10 * MINUTE), 5 * MINUTE);
 });
 
-test('Session Runner: saveFinalizedRecording, renameRecordingInSession and deleteRecordingFromSession manage entities', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Interrupted: resume restores same Block and same Point without re-marking progress', () => {
+  let session = createLiveSession(PLANNER, START);
+  session = advanceLiveSession(PLANNER, session, START + 2 * MINUTE);
+  const beforeStatuses = {...session.pointStatuses};
 
-  const recording1 = {
-    id: 'rec-1',
-    sessionId: session.sessionId,
-    blockId: 'block-1',
-    blockTitle: 'Apertura',
-    pointId: 'p1',
-    pointTitle: 'Contexto',
-    name: 'Contexto de apertura',
-    durationMs: 240000,
-    sources: ['microphone'],
-    sourcesLabel: 'Micrófono',
-    status: 'saved',
+  session = interruptLiveSession(session, START + 4 * MINUTE);
+  assert.equal(session.status, SESSION_STATUS.INTERRUPTED);
+  assert.equal(session.liveActiveBlockId, 'block-1');
+  assert.equal(session.liveActivePointId, 'p2');
+
+  session = resumeInterruptedSession(session, START + 14 * MINUTE);
+  assert.equal(session.status, SESSION_STATUS.RUNNING);
+  assert.equal(session.liveActiveBlockId, 'block-1');
+  assert.equal(session.liveActivePointId, 'p2');
+  assert.deepEqual(session.pointStatuses, beforeStatuses);
+  assert.equal(getElapsedSessionMs(session, START + 16 * MINUTE), 6 * MINUTE);
+});
+
+test('Migration: old live Session without liveActivePointId infers first pending point safely', () => {
+  const oldState = {
+    status: SESSION_STATUS.RUNNING,
+    sessionId: 'legacy-session',
+    sessionStartedAt: START,
+    liveActiveBlockId: 'block-1',
+    activeBlockStartedAt: START,
+    completedBlockIds: [],
+    skippedBlockIds: [],
+    recordings: [{id: 'legacy-rec', blockId: 'block-1'}],
+    decisions: [],
   };
 
-  session = saveFinalizedRecording(session, recording1);
-  assert.equal(session.recordings.length, 1);
-  assert.equal(session.recordings[0].name, 'Contexto de apertura');
-
-  // Rename
-  session = renameRecordingInSession(session, 'rec-1', 'Introducción ejecutiva');
-  assert.equal(session.recordings[0].name, 'Introducción ejecutiva');
-
-  // Delete
-  session = deleteRecordingFromSession(session, 'rec-1');
-  assert.equal(session.recordings.length, 0);
+  const migrated = migrateLiveSessionState(PLANNER, oldState);
+  assert.equal(migrated.sessionId, 'legacy-session');
+  assert.equal(migrated.liveActiveBlockId, 'block-1');
+  assert.equal(migrated.liveActivePointId, 'p1');
+  assert.equal(migrated.recordings.length, 1);
+  assert.equal(migrated.pointStatuses.p1, POINT_STATUS.PENDING);
 });
 
-test('Session Assistant Engine: emits 5-min warning and expiration events correctly', () => {
-  const start = 1000000;
-  const session = createLiveSession(MOCK_PLANNER_STATE, start);
-  const block1 = MOCK_PLANNER_STATE.blocks[0]; // 15m
+test('Recording + Next: recording remains associated with outgoing Point A', () => {
+  let session = createLiveSession(PLANNER, START);
+  const recording = {
+    id: 'rec-p1',
+    sessionId: session.sessionId,
+    blockId: session.liveActiveBlockId,
+    blockTitle: 'Revisión ORION',
+    pointId: session.liveActivePointId,
+    pointTitle: 'Prototipo navegable',
+    durationMs: 90_000,
+    status: 'saved',
+    binaryStorage: 'indexeddb',
+  };
 
-  // At 11 minutes (4 min remaining -> should trigger 5 min warning)
-  const at11Min = start + 11 * 60 * 1000;
-  const evalWarning = evaluateSessionAssistant(MOCK_PLANNER_STATE, session, at11Min);
-  assert.equal(evalWarning.event, ASSISTANT_EVENT.BLOCK_5_MIN_REMAINING);
-  assert.equal(evalWarning.is5MinWarning, true);
-  assert.equal(evalWarning.isExpired, false);
+  session = saveFinalizedRecording(session, recording);
+  session = advanceLiveSession(PLANNER, session, START + 90_000);
 
-  // At 16 minutes (1 min overtime -> should trigger expired event)
-  const at16Min = start + 16 * 60 * 1000;
-  const evalExpired = evaluateSessionAssistant(MOCK_PLANNER_STATE, session, at16Min);
-  assert.equal(evalExpired.event, ASSISTANT_EVENT.BLOCK_TIME_EXPIRED);
-  assert.equal(evalExpired.isExpired, true);
-  assert.equal(evalExpired.overtimeMs, 60000); // 1 min overtime
-
-  // With unlimited set, event becomes BLOCK_UNLIMITED without expired alarm
-  const sessionUnlimited = setUnlimitedActiveBlock(session, 'block-1');
-  const evalUnlimited = evaluateSessionAssistant(MOCK_PLANNER_STATE, sessionUnlimited, at16Min);
-  assert.equal(evalUnlimited.event, ASSISTANT_EVENT.BLOCK_UNLIMITED);
-  assert.equal(evalUnlimited.isExpired, false);
+  assert.equal(session.liveActivePointId, 'p2');
+  assert.equal(session.recordings[0].pointId, 'p1');
+  assert.equal(session.recordings[0].pointTitle, 'Prototipo navegable');
+  assert.equal(session.pointStatuses.p1, POINT_STATUS.DONE);
 });
 
-test('Session Assistant Engine: getAssistantContextDetails generates dynamic hierarchy and CTAs', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Recording persistence: metadata + binary are retrievable after reload simulation', async () => {
+  const storage = createMemoryRecordingStorage();
+  const blob = new Blob(['bardo-audio'], {type: 'audio/webm'});
+  const transient = {
+    id: 'rec-durable',
+    sessionId: 'session-1',
+    blockId: 'block-1',
+    pointId: 'p1',
+    pointTitle: 'Prototipo navegable',
+    durationMs: 12_000,
+    status: 'pending',
+    blob,
+    blobUrl: 'blob:current-page',
+  };
 
-  // 1. Running state
-  const runningDetails = getAssistantContextDetails(MOCK_PLANNER_STATE, session, start + 60000);
-  assert.equal(runningDetails.blockProgressLabel, 'Bloque 1 de 2');
-  assert.equal(runningDetails.primaryAction.label, 'Siguiente →');
-  assert.equal(runningDetails.secondaryAction.label, 'Pausar');
-  assert.equal(runningDetails.showInitialRecordingPrompt, true);
+  const saved = await persistRecordingBinary(transient, storage);
+  assert.equal(saved.status, 'saved');
+  assert.equal(saved.binaryStorage, 'indexeddb');
+  assert.equal(Object.hasOwn(saved, 'blob'), false);
+  assert.equal(await storage.get('rec-durable'), blob);
 
-  // Dismiss prompt
-  session = dismissBlockRecordingPrompt(session, 'block-1');
-  const afterDismiss = getAssistantContextDetails(MOCK_PLANNER_STATE, session, start + 60000);
-  assert.equal(afterDismiss.showInitialRecordingPrompt, false);
-
-  // 2. Paused state
-  session = pauseLiveSession(session, start + 120000);
-  const pausedDetails = getAssistantContextDetails(MOCK_PLANNER_STATE, session, start + 120000);
-  assert.equal(pausedDetails.stateVariant, 'paused');
-  assert.equal(pausedDetails.primaryAction.label, 'Reanudar sesión');
-  assert.equal(pausedDetails.contextualHelperText, 'El tiempo y la grabación están pausados.');
-
-  // 3. Expired state (after 16 minutes)
-  session = resumeLiveSession(session, start + 120000);
-  const expiredDetails = getAssistantContextDetails(MOCK_PLANNER_STATE, session, start + 16 * 60 * 1000);
-  assert.equal(expiredDetails.stateVariant, 'expired');
-  assert.equal(expiredDetails.isExpired, true);
-  assert.match(expiredDetails.contextualHelperText, /¿Continuamos o pasamos al siguiente punto\?/);
+  const metadataAfterReload = {...saved, blobUrl: '', status: 'pending'};
+  const hydrated = await hydrateRecordingBinary(metadataAfterReload, storage, () => 'blob:rehydrated');
+  assert.equal(hydrated.status, 'saved');
+  assert.equal(hydrated.blobUrl, 'blob:rehydrated');
 });
 
-test('Session Assistant Engine: formatMsToClock formats positive and overtime clocks', () => {
-  assert.equal(formatMsToClock(300000), '05:00');
-  assert.equal(formatMsToClock(75000), '01:15');
-  assert.equal(formatMsToClock(45000, true), '+00:45');
-  assert.equal(formatMsToClock(-125000), '-02:05');
+test('Recording persistence error never reports saved', async () => {
+  const failingStorage = {
+    async save() { throw new Error('quota exceeded'); },
+    async get() { return null; },
+    async delete() {},
+  };
+  const result = await persistRecordingBinary({
+    id: 'rec-error',
+    blob: new Blob(['x'], {type: 'audio/webm'}),
+    status: 'pending',
+  }, failingStorage);
+  assert.equal(result.status, 'error');
+  assert.equal(result.binaryStorage, null);
+  assert.match(result.persistenceError, /quota exceeded/);
 });
 
-test('Session Assistant Engine: computeSessionRecap produces deterministic recap for Completed & Interrupted', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('Recording pause/resume keeps the same recordingId', async () => {
+  const previousNavigator = globalThis.navigator;
+  const previousMediaRecorder = globalThis.MediaRecorder;
 
+  class FakeMediaRecorder {
+    static isTypeSupported() { return true; }
+    constructor() {
+      this.state = 'inactive';
+      this.ondataavailable = null;
+      this.onstop = null;
+    }
+    start() { this.state = 'recording'; }
+    pause() { this.state = 'paused'; }
+    resume() { this.state = 'recording'; }
+    stop() {
+      this.state = 'inactive';
+      this.ondataavailable?.({data: new Blob(['audio'], {type: 'audio/webm'})});
+      this.onstop?.();
+    }
+  }
+
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => ({getTracks: () => [{stop() {}}]}),
+      },
+    },
+  });
+  globalThis.MediaRecorder = FakeMediaRecorder;
+
+  try {
+    const controller = new RecordingController();
+    const recordingId = await controller.startRecording('s1', 'block-1', 'ORION', 'p1', 'Prototipo');
+    assert.equal(controller.getStatus(), RECORDING_STATUS.RECORDING);
+    assert.equal(controller.getCurrentRecordingId(), recordingId);
+
+    controller.pauseRecording();
+    assert.equal(controller.getStatus(), RECORDING_STATUS.PAUSED);
+    assert.equal(controller.getCurrentRecordingId(), recordingId);
+
+    controller.resumeRecording();
+    assert.equal(controller.getStatus(), RECORDING_STATUS.RECORDING);
+    assert.equal(controller.getCurrentRecordingId(), recordingId);
+
+    controller.pauseRecording();
+    const entity = await controller.finalizeRecording();
+    assert.equal(entity.id, recordingId);
+    assert.equal(entity.pointId, 'p1');
+    assert.equal(entity.status, 'pending');
+    assert.ok(entity.blob instanceof Blob);
+  } finally {
+    if (previousNavigator === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, 'navigator', {configurable: true, value: previousNavigator});
+    if (previousMediaRecorder === undefined) delete globalThis.MediaRecorder;
+    else globalThis.MediaRecorder = previousMediaRecorder;
+  }
+});
+
+test('Atomic Next: double invocation executes only one transition while finalize/persist is pending', async () => {
+  const guard = createSessionTransitionGuard();
+  let transitions = 0;
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+
+  const first = guard.run(async () => {
+    transitions += 1;
+    await pending;
+    return 'advanced-once';
+  });
+  const second = guard.run(async () => {
+    transitions += 1;
+    return 'advanced-twice';
+  });
+
+  assert.equal(guard.isActive, true);
+  const secondResult = await second;
+  assert.equal(secondResult.executed, false);
+  assert.equal(transitions, 1);
+
+  release();
+  const firstResult = await first;
+  assert.equal(firstResult.executed, true);
+  assert.equal(firstResult.value, 'advanced-once');
+  assert.equal(guard.isActive, false);
+  assert.equal(transitions, 1);
+});
+
+test('Assistant: CTA predicts point, block and session transitions', () => {
+  let session = createLiveSession(PLANNER, START);
+  let details = getAssistantContextDetails(PLANNER, session, START + MINUTE);
+  assert.equal(details.blockProgressLabel, 'Bloque 1 de 3');
+  assert.equal(details.pointProgressLabel, 'Punto 1 de 3');
+  assert.equal(details.primaryAction.label, 'Siguiente punto');
+  assert.equal(details.stateTitle, 'Prototipo navegable');
+
+  session = advanceLiveSession(PLANNER, session, START + 2 * MINUTE);
+  session = advanceLiveSession(PLANNER, session, START + 3 * MINUTE);
+  details = getAssistantContextDetails(PLANNER, session, START + 4 * MINUTE);
+  assert.equal(details.primaryAction.label, 'Siguiente bloque');
+
+  session = advanceLiveSession(PLANNER, session, START + 5 * MINUTE);
+  details = getAssistantContextDetails(PLANNER, session, START + 6 * MINUTE);
+  assert.equal(details.primaryAction.label, 'Siguiente bloque');
+
+  session = advanceLiveSession(PLANNER, session, START + 7 * MINUTE);
+  details = getAssistantContextDetails(PLANNER, session, START + 8 * MINUTE);
+  assert.equal(details.primaryAction.label, 'Finalizar sesión');
+});
+
+test('Assistant: expired Block keeps current Point and presents overtime context', () => {
+  const session = createLiveSession(PLANNER, START);
+  const details = getAssistantContextDetails(PLANNER, session, START + 16 * MINUTE);
+  assert.equal(details.stateVariant, 'expired');
+  assert.equal(details.activePoint.id, 'p1');
+  assert.equal(details.nextAction.label, 'Siguiente punto');
+  assert.match(details.contextualHelperText, /sigue activo/);
+});
+
+test('Point progress counts done and skipped separately', () => {
+  let session = createLiveSession(PLANNER, START);
+  session = advanceLiveSession(PLANNER, session, START + MINUTE);
+  session = skipActivePoint(PLANNER, session, START + 2 * MINUTE);
+  const counts = getPointCounts(PLANNER, session);
+  assert.equal(counts.total, 4);
+  assert.equal(counts.done, 1);
+  assert.equal(counts.skipped, 1);
+});
+
+test('Recap: blocks, treated Points, skipped Points and recordings use exact semantics', () => {
+  let session = createLiveSession(PLANNER, START);
   session = saveFinalizedRecording(session, {
     id: 'rec-1',
-    blockId: 'block-1',
-    blockTitle: 'Apertura',
-    pointId: 'p1',
-    pointTitle: 'Contexto',
-    name: 'Contexto de apertura',
-    durationMs: 180000, // 3 min
-    sourcesLabel: 'Micrófono',
-  });
-
-  session = addDecisionToSession(session, {
-    id: 'd-1',
-    blockId: 'block-1',
-    content: 'Se aprueba el roadmap',
-  });
-
-  // 1. Interrupted Session Recap
-  session = interruptLiveSession(session, start + 780000); // 13 min elapsed
-  const interruptedRecap = computeSessionRecap(MOCK_PLANNER_STATE, session);
-  assert.equal(interruptedRecap.isInterrupted, true);
-  assert.equal(interruptedRecap.statusLabel, 'Interrumpida');
-  assert.equal(interruptedRecap.actualDurationMinutes, 13);
-  assert.equal(interruptedRecap.totalRecordingsCount, 1);
-  assert.equal(interruptedRecap.totalRecordedMinutes, 3);
-  assert.equal(interruptedRecap.decisions.length, 1);
-  assert.match(interruptedRecap.recapDescription, /Se conservaron 13 min/);
-
-  // 2. Completed Session Recap
-  session = completeLiveSession(session, start + 1800000); // 30 min elapsed
-  const completedRecap = computeSessionRecap(MOCK_PLANNER_STATE, session);
-  assert.equal(completedRecap.isCompleted, true);
-  assert.equal(completedRecap.statusLabel, 'Completada');
-  assert.equal(completedRecap.actualDurationMinutes, 30);
-  assert.equal(completedRecap.plannedDurationMinutes, 45);
-});
-
-test('Session Lifecycle: active recording auto-persists to previous point when advancing with zero pending modal', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
-  assert.equal(session.liveActiveBlockId, 'block-1');
-
-  // Simulate active recording on block-1 / point p1
-  const activeRecording = {
-    id: 'rec-active-1',
     sessionId: session.sessionId,
     blockId: 'block-1',
-    blockTitle: 'Apertura',
+    blockTitle: 'Revisión ORION',
     pointId: 'p1',
-    pointTitle: 'Contexto',
-    name: 'Contexto',
-    durationMs: 320000,
-    sources: ['microphone'],
-    sourcesLabel: 'Micrófono',
+    pointTitle: 'Prototipo navegable',
+    durationMs: 3 * MINUTE,
     status: 'saved',
-  };
+  });
+  session = advanceLiveSession(PLANNER, session, START + MINUTE);
+  session = skipActivePoint(PLANNER, session, START + 2 * MINUTE);
+  session = interruptLiveSession(session, START + 13 * MINUTE);
 
-  // User hits "Siguiente ->": auto-persists recording & advances without pending modal
-  session = saveFinalizedRecording(session, activeRecording);
-  session = advanceToNextBlock(MOCK_PLANNER_STATE, session, start + 320000);
-
-  // Verify previous point has its recording saved correctly
-  assert.equal(session.recordings.length, 1);
-  assert.equal(session.recordings[0].blockId, 'block-1');
-  assert.equal(session.recordings[0].pointId, 'p1');
-  assert.equal(session.recordings[0].name, 'Contexto');
-
-  // Verify next block is live and previous is marked completed
-  assert.equal(session.liveActiveBlockId, 'block-2');
-  assert.deepEqual(session.completedBlockIds, ['block-1']);
+  const recap = computeSessionRecap(PLANNER, session);
+  assert.equal(recap.isInterrupted, true);
+  assert.equal(recap.actualDurationMinutes, 13);
+  assert.equal(recap.completedCount, 0);
+  assert.equal(recap.totalBlocksCount, 3);
+  assert.equal(recap.completedPointsCount, 1);
+  assert.equal(recap.skippedPointsCount, 1);
+  assert.equal(recap.totalPointsCount, 4);
+  assert.equal(recap.totalRecordingsCount, 1);
+  assert.equal(recap.groupedRecordings[0].block.id, 'block-1');
+  assert.equal(recap.groupedRecordings[0].pointGroups[0].point.id, 'p1');
+  assert.equal(recap.groupedRecordings[0].pointGroups[0].recordings[0].id, 'rec-1');
 });
 
-test('Session Lifecycle: active recording auto-persists and conserves artifacts when interrupting session', () => {
-  const start = 1000000;
-  let session = createLiveSession(MOCK_PLANNER_STATE, start);
+test('formatMsToClock formats remaining and overtime clocks', () => {
+  assert.equal(formatMsToClock(300_000), '05:00');
+  assert.equal(formatMsToClock(75_000), '01:15');
+  assert.equal(formatMsToClock(45_000, true), '+00:45');
+  assert.equal(formatMsToClock(-125_000), '-02:05');
+});
 
-  const activeRecording = {
-    id: 'rec-interrupt',
-    sessionId: session.sessionId,
-    blockId: 'block-1',
-    blockTitle: 'Apertura',
-    pointId: 'p1',
-    pointTitle: 'Contexto',
-    name: 'Contexto',
-    durationMs: 400000,
-    sources: ['microphone'],
-    sourcesLabel: 'Micrófono',
-    status: 'saved',
+test('End-to-end domain scenario: 3 Blocks (3 Points, 4 Points, 0 Points) converges predictably', () => {
+  const planner = {
+    title: 'Product validation',
+    startTime: '19:00',
+    totalCalculatedDuration: 35,
+    blocks: [
+      {id: 'b1', title: 'ORION', durationMinutes: 10, subpoints: [
+        {id: 'a1', title: 'Prototype', status: 'pending'},
+        {id: 'a2', title: 'SIM', status: 'pending'},
+        {id: 'a3', title: 'Plan', status: 'pending'},
+      ]},
+      {id: 'b2', title: 'Review', durationMinutes: 15, subpoints: [
+        {id: 'b1p', title: 'One', status: 'pending'},
+        {id: 'b2p', title: 'Two', status: 'pending'},
+        {id: 'b3p', title: 'Three', status: 'pending'},
+        {id: 'b4p', title: 'Four', status: 'pending'},
+      ]},
+      {id: 'b3', title: 'Break', durationMinutes: 10, subpoints: []},
+    ],
   };
 
-  // User confirms "Interrumpir y conservar": auto-persists recording & interrupts session
-  session = saveFinalizedRecording(session, activeRecording);
-  session = interruptLiveSession(session, start + 400000);
+  let session = createLiveSession(planner, START);
+  assert.deepEqual([session.liveActiveBlockId, session.liveActivePointId], ['b1', 'a1']);
 
-  assert.equal(session.status, SESSION_STATUS.INTERRUPTED);
-  assert.equal(session.recordings.length, 1);
-  assert.equal(session.recordings[0].id, 'rec-interrupt');
-  assert.equal(session.liveActiveBlockId, 'block-1');
+  session = advanceLiveSession(planner, session, START + 2 * MINUTE);
+  assert.equal(session.liveActivePointId, 'a2');
+
+  assert.equal(evaluateSessionAssistant(planner, session, START + 11 * MINUTE).isExpired, true);
+  assert.equal(session.liveActivePointId, 'a2');
+
+  session = extendActiveBlock(session, 'b1', 10);
+  assert.equal(recalculateEstimatedEndTime(planner, session), '19:45');
+  session = advanceLiveSession(planner, session, START + 12 * MINUTE);
+  session = advanceLiveSession(planner, session, START + 13 * MINUTE);
+  assert.deepEqual([session.liveActiveBlockId, session.liveActivePointId], ['b2', 'b1p']);
+
+  session = {
+    ...session,
+    decisions: [...session.decisions, {
+      id: 'decision-1',
+      sessionId: session.sessionId,
+      blockId: session.liveActiveBlockId,
+      pointId: session.liveActivePointId,
+      timestamp: START + 14 * MINUTE,
+      content: 'Decision in current Point',
+    }],
+  };
+  assert.equal(session.decisions.at(-1).pointId, 'b1p');
+
+  session = interruptLiveSession(session, START + 15 * MINUTE);
+  const interruptedBlock = session.liveActiveBlockId;
+  const interruptedPoint = session.liveActivePointId;
+  session = resumeInterruptedSession(session, START + 20 * MINUTE);
+  assert.equal(session.liveActiveBlockId, interruptedBlock);
+  assert.equal(session.liveActivePointId, interruptedPoint);
+
+  session = advanceLiveSession(planner, session, START + 21 * MINUTE);
+  session = advanceLiveSession(planner, session, START + 22 * MINUTE);
+  session = skipActivePoint(planner, session, START + 23 * MINUTE);
+  assert.equal(session.liveActivePointId, 'b4p');
+  session = advanceLiveSession(planner, session, START + 24 * MINUTE);
+  assert.deepEqual([session.liveActiveBlockId, session.liveActivePointId], ['b3', null]);
+  session = advanceLiveSession(planner, session, START + 25 * MINUTE);
+
+  assert.equal(session.status, SESSION_STATUS.COMPLETED);
+  assert.equal(session.liveActiveBlockId, null);
+  assert.equal(session.liveActivePointId, null);
+  assert.deepEqual(session.completedBlockIds, ['b1', 'b2', 'b3']);
+  assert.equal(session.pointStatuses.b3p, POINT_STATUS.SKIPPED);
+  assert.equal(getPointCounts(planner, session).done, 6);
+  assert.equal(getPointCounts(planner, session).skipped, 1);
 });
