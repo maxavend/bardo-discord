@@ -1,8 +1,9 @@
-import {
-  computePlannerTimes,
-} from './time-engine.js';
+import {computePlannerTimes} from './time-engine.js';
 import {
   DEFAULT_LIVE_SESSION,
+  POINT_STATUS,
+  getPointStatus,
+  migrateLiveSessionState,
 } from './session-runner.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
@@ -56,9 +57,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-2', title: 'Coordinación sobre Minuta Weekly', presenter: 'Pau', status: 'done'},
         {id: 'p-3', title: 'Agenda de la sesión', presenter: 'Pau', status: 'done'},
       ],
-      decisions: [
-        {id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.'},
-      ],
+      decisions: [{id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.'}],
     },
     {
       id: 'b-2',
@@ -103,9 +102,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-8', title: 'Landing Apple con Integración Claro Up', presenter: 'Javi', status: 'pending'},
         {id: 'p-9', title: 'Avance landing factibilidad (opcional)', presenter: 'Dani / Javi', status: 'pending'},
       ],
-      decisions: [
-        {id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.'},
-      ],
+      decisions: [{id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.'}],
     },
     {
       id: 'b-5',
@@ -119,9 +116,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-10', title: 'Landing OTT Mascotas (avances y soluciones)', presenter: 'Responsable', status: 'pending'},
         {id: 'p-11', title: 'Pantallas SSO para el flujo de Registro', presenter: 'Pau / Maxi', status: 'pending'},
       ],
-      decisions: [
-        {id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.'},
-      ],
+      decisions: [{id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.'}],
     },
   ],
 };
@@ -130,8 +125,7 @@ export function loadPlannerState() {
   try {
     const raw = localStorage.getItem(PLANNER_STORE_KEY);
     if (!raw) return computePlannerTimes(DEFAULT_EMPTY_SESSION);
-    const parsed = JSON.parse(raw);
-    return computePlannerTimes(parsed);
+    return computePlannerTimes(JSON.parse(raw));
   } catch {
     return computePlannerTimes(DEFAULT_EMPTY_SESSION);
   }
@@ -141,33 +135,54 @@ export function savePlannerState(state) {
   try {
     localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(state));
   } catch {
-    // Local storage persistence fallback
+    // Local storage persistence fallback.
   }
 }
 
-export function loadLiveSessionState() {
+function normalizeReloadedRecording(recording) {
+  if (!recording || typeof recording !== 'object') return recording;
+  const {blobUrl: _blobUrl, blob: _blob, ...metadata} = recording;
+  if (metadata.binaryStorage === 'indexeddb') {
+    return {...metadata, blobUrl: '', status: 'pending', persistenceError: null};
+  }
+  return {
+    ...metadata,
+    blobUrl: '',
+    status: 'error',
+    persistenceError: metadata.persistenceError || 'El audio de esta grabación no fue persistido y no puede recuperarse tras recargar.',
+  };
+}
+
+export function loadLiveSessionState(plannerState = null) {
   try {
     const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
-    if (!raw) return DEFAULT_LIVE_SESSION;
-    return JSON.parse(raw);
+    if (!raw) return {...DEFAULT_LIVE_SESSION};
+    const parsed = JSON.parse(raw);
+    const migrated = migrateLiveSessionState(plannerState, parsed);
+    return {
+      ...migrated,
+      recordings: (migrated.recordings || []).map(normalizeReloadedRecording),
+    };
   } catch {
-    return DEFAULT_LIVE_SESSION;
+    return {...DEFAULT_LIVE_SESSION};
   }
+}
+
+export function serializeLiveSessionState(sessionState) {
+  return {
+    ...sessionState,
+    recordings: (sessionState?.recordings || []).map((recording) => {
+      const {blob: _blob, blobUrl: _blobUrl, ...metadata} = recording;
+      return metadata;
+    }),
+  };
 }
 
 export function saveLiveSessionState(sessionState) {
   try {
-    // Do not serialize active blob URLs that might be transient
-    const cleanSession = {
-      ...sessionState,
-      recordings: (sessionState.recordings || []).map(r => ({
-        ...r,
-        // Keep blobUrl in memory, clean fallback for localStorage
-      })),
-    };
-    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(cleanSession));
+    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(serializeLiveSessionState(sessionState)));
   } catch {
-    // Local storage persistence fallback
+    // Local storage persistence fallback.
   }
 }
 
@@ -175,7 +190,7 @@ export function clearLiveSessionState() {
   try {
     localStorage.removeItem(LIVE_SESSION_STORE_KEY);
   } catch {
-    // Local storage persistence fallback
+    // Local storage persistence fallback.
   }
 }
 
@@ -207,67 +222,66 @@ export function generateDiscordAnnouncement(plannerState) {
   if (computed.description) text += `\n> ${computed.description}\n`;
 
   text += `\n**📋 Agenda de la sesión:**\n`;
-  (computed.blocks || []).forEach((b, idx) => {
-    text += `${idx + 1}. **${b.title}** (${b.durationMinutes}m)`;
-    if (b.leader) text += ` — *Lidera: ${b.leader}*`;
-    text += `\n`;
-    if ((b.subpoints || []).length > 0) {
-      b.subpoints.forEach((p) => {
-        const presenter = p.presenter ? ` · ${p.presenter}` : '';
-        text += `   • ${p.title}${presenter}\n`;
-      });
+  (computed.blocks || []).forEach((block, index) => {
+    text += `${index + 1}. **${block.title}** (${block.durationMinutes}m)`;
+    if (block.leader) text += ` — *Lidera: ${block.leader}*`;
+    text += '\n';
+    for (const point of block.subpoints || []) {
+      const presenter = point.presenter ? ` · ${point.presenter}` : '';
+      text += `   • ${point.title}${presenter}\n`;
     }
   });
-
   return text;
 }
 
 export function generateMinutesMarkdown(plannerState, sessionState = null) {
   const computed = computePlannerTimes(plannerState);
-  let md = `# Acta: ${computed.title}\n\n`;
-  md += `**Fecha:** ${computed.date || 'Sin fecha'} | **Moderador:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min\n\n`;
+  let markdown = `# Acta: ${computed.title}\n\n`;
+  markdown += `**Fecha:** ${computed.date || 'Sin fecha'} | **Moderador:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min\n\n`;
 
-  md += `## 1. Decisiones y acuerdos tomados\n`;
+  markdown += '## 1. Decisiones y acuerdos tomados\n';
   const allDecisions = [];
-  (computed.blocks || []).forEach(b => {
-    (b.decisions || []).forEach(d => {
-      allDecisions.push({content: d.content, origin: b.title});
-    });
-  });
-  if (sessionState?.decisions) {
-    sessionState.decisions.forEach(d => {
-      const block = (computed.blocks || []).find(b => b.id === d.blockId);
-      if (!allDecisions.some(existing => existing.content === d.content)) {
-        allDecisions.push({content: d.content, origin: block ? block.title : 'Sesión'});
-      }
-    });
+  for (const block of computed.blocks || []) {
+    for (const decision of block.decisions || []) {
+      allDecisions.push({content: decision.content, origin: block.title, pointId: decision.pointId || null});
+    }
+  }
+  for (const decision of sessionState?.decisions || []) {
+    const block = (computed.blocks || []).find((candidate) => candidate.id === decision.blockId);
+    const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
+    if (!allDecisions.some((existing) => existing.content === decision.content)) {
+      allDecisions.push({
+        content: decision.content,
+        origin: point ? `${block.title} → ${point.title}` : (block?.title || 'Sesión'),
+      });
+    }
   }
 
   if (allDecisions.length > 0) {
-    allDecisions.forEach(d => {
-      md += `- **${d.content}** *(Bloque: ${d.origin})*\n`;
-    });
+    for (const decision of allDecisions) {
+      markdown += `- **${decision.content}** *(Contexto: ${decision.origin})*\n`;
+    }
   } else {
-    md += `*No se registraron decisiones formales en esta sesión.*\n`;
+    markdown += '*No se registraron decisiones formales en esta sesión.*\n';
   }
 
-  md += `\n## 2. Resumen de temas tratados\n`;
+  markdown += '\n## 2. Resumen de temas tratados\n';
   if ((computed.blocks || []).length === 0) {
-    md += `*Sin bloques registrados en la sesión.*\n`;
+    markdown += '*Sin bloques registrados en la sesión.*\n';
   } else {
-    computed.blocks.forEach(b => {
-      md += `### ${b.title} (${b.durationMinutes} min)\n`;
-      if (b.leader) md += `*Lidera:* ${b.leader}\n`;
-      if ((b.subpoints || []).length > 0) {
-        b.subpoints.forEach(p => {
-          const check = p.status === 'done' ? '[x]' : '[ ]';
-          const pres = p.presenter ? ` · ${p.presenter}` : '';
-          md += `- ${check} ${p.title}${pres}\n`;
-        });
+    for (const block of computed.blocks) {
+      markdown += `### ${block.title} (${block.durationMinutes} min)\n`;
+      if (block.leader) markdown += `*Lidera:* ${block.leader}\n`;
+      for (const point of block.subpoints || []) {
+        const status = sessionState ? getPointStatus(sessionState, point.id) : point.status;
+        const marker = status === POINT_STATUS.DONE ? '[x]' : status === POINT_STATUS.SKIPPED ? '[-]' : '[ ]';
+        const presenter = point.presenter ? ` · ${point.presenter}` : '';
+        const suffix = status === POINT_STATUS.SKIPPED ? ' *(saltado)*' : '';
+        markdown += `- ${marker} ${point.title}${presenter}${suffix}\n`;
       }
-      md += '\n';
-    });
+      markdown += '\n';
+    }
   }
 
-  return md;
+  return markdown;
 }
