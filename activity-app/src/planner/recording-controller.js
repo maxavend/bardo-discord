@@ -1,7 +1,9 @@
 /**
- * Recording Controller — Manages browser audio recording for agenda points and blocks.
- * Maintains a single consolidated Recording entity across multiple pause/resume cycles.
- * Uses MediaRecorder with WebM/Opus priority and guaranteed stream track cleanup.
+ * Recording Controller — browser capture lifecycle only.
+ *
+ * The controller owns MediaRecorder + pause/resume segments. Persistence is
+ * intentionally delegated to recording-storage.js so metadata and binary audio
+ * have separate responsibilities.
  */
 
 export const RECORDING_STATUS = {
@@ -29,6 +31,13 @@ function getSupportedMimeType() {
   return '';
 }
 
+function createRecordingId(now = Date.now()) {
+  const suffix = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10);
+  return `rec-${now}-${suffix}`;
+}
+
 export class RecordingController {
   constructor(options = {}) {
     this.onStatusChange = options.onStatusChange || (() => {});
@@ -40,19 +49,24 @@ export class RecordingController {
     this.pauseStartTime = null;
     this.accumulatedPausedMs = 0;
     this.status = RECORDING_STATUS.IDLE;
+    this.currentRecordingId = null;
     this.currentSessionId = null;
     this.currentBlockId = null;
     this.currentBlockTitle = null;
     this.currentPointId = null;
     this.currentPointTitle = null;
     this.currentSources = ['microphone'];
-    this.segments = []; // [{ id, startedAt, endedAt, durationMs }]
+    this.segments = [];
     this.activeSegmentStartedAt = null;
     this.mimeType = '';
   }
 
   getStatus() {
     return this.status;
+  }
+
+  getCurrentRecordingId() {
+    return this.currentRecordingId;
   }
 
   isRecording() {
@@ -69,6 +83,7 @@ export class RecordingController {
 
   getCurrentContext() {
     return {
+      recordingId: this.currentRecordingId,
       sessionId: this.currentSessionId,
       blockId: this.currentBlockId,
       blockTitle: this.currentBlockTitle,
@@ -94,15 +109,18 @@ export class RecordingController {
   }
 
   async startRecording(sessionId, blockId, blockTitle = 'Bloque', pointId = null, pointTitle = null, sources = ['microphone']) {
-    if (this.status === RECORDING_STATUS.RECORDING) return;
+    if (this.isActive() || this.status === RECORDING_STATUS.STARTING || this.status === RECORDING_STATUS.FINALIZING) {
+      return this.currentRecordingId;
+    }
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      const err = new Error('Tu navegador no soporta grabación de micrófono.');
+      const error = new Error('Tu navegador no soporta grabación de micrófono.');
       this.setStatus(RECORDING_STATUS.ERROR);
-      this.onError(err);
-      throw err;
+      this.onError(error);
+      throw error;
     }
 
     this.setStatus(RECORDING_STATUS.STARTING);
+    this.currentRecordingId = createRecordingId();
     this.currentSessionId = sessionId;
     this.currentBlockId = blockId;
     this.currentBlockTitle = blockTitle;
@@ -124,74 +142,69 @@ export class RecordingController {
 
       const mimeType = getSupportedMimeType();
       this.mimeType = mimeType;
-
-      const options = mimeType ? {mimeType} : {};
-      this.mediaRecorder = new MediaRecorder(this.stream, options);
-
+      this.mediaRecorder = new MediaRecorder(this.stream, mimeType ? {mimeType} : {});
       this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          this.audioChunks.push(event.data);
-        }
+        if (event.data && event.data.size > 0) this.audioChunks.push(event.data);
       };
 
-      this.mediaRecorder.start(1000); // collect chunk every 1 second
+      this.mediaRecorder.start(1000);
       const now = Date.now();
       this.startTime = now;
       this.activeSegmentStartedAt = now;
       this.setStatus(RECORDING_STATUS.RECORDING);
-    } catch (err) {
-      this.cleanup();
+      return this.currentRecordingId;
+    } catch (error) {
+      this.cleanup({clearContext: true});
       this.setStatus(RECORDING_STATUS.ERROR);
-      this.onError(err);
-      throw err;
+      this.onError(error);
+      throw error;
     }
   }
 
   pauseRecording() {
-    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-      try {
-        this.mediaRecorder.pause();
-        const now = Date.now();
-        this.pauseStartTime = now;
-        if (this.activeSegmentStartedAt) {
-          this.segments.push({
-            id: `seg-${this.segments.length + 1}`,
-            startedAt: this.activeSegmentStartedAt,
-            endedAt: now,
-            durationMs: Math.max(0, now - this.activeSegmentStartedAt),
-          });
-          this.activeSegmentStartedAt = null;
-        }
-        this.setStatus(RECORDING_STATUS.PAUSED);
-      } catch (err) {
-        console.warn('[RecordingController] Error pausing recorder:', err);
+    if (!this.mediaRecorder || this.mediaRecorder.state !== 'recording') return;
+    try {
+      this.mediaRecorder.pause();
+      const now = Date.now();
+      this.pauseStartTime = now;
+      if (this.activeSegmentStartedAt) {
+        this.segments.push({
+          id: `seg-${this.segments.length + 1}`,
+          startedAt: this.activeSegmentStartedAt,
+          endedAt: now,
+          durationMs: Math.max(0, now - this.activeSegmentStartedAt),
+        });
+        this.activeSegmentStartedAt = null;
       }
+      this.setStatus(RECORDING_STATUS.PAUSED);
+    } catch (error) {
+      console.warn('[RecordingController] Error pausing recorder:', error);
     }
   }
 
   resumeRecording() {
-    if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
-      try {
-        this.mediaRecorder.resume();
-        const now = Date.now();
-        if (this.pauseStartTime) {
-          this.accumulatedPausedMs += now - this.pauseStartTime;
-          this.pauseStartTime = null;
-        }
-        this.activeSegmentStartedAt = now;
-        this.setStatus(RECORDING_STATUS.RECORDING);
-      } catch (err) {
-        console.warn('[RecordingController] Error resuming recorder:', err);
+    if (!this.mediaRecorder || this.mediaRecorder.state !== 'paused') return;
+    try {
+      this.mediaRecorder.resume();
+      const now = Date.now();
+      if (this.pauseStartTime) {
+        this.accumulatedPausedMs += now - this.pauseStartTime;
+        this.pauseStartTime = null;
       }
+      this.activeSegmentStartedAt = now;
+      this.setStatus(RECORDING_STATUS.RECORDING);
+    } catch (error) {
+      console.warn('[RecordingController] Error resuming recorder:', error);
     }
   }
 
   async finalizeRecording() {
     if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
-      this.cleanup();
+      this.cleanup({clearContext: true});
       this.setStatus(RECORDING_STATUS.IDLE);
       return null;
     }
+    if (this.status === RECORDING_STATUS.FINALIZING) return null;
 
     this.setStatus(RECORDING_STATUS.FINALIZING);
     const endTime = Date.now();
@@ -207,88 +220,88 @@ export class RecordingController {
       this.activeSegmentStartedAt = null;
     }
 
-    const recId = `rec-${Date.now()}`;
+    const recordingId = this.currentRecordingId || createRecordingId(endTime);
+    const sessionId = this.currentSessionId;
     const blockId = this.currentBlockId;
     const blockTitle = this.currentBlockTitle;
     const pointId = this.currentPointId;
     const pointTitle = this.currentPointTitle;
     const sources = this.currentSources;
     const sourcesLabel = sources.includes('system') ? 'Micrófono + sistema' : 'Micrófono';
-    const defaultName = pointTitle || blockTitle || 'Grabación';
-    const sessionId = this.currentSessionId;
     const mimeType = this.mimeType || 'audio/webm';
-    const totalSegments = this.segments.length || 1;
+    const segments = [...this.segments];
+    const startedAt = this.startTime;
 
     return new Promise((resolve) => {
-      this.mediaRecorder.onstop = () => {
+      const recorder = this.mediaRecorder;
+      recorder.onstop = () => {
         try {
           const blob = new Blob(this.audioChunks, {type: mimeType});
           const blobUrl = typeof URL !== 'undefined' ? URL.createObjectURL(blob) : '';
-          const storageKey = `sessions/${sessionId}/blocks/${blockId}/recordings/${recId}.webm`;
-
           const recordingEntity = {
-            id: recId,
+            id: recordingId,
             sessionId,
             blockId,
             blockTitle,
             pointId,
             pointTitle,
-            name: defaultName,
-            createdAt: Date.now(),
-            startedAt: this.startTime,
+            name: pointTitle || blockTitle || 'Grabación',
+            createdAt: endTime,
+            startedAt,
             endedAt: endTime,
             durationMs,
             sources,
             sourcesLabel,
-            segmentsCount: totalSegments,
-            segments: [...this.segments],
+            segmentsCount: segments.length || 1,
+            segments,
             mimeType,
             fileSize: blob.size,
-            storageKey,
-            status: 'saved',
+            storageKey: `sessions/${sessionId}/blocks/${blockId}/recordings/${recordingId}`,
+            status: 'pending',
+            binaryStorage: null,
             blobUrl,
+            blob, // transient: stripped before metadata persistence
           };
-
-          this.cleanup();
+          this.cleanup({clearContext: true});
           this.setStatus(RECORDING_STATUS.FINALIZED);
           resolve(recordingEntity);
-        } catch (err) {
-          this.cleanup();
+        } catch (error) {
+          this.cleanup({clearContext: true});
           this.setStatus(RECORDING_STATUS.ERROR);
-          this.onError(err);
+          this.onError(error);
           resolve(null);
         }
       };
 
       try {
-        this.mediaRecorder.stop();
+        if (recorder.state === 'paused') recorder.resume();
+        recorder.stop();
       } catch {
-        this.cleanup();
+        this.cleanup({clearContext: true});
         this.setStatus(RECORDING_STATUS.IDLE);
         resolve(null);
       }
     });
   }
 
-  // Alias for backward compatibility
   async stopRecording() {
     return this.finalizeRecording();
   }
 
   discardRecording() {
-    this.cleanup();
+    this.cleanup({clearContext: true});
     this.setStatus(RECORDING_STATUS.IDLE);
   }
 
-  cleanup() {
+  cleanup({clearContext = false} = {}) {
     if (this.stream) {
       try {
         this.stream.getTracks().forEach((track) => track.stop());
       } catch {
-        // Stream track stop fallback
+        // Best effort track cleanup.
       }
-      this.stream = null;
     }
+    this.stream = null;
     this.mediaRecorder = null;
     this.startTime = null;
     this.pauseStartTime = null;
@@ -296,5 +309,16 @@ export class RecordingController {
     this.accumulatedPausedMs = 0;
     this.audioChunks = [];
     this.segments = [];
+    this.mimeType = '';
+
+    if (clearContext) {
+      this.currentRecordingId = null;
+      this.currentSessionId = null;
+      this.currentBlockId = null;
+      this.currentBlockTitle = null;
+      this.currentPointId = null;
+      this.currentPointTitle = null;
+      this.currentSources = ['microphone'];
+    }
   }
 }
