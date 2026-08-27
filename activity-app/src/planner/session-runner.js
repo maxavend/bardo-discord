@@ -38,9 +38,9 @@ export const DEFAULT_LIVE_SESSION = {
   activeBlockAccumulatedPausedMs: 0,
   completedBlockIds: [],
   skippedBlockIds: [],
-  pointStatuses: {}, // { [pointId]: pending | done | skipped }; active is represented by liveActivePointId
-  blockExtensions: {}, // { [blockId]: { extensionMinutes: number, isUnlimited: boolean } }
-  recordingPromptsDismissed: {}, // keyed by point:<id> or block:<id>
+  pointStatuses: {},
+  blockExtensions: {},
+  recordingPromptsDismissed: {},
   recordings: [],
   decisions: [],
   tasks: [],
@@ -56,12 +56,11 @@ export function getBlockPoints(block) {
 
 export function getPointStatus(sessionState, pointId) {
   if (!pointId) return null;
-  if (sessionState?.liveActivePointId === pointId &&
-      sessionState?.status !== SESSION_STATUS.COMPLETED) {
-    return POINT_STATUS.ACTIVE;
-  }
   const stored = sessionState?.pointStatuses?.[pointId];
   if (stored === POINT_STATUS.DONE || stored === POINT_STATUS.SKIPPED) return stored;
+  if (sessionState?.liveActivePointId === pointId && sessionState?.status !== SESSION_STATUS.COMPLETED) {
+    return POINT_STATUS.ACTIVE;
+  }
   return POINT_STATUS.PENDING;
 }
 
@@ -106,11 +105,15 @@ export function getPointCounts(plannerState, sessionState) {
     if (status === POINT_STATUS.DONE) done += 1;
     if (status === POINT_STATUS.SKIPPED) skipped += 1;
   }
+  const activeIsPending = Boolean(
+    sessionState?.liveActivePointId &&
+    getPointStatus(sessionState, sessionState.liveActivePointId) === POINT_STATUS.ACTIVE
+  );
   return {
     total: points.length,
     done,
     skipped,
-    pending: Math.max(0, points.length - done - skipped - (sessionState?.liveActivePointId ? 1 : 0)),
+    pending: Math.max(0, points.length - done - skipped - (activeIsPending ? 1 : 0)),
   };
 }
 
@@ -123,23 +126,14 @@ function normalizePersistedPointStatuses(plannerState, persistedStatuses = {}) {
 
 function inferActiveBlock(plannerState, sessionState) {
   const blocks = plannerState?.blocks || [];
-  if (blocks.some((block) => block.id === sessionState?.liveActiveBlockId)) {
-    return sessionState.liveActiveBlockId;
-  }
+  if (blocks.some((block) => block.id === sessionState?.liveActiveBlockId)) return sessionState.liveActiveBlockId;
   const completed = new Set(sessionState?.completedBlockIds || []);
   const skipped = new Set(sessionState?.skippedBlockIds || []);
   return blocks.find((block) => !completed.has(block.id) && !skipped.has(block.id))?.id || null;
 }
 
-/**
- * Safe migration for persisted live-session v1 data.
- * Old sessions had no liveActivePointId/pointStatuses. We preserve every existing
- * field and infer the first pending Point inside the persisted active Block.
- */
 export function migrateLiveSessionState(plannerState, persistedState) {
-  if (!persistedState || typeof persistedState !== 'object') {
-    return {...DEFAULT_LIVE_SESSION};
-  }
+  if (!persistedState || typeof persistedState !== 'object') return {...DEFAULT_LIVE_SESSION};
 
   const merged = {
     ...DEFAULT_LIVE_SESSION,
@@ -180,7 +174,6 @@ export function migrateLiveSessionState(plannerState, persistedState) {
   };
 }
 
-/** Creates and initializes a new live session from a planner schedule state. */
 export function createLiveSession(plannerState, now = Date.now()) {
   const firstBlock = (plannerState?.blocks || [])[0] || null;
   const pointStatuses = seedPointStatuses(plannerState);
@@ -209,7 +202,6 @@ export function createLiveSession(plannerState, now = Date.now()) {
   };
 }
 
-/** Calculates effective elapsed time for the entire session. */
 export function getElapsedSessionMs(sessionState, now = Date.now()) {
   if (!sessionState?.sessionStartedAt) return 0;
   if ((sessionState.status === SESSION_STATUS.COMPLETED || sessionState.status === SESSION_STATUS.INTERRUPTED) && sessionState.sessionEndedAt) {
@@ -221,7 +213,6 @@ export function getElapsedSessionMs(sessionState, now = Date.now()) {
   return Math.max(0, now - sessionState.sessionStartedAt - (sessionState.accumulatedPausedMs || 0));
 }
 
-/** Calculates effective elapsed time for the active Block. */
 export function getElapsedActiveBlockMs(sessionState, now = Date.now()) {
   if (!sessionState?.activeBlockStartedAt || !sessionState.liveActiveBlockId) return 0;
   if (sessionState.status === SESSION_STATUS.COMPLETED || sessionState.status === SESSION_STATUS.INTERRUPTED) return 0;
@@ -231,7 +222,6 @@ export function getElapsedActiveBlockMs(sessionState, now = Date.now()) {
   return Math.max(0, now - sessionState.activeBlockStartedAt - (sessionState.activeBlockAccumulatedPausedMs || 0));
 }
 
-/** Returns planned duration in milliseconds for a Block, including extensions. */
 export function getBlockPlannedMs(block, sessionState) {
   if (!block) return 0;
   const baseMinutes = Number(block.durationMinutes) || 15;
@@ -239,7 +229,6 @@ export function getBlockPlannedMs(block, sessionState) {
   return (baseMinutes + extension) * 60 * 1000;
 }
 
-/** Calculates remaining time in milliseconds for the active Block. */
 export function getRemainingActiveBlockMs(block, sessionState, now = Date.now()) {
   if (!block || !sessionState) return 0;
   return getBlockPlannedMs(block, sessionState) - getElapsedActiveBlockMs(sessionState, now);
@@ -311,15 +300,22 @@ function getNextUnhandledPoint(block, currentPointId, pointStatuses) {
   }) || null;
 }
 
+function getCurrentPauseDuration(sessionState, now) {
+  if (sessionState?.status !== SESSION_STATUS.PAUSED || !sessionState.pausedAt) return 0;
+  return Math.max(0, now - sessionState.pausedAt);
+}
+
 function moveToBlock(sessionState, block, now, pointStatuses) {
   if (!block) return sessionState;
   const movingWhilePaused = sessionState.status === SESSION_STATUS.PAUSED;
+  const pauseBeforeMove = getCurrentPauseDuration(sessionState, now);
   return {
     ...sessionState,
     liveActiveBlockId: block.id,
     liveActivePointId: findFirstPendingPointId(block, pointStatuses),
     activeBlockStartedAt: now,
     activeBlockAccumulatedPausedMs: 0,
+    accumulatedPausedMs: (sessionState.accumulatedPausedMs || 0) + pauseBeforeMove,
     pausedAt: movingWhilePaused ? now : sessionState.pausedAt,
     pointStatuses,
   };
@@ -334,13 +330,6 @@ function allBlockPointsHandled(block, pointStatuses) {
   });
 }
 
-/**
- * Primary live navigation action.
- * - Another Point in the same Block -> advance Point without touching the Block timer.
- * - Last Point -> complete Block and start the next Block timer.
- * - Block without Points -> complete Block and advance Block.
- * - Last Point of last Block -> complete Session.
- */
 export function advanceLiveSession(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState || sessionState.status === SESSION_STATUS.COMPLETED || sessionState.status === SESSION_STATUS.INTERRUPTED) {
     return sessionState;
@@ -351,7 +340,7 @@ export function advanceLiveSession(plannerState, sessionState, now = Date.now())
   if (currentBlockIndex < 0) return completeLiveSession(sessionState, now);
 
   const currentBlock = blocks[currentBlockIndex];
-  let pointStatuses = {...(sessionState.pointStatuses || {})};
+  const pointStatuses = {...(sessionState.pointStatuses || {})};
   const currentPointId = sessionState.liveActivePointId;
 
   if (currentPointId) {
@@ -366,9 +355,7 @@ export function advanceLiveSession(plannerState, sessionState, now = Date.now())
     }
   } else {
     const firstUnhandled = findFirstPendingPointId(currentBlock, pointStatuses);
-    if (firstUnhandled) {
-      return {...sessionState, liveActivePointId: firstUnhandled, pointStatuses};
-    }
+    if (firstUnhandled) return {...sessionState, liveActivePointId: firstUnhandled, pointStatuses};
   }
 
   const completedBlockIds = allBlockPointsHandled(currentBlock, pointStatuses)
@@ -378,11 +365,9 @@ export function advanceLiveSession(plannerState, sessionState, now = Date.now())
   const base = {...sessionState, completedBlockIds, pointStatuses, liveActivePointId: null};
   const nextBlock = blocks[currentBlockIndex + 1] || null;
   if (!nextBlock) return completeLiveSession(base, now);
-
   return moveToBlock(base, nextBlock, now, pointStatuses);
 }
 
-/** Secondary action: skip the active Point without marking it done. */
 export function skipActivePoint(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState) return sessionState;
   if (!sessionState.liveActivePointId) return skipActiveBlock(plannerState, sessionState, now);
@@ -398,9 +383,7 @@ export function skipActivePoint(plannerState, sessionState, now = Date.now()) {
   };
   const nextPoint = getNextUnhandledPoint(currentBlock, sessionState.liveActivePointId, pointStatuses);
 
-  if (nextPoint) {
-    return {...sessionState, liveActivePointId: nextPoint.id, pointStatuses};
-  }
+  if (nextPoint) return {...sessionState, liveActivePointId: nextPoint.id, pointStatuses};
 
   const completedBlockIds = allBlockPointsHandled(currentBlock, pointStatuses)
     ? unique([...(sessionState.completedBlockIds || []), currentBlock.id])
@@ -411,10 +394,6 @@ export function skipActivePoint(plannerState, sessionState, now = Date.now()) {
   return moveToBlock(base, nextBlock, now, pointStatuses);
 }
 
-/**
- * Backwards-compatible explicit Block advance. New live UI should use advanceLiveSession.
- * It never marks unvisited Points done.
- */
 export function advanceToNextBlock(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState) return sessionState;
   const blocks = plannerState.blocks || [];
@@ -429,7 +408,6 @@ export function advanceToNextBlock(plannerState, sessionState, now = Date.now())
   return moveToBlock(base, nextBlock, now, base.pointStatuses || {});
 }
 
-/** Skips the active Block without marking its Points completed. */
 export function skipActiveBlock(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState) return sessionState;
   const blocks = plannerState.blocks || [];
@@ -444,9 +422,9 @@ export function skipActiveBlock(plannerState, sessionState, now = Date.now()) {
   return moveToBlock(base, nextBlock, now, base.pointStatuses || {});
 }
 
-/** Completes and seals the live Session. Pending future Points are never marked done. */
 export function completeLiveSession(sessionState, now = Date.now()) {
   if (!sessionState) return sessionState;
+  const pauseDuration = getCurrentPauseDuration(sessionState, now);
   return {
     ...sessionState,
     status: SESSION_STATUS.COMPLETED,
@@ -455,16 +433,23 @@ export function completeLiveSession(sessionState, now = Date.now()) {
     liveActivePointId: null,
     activeBlockStartedAt: null,
     pausedAt: null,
+    accumulatedPausedMs: (sessionState.accumulatedPausedMs || 0) + pauseDuration,
   };
 }
 
-/** Interrupts the Session while preserving current Block + Point and all artifacts. */
 export function interruptLiveSession(sessionState, now = Date.now()) {
   if (!sessionState) return sessionState;
-  return {...sessionState, status: SESSION_STATUS.INTERRUPTED, sessionEndedAt: now};
+  const pauseDuration = getCurrentPauseDuration(sessionState, now);
+  return {
+    ...sessionState,
+    status: SESSION_STATUS.INTERRUPTED,
+    sessionEndedAt: now,
+    pausedAt: null,
+    accumulatedPausedMs: (sessionState.accumulatedPausedMs || 0) + pauseDuration,
+    activeBlockAccumulatedPausedMs: (sessionState.activeBlockAccumulatedPausedMs || 0) + pauseDuration,
+  };
 }
 
-/** Resumes an interrupted Session without resetting Block or Point progress. */
 export function resumeInterruptedSession(sessionState, now = Date.now()) {
   if (!sessionState || sessionState.status !== SESSION_STATUS.INTERRUPTED) return sessionState;
   const interruptedDuration = sessionState.sessionEndedAt
@@ -524,7 +509,6 @@ export function addTaskToSession(sessionState, task) {
   return {...sessionState, tasks: [...(sessionState.tasks || []), task]};
 }
 
-/** Recalculates estimated end time from planned Session duration + Block extensions. */
 export function recalculateEstimatedEndTime(plannerState, sessionState) {
   const startTime = plannerState?.startTime || '10:00';
   const [h, m] = startTime.split(':').map(Number);
@@ -557,7 +541,6 @@ export function dismissRecordingPrompt(sessionState) {
   };
 }
 
-/** Backwards-compatible block-based prompt dismissal. */
 export function dismissBlockRecordingPrompt(sessionState, blockId) {
   if (!sessionState || !blockId) return sessionState;
   const key = sessionState.liveActivePointId
