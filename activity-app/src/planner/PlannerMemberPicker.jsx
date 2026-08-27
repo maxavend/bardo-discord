@@ -92,11 +92,11 @@ export function PlannerMemberPicker({value = '', onChange}) {
   });
 
   return (
-    <div ref={containerRef} className="relative flex flex-col gap-2 w-full">
-      {/* Container de Chips y Campo de búsqueda dinámico */}
+    <div ref={containerRef} className="relative flex flex-col gap-1.5 w-full">
+      {/* Container de Chips y Campo de búsqueda dinámico — Mismo radius (rounded-lg) y altura base (min-h-10) que los inputs */}
       <div
         onClick={() => inputRef.current?.focus()}
-        className="min-h-[44px] p-2 rounded-xl bg-surface-secondary/50 hover:bg-surface-secondary/70 focus-within:bg-surface-secondary/80 focus-within:ring-1 focus-within:ring-accent flex flex-wrap items-center gap-1.5 cursor-text transition-all"
+        className="min-h-10 px-2.5 py-1.5 rounded-lg bg-field-background border border-field-border focus-within:ring-1 focus-within:ring-focus flex flex-wrap items-center gap-1.5 cursor-text transition-all"
       >
         {selectedTags.map((tag, i) => {
           const matchedMember = DEFAULT_DISCORD_MEMBERS.find(
@@ -108,26 +108,26 @@ export function PlannerMemberPicker({value = '', onChange}) {
           return (
             <div
               key={tag}
-              className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-1 rounded-full bg-surface text-xs font-medium text-foreground border border-border/40 shadow-xs select-none"
+              className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-surface-secondary/80 hover:bg-surface-secondary text-xs font-medium text-foreground border border-border/30 select-none h-6"
             >
               <div
                 style={{backgroundColor: `${color}25`, color}}
-                className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
                 aria-hidden="true"
               >
                 {initials}
               </div>
-              <span className="max-w-[140px] truncate">{matchedMember?.globalName || tag}</span>
+              <span className="max-w-[130px] truncate text-xs">{matchedMember?.globalName || tag}</span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeTag(tag);
                 }}
-                className="w-4 h-4 rounded-full hover:bg-surface-secondary flex items-center justify-center text-muted hover:text-danger cursor-pointer ml-0.5"
+                className="w-3.5 h-3.5 rounded-full hover:bg-surface flex items-center justify-center text-muted hover:text-danger cursor-pointer ml-0.5"
                 aria-label={`Quitar ${tag}`}
               >
-                <Xmark width={11} height={11} />
+                <Xmark width={10} height={10} />
               </button>
             </div>
           );
@@ -144,13 +144,13 @@ export function PlannerMemberPicker({value = '', onChange}) {
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={selectedTags.length === 0 ? 'Buscar miembros de Discord (@usuario o nombre)...' : 'Añadir otro...'}
-          className="flex-1 min-w-[160px] bg-transparent border-none outline-none text-xs text-foreground placeholder:text-muted/70 px-1.5 py-1"
+          className="flex-1 min-w-[140px] bg-transparent border-none outline-none text-xs text-foreground placeholder:text-muted/60 px-1 py-0.5"
         />
       </div>
 
       {/* Popover / Dropdown de Sugerencias de Discord */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-xl bg-surface border border-border/60 shadow-xl p-1.5 flex flex-col gap-0.5">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg bg-surface border border-border/60 shadow-lg p-1.5 flex flex-col gap-0.5">
           <div className="px-2.5 py-1 text-[11px] font-semibold text-muted">
             Miembros del servidor Discord
           </div>

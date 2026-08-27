@@ -1,8 +1,12 @@
 import {
   computePlannerTimes,
 } from './time-engine.js';
+import {
+  DEFAULT_LIVE_SESSION,
+} from './session-runner.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
+export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 
 export const DEFAULT_EMPTY_SESSION = {
   title: 'Nueva sesión de trabajo',
@@ -24,7 +28,6 @@ export const DEFAULT_EMPTY_SESSION = {
       phases: {context: 3, review: 10, closing: 2},
       subpoints: [],
       decisions: [],
-      tasks: [],
     },
   ],
 };
@@ -56,7 +59,6 @@ export const DEMO_PLANNER_FIXTURE = {
       decisions: [
         {id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.'},
       ],
-      tasks: [],
     },
     {
       id: 'b-2',
@@ -73,9 +75,7 @@ export const DEMO_PLANNER_FIXTURE = {
       ],
       decisions: [
         {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.'},
-      ],
-      tasks: [
-        {id: 't-1', title: 'Compartir enlace a prototipo navegable Figma en el canal #orion', assignee: '@Max Avendaño'},
+        {id: 'd-3', content: 'Compartir enlace al prototipo navegable Figma en el canal #orion.'},
       ],
     },
     {
@@ -89,7 +89,6 @@ export const DEMO_PLANNER_FIXTURE = {
       phases: {context: 0, review: 10, closing: 0},
       subpoints: [],
       decisions: [],
-      tasks: [],
     },
     {
       id: 'b-4',
@@ -104,9 +103,8 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-8', title: 'Landing Apple con Integración Claro Up', presenter: 'Javi', status: 'pending'},
         {id: 'p-9', title: 'Avance landing factibilidad (opcional)', presenter: 'Dani / Javi', status: 'pending'},
       ],
-      decisions: [],
-      tasks: [
-        {id: 't-2', title: 'Enviar especificaciones de Claro Up al equipo de desarrollo', assignee: '@Javi Acuña'},
+      decisions: [
+        {id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.'},
       ],
     },
     {
@@ -121,9 +119,8 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-10', title: 'Landing OTT Mascotas (avances y soluciones)', presenter: 'Responsable', status: 'pending'},
         {id: 'p-11', title: 'Pantallas SSO para el flujo de Registro', presenter: 'Pau / Maxi', status: 'pending'},
       ],
-      decisions: [],
-      tasks: [
-        {id: 't-3', title: 'Detalle de pedida SSO Registro entregado a Maxi para estimación', assignee: '@Max Avendaño'},
+      decisions: [
+        {id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.'},
       ],
     },
   ],
@@ -143,84 +140,118 @@ export function loadPlannerState() {
 export function savePlannerState(state) {
   try {
     localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(state));
-  } catch {}
+  } catch {
+    // Local storage persistence fallback
+  }
+}
+
+export function loadLiveSessionState() {
+  try {
+    const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
+    if (!raw) return DEFAULT_LIVE_SESSION;
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_LIVE_SESSION;
+  }
+}
+
+export function saveLiveSessionState(sessionState) {
+  try {
+    // Do not serialize active blob URLs that might be transient
+    const cleanSession = {
+      ...sessionState,
+      recordings: (sessionState.recordings || []).map(r => ({
+        ...r,
+        // Keep blobUrl in memory, clean fallback for localStorage
+      })),
+    };
+    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(cleanSession));
+  } catch {
+    // Local storage persistence fallback
+  }
+}
+
+export function clearLiveSessionState() {
+  try {
+    localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+  } catch {
+    // Local storage persistence fallback
+  }
 }
 
 export function resetToDemoFixture() {
-  const demo = computePlannerTimes(DEMO_PLANNER_FIXTURE);
-  savePlannerState(demo);
-  return demo;
+  const computed = computePlannerTimes(DEMO_PLANNER_FIXTURE);
+  savePlannerState(computed);
+  clearLiveSessionState();
+  return computed;
 }
 
 export function resetToCleanSession() {
-  const clean = computePlannerTimes(DEFAULT_EMPTY_SESSION);
-  savePlannerState(clean);
-  return clean;
+  const computed = computePlannerTimes(DEFAULT_EMPTY_SESSION);
+  savePlannerState(computed);
+  clearLiveSessionState();
+  return computed;
 }
 
-export function generateDiscordAnnouncement(state) {
-  const computed = computePlannerTimes(state);
-  let msg = '';
-  if (computed.title) {
-    msg += `**${computed.title}**\n\n`;
-  }
-  if (computed.host) {
-    msg += `**Conduce:** ${computed.host}\n\n`;
-  }
-  if (computed.date || computed.startTime) {
-    msg += `**Horario:** ${computed.date || ''} a las ${computed.startTime || '10:00'} (${computed.totalCalculatedDuration || 0} min totales)\n\n`;
-  }
-  if (computed.description) {
-    msg += `${computed.description}\n\n`;
-  }
+export function generateDiscordAnnouncement(plannerState) {
+  const computed = computePlannerTimes(plannerState);
+  const mentions = (computed.mentions || '').trim();
+  const dateStr = computed.date || 'Fecha por confirmar';
+  const startStr = computed.startTime || '10:00';
+  const totalMin = computed.totalCalculatedDuration || 0;
 
-  (computed.blocks || []).forEach(b => {
-    msg += `**${b.title}** (${b.durationMinutes} min)\n\n`;
-    if (b.leader) msg += `*Lidera:* ${b.leader}\n\n`;
+  let text = `📢 **Convocatoria: ${computed.title}**\n`;
+  if (mentions) text += `👥 ${mentions}\n`;
+  text += `📅 **Fecha:** ${dateStr} · ⏰ **Hora:** ${startStr} (${totalMin} min)\n`;
+  if (computed.host) text += `👤 **Modera:** ${computed.host}\n`;
+  if (computed.description) text += `\n> ${computed.description}\n`;
+
+  text += `\n**📋 Agenda de la sesión:**\n`;
+  (computed.blocks || []).forEach((b, idx) => {
+    text += `${idx + 1}. **${b.title}** (${b.durationMinutes}m)`;
+    if (b.leader) text += ` — *Lidera: ${b.leader}*`;
+    text += `\n`;
     if ((b.subpoints || []).length > 0) {
-      msg += `Puntos a tratar:\n`;
-      b.subpoints.forEach(p => {
-        const pres = p.presenter ? ` (Presenta ${p.presenter})` : '';
-        msg += `- ${p.title}${pres}\n`;
+      b.subpoints.forEach((p) => {
+        const presenter = p.presenter ? ` · ${p.presenter}` : '';
+        text += `   • ${p.title}${presenter}\n`;
       });
-      msg += '\n';
     }
-    if (b.participants) msg += `*Participan:* ${b.participants}\n\n`;
-    msg += `--------------------------------------------------\n\n`;
   });
 
-  if (computed.mentions) {
-    msg += `${computed.mentions} Aquí pueden revisar la agenda de la sesión.`;
-  }
-  return msg;
+  return text;
 }
 
-export function generateMinutesMarkdown(state) {
-  const computed = computePlannerTimes(state);
+export function generateMinutesMarkdown(plannerState, sessionState = null) {
+  const computed = computePlannerTimes(plannerState);
   let md = `# Acta: ${computed.title}\n\n`;
   md += `**Fecha:** ${computed.date || 'Sin fecha'} | **Moderador:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min\n\n`;
 
   md += `## 1. Decisiones y acuerdos tomados\n`;
-  let hasDecisions = false;
+  const allDecisions = [];
   (computed.blocks || []).forEach(b => {
     (b.decisions || []).forEach(d => {
-      hasDecisions = true;
-      md += `- **${d.content}** *(Bloque: ${b.title})*\n`;
+      allDecisions.push({content: d.content, origin: b.title});
     });
   });
-  if (!hasDecisions) md += `*No se registraron decisiones formales en esta sesión.*\n`;
-
-  md += `\n## 2. Compromisos y tareas asignadas\n`;
-  let hasTasks = false;
-  (computed.blocks || []).forEach(b => {
-    (b.tasks || []).forEach(t => {
-      hasTasks = true;
-      md += `- [ ] **${t.title}** — Responsable: ${t.assignee || 'Sin asignar'} *(Ref: ${b.title})*\n`;
+  if (sessionState?.decisions) {
+    sessionState.decisions.forEach(d => {
+      const block = (computed.blocks || []).find(b => b.id === d.blockId);
+      if (!allDecisions.some(existing => existing.content === d.content)) {
+        allDecisions.push({content: d.content, origin: block ? block.title : 'Sesión'});
+      }
     });
-  });
-  if (!hasTasks) md += `*No se asignaron tareas en esta sesión.*\n`;
+  }
 
-  md += `\n## 3. Resumen de temas tratados\n`;
+  if (allDecisions.length > 0) {
+    allDecisions.forEach(d => {
+      md += `- **${d.content}** *(Bloque: ${d.origin})*\n`;
+    });
+  } else {
+    md += `*No se registraron decisiones formales en esta sesión.*\n`;
+  }
+
+  md += `\n## 2. Resumen de temas tratados\n`;
   if ((computed.blocks || []).length === 0) {
     md += `*Sin bloques registrados en la sesión.*\n`;
   } else {

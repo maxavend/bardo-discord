@@ -100,7 +100,6 @@ export function PlannerEditorView({
           participants: '',
           subpoints: [],
           decisions: [],
-          tasks: [],
         },
       ];
       return computePlannerTimes({...prev, blocks: nextBlocks});
@@ -110,7 +109,7 @@ export function PlannerEditorView({
   const confirmDeleteBlock = (bIdx) => {
     const target = formData.blocks[bIdx];
     if (!target) return;
-    if ((target.subpoints || []).length === 0 && (target.decisions || []).length === 0 && (target.tasks || []).length === 0) {
+    if ((target.subpoints || []).length === 0 && (target.decisions || []).length === 0) {
       executeDeleteBlock(bIdx);
       return;
     }
@@ -193,32 +192,38 @@ export function PlannerEditorView({
   const diffMinutes = Math.abs(targetDuration - totalAllocated);
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto pb-12">
-      {/* Header bar (no contained) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Editor de sesión</h1>
-          <p className="text-xs text-muted">
-            Configura los detalles de la reunión, bloques de tiempo y participantes.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onPress={onCancel}>
-            Cancelar
-          </Button>
-          <Button variant="primary" size="sm" onPress={handleSave}>
-            <Check width={14} height={14} /> Guardar cambios
-          </Button>
-        </div>
-      </div>
+    <div className="w-full max-w-4xl mx-auto pb-16 pt-2 animate-in fade-in duration-150">
+      <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
+        {/* Timeline Spacer */}
+        <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
 
-      {/* 1. Información General */}
-      <Card className="p-4 sm:p-5 flex flex-col gap-3.5">
+        {/* Content Column */}
+        <div className="flex flex-col gap-5 min-w-0 w-full">
+          {/* Header bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Editor de sesión</h1>
+              <p className="text-xs text-muted">
+                Configura los detalles de la reunión, bloques de tiempo y participantes.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onPress={onCancel} className="h-8 px-3">
+                Cancelar
+              </Button>
+              <Button variant="primary" size="sm" onPress={handleSave} className="h-8 px-3.5">
+                <Check width={14} height={14} /> Guardar cambios
+              </Button>
+            </div>
+          </div>
+
+          {/* 1. Información General */}
+          <Card className="p-5 sm:p-6 flex flex-col gap-4 rounded-xl">
         <h2 className="text-sm font-semibold text-foreground">
           Información general
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField className="w-full">
             <Label className="text-xs font-medium text-muted">
               Título de la sesión
@@ -242,7 +247,7 @@ export function PlannerEditorView({
           </TextField>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <DatePicker
             className="w-full"
             value={formData.date ? (() => {
@@ -361,8 +366,8 @@ export function PlannerEditorView({
         </div>
       </Card>
 
-      {/* 2. Presupuesto de Tiempo */}
-      <Card className="p-4 flex flex-col gap-2.5">
+      {/* 2. Presupuesto de Tiempo (Mismo Section Surface pattern) */}
+      <Card className="p-5 sm:p-6 flex flex-col gap-3.5">
         <div className="flex items-center justify-between gap-4 text-xs font-medium">
           <div className="flex items-center gap-1.5">
             <Clock width={14} height={14} className="text-muted" />
@@ -420,9 +425,9 @@ export function PlannerEditorView({
         ) : (
           formData.blocks.map((block, bIdx) => {
             return (
-              <Card key={block.id || bIdx} className="p-4 sm:p-5 flex flex-col gap-3.5">
+              <Card key={block.id || bIdx} className="p-5 sm:p-6 flex flex-col gap-4">
                 {/* Header del bloque */}
-                <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
+                <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-accent bg-accent/10 px-2 py-0.5 rounded">
                       Bloque 0{bIdx + 1}
@@ -433,14 +438,16 @@ export function PlannerEditorView({
                   </div>
 
                   <Dropdown>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      isIconOnly
-                      aria-label={`Opciones del bloque ${block.title}`}
-                    >
-                      <EllipsisVertical width={14} height={14} />
-                    </Button>
+                    <Dropdown.Trigger>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        isIconOnly
+                        aria-label={`Opciones del bloque ${block.title}`}
+                      >
+                        <EllipsisVertical width={14} height={14} />
+                      </Button>
+                    </Dropdown.Trigger>
                     <Dropdown.Popover>
                       <Dropdown.Menu
                         onAction={(key) => {
@@ -458,7 +465,7 @@ export function PlannerEditorView({
                 </div>
 
                 {/* Título y metadatos principales */}
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-3">
                   <TextField className="w-full">
                     <Label className="text-xs font-medium text-muted">
                       Título del bloque
@@ -471,7 +478,7 @@ export function PlannerEditorView({
                     />
                   </TextField>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <TextField className="w-full">
                       <Label className="text-xs font-medium text-muted">
                         Conduce
@@ -650,6 +657,8 @@ export function PlannerEditorView({
           </AlertDialog.Backdrop>
         </AlertDialog>
       )}
+        </div>
+      </div>
     </div>
   );
 }

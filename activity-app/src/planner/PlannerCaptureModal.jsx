@@ -4,26 +4,22 @@ import {
   Modal,
   TextField,
   Label,
-  Input,
   TextArea,
   Select,
   ListBox,
 } from '@heroui/react';
 import {
   CircleCheck,
-  ListCheck,
 } from '@gravity-ui/icons';
 
 export function PlannerCaptureModal({
   isOpen,
   onClose,
   onSubmit,
-  kind = 'decision',
   initialBlockId = null,
   blocks = [],
 }) {
   const [content, setContent] = useState('');
-  const [assignee, setAssignee] = useState('@Max Avendaño');
   const [selectedBlockId, setSelectedBlockId] = useState(() => initialBlockId || blocks[0]?.id || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -41,18 +37,15 @@ export function PlannerCaptureModal({
     setIsSubmitting(true);
     try {
       onSubmit({
-        kind,
+        kind: 'decision',
         blockId: selectedBlockId || blocks[0]?.id,
         content: content.trim(),
-        assignee: kind === 'task' ? assignee.trim() : undefined,
       });
       onClose();
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const isDecision = kind === 'decision';
 
   return (
     <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -62,12 +55,8 @@ export function PlannerCaptureModal({
             <Modal.CloseTrigger />
             <Modal.Header>
               <Modal.Heading className="text-base font-semibold text-foreground flex items-center gap-2">
-                {isDecision ? (
-                  <CircleCheck width={16} height={16} className="text-success" />
-                ) : (
-                  <ListCheck width={16} height={16} className="text-accent" />
-                )}
-                <span>{isDecision ? 'Registrar decisión' : 'Asignar tarea'}</span>
+                <CircleCheck width={16} height={16} className="text-success" />
+                <span>Registrar acuerdo / decisión</span>
               </Modal.Heading>
             </Modal.Header>
 
@@ -102,28 +91,15 @@ export function PlannerCaptureModal({
 
                 <TextField isRequired className="w-full">
                   <Label className="text-xs font-medium text-muted">
-                    {isDecision ? 'Detalle del acuerdo' : 'Descripción de la tarea'}
+                    Detalle del acuerdo o decisión
                   </Label>
                   <TextArea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder={isDecision ? 'Ej: Se aprueba la propuesta de navegación móvil...' : 'Ej: Compartir prototipo en #orion...'}
+                    placeholder="Ej: Se aprueba la propuesta de navegación y se definen los siguientes pasos..."
                     autoFocus
                   />
                 </TextField>
-
-                {!isDecision && (
-                  <TextField className="w-full">
-                    <Label className="text-xs font-medium text-muted">
-                      Responsable asignado (@mención o nombre)
-                    </Label>
-                    <Input
-                      value={assignee}
-                      onChange={(e) => setAssignee(e.target.value)}
-                      placeholder="@Nombre"
-                    />
-                  </TextField>
-                )}
               </Modal.Body>
 
               <Modal.Footer className="flex items-center justify-end gap-2">
@@ -131,11 +107,7 @@ export function PlannerCaptureModal({
                   Cancelar
                 </Button>
                 <Button type="submit" variant="primary" size="sm" isDisabled={!content.trim() || isSubmitting}>
-                  {isSubmitting
-                    ? 'Guardando…'
-                    : isDecision
-                    ? 'Guardar decisión'
-                    : 'Guardar tarea'}
+                  {isSubmitting ? 'Guardando…' : 'Guardar acuerdo'}
                 </Button>
               </Modal.Footer>
             </form>
