@@ -893,15 +893,6 @@ button { font-size: 14px; }
 }
 
 /* ── Material Design 3 Expressive Wavy Progress Track ───────────────────── */
-@keyframes m3-wavy-vertical-flow {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(72px);
-  }
-}
-
 .m3-wavy-progress-root.vertical {
   position: relative;
   width: 20px;
@@ -911,51 +902,6 @@ button { font-size: 14px; }
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-.m3-wavy-bg-track {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4.5px;
-  background: color-mix(in srgb, var(--border) 40%, transparent);
-  border-radius: 9999px;
-}
-
-.m3-wavy-fill-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  overflow: hidden;
-  border-radius: 9999px;
-  transition: height 0.4s ease-out;
-}
-
-.m3-wavy-svg {
-  width: 20px;
-  position: absolute;
-  top: -72px;
-  left: 0;
-  animation: m3-wavy-vertical-flow 2.8s linear infinite;
-  will-change: transform;
-}
-
-.m3-wavy-progress-root.is-paused .m3-wavy-svg {
-  animation-play-state: paused;
-}
-
-.m3-wavy-stop-dot {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4.5px;
-  height: 4.5px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
