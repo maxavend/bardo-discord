@@ -3,13 +3,14 @@ import {useMemo} from 'react';
 /**
  * Material Design 3 Expressive Wavy Progress Indicator
  * Ported from Material 3 (Squiggly / Wavy Progress) specification for React.
- * Supports vertical and horizontal orientations with smooth GPU-accelerated wave animation.
+ * Uses 1:1 pixel coordinates to prevent SVG scaling distortion and ensure
+ * exact matching thickness with the background rail and smooth calm frequency.
  */
 export function MaterialWavyProgress({
   value = 50, // Progress 0-100
   orientation = 'vertical',
-  strokeWidth = 4,
-  wavelength = 52,
+  strokeWidth = 4.5,
+  wavelength = 72,
   amplitude = 3.5,
   color = 'accent',
   isPaused = false,
@@ -18,10 +19,10 @@ export function MaterialWavyProgress({
 }) {
   const progressClamped = Math.min(100, Math.max(0, value));
 
-  // Generate cubic Bézier approximation of sine wave
+  // Generate cubic Bézier approximation of sine wave in 1:1 pixel coordinates
   const wavePathData = useMemo(() => {
-    const totalPeriods = 25; // Supports heights up to ~1300px
-    const cx = 8;
+    const totalPeriods = 20; // 20 * 72px = 1440px height coverage
+    const cx = 10;
     let d = `M ${cx} 0`;
 
     for (let i = 0; i < totalPeriods; i++) {
@@ -53,7 +54,7 @@ export function MaterialWavyProgress({
       className={`m3-wavy-progress-root ${orientation} ${isPaused ? 'is-paused' : ''} ${className}`}
       aria-hidden="true"
     >
-      {/* Background Track (Inactive Gray Rail) */}
+      {/* Background Track (Inactive Gray Rail - 4.5px) */}
       <div className="m3-wavy-bg-track" />
 
       {/* Active Animated Wavy Progress Fill */}
@@ -66,7 +67,8 @@ export function MaterialWavyProgress({
       >
         <svg
           className={`m3-wavy-svg ${colorClass}`}
-          viewBox="0 0 16 1300"
+          width="20"
+          height="1440"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
@@ -87,3 +89,4 @@ export function MaterialWavyProgress({
     </div>
   );
 }
+

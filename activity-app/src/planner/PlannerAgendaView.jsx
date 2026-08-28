@@ -134,9 +134,9 @@ export function PlannerAgendaView({
                       {!isLast && (
                         <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[24px]">
                           {isCompleted ? (
-                            <div className="w-[4px] h-full bg-accent rounded-full" />
+                            <div className="w-[4.5px] h-full bg-accent rounded-full" />
                           ) : (
-                            <div className="w-[4px] h-full bg-border/40 rounded-full" />
+                            <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
                           )}
                         </div>
                       )}
@@ -171,7 +171,7 @@ export function PlannerAgendaView({
                     <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
                   </div>
 
-                  {/* Material Design 3 Vertical Progress Timeline Rail (4px) */}
+                  {/* Material Design 3 Vertical Progress Timeline Rail (4.5px) */}
                   <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-14px] w-4 select-none pointer-events-none z-0">
                     <div className="relative mt-2.5 z-10">
                       {isLive ? (
@@ -194,14 +194,14 @@ export function PlannerAgendaView({
                             color={sessionState?.isExpired ? 'danger' : 'accent'}
                             isPaused={isPaused}
                             orientation="vertical"
-                            strokeWidth={4}
-                            wavelength={52}
+                            strokeWidth={4.5}
+                            wavelength={72}
                             amplitude={3.5}
                           />
                         ) : isCompleted ? (
-                          <div className="w-[4px] h-full bg-accent rounded-full" />
+                          <div className="w-[4.5px] h-full bg-accent rounded-full" />
                         ) : (
-                          <div className="w-[4px] h-full bg-border/40 rounded-full" />
+                          <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
                         )}
                       </div>
                     )}

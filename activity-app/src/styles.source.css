@@ -898,13 +898,13 @@ button { font-size: 14px; }
     transform: translateY(0);
   }
   100% {
-    transform: translateY(52px);
+    transform: translateY(72px);
   }
 }
 
 .m3-wavy-progress-root.vertical {
   position: relative;
-  width: 16px;
+  width: 20px;
   height: 100%;
   min-height: 24px;
   pointer-events: none;
@@ -919,7 +919,7 @@ button { font-size: 14px; }
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 4px;
+  width: 4.5px;
   background: color-mix(in srgb, var(--border) 40%, transparent);
   border-radius: 9999px;
 }
@@ -935,12 +935,11 @@ button { font-size: 14px; }
 }
 
 .m3-wavy-svg {
-  width: 16px;
-  height: calc(100% + 52px);
+  width: 20px;
   position: absolute;
-  top: -52px;
+  top: -72px;
   left: 0;
-  animation: m3-wavy-vertical-flow 2.4s linear infinite;
+  animation: m3-wavy-vertical-flow 2.8s linear infinite;
   will-change: transform;
 }
 
@@ -953,8 +952,8 @@ button { font-size: 14px; }
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 4px;
-  height: 4px;
+  width: 4.5px;
+  height: 4.5px;
   border-radius: 9999px;
   background: color-mix(in srgb, var(--border) 60%, transparent);
 }
