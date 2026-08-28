@@ -102,20 +102,20 @@ export function SessionDock({
             <button
               type="button"
               onClick={onPauseRecording}
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-danger text-white text-[11px] font-medium cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-danger text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
               title="Pausar grabación"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
             </button>
           ) : isRecPaused ? (
             <button
               type="button"
               onClick={onResumeRecording}
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-warning text-white text-[11px] font-medium cursor-pointer shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
               title="Reanudar grabación"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+              <span className="h-2 w-2 rounded-full bg-white" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
             </button>
           ) : (
@@ -126,9 +126,9 @@ export function SessionDock({
               onPress={onStartRecording}
               isDisabled={isBusy}
               aria-label="Grabar"
-              className="h-7 w-7 rounded-full bg-danger text-white hover:bg-danger/90 shadow-xs"
+              className="h-8 w-8 rounded-full bg-danger text-white hover:bg-danger/90 shadow-xs"
             >
-              <Microphone width={13} height={13} className="text-white" />
+              <Microphone width={14} height={14} className="text-white" />
             </Button>
           )}
 
@@ -140,13 +140,13 @@ export function SessionDock({
             onPress={isPaused ? onResumeSession : onPauseSession}
             isDisabled={isBusy}
             aria-label={isPaused ? 'Reanudar' : 'Pausar'}
-            className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors ${
+            className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
               isPaused
                 ? 'text-warning hover:text-warning-foreground hover:bg-warning/20'
-                : 'text-muted hover:text-foreground'
+                : 'text-muted hover:text-foreground hover:bg-surface-secondary'
             }`}
           >
-            {isPaused ? <Play width={13} height={13} fill="currentColor" /> : <Pause width={13} height={13} />}
+            {isPaused ? <Play width={14} height={14} fill="currentColor" /> : <Pause width={14} height={14} />}
           </Button>
         </div>
       </div>

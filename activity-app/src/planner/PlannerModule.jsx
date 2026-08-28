@@ -9,6 +9,7 @@ import {PlannerSessionHeader} from './PlannerSessionHeader.jsx';
 import {PlannerAgendaView} from './PlannerAgendaView.jsx';
 import {PlannerEditorView} from './PlannerEditorView.jsx';
 import {PlannerMinutesView} from './PlannerMinutesView.jsx';
+import {PlannerHomeView} from './PlannerHomeView.jsx';
 import {PlannerCaptureModal} from './PlannerCaptureModal.jsx';
 import {SessionDock} from './SessionDock.jsx';
 import {SessionRecapView} from './SessionRecapView.jsx';
@@ -61,7 +62,7 @@ import {
   hydrateRecordingBinary,
 } from './recording-storage.js';
 
-export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLibrary}) {
+export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -731,8 +732,8 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
     !dismissedUpcomingBanner &&
     assistantEvaluation.event === ASSISTANT_EVENT.SESSION_UPCOMING;
   const recordingContext = recordingControllerRef.current?.getCurrentContext();
-  const activeBlock = getActiveBlock(plannerState, sessionState);
-  const activePoint = getActivePoint(plannerState, sessionState);
+  const _activeBlock = getActiveBlock(plannerState, sessionState);
+  const _activePoint = getActivePoint(plannerState, sessionState);
   const elapsedMinutes = Math.round(getElapsedSessionMs(sessionState, nowTimestamp) / (60 * 1000));
   const recordingsCount = (sessionState.recordings || []).length;
   const decisionsCount = (sessionState.decisions || []).length;
@@ -744,6 +745,33 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
           plannerState={plannerState}
           onStartSession={handleStartSession}
           onDismiss={() => setDismissedUpcomingBanner(true)}
+        />
+      )}
+
+      {/* ── Home del Planner ──────────────────────────────────────────────── */}
+      {activeTab === 'home' && (
+        <PlannerHomeView
+          plannerState={plannerState}
+          sessionState={sessionState}
+          onStartSession={() => {
+            handleStartSession();
+            handleTabChange('agenda');
+          }}
+          onResumeSession={() => {
+            handleResumeSession();
+            handleTabChange('agenda');
+          }}
+          onViewAgenda={() => handleTabChange('agenda')}
+          onViewMinutes={() => handleTabChange('minutes')}
+          onViewRecap={() => handleTabChange('recap')}
+          onLoadDemo={() => {
+            handleLoadDemo();
+            handleTabChange('agenda');
+          }}
+          onNewCleanSession={() => {
+            handleCleanSession();
+            handleTabChange('agenda');
+          }}
         />
       )}
 
@@ -829,7 +857,7 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
         <PlannerMinutesView
           state={plannerState}
           sessionState={sessionState}
-          onBack={() => handleTabChange('agenda')}
+          onBack={() => handleTabChange('home')}
           onCopyMarkdown={handleCopyMinutes}
           onSaveDocToLibrary={onSaveDocToLibrary}
         />
@@ -853,8 +881,6 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
         onSubmit={handleCaptureSubmit}
         initialBlockId={captureModal.blockId}
         blocks={plannerState.blocks}
-        lockContext={false}
-        contextLabel={activePoint ? `${activeBlock?.title} → ${activePoint.title}` : activeBlock?.title}
       />
 
       <RecordingSaveModal

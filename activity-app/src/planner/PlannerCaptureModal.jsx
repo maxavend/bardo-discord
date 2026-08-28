@@ -3,10 +3,7 @@ import {
   Button,
   Modal,
   TextField,
-  Label,
   TextArea,
-  Select,
-  ListBox,
 } from '@heroui/react';
 import {CircleCheck} from '@gravity-ui/icons';
 
@@ -16,20 +13,18 @@ export function PlannerCaptureModal({
   onSubmit,
   initialBlockId = null,
   blocks = [],
-  lockContext = false,
-  contextLabel = '',
 }) {
   const [content, setContent] = useState('');
-  const [selectedBlockId, setSelectedBlockId] = useState(() => initialBlockId || blocks[0]?.id || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setContent('');
-      setSelectedBlockId(initialBlockId || blocks[0]?.id || '');
       setIsSubmitting(false);
     }
-  }, [isOpen, initialBlockId, blocks]);
+  }, [isOpen]);
+
+  const targetBlock = blocks.find((b) => b.id === initialBlockId) || blocks[0];
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -38,7 +33,7 @@ export function PlannerCaptureModal({
     try {
       onSubmit({
         kind: 'decision',
-        blockId: selectedBlockId || blocks[0]?.id,
+        blockId: targetBlock?.id || initialBlockId,
         content: content.trim(),
       });
       onClose();
@@ -51,62 +46,39 @@ export function PlannerCaptureModal({
     <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Modal.Backdrop>
         <Modal.Container>
-          <Modal.Dialog className="max-w-md w-full">
+          <Modal.Dialog className="max-w-md w-full p-5 rounded-2xl bg-surface border border-border shadow-2xl">
             <Modal.CloseTrigger />
-            <Modal.Header>
+            <Modal.Header className="pb-1">
               <Modal.Heading className="text-base font-semibold text-foreground flex items-center gap-2">
                 <CircleCheck width={16} height={16} className="text-accent" />
                 ¿Qué quieres guardar?
               </Modal.Heading>
+              {targetBlock?.title && (
+                <p className="text-xs text-muted mt-1 font-normal">
+                  Se agregará al bloque <span className="font-semibold text-foreground">“{targetBlock.title}”</span>
+                </p>
+              )}
             </Modal.Header>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <Modal.Body className="flex flex-col gap-3.5">
-                {lockContext ? (
-                  contextLabel && (
-                    <div className="text-xs text-muted">
-                      Contexto: <span className="text-foreground font-medium">{contextLabel}</span>
-                    </div>
-                  )
-                ) : blocks.length > 0 ? (
-                  <Select
-                    fullWidth
-                    selectedKey={selectedBlockId || blocks[0]?.id}
-                    onSelectionChange={(key) => setSelectedBlockId(String(key))}
-                    variant="secondary"
-                  >
-                    <Label className="text-xs font-medium text-muted">Bloque asociado</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {blocks.map((block, index) => (
-                          <ListBox.Item key={block.id} id={block.id} textValue={`Bloque 0${index + 1}: ${block.title}`}>
-                            Bloque 0{index + 1}: {block.title}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                ) : null}
-
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+              <Modal.Body className="flex flex-col gap-3.5 p-0">
                 <TextField isRequired className="w-full">
                   <TextArea
                     value={content}
                     onChange={(event) => setContent(event.target.value)}
-                    placeholder="Escribe algo importante…"
+                    placeholder="Escribe el acuerdo o decisión importante…"
                     autoFocus
-                    rows={3}
+                    rows={4}
+                    className="w-full rounded-xl border border-border/80 bg-surface-secondary/50 text-foreground placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent focus:bg-surface text-sm p-3 transition-colors outline-none resize-none"
                   />
                 </TextField>
               </Modal.Body>
 
-              <Modal.Footer className="flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" size="sm" onPress={onClose} isDisabled={isSubmitting}>Cancelar</Button>
-                <Button type="submit" variant="primary" size="sm" isDisabled={!content.trim() || isSubmitting}>
+              <Modal.Footer className="flex items-center justify-end gap-2 pt-1">
+                <Button type="button" variant="ghost" size="sm" onPress={onClose} isDisabled={isSubmitting} className="h-8 px-3 text-xs">
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="primary" size="sm" isDisabled={!content.trim() || isSubmitting} className="h-8 px-4 text-xs font-medium">
                   {isSubmitting ? 'Guardando…' : 'Guardar'}
                 </Button>
               </Modal.Footer>

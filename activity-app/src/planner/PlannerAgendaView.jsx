@@ -520,7 +520,7 @@ export function PlannerAgendaView({
                                       value={point.title}
                                       onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {title: e.target.value})}
                                       placeholder="Título del punto..."
-                                      className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0 leading-normal"
+                                      className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-accent/40 rounded px-1 -mx-1 transition-all leading-normal"
                                     />
                                   ) : (
                                     <span
@@ -593,7 +593,7 @@ export function PlannerAgendaView({
                                   value={point.description || ''}
                                   onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {description: e.target.value})}
                                   placeholder="Añadir descripción o detalle..."
-                                  className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-0"
+                                  className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-1 focus:ring-accent/40 rounded px-1 -mx-1 transition-all"
                                 />
                               ) : point.description ? (
                                 <p className={`text-xs line-clamp-2 leading-relaxed ${
@@ -690,7 +690,7 @@ export function PlannerAgendaView({
                                               );
                                             })}
                                           </div>
-                                          <span className={`text-xs ${isPointActive ? 'text-accent/90 font-medium' : 'text-muted font-normal'}`}>
+                                          <span className={`text-xs ${isPointActive ? 'text-accent font-medium' : 'text-muted font-normal'}`}>
                                             {pointPresenterList.join(', ')}
                                           </span>
                                         </div>
@@ -711,7 +711,7 @@ export function PlannerAgendaView({
                                           size="sm"
                                           onPress={onAdvance}
                                           isDisabled={isTransitioning}
-                                          className="w-full sm:w-auto h-7 px-3.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 shadow-xs"
+                                          className="w-full sm:w-auto h-7.5 px-3.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 shadow-xs transition-transform"
                                         >
                                           <span>{label}</span>
                                           {!isTransitioning && assistantDetails.nextAction.target !== 'session' && (

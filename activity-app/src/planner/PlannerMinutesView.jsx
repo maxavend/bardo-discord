@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {Button, Avatar, toast} from '@heroui/react';
+import {Button, Avatar, Dropdown, Label, toast} from '@heroui/react';
 import {
   Copy,
   ChevronLeft,
@@ -9,6 +9,7 @@ import {
   CircleCheck,
   FileText,
   Check,
+  EllipsisVertical,
 } from '@gravity-ui/icons';
 import {generateMinutesMarkdown} from './planner-store.js';
 import {POINT_STATUS, getPointStatus, recalculateEstimatedEndTime} from './session-runner.js';
@@ -226,38 +227,70 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
             <button
               type="button"
               onClick={onBack}
-              className="text-xs text-muted hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors font-medium select-none"
+              className="text-xs text-muted hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors font-medium select-none shrink-0"
             >
               <ChevronLeft width={14} height={14} className="-ml-0.5" />
               <span>Volver al planner</span>
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Button
                 variant="primary"
                 size="sm"
                 onPress={handleSaveToDocs}
                 isDisabled={isSavingDoc}
-                className="h-7 px-3 text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+                className="h-8 px-3 text-xs font-semibold flex items-center gap-1.5 shadow-xs"
               >
                 <FileText width={13} height={13} /> <span>Guardar en Docs</span>
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onPress={onCopyMarkdown}
-                className="h-7 px-2.5 text-xs font-medium flex items-center gap-1.5"
-              >
-                <Copy width={13} height={13} /> <span>Copiar Markdown</span>
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onPress={handlePublishDiscord}
-                className="h-7 px-2.5 text-xs font-medium flex items-center gap-1.5"
-              >
-                <ArrowUpRightFromSquare width={13} height={13} /> <span>Publicar en canal</span>
-              </Button>
+
+              {/* Acciones secundarias: visibles en desktop, colapsadas en mobile */}
+              <div className="hidden sm:flex items-center gap-1.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onPress={onCopyMarkdown}
+                  className="h-8 px-3 text-xs font-medium flex items-center gap-1.5"
+                >
+                  <Copy width={13} height={13} /> <span>Copiar</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onPress={handlePublishDiscord}
+                  className="h-8 px-3 text-xs font-medium flex items-center gap-1.5"
+                >
+                  <ArrowUpRightFromSquare width={13} height={13} /> <span>Publicar</span>
+                </Button>
+              </div>
+
+              {/* Menú ⋮ en mobile */}
+              <div className="sm:hidden">
+                <Dropdown>
+                  <Dropdown.Trigger>
+                    <Button variant="ghost" size="sm" isIconOnly aria-label="Más acciones" className="h-8 w-8 text-muted hover:text-foreground">
+                      <EllipsisVertical width={14} height={14} />
+                    </Button>
+                  </Dropdown.Trigger>
+                  <Dropdown.Popover placement="bottom end">
+                    <Dropdown.Menu
+                      onAction={(key) => {
+                        if (key === 'copy') onCopyMarkdown?.();
+                        if (key === 'publish') handlePublishDiscord();
+                      }}
+                    >
+                      <Dropdown.Item id="copy" textValue="Copiar Markdown">
+                        <Copy />
+                        <Label>Copiar Markdown</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="publish" textValue="Publicar en canal">
+                        <ArrowUpRightFromSquare />
+                        <Label>Publicar en canal</Label>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+              </div>
             </div>
           </div>
 

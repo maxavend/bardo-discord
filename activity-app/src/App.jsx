@@ -77,8 +77,8 @@ const BLOCK_TYPES = [
 function parseRoute() {
   const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
   if (raw === 'planner' || raw.startsWith('planner-')) {
-    const tab = raw.replace(/^planner-?/, '') || 'agenda';
-    return {type: 'planner', tab: tab === 'planner' ? 'agenda' : tab, key: raw};
+    const tab = raw.replace(/^planner-?/, '') || 'home';
+    return {type: 'planner', tab: tab === 'planner' ? 'home' : tab, key: raw};
   }
   if (!raw || raw === 'docs') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
@@ -517,9 +517,9 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             variant="secondary"
             size="sm"
             onPress={() => onNavigateModule?.('docs')}
-            className="font-medium"
+            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <FileText width={14} height={14} /> Ir a Docs
+            <FileText width={14} height={14} /> Docs
           </Button>
         </div>
       ) : isLibrary ? (
@@ -528,7 +528,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             variant="secondary"
             size="sm"
             onPress={() => onNavigateModule?.('planner')}
-            className="font-medium"
+            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
             <Calendar width={14} height={14} /> Planner
           </Button>
@@ -544,16 +544,16 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               if (file) onUpload(file);
             }}
           />
-          <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="font-medium">
-            <FileArrowUp width={16} height={16} /> Subir
+          <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+            <FileArrowUp width={14} height={14} /> Subir
           </Button>
-          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Nuevo documento" className="new-button">
-            <Plus width={18} height={18} />
+          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Nuevo documento" className="h-8 w-8 rounded-lg">
+            <Plus width={16} height={16} />
           </Button>
         </div>
       ) : doc ? (
-        <div key="document-actions" className="header-slot-enter">
-          <Button variant="primary" size="sm" onPress={onEdit}>
+        <div key="document-actions" className="header-slot-enter flex items-center gap-2">
+          <Button variant="primary" size="sm" onPress={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
             <Pencil width={14} height={14} /> Editar
           </Button>
           <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
@@ -562,18 +562,18 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
     >
       {isPlanner ? (
         <div key="planner-brand" className="flex items-center gap-2 header-slot-enter">
-          <span className="topbar-title">Bardo Planner</span>
-          <Chip size="sm" variant="soft" color="accent" className="font-semibold text-[11px]">
+          <span className="topbar-title font-bold text-sm tracking-tight text-foreground">Bardo Planner</span>
+          <Chip size="sm" variant="soft" color="accent" className="font-semibold text-[10.5px] px-2 h-5">
             Release 2.0
           </Chip>
         </div>
       ) : isLibrary ? (
-        <span key="library-title" className="topbar-title header-slot-enter">
-          <span>Bardo</span>
+        <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
+          <span>Bardo Docs</span>
         </span>
       ) : (
-        <Button key="document-title" variant="ghost" size="sm" onPress={onBack} className="back-button">
-          <ChevronLeft width={16} height={16} /> Docs
+        <Button key="document-title" variant="ghost" size="sm" onPress={onBack} className="back-button h-8 px-2.5 text-xs text-muted hover:text-foreground font-medium flex items-center gap-1">
+          <ChevronLeft width={15} height={15} /> Docs
         </Button>
       )}
     </DocsHeader>
@@ -2141,8 +2141,12 @@ function App() {
       )}
       {route.type === 'planner' && (
         <PlannerModule
-          initialTab={route.tab || 'agenda'}
-          onSwitchTab={(tab) => go(tab === 'agenda' ? '#planner' : `#planner-${tab}`, {skipTransition: true})}
+          initialTab={route.tab || 'home'}
+          onSwitchTab={(tab) => {
+            if (tab === 'home') go('#planner', {skipTransition: true});
+            else if (tab === 'agenda') go('#planner-agenda', {skipTransition: true});
+            else go(`#planner-${tab}`, {skipTransition: true});
+          }}
           onSaveDocToLibrary={(docData) => {
             const now = new Date().toISOString();
             const doc = {
