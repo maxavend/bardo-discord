@@ -411,29 +411,38 @@ export function SearchableParticipantMenu({
               Roles del servidor
             </div>
             {filteredRoles.map((role) => {
-              const isSelected = selectedKeys.has(role.tag);
+              const isSelected =
+                selectedKeys.has(role.tag) ||
+                selectedKeys.has(role.name) ||
+                selectedKeys.has(`@${role.name}`) ||
+                Array.from(selectedKeys).some(
+                  (k) => k.toLowerCase() === role.tag.toLowerCase() || k.toLowerCase() === `@${role.name.toLowerCase()}`
+                );
+
               return (
                 <button
                   key={role.tag}
                   type="button"
                   onClick={() => handleToggle(role.tag)}
-                  className={`w-full text-left px-3 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
                     isSelected ? 'bg-accent/10 text-foreground font-semibold' : 'hover:bg-surface-secondary/70 text-foreground'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <span
                       className="w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
                       style={{backgroundColor: role.color}}
                     >
                       #
                     </span>
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-xs font-medium text-foreground leading-tight truncate">{role.name}</span>
                       <span className="text-[10.5px] text-muted leading-tight truncate">{role.tag}</span>
                     </div>
                   </div>
-                  {isSelected && <Check width={13} height={13} className="text-accent shrink-0" />}
+                  <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
+                    {isSelected && <Check width={14} height={14} className="text-accent" />}
+                  </div>
                 </button>
               );
             })}
@@ -447,29 +456,41 @@ export function SearchableParticipantMenu({
               Miembros del servidor y canal
             </div>
             {filteredMembers.map((member) => {
-              const isSelected = selectedKeys.has(member.tag);
+              const isSelected =
+                selectedKeys.has(member.tag) ||
+                selectedKeys.has(member.globalName) ||
+                selectedKeys.has(`@${member.globalName}`) ||
+                Array.from(selectedKeys).some(
+                  (k) =>
+                    k.toLowerCase() === member.tag.toLowerCase() ||
+                    k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
+                    k.toLowerCase() === member.globalName.toLowerCase()
+                );
+
               return (
                 <button
                   key={member.tag}
                   type="button"
                   onClick={() => handleToggle(member.tag)}
-                  className={`w-full text-left px-3 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
                     isSelected ? 'bg-accent/10 text-foreground font-semibold' : 'hover:bg-surface-secondary/70 text-foreground'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <Avatar
                       name={member.globalName}
                       size="xs"
                       className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                       style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                     />
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-xs font-medium text-foreground leading-tight truncate">{member.globalName}</span>
                       <span className="text-[10.5px] text-muted leading-tight truncate">{member.tag}</span>
                     </div>
                   </div>
-                  {isSelected && <Check width={13} height={13} className="text-accent shrink-0" />}
+                  <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
+                    {isSelected && <Check width={14} height={14} className="text-accent" />}
+                  </div>
                 </button>
               );
             })}

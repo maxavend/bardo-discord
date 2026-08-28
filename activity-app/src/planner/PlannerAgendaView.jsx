@@ -360,75 +360,20 @@ export function PlannerAgendaView({
               );
             }
 
-            return (
-              <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch">
-                {/* Timeline lateral izquierdo (visible en mobile y desktop) */}
-                <div className="flex flex-col items-center justify-between text-[11px] sm:text-xs text-muted font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
-                  <div className="flex flex-col items-center gap-0.5">
-                    <span className={isLive ? 'text-accent font-bold' : isCompleted ? 'text-success font-semibold' : 'text-muted'}>
-                      {blockStart}
-                    </span>
-                    <span className="text-[10px] sm:text-[11px] text-muted/60">{blockEnd}</span>
-                    <span className="text-[9px] sm:text-[10px] text-muted/50 mt-0.5">{blockDuration}m</span>
-                  </div>
-
-                  <div className="flex-1 flex flex-col items-center my-1 relative w-full">
-                    <div className="relative my-1 z-10 flex items-center justify-center">
-                      {isLive ? (
-                        <MaterialMorphShape
-                          size={18}
-                          color={blockColor}
-                          isPaused={isPaused}
-                        />
-                      ) : isCompleted ? (
-                        <span className="h-2 w-2 rounded-full bg-success ring-2 ring-surface block" />
-                      ) : (
-                        <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[32px]">
-                      {isLive ? (
-                        <MaterialWavyProgress
-                          value={progressPercent}
-                          color={blockColor}
-                          isPaused={isPaused}
-                          orientation="vertical"
-                          strokeWidth={4.5}
-                          wavelength={72}
-                          amplitude={3.5}
-                        />
-                      ) : isCompleted ? (
-                        <div className="w-[4.5px] h-full bg-success rounded-full" />
-                      ) : (
-                        <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
-                      )}
-                    </div>
-
-                    {isLast && (
-                      <div className="relative mb-2 z-10 flex items-center justify-center">
-                        <span className={`h-2 w-2 rounded-full ring-2 ring-surface block ${
-                          isCompleted ? 'bg-success' : 'bg-border'
-                        }`} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="min-w-0 w-full">
-                  <Card
-                    className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs ${
-                      isLive && !isEditing
-                        ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
-                        : isCompleted && !isEditing
-                          ? 'opacity-85 bg-surface border-border/60'
-                          : isSkipped && !isEditing
-                            ? 'opacity-60 bg-surface-secondary/30 border-border/40'
-                            : 'bg-surface border-border/80'
-                    }`}
-                  >
-                                   <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
+            const blockCardElement = (
+              <Card
+                className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs ${
+                  isLive && !isEditing
+                    ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
+                    : isCompleted && !isEditing
+                      ? 'opacity-85 bg-surface border-border/60'
+                      : isSkipped && !isEditing
+                        ? 'opacity-60 bg-surface-secondary/30 border-border/40'
+                        : 'bg-surface border-border/80'
+                }`}
+              >
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                         {isEditing ? (
                           <input
                             type="text"
@@ -861,14 +806,80 @@ export function PlannerAgendaView({
                       </div>
                     )}
                   </Card>
+            );
+
+            if (isEditing) {
+              return (
+                <div key={block.id} className="w-full">
+                  {blockCardElement}
+                </div>
+              );
+            }
+
+            return (
+              <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch">
+                {/* Timeline lateral izquierdo (visible solo fuera de modo edición) */}
+                <div className="flex flex-col items-center justify-between text-[11px] sm:text-xs text-muted font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={isLive ? 'text-accent font-bold' : isCompleted ? 'text-success font-semibold' : 'text-muted'}>
+                      {blockStart}
+                    </span>
+                    <span className="text-[10px] sm:text-[11px] text-muted/60">{blockEnd}</span>
+                    <span className="text-[9px] sm:text-[10px] text-muted/50 mt-0.5">{blockDuration}m</span>
+                  </div>
+
+                  <div className="flex-1 flex flex-col items-center my-1 relative w-full">
+                    <div className="relative my-1 z-10 flex items-center justify-center">
+                      {isLive ? (
+                        <MaterialMorphShape
+                          size={18}
+                          color={blockColor}
+                          isPaused={isPaused}
+                        />
+                      ) : isCompleted ? (
+                        <span className="h-2 w-2 rounded-full bg-success ring-2 ring-surface block" />
+                      ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[32px]">
+                      {isLive ? (
+                        <MaterialWavyProgress
+                          value={progressPercent}
+                          color={blockColor}
+                          isPaused={isPaused}
+                          orientation="vertical"
+                          strokeWidth={4.5}
+                          wavelength={72}
+                          amplitude={3.5}
+                        />
+                      ) : isCompleted ? (
+                        <div className="w-[4.5px] h-full bg-success rounded-full" />
+                      ) : (
+                        <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
+                      )}
+                    </div>
+
+                    {isLast && (
+                      <div className="relative mb-2 z-10 flex items-center justify-center">
+                        <span className={`h-2 w-2 rounded-full ring-2 ring-surface block ${
+                          isCompleted ? 'bg-success' : 'bg-border'
+                        }`} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-w-0 w-full">
+                  {blockCardElement}
                 </div>
               </div>
             );
           })}
 
           {isEditing && (
-            <div className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch mt-3">
-              <div className="w-[52px] sm:w-16 shrink-0" />
+            <div className="w-full mt-3">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full">
                 <button
                   type="button"
