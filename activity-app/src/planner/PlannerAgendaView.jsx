@@ -43,6 +43,7 @@ export function PlannerAgendaView({
   isEditing = false,
   dockSlot = null,
   onAdvance,
+  onSkipBlock,
   isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
@@ -802,24 +803,43 @@ export function PlannerAgendaView({
                     )}
 
                     {!isEditing && (
-                      <div className="flex items-center justify-between pt-1 border-t border-border/30 text-xs text-muted">
+                      <div className="flex items-center justify-between pt-2 border-t border-border/30 text-xs text-muted flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          {block.phases && (
-                            <span className="text-[11px]">
-                              {block.phases.context}m ctx · {block.phases.review}m rev · {block.phases.closing}m cierre
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onPress={() => onOpenCapture('decision', block.id)}
-                            className="h-7 text-xs text-muted hover:text-foreground"
+                            className="h-7 text-xs text-muted hover:text-foreground px-2 gap-1.5"
                           >
-                            <Plus width={12} height={12} /> Acuerdo
+                            <Plus width={12} height={12} />
+                            <span>Acuerdo</span>
                           </Button>
+                          {block.phases && (
+                            <span className="text-[11px] text-muted/60 hidden sm:inline">
+                              {block.phases.context}m ctx · {block.phases.review}m rev · {block.phases.closing}m cierre
+                            </span>
+                          )}
                         </div>
+
+                        {!isLast && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onPress={() => {
+                                if (isLive && onSkipBlock) {
+                                  onSkipBlock();
+                                } else if (onAdvance) {
+                                  onAdvance();
+                                }
+                              }}
+                              className="h-7 text-xs text-muted hover:text-foreground px-2.5 font-medium gap-1"
+                            >
+                              <span>Siguiente bloque</span>
+                              <ArrowRight width={12} height={12} className="text-muted/70" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </Card>

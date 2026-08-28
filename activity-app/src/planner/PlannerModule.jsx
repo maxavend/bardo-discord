@@ -771,6 +771,7 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
           sessionState={sessionState}
           isEditing={isEditing}
           onAdvance={handleAdvance}
+          onSkipBlock={handleSkipBlock}
           isTransitioning={isTransitioning}
           onUpdateBlock={handleUpdateBlock}
           onAddBlock={handleAddBlock}
