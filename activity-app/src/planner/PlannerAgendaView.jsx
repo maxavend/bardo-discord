@@ -3,7 +3,6 @@ import {
   Avatar,
   Button,
   Card,
-  Checkbox,
   Dropdown,
   Popover,
   Label,
@@ -385,7 +384,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={point.id}
-                              className={`group relative flex items-start gap-3 p-3 rounded-lg transition-all ${
+                              className={`group relative flex flex-col justify-center px-4 py-3 sm:px-4.5 sm:py-3.5 rounded-xl gap-2 transition-all ${
                                 isPointActive
                                   ? 'bg-accent/15 text-accent shadow-xs'
                                   : isDone || isPointSkipped
@@ -393,122 +392,125 @@ export function PlannerAgendaView({
                                     : 'bg-surface-secondary/50 hover:bg-surface-secondary/70 text-foreground'
                               }`}
                             >
-                              <Checkbox
-                                size="sm"
-                                isSelected={isDone}
-                                onChange={(event) => onToggleSubpointStatus(block.id, point.id, event.target.checked)}
-                                className="mt-0.5 shrink-0 pl-1"
-                              />
+                              {/* Fila 1: Título del punto y Estado/Acción */}
+                              <div className="flex items-center justify-between gap-3 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  {isDone && !isPointActive && (
+                                    <CircleCheck width={14} height={14} className="text-success shrink-0" />
+                                  )}
 
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <div className="flex items-baseline justify-between gap-2 flex-wrap">
                                   {isEditing ? (
                                     <input
                                       type="text"
                                       value={point.title}
                                       onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {title: e.target.value})}
                                       placeholder="Título del punto..."
-                                      className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0"
+                                      className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0 leading-normal"
                                     />
                                   ) : (
-                                    <span className={`text-sm leading-snug ${
-                                      isDone
-                                        ? 'line-through text-foreground/60 font-normal'
-                                        : isPointSkipped
-                                          ? 'text-muted font-normal'
-                                          : isPointActive
-                                            ? 'font-bold text-accent'
-                                            : 'font-semibold text-foreground'
-                                    }`}>
+                                    <span
+                                      onClick={() => !isPointActive && onToggleSubpointStatus?.(block.id, point.id, !isDone)}
+                                      className={`text-sm leading-normal truncate ${
+                                        isDone
+                                          ? 'line-through text-foreground/60 font-normal cursor-pointer'
+                                          : isPointSkipped
+                                            ? 'text-muted font-normal cursor-pointer'
+                                            : isPointActive
+                                              ? 'font-bold text-accent'
+                                              : 'font-semibold text-foreground cursor-pointer hover:text-accent'
+                                      }`}
+                                    >
                                       {point.title || '(Punto sin título)'}
                                     </span>
                                   )}
-
-                                  {!isEditing && (
-                                    <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                      {isPointActive ? (
-                                        onAdvance ? (() => {
-                                          const assistantDetails = getAssistantContextDetails(state, sessionState);
-                                          const label = isTransitioning ? 'Guardando…' : assistantDetails.nextAction.label;
-                                          return (
-                                            <Button
-                                              variant="primary"
-                                              size="sm"
-                                              onPress={onAdvance}
-                                              isDisabled={isTransitioning}
-                                              className="h-7 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 active:scale-95 shadow-xs"
-                                            >
-                                              <span>{label}</span>
-                                              {!isTransitioning && assistantDetails.nextAction.target !== 'session' && (
-                                                <ArrowRight width={12} height={12} />
-                                              )}
-                                            </Button>
-                                          );
-                                        })() : (
-                                          <span className="text-accent font-bold">
-                                            Punto {pointIndex + 1} · En curso
-                                          </span>
-                                        )
-                                      ) : isDone ? (
-                                        <span className="text-success font-semibold">Revisado</span>
-                                      ) : isPointSkipped ? (
-                                        <span className="text-muted font-medium">Saltado</span>
-                                      ) : null}
-                                    </div>
-                                  )}
-
-                                  {isEditing && (
-                                    <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
-                                      <button
-                                        type="button"
-                                        onClick={() => onMoveSubpoint?.(block.id, point.id, -1)}
-                                        disabled={pointIndex === 0}
-                                        aria-label="Mover punto arriba"
-                                        className="p-1 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer"
-                                      >
-                                        <ChevronUp width={12} height={12} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => onMoveSubpoint?.(block.id, point.id, 1)}
-                                        disabled={pointIndex === (block.subpoints || []).length - 1}
-                                        aria-label="Mover punto abajo"
-                                        className="p-1 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer"
-                                      >
-                                        <ChevronDown width={12} height={12} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => onDeleteSubpoint?.(block.id, point.id)}
-                                        aria-label="Eliminar punto"
-                                        className="p-1 text-muted hover:text-danger cursor-pointer ml-0.5"
-                                      >
-                                        <TrashBin width={12} height={12} />
-                                      </button>
-                                    </div>
-                                  )}
                                 </div>
 
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={point.description || ''}
-                                    onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {description: e.target.value})}
-                                    placeholder={point.description ? '' : 'Añadir descripción o detalle...'}
-                                    className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-0 mt-0.5"
-                                  />
-                                ) : (
-                                  point.description && (
-                                    <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${
-                                      isPointActive ? 'text-accent/85' : 'text-muted'
-                                    }`}>
-                                      {point.description}
-                                    </p>
-                                  )
+                                {!isEditing && (
+                                  <div className="flex items-center gap-1.5 text-xs shrink-0">
+                                    {isPointActive ? (
+                                      onAdvance ? (() => {
+                                        const assistantDetails = getAssistantContextDetails(state, sessionState);
+                                        const label = isTransitioning ? 'Guardando…' : assistantDetails.nextAction.label;
+                                        return (
+                                          <Button
+                                            variant="primary"
+                                            size="sm"
+                                            onPress={onAdvance}
+                                            isDisabled={isTransitioning}
+                                            className="h-7 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 active:scale-95 shadow-xs"
+                                          >
+                                            <span>{label}</span>
+                                            {!isTransitioning && assistantDetails.nextAction.target !== 'session' && (
+                                              <ArrowRight width={12} height={12} />
+                                            )}
+                                          </Button>
+                                        );
+                                      })() : (
+                                        <span className="text-accent font-bold">
+                                          Punto {pointIndex + 1} · En curso
+                                        </span>
+                                      )
+                                    ) : isDone ? (
+                                      <span className="text-success font-semibold">Revisado</span>
+                                    ) : isPointSkipped ? (
+                                      <span className="text-muted font-medium">Saltado</span>
+                                    ) : null}
+                                  </div>
                                 )}
 
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2 mt-2 pt-0.5">
+                                {isEditing && (
+                                  <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => onMoveSubpoint?.(block.id, point.id, -1)}
+                                      disabled={pointIndex === 0}
+                                      aria-label="Mover punto arriba"
+                                      className="p-1 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer"
+                                    >
+                                      <ChevronUp width={12} height={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onMoveSubpoint?.(block.id, point.id, 1)}
+                                      disabled={pointIndex === (block.subpoints || []).length - 1}
+                                      aria-label="Mover punto abajo"
+                                      className="p-1 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer"
+                                    >
+                                      <ChevronDown width={12} height={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteSubpoint?.(block.id, point.id)}
+                                      aria-label="Eliminar punto"
+                                      className="p-1 text-muted hover:text-danger cursor-pointer ml-0.5"
+                                    >
+                                      <TrashBin width={12} height={12} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Descripción opcional */}
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={point.description || ''}
+                                  onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {description: e.target.value})}
+                                  placeholder="Añadir descripción o detalle..."
+                                  className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-0"
+                                />
+                              ) : point.description ? (
+                                <p className={`text-xs line-clamp-2 leading-relaxed ${
+                                  isPointActive ? 'text-accent/85' : 'text-muted'
+                                }`}>
+                                  {point.description}
+                                </p>
+                              ) : null}
+
+                              {/* Fila 2: Presentador / Responsable */}
+                              {(isEditing || presenterList.length > 0) && (
+                                <div className="flex items-center gap-2">
+                                  {isEditing ? (
                                     <Dropdown>
                                       <Dropdown.Trigger>
                                         <button
@@ -552,10 +554,8 @@ export function PlannerAgendaView({
                                         </Dropdown.Menu>
                                       </Dropdown.Popover>
                                     </Dropdown>
-                                  </div>
-                                ) : (
-                                  presenterList.length > 0 && (
-                                    <div className="flex items-center gap-2 mt-2 pt-0.5">
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
                                       <div className="flex items-center -space-x-1.5">
                                         {presenterList.map((pName, pIdx) => {
                                           const matched = DEFAULT_DISCORD_MEMBERS.find(
@@ -579,9 +579,9 @@ export function PlannerAgendaView({
                                         {point.presenter}
                                       </span>
                                     </div>
-                                  )
-                                )}
-                              </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
