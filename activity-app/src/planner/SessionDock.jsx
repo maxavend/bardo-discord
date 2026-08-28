@@ -1,3 +1,4 @@
+import {useState, useEffect} from 'react';
 import {
   Button,
 } from '@heroui/react';
@@ -34,6 +35,17 @@ export function SessionDock({
   onOpenDecisionCapture,
   onInterruptSession: _onInterruptSession,
 }) {
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 90);
+    };
+    window.addEventListener('scroll', handleScroll, {passive: true});
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   if (
     !sessionState ||
     sessionState.status === SESSION_STATUS.IDLE ||
@@ -58,13 +70,13 @@ export function SessionDock({
   const activeDescription = details.activePointDescription || details.activeBlockDescription || '';
   const advanceLabel = details.nextAction.label;
 
-  const renderAdvanceButton = (variant = 'primary') => (
+  const renderAdvanceButton = (variant = 'primary', size = 'sm') => (
     <Button
       variant={variant}
-      size="sm"
+      size={size}
       onPress={onAdvance}
       isDisabled={isBusy}
-      className="font-medium text-xs h-8 px-3.5"
+      className={`font-medium text-xs ${size === 'sm' ? 'h-8 px-3' : 'h-7 px-2.5'}`}
     >
       <span>{isBusy ? 'Guardando…' : advanceLabel}</span>
       {!isBusy && details.nextAction.target !== 'session' && <ArrowRight width={12} height={12} />}
@@ -82,171 +94,95 @@ export function SessionDock({
         zIndex: 45,
       }}
     >
-      <div className="w-full session-dock-glass rounded-2xl px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-2.5 transition-all">
-        {/* 1. Title + Block Index (Check-in, contexto y novedades              1/5) */}
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <div className="flex items-baseline justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={`h-2 w-2 rounded-full shrink-0 ${
-                isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
-              }`} />
-              <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
-                {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
-              </h2>
-            </div>
+      {/* ── Modo Sticky Compacto (Al hacer scroll) ────────────────────────── */}
+      {isScrolled ? (
+        <div className="w-full session-dock-glass rounded-xl px-3.5 py-1.5 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
+          {/* Resumen operacional: Tema · #/# · Tiempo · Progreso */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${
+              isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
+            }`} />
+
+            <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
+              {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
+            </span>
 
             <span className="text-xs font-mono text-muted shrink-0 tabular-nums">
               {details.activeBlockIndex >= 0 ? `${details.activeBlockIndex + 1}/${details.totalBlocksCount}` : ''}
             </span>
-          </div>
 
-          {activeDescription && (
-            <p className="text-xs text-muted leading-relaxed pl-4 line-clamp-2">
-              {activeDescription}
-            </p>
-          )}
-        </div>
+            <span className="text-muted/40">·</span>
 
-        {/* 2. Block Timer */}
-        <div className="flex items-center gap-2 pl-4 text-xs font-medium">
-          {isPaused ? (
-            <span className="text-warning">{formatMsToClock(details.remainingBlockMs)} · pausado</span>
-          ) : isExpired ? (
-            <span className="text-danger">+{formatMsToClock(details.overtimeMs)} sobre el tiempo</span>
-          ) : isUnlimited ? (
-            <span className="text-accent">+{formatMsToClock(details.elapsedBlockMs)} (sin límite)</span>
-          ) : (
-            <span className={is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'}>
-              {formatMsToClock(details.remainingBlockMs)} restantes
-              {isExtended ? ` (+${details.extensionMinutes}m)` : ''}
+            {/* Timer de bloque */}
+            <span className={`text-xs font-medium shrink-0 ${
+              isPaused ? 'text-warning' : isExpired ? 'text-danger font-semibold' : is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'
+            }`}>
+              {isPaused
+                ? `${formatMsToClock(details.remainingBlockMs)} · pausado`
+                : isExpired
+                ? `+${formatMsToClock(details.overtimeMs)}`
+                : isUnlimited
+                ? `+${formatMsToClock(details.elapsedBlockMs)}`
+                : `${formatMsToClock(details.remainingBlockMs)}`}
             </span>
-          )}
-        </div>
 
-        {/* 3. Segmented Timeline Progress Bar by Block */}
-        <div className="pl-4">
-          <div
-            className="flex items-center gap-1.5 w-full h-1"
-            role="progressbar"
-            aria-label="Progreso temporal de la sesión por bloques"
-            aria-valuenow={details.sessionProgressPercent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            {(plannerState.blocks || []).map((b, idx) => {
-              const isCompleted = (sessionState?.completedBlockIds || []).includes(b.id);
-              const isCurrent = b.id === sessionState?.liveActiveBlockId;
-              const isSkipped = (sessionState?.skippedBlockIds || []).includes(b.id);
-              const blockDuration = Math.max(Number(b.durationMinutes) || 10, 1);
-
-              let fillWidthPercent = 0;
-              let fillColor = 'bg-accent';
-
-              if (isCompleted) {
-                fillWidthPercent = 100;
-                fillColor = 'bg-accent/80';
-              } else if (isCurrent) {
-                const extMin = sessionState?.blockExtensions?.[b.id]?.extensionMinutes || 0;
-                const plannedMs = Math.max((blockDuration + extMin) * 60 * 1000, 1);
-                fillWidthPercent = details.isUnlimited
-                  ? 100
-                  : Math.min(100, Math.max(0, (details.elapsedBlockMs / plannedMs) * 100));
-                fillColor = isExpired ? 'bg-danger' : is5MinWarning ? 'bg-warning' : 'bg-accent';
-              } else if (isSkipped) {
-                fillWidthPercent = 0;
-              }
-
-              return (
-                <div
-                  key={b.id || idx}
-                  className="relative h-1 bg-surface-secondary/70 rounded-full overflow-hidden transition-all"
-                  style={{flex: blockDuration}}
-                  title={`${b.title} (${blockDuration} min)`}
-                >
-                  <div
-                    className={`h-full ${fillColor} rounded-full transition-all duration-300 ease-out`}
-                    style={{width: `${fillWidthPercent}%`}}
-                  />
-                </div>
-              );
-            })}
+            {details.totalPoints > 0 && (
+              <>
+                <span className="text-muted/40 hidden sm:inline">·</span>
+                <span className="text-xs text-muted shrink-0 hidden sm:inline">
+                  {details.completedPoints}/{details.totalPoints} puntos
+                </span>
+              </>
+            )}
           </div>
-        </div>
 
-        {/* 4. Session Meta (0/11 puntos · Fin ~20:45) */}
-        <div className="flex items-center justify-between text-xs text-muted pl-4">
-          <span>
-            {details.completedPoints} de {details.totalPoints} puntos
-            {details.estimatedEndTime ? ` · Fin ~${details.estimatedEndTime}` : ''}
-          </span>
-        </div>
-
-        {/* 5. Minimal Action Row: Zero dropdown, pure progressive disclosure */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 pl-4 flex-wrap">
-          <div className="flex items-center gap-1 flex-wrap">
+          {/* Microacciones rápidas + Siguiente */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Pausar / Reanudar */}
             <Button
               variant="ghost"
               size="sm"
+              isIconOnly
               onPress={isPaused ? onResumeSession : onPauseSession}
               isDisabled={isBusy}
-              className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+              aria-label={isPaused ? 'Reanudar' : 'Pausar'}
+              className="h-7 w-7 text-muted hover:text-foreground"
             >
               {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
-              <span>{isPaused ? 'Reanudar' : 'Pausar'}</span>
             </Button>
 
-            {/* Grabar / Estado de Grabación */}
+            {/* Grabar / Estado */}
             {isRecording ? (
-              <div className="flex items-center gap-1.5 bg-danger/10 text-danger border border-danger/20 rounded-lg px-2.5 py-1 text-xs">
-                <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />
-                <span className="font-medium">Grabando</span>
+              <button
+                type="button"
+                onClick={onPauseRecording}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-danger/10 text-danger border border-danger/20 text-[11px] font-medium cursor-pointer"
+                title="Pausar grabación"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-danger animate-pulse" />
                 <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-                <button
-                  type="button"
-                  className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
-                  onClick={onPauseRecording}
-                >
-                  Pausar
-                </button>
-                <button
-                  type="button"
-                  className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
-                  onClick={onFinalizeRecording}
-                >
-                  Fin
-                </button>
-              </div>
+              </button>
             ) : isRecPaused ? (
-              <div className="flex items-center gap-1.5 bg-warning/10 text-warning border border-warning/20 rounded-lg px-2.5 py-1 text-xs">
-                <span className="h-2 w-2 rounded-full bg-warning" />
-                <span className="font-medium">Pausada</span>
+              <button
+                type="button"
+                onClick={onResumeRecording}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-warning/10 text-warning border border-warning/20 text-[11px] font-medium cursor-pointer"
+                title="Reanudar grabación"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-warning" />
                 <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-                <button
-                  type="button"
-                  className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
-                  onClick={onResumeRecording}
-                >
-                  Reanudar
-                </button>
-                <button
-                  type="button"
-                  className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
-                  onClick={onFinalizeRecording}
-                >
-                  Fin
-                </button>
-              </div>
+              </button>
             ) : (
               <Button
                 variant="ghost"
                 size="sm"
+                isIconOnly
                 onPress={onStartRecording}
                 isDisabled={isBusy}
-                className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+                aria-label="Grabar"
+                className="h-7 w-7 text-muted hover:text-foreground"
               >
                 <Microphone width={13} height={13} className="text-danger" />
-                <span>Grabar</span>
               </Button>
             )}
 
@@ -254,20 +190,161 @@ export function SessionDock({
             <Button
               variant="ghost"
               size="sm"
+              isIconOnly
               onPress={onOpenDecisionCapture}
               isDisabled={isBusy}
-              className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+              aria-label="Anotar"
+              className="h-7 w-7 text-muted hover:text-foreground"
             >
-              <Plus width={13} height={13} />
-              <span>Anotar</span>
+              <Plus width={14} height={14} />
             </Button>
-          </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-            {renderAdvanceButton()}
+            {/* Siguiente → */}
+            {renderAdvanceButton('primary', 'sm')}
           </div>
         </div>
-      </div>
+      ) : (
+        /* ── Modo Expandido (Al tope del documento) ────────────────────────── */
+        <div className="w-full session-dock-glass rounded-2xl px-4 py-3.5 flex flex-col gap-2.5 transition-all duration-200">
+          {/* 1. Título + Contador (Break                    3/5) */}
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`h-2 w-2 rounded-full shrink-0 ${
+                  isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
+                }`} />
+                <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
+                  {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
+                </h2>
+              </div>
+
+              <span className="text-xs font-mono text-muted shrink-0 tabular-nums">
+                {details.activeBlockIndex >= 0 ? `${details.activeBlockIndex + 1}/${details.totalBlocksCount}` : ''}
+              </span>
+            </div>
+
+            {activeDescription && (
+              <p className="text-xs text-muted leading-relaxed pl-4 line-clamp-2">
+                {activeDescription}
+              </p>
+            )}
+          </div>
+
+          {/* 2. Métricas de tiempo y estado en una línea limpia */}
+          <div className="flex items-center justify-between text-xs pl-4 flex-wrap gap-x-2">
+            <div className="flex items-center gap-1.5 font-medium">
+              {isPaused ? (
+                <span className="text-warning">{formatMsToClock(details.remainingBlockMs)} · pausado</span>
+              ) : isExpired ? (
+                <span className="text-danger">+{formatMsToClock(details.overtimeMs)} sobre el tiempo</span>
+              ) : isUnlimited ? (
+                <span className="text-accent">+{formatMsToClock(details.elapsedBlockMs)} (sin límite)</span>
+              ) : (
+                <span className={is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'}>
+                  {formatMsToClock(details.remainingBlockMs)} restantes
+                  {isExtended ? ` (+${details.extensionMinutes}m)` : ''}
+                </span>
+              )}
+              {details.totalPoints > 0 && (
+                <>
+                  <span className="text-muted/40">·</span>
+                  <span className="text-muted font-normal">
+                    {details.completedPoints} de {details.totalPoints} puntos
+                  </span>
+                </>
+              )}
+            </div>
+            <span className="text-muted font-normal text-xs">Fin ~{details.estimatedEndTime}</span>
+          </div>
+
+          {/* 3. Barra de acciones principal */}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 pl-4 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
+              {/* Pausar / Reanudar */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={isPaused ? onResumeSession : onPauseSession}
+                isDisabled={isBusy}
+                className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+              >
+                {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
+                <span>{isPaused ? 'Reanudar' : 'Pausar'}</span>
+              </Button>
+
+              {/* Grabar / Estado de Grabación */}
+              {isRecording ? (
+                <div className="flex items-center gap-1.5 bg-danger/10 text-danger border border-danger/20 rounded-lg px-2.5 py-1 text-xs">
+                  <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />
+                  <span className="font-medium">Grabando</span>
+                  <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
+                  <button
+                    type="button"
+                    className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
+                    onClick={onPauseRecording}
+                  >
+                    Pausar
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
+                    onClick={onFinalizeRecording}
+                  >
+                    Fin
+                  </button>
+                </div>
+              ) : isRecPaused ? (
+                <div className="flex items-center gap-1.5 bg-warning/10 text-warning border border-warning/20 rounded-lg px-2.5 py-1 text-xs">
+                  <span className="h-2 w-2 rounded-full bg-warning" />
+                  <span className="font-medium">Pausada</span>
+                  <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
+                  <button
+                    type="button"
+                    className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
+                    onClick={onResumeRecording}
+                  >
+                    Reanudar
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
+                    onClick={onFinalizeRecording}
+                  >
+                    Fin
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={onStartRecording}
+                  isDisabled={isBusy}
+                  className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+                >
+                  <Microphone width={13} height={13} className="text-danger" />
+                  <span>Grabar</span>
+                </Button>
+              )}
+
+              {/* + Anotar */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={onOpenDecisionCapture}
+                isDisabled={isBusy}
+                className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+              >
+                <Plus width={13} height={13} />
+                <span>Anotar</span>
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+              {renderAdvanceButton('primary', 'sm')}
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
