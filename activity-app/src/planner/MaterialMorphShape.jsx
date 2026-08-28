@@ -1,12 +1,11 @@
 import {useMemo} from 'react';
 
 /**
- * Material Design 3 Expressive Morphing Shape Indicator
- * Smoothly morphs between iconic Material 3 Expressive shapes:
- * 1. Squircle / Smooth Circle
- * 2. 5-point Rounded Flower / Pentagon (Image 3)
- * 3. Angled Pebble / Oblong (Image 2 & 4)
- * 4. 8-point Scallop Flower / Daisy (Image 5)
+ * Material Design 3 Expressive State Morph Glyph
+ * - PLAY MODE: Morphs smoothly between organic Play-inspired shapes (rounded play triangle,
+ *   3-lobe Reuleaux play badge, squircle) with gentle rotation.
+ * - PAUSE MODE: Smoothly splits/divides into the two iconic rounded pause bars (||) with spring physics.
+ * - RESUME: The two pause bars fuse seamlessly back into the play morphing shape.
  */
 export function MaterialMorphShape({
   size = 14,
@@ -17,7 +16,7 @@ export function MaterialMorphShape({
   const paths = useMemo(() => {
     const cx = 16;
     const cy = 16;
-    const numPoints = 16;
+    const numPoints = 18;
 
     const generatePath = (rFunc) => {
       const pts = [];
@@ -51,21 +50,21 @@ export function MaterialMorphShape({
       return d;
     };
 
-    // 1. Circle / Squircle
-    const dCircle = generatePath(() => 12);
-    // 2. 5-point Rounded Pentagon / Flower (Image 3)
-    const d5Gon = generatePath((th) => 11.5 + 2.8 * Math.cos(5 * th - Math.PI / 2));
-    // 3. Angled Pebble / Oblong (Image 2 & 4)
-    const dPebble = generatePath((th) => 11.5 + 3.4 * Math.cos(2 * th - 0.7));
-    // 4. 8-point Scallop Flower (Image 5)
-    const d8Scallop = generatePath((th) => 11.2 + 2.4 * Math.cos(8 * th));
+    // 1. Rounded Play Triangle (Pointing right)
+    const dPlayTri = generatePath((th) => 11.2 + 3.8 * Math.cos(3 * th));
+    // 2. 3-lobe Organic Reuleaux Play Badge
+    const dReuleaux = generatePath((th) => 11.5 + 2.6 * Math.cos(3 * th + 0.4));
+    // 3. Rounded Play Squircle
+    const dSquircle = generatePath((th) => 11.6 + 1.8 * Math.cos(4 * th));
+    // 4. Chevron Play Fast-Forward Morph
+    const dChevron = generatePath((th) => 11.0 + 3.2 * Math.cos(3 * th - 0.3));
 
     return {
-      dCircle,
-      d5Gon,
-      dPebble,
-      d8Scallop,
-      morphValues: `${dCircle}; ${d5Gon}; ${dPebble}; ${d8Scallop}; ${dCircle}`,
+      dPlayTri,
+      dReuleaux,
+      dSquircle,
+      dChevron,
+      morphValues: `${dPlayTri}; ${dReuleaux}; ${dSquircle}; ${dChevron}; ${dPlayTri}`,
     };
   }, []);
 
@@ -79,12 +78,12 @@ export function MaterialMorphShape({
       : 'text-accent';
 
   // Frecuencia dinámica: Aumenta velocidad cuando se acaba el tiempo (<5m o overtime)
-  const morphDuration = color === 'danger' ? '1.6s' : color === 'warning' ? '3.2s' : '8s';
-  const rotationDuration = color === 'danger' ? '3s' : color === 'warning' ? '6s' : '16s';
+  const morphDuration = color === 'danger' ? '1.6s' : color === 'warning' ? '3.2s' : '7s';
+  const rotationDuration = color === 'danger' ? '3s' : color === 'warning' ? '6s' : '14s';
 
   return (
     <div
-      className={`relative flex items-center justify-center select-none ${className}`}
+      className={`relative flex items-center justify-center select-none ${colorClass} ${className}`}
       style={{width: size, height: size}}
       aria-hidden="true"
     >
@@ -92,26 +91,71 @@ export function MaterialMorphShape({
         viewBox="0 0 32 32"
         width={size}
         height={size}
-        style={{
-          animationDuration: rotationDuration,
-        }}
-        className={`m3-morph-svg ${colorClass} ${isPaused ? 'is-paused' : ''}`}
+        className="overflow-visible"
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <path d={paths.dCircle}>
-          {!isPaused && (
-            <animate
-              attributeName="d"
-              dur={morphDuration}
-              repeatCount="indefinite"
-              values={paths.morphValues}
-              keyTimes="0; 0.25; 0.5; 0.75; 1"
-              calcMode="spline"
-              keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"
-            />
-          )}
-        </path>
+        {/* ── Capa 1: Forma Play Morphing (Activa en reproducción) ─────────── */}
+        <g
+          className="m3-morph-play-container"
+          style={{
+            opacity: isPaused ? 0 : 1,
+            transform: isPaused ? 'scale(0.3) rotate(-30deg)' : 'scale(1) rotate(0deg)',
+            transformOrigin: 'center center',
+            transition: 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease-out',
+          }}
+        >
+          <path
+            d={paths.dPlayTri}
+            className="m3-morph-svg"
+            style={{
+              animationDuration: rotationDuration,
+              animationPlayState: isPaused ? 'paused' : 'running',
+            }}
+          >
+            {!isPaused && (
+              <animate
+                attributeName="d"
+                dur={morphDuration}
+                repeatCount="indefinite"
+                values={paths.morphValues}
+                keyTimes="0; 0.25; 0.5; 0.75; 1"
+                calcMode="spline"
+                keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"
+              />
+            )}
+          </path>
+        </g>
+
+        {/* ── Capa 2: Barra Izquierda de Pausa (Divide y expande a la izquierda) */}
+        <rect
+          x="6.5"
+          y="6.5"
+          width="5.5"
+          height="19"
+          rx="2.75"
+          style={{
+            opacity: isPaused ? 1 : 0,
+            transform: isPaused ? 'translateX(0) scaleY(1)' : 'translateX(4px) scale(0.2)',
+            transformOrigin: 'center center',
+            transition: 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease-out',
+          }}
+        />
+
+        {/* ── Capa 3: Barra Derecha de Pausa (Divide y expande a la derecha) ──── */}
+        <rect
+          x="20"
+          y="6.5"
+          width="5.5"
+          height="19"
+          rx="2.75"
+          style={{
+            opacity: isPaused ? 1 : 0,
+            transform: isPaused ? 'translateX(0) scaleY(1)' : 'translateX(-4px) scale(0.2)',
+            transformOrigin: 'center center',
+            transition: 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.22s ease-out',
+          }}
+        />
       </svg>
     </div>
   );
