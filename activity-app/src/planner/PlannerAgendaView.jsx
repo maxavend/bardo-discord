@@ -235,21 +235,21 @@ export function PlannerAgendaView({
 
                 <div className="min-w-0 w-full">
                   <Card
-                    className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-xl transition-all ${
+                    className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs ${
                       isLive
-                        ? 'border-accent/60 ring-1 ring-accent/20 shadow-sm bg-surface'
+                        ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
                         : isCompleted
-                          ? 'opacity-85 bg-surface border-border/40'
+                          ? 'opacity-85 bg-surface border-border/60'
                           : isSkipped
-                            ? 'opacity-60 bg-surface-secondary/30 border-border/30'
-                            : 'bg-surface border-border/60'
+                            ? 'opacity-60 bg-surface-secondary/30 border-border/40'
+                            : 'bg-surface border-border/80'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
                       <div className="flex items-baseline gap-2 flex-wrap min-w-0">
                         <h3 className="text-base font-bold tracking-tight text-foreground">{block.title}</h3>
                         {isLive && <span className="text-[11px] font-semibold text-accent">En curso</span>}
-                        {isCompleted && <span className="text-[11px] font-medium text-success">Completado</span>}
+                        {isCompleted && <span className="text-[11px] font-semibold text-success">Completado</span>}
                         {isSkipped && <span className="text-[11px] font-medium text-muted">Saltado</span>}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
@@ -263,7 +263,7 @@ export function PlannerAgendaView({
                     )}
 
                     {(block.subpoints || []).length > 0 && (
-                      <div className="flex flex-col gap-1 pt-1">
+                      <div className="flex flex-col gap-1.5 pt-1">
                         {block.subpoints.map((point, pointIndex) => {
                           const storedStatus = sessionState?.pointStatuses?.[point.id] || point.status || POINT_STATUS.PENDING;
                           const isPointActive = isLive && point.id === liveActivePointId;
@@ -272,12 +272,12 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={point.id}
-                              className={`flex items-start justify-between gap-2.5 px-2.5 py-2 rounded-lg transition-colors ${
+                              className={`flex items-start justify-between gap-3 px-3 py-2.5 rounded-xl transition-colors ${
                                 isPointActive
-                                  ? 'bg-accent/8 ring-1 ring-inset ring-accent/25'
+                                  ? 'bg-accent/12 text-foreground'
                                   : isDone || isPointSkipped
-                                    ? 'bg-surface-secondary/20'
-                                    : 'hover:bg-surface-secondary/45'
+                                    ? 'bg-surface-secondary/40'
+                                    : 'hover:bg-surface-secondary/50'
                               }`}
                             >
                               <label className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer select-none">
@@ -289,21 +289,37 @@ export function PlannerAgendaView({
                                 />
                                 <span className="flex flex-col min-w-0">
                                   <span className={`text-xs leading-snug ${
-                                    isDone ? 'line-through text-muted' : isPointSkipped ? 'text-muted' : isPointActive ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                                    isDone
+                                      ? 'line-through text-foreground/60 font-normal'
+                                      : isPointSkipped
+                                      ? 'text-muted font-normal'
+                                      : isPointActive
+                                      ? 'font-semibold text-foreground'
+                                      : 'font-medium text-foreground'
                                   }`}>
                                     {point.title || '(Punto sin título)'}
                                   </span>
                                   {isPointActive && point.description && (
-                                    <span className="text-[11px] text-muted mt-0.5 line-clamp-2">{point.description}</span>
+                                    <span className="text-xs text-muted mt-0.5 line-clamp-2">{point.description}</span>
                                   )}
                                 </span>
                               </label>
 
-                              <div className="flex items-center gap-2 text-[11px] text-muted shrink-0">
-                                {isPointActive && <span className="text-accent font-semibold">Punto {pointIndex + 1} · En curso</span>}
-                                {!isPointActive && isDone && <span className="text-success font-medium">Revisado</span>}
-                                {!isPointActive && isPointSkipped && <span className="font-medium">Saltado</span>}
-                                {point.presenter && <span className="text-muted/80">· {point.presenter}</span>}
+                              <div className="flex items-center gap-1.5 text-xs shrink-0">
+                                {isPointActive && (
+                                  <span className="text-accent font-semibold">
+                                    Punto {pointIndex + 1} · En curso
+                                  </span>
+                                )}
+                                {!isPointActive && isDone && (
+                                  <span className="text-success font-semibold">Revisado</span>
+                                )}
+                                {!isPointActive && isPointSkipped && (
+                                  <span className="text-muted font-medium">Saltado</span>
+                                )}
+                                {point.presenter && (
+                                  <span className="text-muted">· {point.presenter}</span>
+                                )}
                               </div>
                             </div>
                           );
@@ -332,7 +348,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={decision.id}
-                              className="px-3 py-2 rounded-lg bg-surface-secondary/40 text-xs text-foreground flex items-center justify-between gap-2"
+                              className="px-3 py-2 rounded-xl bg-surface-secondary/60 border border-border/50 text-xs text-foreground flex items-center justify-between gap-2"
                             >
                               <div className="flex items-start gap-2 min-w-0">
                                 <CircleCheck width={14} height={14} className="text-success shrink-0 mt-0.5" />
