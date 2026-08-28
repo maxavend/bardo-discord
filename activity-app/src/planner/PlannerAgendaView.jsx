@@ -81,13 +81,25 @@ export function PlannerAgendaView({
 
   const renderBlockLeader = (block) => {
     const leaderStr = block.leader || 'Todo el equipo';
+    const leaderMember = DEFAULT_DISCORD_MEMBERS.find(
+      (m) =>
+        m.globalName.toLowerCase() === leaderStr.toLowerCase() ||
+        m.tag.toLowerCase() === leaderStr.toLowerCase() ||
+        `@${m.globalName.toLowerCase()}` === leaderStr.toLowerCase()
+    );
+    const color = leaderMember?.avatarColor || DISCORD_PALETTES[0];
 
     if (!isEditing) {
       return (
-        <span className="inline-flex items-center gap-1">
-          <span className="text-muted">Conduce:</span>
-          <strong className="font-semibold text-foreground">{leaderStr}</strong>
-        </span>
+        <div className="inline-flex items-center gap-1.5">
+          <Avatar
+            name={leaderMember?.globalName || leaderStr}
+            size="sm"
+            className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 border border-background shadow-2xs"
+            style={{backgroundColor: `${color}30`, color}}
+          />
+          <span className="font-medium text-foreground">{leaderStr}</span>
+        </div>
       );
     }
 
@@ -96,10 +108,15 @@ export function PlannerAgendaView({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="inline-flex items-center gap-1 cursor-pointer text-xs text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none group"
+            className="inline-flex items-center gap-1.5 cursor-pointer text-xs text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none group"
           >
-            <span className="text-muted">Conduce:</span>
-            <span className="font-semibold text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+            <Avatar
+              name={leaderMember?.globalName || leaderStr}
+              size="sm"
+              className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 border border-background shadow-2xs"
+              style={{backgroundColor: `${color}30`, color}}
+            />
+            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
               {leaderStr}
             </span>
           </button>
@@ -137,7 +154,6 @@ export function PlannerAgendaView({
 
   const renderBlockParticipants = (block) => {
     const rawParticipants = block.participants || '';
-    const participantsStr = rawParticipants || 'Diseño & SD + Carol, Karola y Nico';
     const {members, roles} = getAllDiscordEntities();
 
     const participantsList = rawParticipants
@@ -156,12 +172,56 @@ export function PlannerAgendaView({
       })
     );
 
+    const renderAvatars = () => (
+      <div className="flex items-center -space-x-2">
+        {participantsList.slice(0, 4).map((tag, i) => {
+          const matchedMember = members.find(
+            (m) =>
+              m.tag.toLowerCase() === tag.toLowerCase() ||
+              `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+          );
+          const matchedRole = roles.find(
+            (r) =>
+              r.tag.toLowerCase() === tag.toLowerCase() ||
+              `@${r.name.toLowerCase()}` === tag.toLowerCase()
+          );
+          const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+
+          if (matchedRole) {
+            return (
+              <span
+                key={i}
+                className="w-4.5 h-4.5 rounded-md border-2 border-background text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+                style={{backgroundColor: color}}
+              >
+                #
+              </span>
+            );
+          }
+
+          return (
+            <Avatar
+              key={i}
+              name={matchedMember?.globalName || tag}
+              size="sm"
+              className="w-4.5 h-4.5 border-2 border-background text-[8px] font-bold shadow-2xs shrink-0"
+              style={{backgroundColor: `${color}35`, color}}
+            />
+          );
+        })}
+      </div>
+    );
+
     if (!isEditing) {
       return (
-        <span className="inline-flex items-center gap-1">
-          <span className="text-muted">Participantes:</span>
-          <span className="text-muted font-normal">{participantsStr}</span>
-        </span>
+        <div className="inline-flex items-center gap-1.5">
+          {renderAvatars()}
+          {participantsList.length > 4 && (
+            <span className="text-xs font-semibold text-muted">
+              +{participantsList.length - 4}
+            </span>
+          )}
+        </div>
       );
     }
 
@@ -170,13 +230,15 @@ export function PlannerAgendaView({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="inline-flex items-center gap-1 cursor-pointer text-xs text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none group"
+            className="inline-flex items-center gap-1.5 cursor-pointer text-xs text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none group"
             aria-label="Editar participantes del bloque"
           >
-            <span className="text-muted">Participantes:</span>
-            <span className="text-foreground font-normal underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-              {participantsStr}
-            </span>
+            {renderAvatars()}
+            {participantsList.length > 4 && (
+              <span className="text-xs font-semibold text-muted">
+                +{participantsList.length - 4}
+              </span>
+            )}
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom end" className="min-w-[280px] max-h-80 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
@@ -485,26 +547,26 @@ export function PlannerAgendaView({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
+                      {isEditing ? (
+                        <textarea
+                          rows={1}
+                          value={block.introDesc || ''}
+                          onChange={(e) => onUpdateBlock?.(block.id, {introDesc: e.target.value})}
+                          placeholder="Contexto o descripción del bloque..."
+                          className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0"
+                        />
+                      ) : (
+                        block.introDesc && (
+                          <p className="text-xs text-muted leading-relaxed">{block.introDesc}</p>
+                        )
+                      )}
+
+                      <div className="flex items-center gap-2 text-xs text-muted flex-wrap pt-0.5">
                         {renderBlockLeader(block)}
                         <span className="text-muted/40">·</span>
                         {renderBlockParticipants(block)}
                       </div>
                     </div>
-
-                    {isEditing ? (
-                      <textarea
-                        rows={1}
-                        value={block.introDesc || ''}
-                        onChange={(e) => onUpdateBlock?.(block.id, {introDesc: e.target.value})}
-                        placeholder="Contexto o descripción del bloque..."
-                        className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0"
-                      />
-                    ) : (
-                      block.introDesc && (
-                        <p className="text-xs text-muted leading-relaxed">{block.introDesc}</p>
-                      )
-                    )}
 
                     {((block.subpoints || []).length > 0 || isEditing) && (
                       <div className="flex flex-col gap-2 pt-1">
