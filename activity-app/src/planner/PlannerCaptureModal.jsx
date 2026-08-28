@@ -55,8 +55,8 @@ export function PlannerCaptureModal({
             <Modal.CloseTrigger />
             <Modal.Header>
               <Modal.Heading className="text-base font-semibold text-foreground flex items-center gap-2">
-                <CircleCheck width={16} height={16} className="text-success" />
-                Registrar acuerdo / decisión
+                <CircleCheck width={16} height={16} className="text-accent" />
+                ¿Qué quieres guardar?
               </Modal.Heading>
             </Modal.Header>
 
@@ -65,8 +65,7 @@ export function PlannerCaptureModal({
                 {lockContext ? (
                   contextLabel && (
                     <div className="text-xs text-muted">
-                      Contexto actual
-                      <strong className="block text-foreground font-medium mt-0.5">{contextLabel}</strong>
+                      Contexto: <span className="text-foreground font-medium">{contextLabel}</span>
                     </div>
                   )
                 ) : blocks.length > 0 ? (
@@ -95,12 +94,12 @@ export function PlannerCaptureModal({
                 ) : null}
 
                 <TextField isRequired className="w-full">
-                  <Label className="text-xs font-medium text-muted">Detalle del acuerdo o decisión</Label>
                   <TextArea
                     value={content}
                     onChange={(event) => setContent(event.target.value)}
-                    placeholder="Ej: Se aprueba la propuesta de navegación y se definen los siguientes pasos..."
+                    placeholder="Escribe algo importante…"
                     autoFocus
+                    rows={3}
                   />
                 </TextField>
               </Modal.Body>
@@ -108,7 +107,7 @@ export function PlannerCaptureModal({
               <Modal.Footer className="flex items-center justify-end gap-2">
                 <Button type="button" variant="ghost" size="sm" onPress={onClose} isDisabled={isSubmitting}>Cancelar</Button>
                 <Button type="submit" variant="primary" size="sm" isDisabled={!content.trim() || isSubmitting}>
-                  {isSubmitting ? 'Guardando…' : 'Guardar acuerdo'}
+                  {isSubmitting ? 'Guardando…' : 'Guardar'}
                 </Button>
               </Modal.Footer>
             </form>
