@@ -14,6 +14,7 @@ import {
   TrashBin,
   Cup,
   CircleCheck,
+  SquareCheck,
   Microphone,
   ChevronUp,
   ChevronDown,
@@ -764,7 +765,7 @@ export function PlannerAgendaView({
                               className="group px-3 py-2.5 rounded-lg bg-surface-secondary/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
                             >
                               <div className="flex items-start gap-2.5 min-w-0">
-                                <CircleCheck width={14} height={14} className="text-success shrink-0 mt-0.5" />
+                                <SquareCheck width={14} height={14} className="text-muted shrink-0 mt-0.5" />
                                 <span className="min-w-0">
                                   <span className="font-medium break-words leading-snug">{decision.content}</span>
                                   {point && <span className="block text-xs text-muted mt-0.5">{point.title}</span>}
