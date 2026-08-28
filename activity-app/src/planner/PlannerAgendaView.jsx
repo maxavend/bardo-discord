@@ -398,7 +398,7 @@ export function PlannerAgendaView({
                               <EllipsisVertical width={13} height={13} />
                             </Button>
                           </Dropdown.Trigger>
-                          <Dropdown.Popover>
+                          <Dropdown.Popover placement="bottom end">
                             <Dropdown.Menu onAction={(key) => key === 'edit' && onOpenEditor()}>
                               <Dropdown.Item id="edit" textValue="Editar bloque en la agenda">
                                 <Label>Editar bloque</Label>

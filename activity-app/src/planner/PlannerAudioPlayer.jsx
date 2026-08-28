@@ -136,7 +136,7 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
                   <EllipsisVertical width={13} height={13} />
                 </Button>
               </Dropdown.Trigger>
-              <Dropdown.Popover>
+              <Dropdown.Popover placement="bottom end">
                 <Dropdown.Menu onAction={(key) => {
                   if (key === 'rename') setShowRenameModal(true);
                   if (key === 'tech-details') setShowTechModal(true);

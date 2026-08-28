@@ -442,7 +442,7 @@ export function PlannerEditorView({
                         <EllipsisVertical width={14} height={14} />
                       </Button>
                     </Dropdown.Trigger>
-                    <Dropdown.Popover>
+                    <Dropdown.Popover placement="bottom end">
                       <Dropdown.Menu
                         onAction={(key) => {
                           if (key === 'delete') confirmDeleteBlock(bIdx);
