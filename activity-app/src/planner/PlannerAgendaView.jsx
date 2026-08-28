@@ -18,6 +18,30 @@ import {clockToMinutes, minutesToClock} from './time-engine.js';
 import {POINT_STATUS} from './session-runner.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 
+function WavyVerticalTrack({isExpired = false, isPaused = false}) {
+  const periods = 30; // 30 * 32 = 960px
+  let d = 'M 7 0';
+  for (let i = 0; i < periods; i++) {
+    const y0 = i * 32;
+    d += ` C 12 ${y0 + 5}, 12 ${y0 + 11}, 7 ${y0 + 16}`;
+    d += ` C 2 ${y0 + 21}, 2 ${y0 + 27}, 7 ${y0 + 32}`;
+  }
+
+  return (
+    <div className={`m3-wavy-track ${isPaused ? 'is-paused' : ''}`} aria-hidden="true">
+      <svg className={`m3-wavy-track-svg ${isExpired ? 'text-danger' : 'text-accent'}`} viewBox="0 0 14 960" fill="none">
+        <path
+          d={d}
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export function PlannerAgendaView({
   state,
   sessionState,
@@ -34,6 +58,7 @@ export function PlannerAgendaView({
 
   const liveActiveBlockId = sessionState?.liveActiveBlockId || state.liveActiveBlockId || null;
   const liveActivePointId = sessionState?.liveActivePointId || null;
+  const isPaused = sessionState?.isPaused || false;
   let cursorMinutes = clockToMinutes(startTime);
 
   return (
@@ -70,7 +95,7 @@ export function PlannerAgendaView({
           </div>
         </div>
       ) : (
-        <div className="relative flex flex-col gap-3 before:hidden sm:before:block before:absolute before:top-3 before:bottom-3 before:left-[31px] before:w-px before:bg-border/50">
+        <div className="relative flex flex-col gap-3">
           {blocks.map((block, blockIndex) => {
             const blockStart = minutesToClock(cursorMinutes);
             const blockDuration = block.durationMinutes || 30;
@@ -83,14 +108,37 @@ export function PlannerAgendaView({
             const lowerTitle = block.title.toLowerCase();
             const isBreak = lowerTitle.includes('break') || lowerTitle.includes('receso') || lowerTitle.includes('pausa');
             const blockRecordings = (sessionState?.recordings || []).filter((recording) => recording.blockId === block.id);
+            const isLast = blockIndex === blocks.length - 1;
 
             if (isBreak && !isLive && (block.subpoints || []).length === 0 && (block.decisions || []).length === 0) {
               return (
                 <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-center relative z-10">
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start select-none pr-2 shrink-0">
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start select-none pr-3 shrink-0 relative h-full">
                     <span className="text-xs font-semibold text-muted">{blockStart}</span>
                     <span className="text-[11px] text-muted/60 hidden sm:inline">{blockEnd}</span>
+
+                    {/* Material Design 3 Vertical Progress Timeline Rail */}
+                    <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-12px] w-4 select-none pointer-events-none z-0">
+                      <div className="relative mt-2 z-10">
+                        {isCompleted ? (
+                          <span className="h-2 w-2 rounded-full bg-accent ring-2 ring-surface block" />
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
+                        )}
+                      </div>
+
+                      {!isLast && (
+                        <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
+                          {isCompleted ? (
+                            <div className="w-[2px] h-full bg-accent rounded-full my-1" />
+                          ) : (
+                            <div className="w-[1.5px] h-full bg-border/50 my-1" />
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
                   <div className="min-w-0 w-full">
                     <div className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border text-xs ${
                       isCompleted ? 'bg-surface-secondary/20 border-border/30 text-muted opacity-70' : 'bg-surface-secondary/30 border-border/40 text-muted'
@@ -112,10 +160,38 @@ export function PlannerAgendaView({
 
             return (
               <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start relative z-10">
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start pt-1.5 select-none pr-2 shrink-0">
+                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start pt-1.5 select-none pr-3 shrink-0 relative h-full">
                   <span className={`text-xs sm:text-sm font-bold leading-tight ${isLive ? 'text-accent' : 'text-foreground'}`}>{blockStart}</span>
                   <span className="text-[11px] text-muted/70 leading-tight">{blockEnd}</span>
                   <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
+
+                  {/* Material Design 3 Vertical Progress Timeline Rail */}
+                  <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-12px] w-4 select-none pointer-events-none z-0">
+                    <div className="relative mt-2.5 z-10">
+                      {isLive ? (
+                        <div className="relative flex items-center justify-center">
+                          <span className="absolute h-4 w-4 rounded-full bg-accent/30 animate-ping" />
+                          <span className="relative h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-surface shadow-xs block" />
+                        </div>
+                      ) : isCompleted ? (
+                        <span className="h-2 w-2 rounded-full bg-accent ring-2 ring-surface block" />
+                      ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
+                      )}
+                    </div>
+
+                    {!isLast && (
+                      <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
+                        {isLive ? (
+                          <WavyVerticalTrack isPaused={isPaused} />
+                        ) : isCompleted ? (
+                          <div className="w-[2px] h-full bg-accent rounded-full my-1" />
+                        ) : (
+                          <div className="w-[1.5px] h-full bg-border/50 my-1" />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="min-w-0 w-full">

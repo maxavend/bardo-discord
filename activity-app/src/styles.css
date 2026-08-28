@@ -892,6 +892,41 @@ button { font-size: 14px; }
   .continue-row:hover strong { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 }
 
+/* ── Material Design 3 Expressive Vertical Wavy Progress Track ───────────── */
+@keyframes m3-vertical-wave-flow {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(32px);
+  }
+}
+
+.m3-wavy-track {
+  overflow: hidden;
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  pointer-events: none;
+}
+
+.m3-wavy-track-svg {
+  width: 14px;
+  height: calc(100% + 32px);
+  position: absolute;
+  top: -32px;
+  left: 0;
+  animation: m3-vertical-wave-flow 1.1s linear infinite;
+  will-change: transform;
+}
+
+.m3-wavy-track.is-paused .m3-wavy-track-svg {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; animation-duration: .001ms !important; }
 }
