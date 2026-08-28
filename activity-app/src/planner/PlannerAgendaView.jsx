@@ -246,12 +246,7 @@ export function PlannerAgendaView({
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-                      <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                        <h3 className="text-base font-bold tracking-tight text-foreground">{block.title}</h3>
-                        {isLive && <span className="text-[11px] font-semibold text-accent">En curso</span>}
-                        {isCompleted && <span className="text-[11px] font-semibold text-success">Completado</span>}
-                        {isSkipped && <span className="text-[11px] font-medium text-muted">Saltado</span>}
-                      </div>
+                      <h3 className="text-base font-bold tracking-tight text-foreground min-w-0">{block.title}</h3>
                       <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
                         {block.leader && <span>Líder: <strong className="font-medium text-foreground">{block.leader}</strong></span>}
                         {block.participants && <span className="hidden sm:inline">· {block.participants}</span>}
