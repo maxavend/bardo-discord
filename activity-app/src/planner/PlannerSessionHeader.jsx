@@ -98,6 +98,15 @@ export function PlannerSessionHeader({
   const participantsList = parseMentions(mentions);
 
   const renderDateSelector = () => {
+    if (!isEditing) {
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
+          <span>{formattedDate || 'Seleccionar fecha'}</span>
+        </span>
+      );
+    }
+
     return (
       <Dropdown>
         <Dropdown.Trigger>
@@ -150,6 +159,15 @@ export function PlannerSessionHeader({
   };
 
   const renderTimeSelector = () => {
+    if (!isEditing) {
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <Clock width={13} height={13} className="text-muted/70 shrink-0" />
+          <span>{startTime}–{estimatedEndTime}</span>
+        </span>
+      );
+    }
+
     return (
       <Dropdown>
         <Dropdown.Trigger>
@@ -187,6 +205,20 @@ export function PlannerSessionHeader({
         `@${m.globalName.toLowerCase()}` === (host || '').toLowerCase()
     );
     const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
+
+    if (!isEditing) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <Avatar
+            name={hostMember?.globalName || host || 'Conductor'}
+            size="sm"
+            className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
+            style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+          />
+          <span className="font-medium text-foreground">{host || 'Conductor'}</span>
+        </div>
+      );
+    }
 
     return (
       <Dropdown>
@@ -242,6 +274,37 @@ export function PlannerSessionHeader({
         return found ? found.globalName : tag.replace(/^@/, '');
       })
     );
+
+    if (!isEditing) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center -space-x-2">
+            {participantsList.slice(0, 4).map((tag, i) => {
+              const matched = DEFAULT_DISCORD_MEMBERS.find(
+                (m) =>
+                  m.tag.toLowerCase() === tag.toLowerCase() ||
+                  `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+              );
+              const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+              return (
+                <Avatar
+                  key={i}
+                  name={matched?.globalName || tag}
+                  size="sm"
+                  className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
+                  style={{backgroundColor: `${color}35`, color}}
+                />
+              );
+            })}
+          </div>
+          {participantsList.length > 4 && (
+            <span className="text-xs font-semibold text-muted">
+              +{participantsList.length - 4}
+            </span>
+          )}
+        </div>
+      );
+    }
 
     return (
       <Dropdown>

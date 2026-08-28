@@ -78,6 +78,34 @@ export function PlannerAgendaView({
     const leaderStr = block.leader || 'Todo el equipo';
     const leaderNames = leaderStr.split(/(?:,|\s+y\s+|\s+and\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean);
 
+    if (!isEditing) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center -space-x-1.5">
+            {leaderNames.slice(0, 2).map((lName, idx) => {
+              const matched = DEFAULT_DISCORD_MEMBERS.find(
+                (m) =>
+                  m.globalName.toLowerCase().includes(lName.toLowerCase()) ||
+                  m.tag.toLowerCase().includes(lName.toLowerCase()) ||
+                  lName.toLowerCase().includes(m.globalName.toLowerCase())
+              );
+              const color = matched?.avatarColor || DISCORD_PALETTES[idx % DISCORD_PALETTES.length];
+              return (
+                <Avatar
+                  key={idx}
+                  name={matched?.globalName || lName}
+                  size="sm"
+                  className="w-5 h-5 text-[9px] font-bold shrink-0 border border-background shadow-2xs"
+                  style={{backgroundColor: `${color}30`, color}}
+                />
+              );
+            })}
+          </div>
+          <span className="font-medium text-foreground">{leaderStr}</span>
+        </div>
+      );
+    }
+
     return (
       <Dropdown>
         <Dropdown.Trigger>
@@ -157,6 +185,38 @@ export function PlannerAgendaView({
         return found ? found.globalName : tag;
       })
     );
+
+    if (!isEditing) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center -space-x-2">
+            {participantsList.slice(0, 4).map((tag, i) => {
+              const matched = DEFAULT_DISCORD_MEMBERS.find(
+                (m) =>
+                  m.tag.toLowerCase().includes(tag.toLowerCase()) ||
+                  m.globalName.toLowerCase().includes(tag.toLowerCase()) ||
+                  tag.toLowerCase().includes(m.globalName.toLowerCase())
+              );
+              const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+              return (
+                <Avatar
+                  key={i}
+                  name={matched?.globalName || tag}
+                  size="sm"
+                  className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
+                  style={{backgroundColor: `${color}35`, color}}
+                />
+              );
+            })}
+          </div>
+          {participantsList.length > 4 && (
+            <span className="text-xs font-semibold text-muted">
+              +{participantsList.length - 4}
+            </span>
+          )}
+        </div>
+      );
+    }
 
     return (
       <Dropdown>
