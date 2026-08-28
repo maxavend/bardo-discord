@@ -50,6 +50,11 @@ export function MaterialWavyProgress({
   const currentLengthRef = useRef(targetLength);
   const [animatedLength, setAnimatedLength] = useState(targetLength);
 
+  // Amplitud dinámica: Se pone recta (0) al pausar, y vuelve a ondularse al dar play
+  const targetAmplitude = isPaused ? 0 : amplitude;
+  const currentAmplitudeRef = useRef(targetAmplitude);
+  const [animatedAmplitude, setAnimatedAmplitude] = useState(targetAmplitude);
+
   // Frecuencia y velocidad dinámicas según el estado de urgencia de tiempo
   const effectiveWavelength = color === 'danger' ? 36 : color === 'warning' ? 48 : wavelength;
   const cycleDuration = color === 'danger' ? 800 : color === 'warning' ? 1400 : 2800; // ms
@@ -64,12 +69,22 @@ export function MaterialWavyProgress({
       const delta = Math.min(64, now - lastTime);
       lastTime = now;
 
-      // 1. Phase update for continuous wave motion
-      if (!isPaused) {
+      // 1. Phase update for continuous wave motion (solo si hay amplitud)
+      if (currentAmplitudeRef.current > 0.05) {
         setPhase((prev) => (prev + delta * speed) % effectiveWavelength);
       }
 
-      // 2. Smooth continuous sub-pixel progress fill (no discrete jumps)
+      // 2. Transición suave de amplitud (recta al pausar, onda al reanudar)
+      const ampDiff = targetAmplitude - currentAmplitudeRef.current;
+      if (Math.abs(ampDiff) > 0.01) {
+        currentAmplitudeRef.current += ampDiff * Math.min(1, delta * 0.012);
+        setAnimatedAmplitude(currentAmplitudeRef.current);
+      } else if (currentAmplitudeRef.current !== targetAmplitude) {
+        currentAmplitudeRef.current = targetAmplitude;
+        setAnimatedAmplitude(targetAmplitude);
+      }
+
+      // 3. Smooth continuous sub-pixel progress fill (no discrete jumps)
       const diff = targetLength - currentLengthRef.current;
       if (Math.abs(diff) > 0.02) {
         currentLengthRef.current += diff * Math.min(1, delta * 0.006);
@@ -84,9 +99,9 @@ export function MaterialWavyProgress({
 
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
-  }, [isPaused, effectiveWavelength, cycleDuration, targetLength]);
+  }, [isPaused, targetAmplitude, effectiveWavelength, cycleDuration, targetLength]);
 
-  // Generate physics-based envelope sine path with animatedLength and effectiveWavelength
+  // Generate physics-based envelope sine path with animatedLength and animatedAmplitude
   const wavePath = useMemo(() => {
     if (animatedLength <= 2) {
       return '';
@@ -111,7 +126,7 @@ export function MaterialWavyProgress({
       const envelope = easeIn * easeOut;
 
       const angle = (2 * Math.PI * (y + phase)) / effectiveWavelength;
-      const x = cx + amplitude * envelope * Math.sin(angle);
+      const x = cx + animatedAmplitude * envelope * Math.sin(angle);
 
       d += ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
     }
@@ -119,7 +134,7 @@ export function MaterialWavyProgress({
     // Ensure final point lands precisely on center of track
     d += ` L ${cx} ${animatedLength.toFixed(2)}`;
     return d;
-  }, [animatedLength, phase, effectiveWavelength, amplitude]);
+  }, [animatedLength, animatedAmplitude, phase, effectiveWavelength]);
 
   const colorClass =
     color === 'danger'
