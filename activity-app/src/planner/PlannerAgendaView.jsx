@@ -438,33 +438,14 @@ export function PlannerAgendaView({
 
                                 {!isEditing && (
                                   <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                    {isPointActive ? (
-                                      onAdvance ? (() => {
-                                        const assistantDetails = getAssistantContextDetails(state, sessionState);
-                                        const label = isTransitioning ? 'Guardando…' : assistantDetails.nextAction.label;
-                                        return (
-                                          <Button
-                                            variant="primary"
-                                            size="sm"
-                                            onPress={onAdvance}
-                                            isDisabled={isTransitioning}
-                                            className="h-7 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 active:scale-95 shadow-xs"
-                                          >
-                                            <span>{label}</span>
-                                            {!isTransitioning && assistantDetails.nextAction.target !== 'session' && (
-                                              <ArrowRight width={12} height={12} />
-                                            )}
-                                          </Button>
-                                        );
-                                      })() : (
-                                        <span className="text-accent font-bold">
-                                          Punto {pointIndex + 1} · En curso
-                                        </span>
-                                      )
-                                    ) : isDone ? (
+                                    {isDone && !isPointActive ? (
                                       <span className="text-success font-semibold">Revisado</span>
                                     ) : isPointSkipped ? (
                                       <span className="text-muted font-medium">Saltado</span>
+                                    ) : isPointActive && !onAdvance ? (
+                                      <span className="text-accent font-bold">
+                                        Punto {pointIndex + 1} · En curso
+                                      </span>
                                     ) : null}
                                   </div>
                                 )}
@@ -518,91 +499,119 @@ export function PlannerAgendaView({
                                 </p>
                               ) : null}
 
-                              {/* Fila 2: Presentador / Responsable */}
-                              {(isEditing || presenterList.length > 0) && (
-                                <div className="flex items-center gap-2">
-                                  {isEditing ? (
-                                    <Dropdown>
-                                      <Dropdown.Trigger>
-                                        <button
-                                          type="button"
-                                          className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none"
-                                        >
-                                          {point.presenter ? (
-                                            <>
-                                              <Avatar
-                                                name={point.presenter}
-                                                size="xs"
-                                                className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 shadow-2xs"
-                                                style={{
-                                                  backgroundColor: `${
-                                                    DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
-                                                    DISCORD_PALETTES[0]
-                                                  }30`,
-                                                  color:
-                                                    DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
-                                                    DISCORD_PALETTES[0],
-                                                }}
-                                              />
-                                              <span className="text-muted hover:text-foreground font-medium">{point.presenter}</span>
-                                            </>
-                                          ) : (
-                                            <span className="text-muted hover:text-foreground">Asignar responsable</span>
-                                          )}
-                                        </button>
-                                      </Dropdown.Trigger>
-                                      <Dropdown.Popover placement="bottom start" className="min-w-[220px]">
-                                        <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})}>
-                                          <Dropdown.Section>
-                                            <Header className="text-xs font-semibold text-muted px-2 py-1">Responsable del punto</Header>
-                                            <Dropdown.Item id="Todos" textValue="Todos">
-                                              <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
-                                              <Label>Todos</Label>
-                                            </Dropdown.Item>
-                                            {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                              <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                              {/* Fila inferior: Presentador a la izquierda y Botón de avance abajo a la derecha (abajo en mobile) */}
+                              {(isEditing || presenterList.length > 0 || (isPointActive && onAdvance)) && (
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-0.5 min-w-0">
+                                  {(isEditing || presenterList.length > 0) ? (
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {isEditing ? (
+                                        <Dropdown>
+                                          <Dropdown.Trigger>
+                                            <button
+                                              type="button"
+                                              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none"
+                                            >
+                                              {point.presenter ? (
+                                                <>
+                                                  <Avatar
+                                                    name={point.presenter}
+                                                    size="xs"
+                                                    className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 shadow-2xs"
+                                                    style={{
+                                                      backgroundColor: `${
+                                                        DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
+                                                        DISCORD_PALETTES[0]
+                                                      }30`,
+                                                      color:
+                                                        DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
+                                                        DISCORD_PALETTES[0],
+                                                    }}
+                                                  />
+                                                  <span className="text-muted hover:text-foreground font-medium">{point.presenter}</span>
+                                                </>
+                                              ) : (
+                                                <span className="text-muted hover:text-foreground">Asignar responsable</span>
+                                              )}
+                                            </button>
+                                          </Dropdown.Trigger>
+                                          <Dropdown.Popover placement="bottom start" className="min-w-[220px]">
+                                            <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})}>
+                                              <Dropdown.Section>
+                                                <Header className="text-xs font-semibold text-muted px-2 py-1">Responsable del punto</Header>
+                                                <Dropdown.Item id="Todos" textValue="Todos">
+                                                  <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
+                                                  <Label>Todos</Label>
+                                                </Dropdown.Item>
+                                                {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                                                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                                                    <Avatar
+                                                      name={member.globalName}
+                                                      size="xs"
+                                                      className="w-5 h-5 text-[9px] font-bold shrink-0"
+                                                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                                                    />
+                                                    <div className="flex flex-col">
+                                                      <Label>{member.globalName}</Label>
+                                                      <Description>{member.tag}</Description>
+                                                    </div>
+                                                  </Dropdown.Item>
+                                                ))}
+                                              </Dropdown.Section>
+                                            </Dropdown.Menu>
+                                          </Dropdown.Popover>
+                                        </Dropdown>
+                                      ) : (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="flex items-center -space-x-1.5">
+                                            {presenterList.map((pName, pIdx) => {
+                                              const matched = DEFAULT_DISCORD_MEMBERS.find(
+                                                (member) =>
+                                                  member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                                  member.tag.toLowerCase().includes(pName.toLowerCase())
+                                              );
+                                              const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                              return (
                                                 <Avatar
-                                                  name={member.globalName}
+                                                  key={pIdx}
+                                                  name={matched?.globalName || pName}
                                                   size="xs"
-                                                  className="w-5 h-5 text-[9px] font-bold shrink-0"
-                                                  style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                                                  className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
+                                                  style={{backgroundColor: `${color}35`, color}}
                                                 />
-                                                <div className="flex flex-col">
-                                                  <Label>{member.globalName}</Label>
-                                                  <Description>{member.tag}</Description>
-                                                </div>
-                                              </Dropdown.Item>
-                                            ))}
-                                          </Dropdown.Section>
-                                        </Dropdown.Menu>
-                                      </Dropdown.Popover>
-                                    </Dropdown>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="flex items-center -space-x-1.5">
-                                        {presenterList.map((pName, pIdx) => {
-                                          const matched = DEFAULT_DISCORD_MEMBERS.find(
-                                            (member) =>
-                                              member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
-                                              member.tag.toLowerCase().includes(pName.toLowerCase())
-                                          );
-                                          const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
-                                          return (
-                                            <Avatar
-                                              key={pIdx}
-                                              name={matched?.globalName || pName}
-                                              size="xs"
-                                              className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
-                                              style={{backgroundColor: `${color}35`, color}}
-                                            />
-                                          );
-                                        })}
-                                      </div>
-                                      <span className={`text-xs ${isPointActive ? 'text-accent/90 font-medium' : 'text-muted font-normal'}`}>
-                                        {point.presenter}
-                                      </span>
+                                              );
+                                            })}
+                                          </div>
+                                          <span className={`text-xs ${isPointActive ? 'text-accent/90 font-medium' : 'text-muted font-normal'}`}>
+                                            {point.presenter}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
+                                  ) : (
+                                    <div />
                                   )}
+
+                                  {/* Botón de avance activo: alineado abajo a la derecha en desktop, abajo en mobile */}
+                                  {!isEditing && isPointActive && onAdvance && (() => {
+                                    const assistantDetails = getAssistantContextDetails(state, sessionState);
+                                    const label = isTransitioning ? 'Guardando…' : assistantDetails.nextAction.label;
+                                    return (
+                                      <div className="flex items-center justify-end w-full sm:w-auto shrink-0">
+                                        <Button
+                                          variant="primary"
+                                          size="sm"
+                                          onPress={onAdvance}
+                                          isDisabled={isTransitioning}
+                                          className="w-full sm:w-auto h-7 px-3.5 rounded-full text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 shadow-xs"
+                                        >
+                                          <span>{label}</span>
+                                          {!isTransitioning && assistantDetails.nextAction.target !== 'session' && (
+                                            <ArrowRight width={12} height={12} />
+                                          )}
+                                        </Button>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               )}
                             </div>
