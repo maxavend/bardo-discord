@@ -45,9 +45,13 @@ export function MaterialWavyProgress({
     return () => observer.disconnect();
   }, []);
 
-  // Smooth continuous phase animation loop (2.8s per wave cycle)
+  const progressClamped = Math.min(100, Math.max(0, value));
+  const targetLength = Math.max(0, (progressClamped / 100) * containerHeight);
+  const currentLengthRef = useRef(targetLength);
+  const [animatedLength, setAnimatedLength] = useState(targetLength);
+
+  // Smooth continuous phase animation + sub-pixel fluid fill loop (60fps)
   useEffect(() => {
-    if (isPaused) return;
     let rafId;
     let lastTime = performance.now();
     const speed = wavelength / 2800; // px per ms
@@ -55,35 +59,48 @@ export function MaterialWavyProgress({
     const loop = (now) => {
       const delta = Math.min(64, now - lastTime);
       lastTime = now;
-      setPhase((prev) => (prev + delta * speed) % wavelength);
+
+      // 1. Phase update for continuous wave motion
+      if (!isPaused) {
+        setPhase((prev) => (prev + delta * speed) % wavelength);
+      }
+
+      // 2. Smooth continuous sub-pixel progress fill (no discrete jumps)
+      const diff = targetLength - currentLengthRef.current;
+      if (Math.abs(diff) > 0.02) {
+        currentLengthRef.current += diff * Math.min(1, delta * 0.006);
+        setAnimatedLength(currentLengthRef.current);
+      } else if (currentLengthRef.current !== targetLength) {
+        currentLengthRef.current = targetLength;
+        setAnimatedLength(targetLength);
+      }
+
       rafId = requestAnimationFrame(loop);
     };
+
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
-  }, [isPaused, wavelength]);
+  }, [isPaused, wavelength, targetLength]);
 
-  const progressClamped = Math.min(100, Math.max(0, value));
-  const activeLength = Math.max(0, (progressClamped / 100) * containerHeight);
-
-  // Generate physics-based envelope sine path
+  // Generate physics-based envelope sine path with animatedLength
   const wavePath = useMemo(() => {
-    if (activeLength <= 2) {
+    if (animatedLength <= 2) {
       return '';
     }
 
     const cx = 10;
     const step = 3; // 3px resolution gives smooth 60fps spline
-    const dampZone = Math.min(28, activeLength * 0.35); // Transition zone at edges
+    const dampZone = Math.min(28, animatedLength * 0.35); // Transition zone at edges
 
     let d = `M ${cx} 0`;
-    const numPoints = Math.ceil(activeLength / step);
+    const numPoints = Math.ceil(animatedLength / step);
 
     for (let i = 1; i <= numPoints; i++) {
-      const y = Math.min(activeLength, i * step);
+      const y = Math.min(animatedLength, i * step);
 
       // Boundary Envelope: Smooth cubic ease-in at top and ease-out at tip
       const inFactor = dampZone > 0 ? Math.min(1, y / dampZone) : 1;
-      const outFactor = dampZone > 0 ? Math.min(1, (activeLength - y) / dampZone) : 1;
+      const outFactor = dampZone > 0 ? Math.min(1, (animatedLength - y) / dampZone) : 1;
       // Smooth step easing (3x^2 - 2x^3)
       const easeIn = inFactor * inFactor * (3 - 2 * inFactor);
       const easeOut = outFactor * outFactor * (3 - 2 * outFactor);
@@ -96,9 +113,9 @@ export function MaterialWavyProgress({
     }
 
     // Ensure final point lands precisely on center of track
-    d += ` L ${cx} ${activeLength.toFixed(2)}`;
+    d += ` L ${cx} ${animatedLength.toFixed(2)}`;
     return d;
-  }, [activeLength, phase, wavelength, amplitude]);
+  }, [animatedLength, phase, wavelength, amplitude]);
 
   const colorClass =
     color === 'danger'

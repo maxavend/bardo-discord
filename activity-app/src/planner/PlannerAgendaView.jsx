@@ -109,7 +109,7 @@ export function PlannerAgendaView({
               const plannedMs = getBlockPlannedMs(block, sessionState);
               const elapsedMs = getElapsedActiveBlockMs(sessionState);
               const ratio = plannedMs > 0 ? Math.min(1, Math.max(0.04, elapsedMs / plannedMs)) : 0.04;
-              progressPercent = Math.round(ratio * 100);
+              progressPercent = ratio * 100;
             }
 
             if (isBreak && !isLive && (block.subpoints || []).length === 0 && (block.decisions || []).length === 0) {
