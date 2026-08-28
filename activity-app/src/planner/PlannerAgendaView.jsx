@@ -373,7 +373,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={point.id}
-                              className={`relative overflow-hidden flex items-start gap-3 p-3 rounded-xl transition-all ${
+                              className={`relative overflow-hidden flex items-start gap-3 p-3 rounded-lg transition-all ${
                                 isPointActive
                                   ? 'bg-accent/15 text-accent shadow-xs'
                                   : isDone || isPointSkipped
@@ -381,17 +381,10 @@ export function PlannerAgendaView({
                                     : 'bg-surface-secondary/50 hover:bg-surface-secondary/70 text-foreground'
                               }`}
                             >
-                              <div
-                                className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl transition-colors ${
-                                  isPointActive
-                                    ? 'bg-accent'
-                                    : isDone
-                                      ? 'bg-success/50'
-                                      : isPointSkipped
-                                        ? 'bg-border/60'
-                                        : 'bg-border/40'
-                                }`}
-                              />
+                              {/* Franja vertical indicadora únicamente en el punto activo */}
+                              {isPointActive && (
+                                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg bg-accent" />
+                              )}
 
                               {isEditing ? (
                                 <div className="flex flex-col items-center gap-0.5 shrink-0 pl-1">
@@ -597,7 +590,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={decision.id}
-                              className="px-3 py-2.5 rounded-xl bg-surface-secondary/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
+                              className="px-3 py-2.5 rounded-lg bg-surface-secondary/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
                             >
                               <div className="flex items-start gap-2.5 min-w-0">
                                 <CircleCheck width={14} height={14} className="text-success shrink-0 mt-0.5" />
