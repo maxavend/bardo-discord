@@ -7,7 +7,6 @@ import {
   Pause,
   Play,
   ArrowRight,
-  Plus,
 } from '@gravity-ui/icons';
 import {SESSION_STATUS} from './session-runner.js';
 import {formatMsToClock, getAssistantContextDetails} from './session-assistant-engine.js';
@@ -32,7 +31,7 @@ export function SessionDock({
   onPauseRecording,
   onResumeRecording,
   onDismissRecordingPrompt: _onDismissRecordingPrompt,
-  onOpenDecisionCapture,
+  onOpenDecisionCapture: _onOpenDecisionCapture,
   onInterruptSession: _onInterruptSession,
 }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -185,19 +184,6 @@ export function SessionDock({
               </Button>
             )}
 
-            {/* + Anotar */}
-            <Button
-              variant="ghost"
-              size="sm"
-              isIconOnly
-              onPress={onOpenDecisionCapture}
-              isDisabled={isBusy}
-              aria-label="Anotar"
-              className="h-7 w-7 text-muted hover:text-foreground"
-            >
-              <Plus width={14} height={14} />
-            </Button>
-
             {/* Siguiente → */}
             {renderAdvanceButton('primary', 'sm')}
           </div>
@@ -316,18 +302,6 @@ export function SessionDock({
                   <span>Grabar</span>
                 </Button>
               )}
-
-              {/* + Anotar */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={onOpenDecisionCapture}
-                isDisabled={isBusy}
-                className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
-              >
-                <Plus width={13} height={13} />
-                <span>Anotar</span>
-              </Button>
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0 ml-auto">
