@@ -142,10 +142,10 @@ export function PlannerAgendaView({
 
             if (isBreak && !isEditing) {
               return (
-                <div key={block.id} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-center">
-                  <div className="hidden sm:flex flex-col items-center justify-center text-xs text-muted font-medium select-none">
+                <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-center">
+                  <div className="flex flex-col items-center justify-center text-[11px] sm:text-xs text-muted font-medium select-none">
                     <span>{blockStart}</span>
-                    <span className="text-[11px] text-muted/60">{blockEnd}</span>
+                    <span className="text-[10px] sm:text-[11px] text-muted/60">{blockEnd}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-surface-secondary/40 border border-border/40 text-xs text-muted">
                     <div className="flex items-center gap-2">
@@ -162,14 +162,15 @@ export function PlannerAgendaView({
             }
 
             return (
-              <div key={block.id} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-stretch">
-                <div className="hidden sm:flex flex-col items-center justify-between text-xs text-muted font-medium select-none py-1 min-h-[140px]">
+              <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch">
+                {/* Timeline lateral izquierdo (visible en mobile y desktop) */}
+                <div className="flex flex-col items-center justify-between text-[11px] sm:text-xs text-muted font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className={isLive ? 'text-accent font-bold' : isCompleted ? 'text-success' : 'text-muted'}>
+                    <span className={isLive ? 'text-accent font-bold' : isCompleted ? 'text-success font-semibold' : 'text-muted'}>
                       {blockStart}
                     </span>
-                    <span className="text-[11px] text-muted/60">{blockEnd}</span>
-                    <span className="text-[10px] text-muted/50 mt-0.5">{blockDuration}m</span>
+                    <span className="text-[10px] sm:text-[11px] text-muted/60">{blockEnd}</span>
+                    <span className="text-[9px] sm:text-[10px] text-muted/50 mt-0.5">{blockDuration}m</span>
                   </div>
 
                   <div className="flex-1 flex flex-col items-center my-1 relative w-full">
@@ -644,8 +645,8 @@ export function PlannerAgendaView({
           })}
 
           {isEditing && (
-            <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-stretch mt-3">
-              <div className="hidden sm:block sm:w-16 shrink-0" />
+            <div className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch mt-3">
+              <div className="w-[52px] sm:w-16 shrink-0" />
               <button
                 type="button"
                 onClick={() => onAddBlock?.()}
