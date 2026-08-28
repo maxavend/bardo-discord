@@ -5,7 +5,6 @@ import {
   Microphone,
   Pause,
   Play,
-  ArrowRight,
 } from '@gravity-ui/icons';
 import {SESSION_STATUS} from './session-runner.js';
 import {formatMsToClock, getAssistantContextDetails} from './session-assistant-engine.js';
@@ -21,7 +20,7 @@ export function SessionDock({
   isTransitioning = false,
   onPauseSession,
   onResumeSession,
-  onAdvance,
+  onAdvance: _onAdvance,
   onSkipPoint: _onSkipPoint,
   onSkipBlock: _onSkipBlock,
   onExtendBlock: _onExtendBlock,
@@ -54,20 +53,6 @@ export function SessionDock({
   const isExpired = details.isExpired;
   const isUnlimited = details.isUnlimited;
   const is5MinWarning = details.is5MinWarning;
-  const advanceLabel = details.nextAction.label;
-
-  const renderAdvanceButton = (variant = 'primary', size = 'sm') => (
-    <Button
-      variant={variant}
-      size={size}
-      onPress={onAdvance}
-      isDisabled={isBusy}
-      className={`font-medium text-xs rounded-full ${size === 'sm' ? 'h-8 px-3.5' : 'h-7 px-3'}`}
-    >
-      <span>{isBusy ? 'Guardando…' : advanceLabel}</span>
-      {!isBusy && details.nextAction.target !== 'session' && <ArrowRight width={12} height={12} />}
-    </Button>
-  );
 
   return (
     <aside
@@ -163,11 +148,6 @@ export function SessionDock({
           >
             {isPaused ? <Play width={13} height={13} fill="currentColor" /> : <Pause width={13} height={13} />}
           </Button>
-
-          {/* 3. Siguiente → (En desktop en el dock) */}
-          <div className="hidden sm:inline-flex">
-            {renderAdvanceButton('primary', 'sm')}
-          </div>
         </div>
       </div>
     </aside>

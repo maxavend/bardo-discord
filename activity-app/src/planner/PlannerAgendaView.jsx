@@ -18,6 +18,7 @@ import {
   Microphone,
   ChevronUp,
   ChevronDown,
+  ArrowRight,
 } from '@gravity-ui/icons';
 import {clockToMinutes, minutesToClock} from './time-engine.js';
 import {
@@ -25,6 +26,7 @@ import {
   getElapsedActiveBlockMs,
   getBlockPlannedMs,
 } from './session-runner.js';
+import {getAssistantContextDetails} from './session-assistant-engine.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 import {MaterialWavyProgress} from './MaterialWavyProgress.jsx';
 import {MaterialMorphShape} from './MaterialMorphShape.jsx';
@@ -37,6 +39,8 @@ export function PlannerAgendaView({
   sessionState,
   isEditing = false,
   dockSlot = null,
+  onAdvance,
+  isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
   onDeleteBlock,
@@ -422,17 +426,34 @@ export function PlannerAgendaView({
 
                                   {!isEditing && (
                                     <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                      {isPointActive && (
-                                        <span className="text-accent font-bold">
-                                          Punto {pointIndex + 1} · En curso
-                                        </span>
-                                      )}
-                                      {!isPointActive && isDone && (
+                                      {isPointActive ? (
+                                        onAdvance ? (() => {
+                                          const assistantDetails = getAssistantContextDetails(state, sessionState);
+                                          const label = isTransitioning ? 'Guardando…' : assistantDetails.nextAction.label;
+                                          return (
+                                            <Button
+                                              variant="primary"
+                                              size="sm"
+                                              onPress={onAdvance}
+                                              isDisabled={isTransitioning}
+                                              className="h-7 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 active:scale-95 shadow-xs"
+                                            >
+                                              <span>{label}</span>
+                                              {!isTransitioning && assistantDetails.nextAction.target !== 'session' && (
+                                                <ArrowRight width={12} height={12} />
+                                              )}
+                                            </Button>
+                                          );
+                                        })() : (
+                                          <span className="text-accent font-bold">
+                                            Punto {pointIndex + 1} · En curso
+                                          </span>
+                                        )
+                                      ) : isDone ? (
                                         <span className="text-success font-semibold">Revisado</span>
-                                      )}
-                                      {!isPointActive && isPointSkipped && (
+                                      ) : isPointSkipped ? (
                                         <span className="text-muted font-medium">Saltado</span>
-                                      )}
+                                      ) : null}
                                     </div>
                                   )}
 

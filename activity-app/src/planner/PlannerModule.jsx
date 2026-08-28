@@ -3,7 +3,6 @@ import {toast, Button} from '@heroui/react';
 import {
   Play,
   Check,
-  ArrowRight,
   FileText,
 } from '@gravity-ui/icons';
 import {PlannerSessionHeader} from './PlannerSessionHeader.jsx';
@@ -54,7 +53,6 @@ import {
   evaluateSessionAssistant,
   ASSISTANT_EVENT,
   formatMsToClock,
-  getAssistantContextDetails,
 } from './session-assistant-engine.js';
 import {RecordingController, RECORDING_STATUS} from './recording-controller.js';
 import {
@@ -744,6 +742,8 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
           state={plannerState}
           sessionState={sessionState}
           isEditing={isEditing}
+          onAdvance={handleAdvance}
+          isTransitioning={isTransitioning}
           onUpdateBlock={handleUpdateBlock}
           onAddBlock={handleAddBlock}
           onDeleteBlock={handleDeleteBlock}
@@ -845,25 +845,16 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         onConfirmInterrupt={handleConfirmInterrupt}
       />
 
-      {/* FAB móvil persistente y sin glow en la esquina inferior derecha */}
-      {activeTab === 'agenda' && (() => {
+      {/* FAB móvil persistente y sin glow al inicio/edición/reanudación */}
+      {activeTab === 'agenda' && !isLive && (() => {
         let fabLabel = 'Iniciar sesión';
         let fabIcon = <Play width={13} height={13} />;
         let fabAction = handleStartSession;
-        let fabDisabled = false;
 
         if (isEditing) {
           fabLabel = 'Listo';
           fabIcon = <Check width={14} height={14} />;
           fabAction = handleToggleEditMode;
-        } else if (isLive) {
-          const details = getAssistantContextDetails(plannerState, sessionState);
-          const isRecSaving = recordingStatus === RECORDING_STATUS.FINALIZING;
-          const isBusy = isTransitioning || isRecSaving;
-          fabLabel = isBusy ? 'Guardando…' : details.nextAction.label;
-          fabIcon = !isBusy && details.nextAction.target !== 'session' ? <ArrowRight width={14} height={14} /> : null;
-          fabAction = handleAdvance;
-          fabDisabled = isBusy;
         } else if (sessionState.status === SESSION_STATUS.INTERRUPTED) {
           fabLabel = 'Reanudar sesión';
           fabIcon = <Play width={13} height={13} />;
@@ -885,7 +876,6 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
               variant="primary"
               size="md"
               onPress={fabAction}
-              isDisabled={fabDisabled}
               className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 active:scale-95 transition-all shadow-lg border border-white/10"
             >
               {fabIcon}
