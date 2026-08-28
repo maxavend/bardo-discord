@@ -792,19 +792,19 @@ export function PlannerAgendaView({
                           )}
                         </div>
 
-                        {!isLast && (
+                        {isLive && !isLast && (
                           <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
                               onPress={() => {
-                                if (isLive && onSkipBlock) {
+                                if (onSkipBlock) {
                                   onSkipBlock();
                                 } else if (onAdvance) {
                                   onAdvance();
                                 }
                               }}
-                              className="h-7 text-xs text-muted hover:text-foreground px-2.5 font-medium gap-1"
+                              className="h-7 text-xs text-muted hover:text-foreground px-2.5 font-medium gap-1 cursor-pointer"
                             >
                               <span>Siguiente bloque</span>
                               <ArrowRight width={12} height={12} className="text-muted/70" />
