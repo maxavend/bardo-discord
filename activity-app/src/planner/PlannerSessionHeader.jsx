@@ -1,7 +1,6 @@
 import {useState, useEffect} from 'react';
 import {
   Button,
-  ProgressBar,
   Dropdown,
   Popover,
   Label,
@@ -21,7 +20,6 @@ import {
 } from '@gravity-ui/icons';
 import {
   SESSION_STATUS,
-  getPointCounts,
   recalculateEstimatedEndTime,
 } from './session-runner.js';
 import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
@@ -93,24 +91,6 @@ export function PlannerSessionHeader({
     host = '',
     mentions = '',
   } = state;
-
-  const pointCounts = sessionState?.status && sessionState.status !== SESSION_STATUS.IDLE
-    ? getPointCounts(state, sessionState)
-    : {
-        total: (state.blocks || []).reduce((acc, block) => acc + (block.subpoints || []).length, 0),
-        done: (state.blocks || []).reduce(
-          (acc, block) => acc + (block.subpoints || []).filter((point) => point.status === 'done').length,
-          0
-        ),
-        skipped: (state.blocks || []).reduce(
-          (acc, block) => acc + (block.subpoints || []).filter((point) => point.status === 'skipped').length,
-          0
-        ),
-      };
-  const totalPoints = pointCounts.total;
-  const completedPoints = pointCounts.done;
-  const skippedPoints = pointCounts.skipped || 0;
-  const progressPercent = totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0;
 
   const isRunning = sessionState?.status === SESSION_STATUS.RUNNING;
   const isPaused = sessionState?.status === SESSION_STATUS.PAUSED;
@@ -348,18 +328,6 @@ export function PlannerSessionHeader({
               {description}
             </p>
           )}
-
-          {!isRunning && !isPaused && totalPoints > 0 && (
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <span className="text-xs font-medium text-foreground shrink-0">
-                {completedPoints} de {totalPoints} puntos tratados{skippedPoints > 0 ? ` · ${skippedPoints} saltados` : ''}
-              </span>
-              <ProgressBar aria-label="Progreso de puntos tratados en la sesión" value={progressPercent} color="accent" size="sm" className="flex-1 max-w-sm">
-                <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
-              </ProgressBar>
-              <span className="text-xs font-semibold text-muted shrink-0 tabular-nums">{progressPercent}%</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -368,12 +336,6 @@ export function PlannerSessionHeader({
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="text-sm font-bold text-foreground truncate">{title}</span>
-              {totalPoints > 0 && <span className="text-xs text-muted hidden sm:inline">·</span>}
-              {totalPoints > 0 && (
-                <span className="text-xs text-muted/90 font-medium shrink-0 hidden sm:inline">
-                  {completedPoints}/{totalPoints} tratados{skippedPoints > 0 ? ` · ${skippedPoints} saltados` : ''}
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
