@@ -24,6 +24,17 @@ import {
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 import {MaterialWavyProgress} from './MaterialWavyProgress.jsx';
 import {MaterialMorphShape} from './MaterialMorphShape.jsx';
+import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
+
+const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
+
+function getInitials(name = '') {
+  const clean = name.replace(/^@/, '').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export function PlannerAgendaView({
   state,
@@ -279,65 +290,114 @@ export function PlannerAgendaView({
                     )}
 
                     {(block.subpoints || []).length > 0 && (
-                      <div className="flex flex-col gap-1.5 pt-1">
+                      <div className="flex flex-col gap-2 pt-1">
                         {block.subpoints.map((point, pointIndex) => {
                           const storedStatus = sessionState?.pointStatuses?.[point.id] || point.status || POINT_STATUS.PENDING;
                           const isPointActive = isLive && point.id === liveActivePointId;
                           const isDone = storedStatus === POINT_STATUS.DONE;
                           const isPointSkipped = storedStatus === POINT_STATUS.SKIPPED;
+                          const presenterList = (point.presenter || '')
+                            .split(/[/,]/)
+                            .map((p) => p.trim())
+                            .filter(Boolean);
+
                           return (
                             <div
                               key={point.id}
-                              className={`flex items-start justify-between gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+                              className={`relative overflow-hidden flex items-start gap-3 p-3 rounded-xl transition-all ${
                                 isPointActive
-                                  ? 'bg-accent/12 text-accent'
+                                  ? 'bg-accent/15 text-accent shadow-xs'
                                   : isDone || isPointSkipped
-                                    ? 'bg-surface-secondary/40'
-                                    : 'hover:bg-surface-secondary/50'
+                                    ? 'bg-surface-secondary/40 text-muted'
+                                    : 'bg-surface-secondary/50 hover:bg-surface-secondary/70 text-foreground'
                               }`}
                             >
-                              <label className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer select-none">
+                              {/* Franja vertical izquierda indicadora */}
+                              <div
+                                className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl transition-colors ${
+                                  isPointActive
+                                    ? 'bg-accent'
+                                    : isDone
+                                      ? 'bg-success/50'
+                                      : isPointSkipped
+                                        ? 'bg-border/60'
+                                        : 'bg-border/40'
+                                }`}
+                              />
+
+                              <div className="flex items-start gap-2.5 flex-1 min-w-0 pl-1">
                                 <Checkbox
                                   size="sm"
                                   isSelected={isDone}
                                   onChange={(event) => onToggleSubpointStatus(block.id, point.id, event.target.checked)}
                                   className="mt-0.5 shrink-0"
                                 />
-                                <span className="flex flex-col min-w-0">
-                                  <span className={`text-xs leading-snug ${
-                                    isDone
-                                      ? 'line-through text-foreground/60 font-normal'
-                                      : isPointSkipped
-                                      ? 'text-muted font-normal'
-                                      : isPointActive
-                                      ? 'font-semibold text-accent'
-                                      : 'font-medium text-foreground'
-                                  }`}>
-                                    {point.title || '(Punto sin título)'}
-                                  </span>
-                                  {isPointActive && point.description && (
-                                    <span className="text-xs text-accent/80 mt-0.5 line-clamp-2">{point.description}</span>
-                                  )}
-                                </span>
-                              </label>
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                                    <span className={`text-sm leading-snug ${
+                                      isDone
+                                        ? 'line-through text-foreground/60 font-normal'
+                                        : isPointSkipped
+                                          ? 'text-muted font-normal'
+                                          : isPointActive
+                                            ? 'font-bold text-accent'
+                                            : 'font-semibold text-foreground'
+                                    }`}>
+                                      {point.title || '(Punto sin título)'}
+                                    </span>
 
-                              <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                {isPointActive && (
-                                  <span className="text-accent font-semibold">
-                                    Punto {pointIndex + 1} · En curso
-                                  </span>
-                                )}
-                                {!isPointActive && isDone && (
-                                  <span className="text-success font-semibold">Revisado</span>
-                                )}
-                                {!isPointActive && isPointSkipped && (
-                                  <span className="text-muted font-medium">Saltado</span>
-                                )}
-                                {point.presenter && (
-                                  <span className={isPointActive ? 'text-accent/90 font-medium' : 'text-muted'}>
-                                    · {point.presenter}
-                                  </span>
-                                )}
+                                    <div className="flex items-center gap-1.5 text-xs shrink-0">
+                                      {isPointActive && (
+                                        <span className="text-accent font-bold">
+                                          Punto {pointIndex + 1} · En curso
+                                        </span>
+                                      )}
+                                      {!isPointActive && isDone && (
+                                        <span className="text-success font-semibold">Revisado</span>
+                                      )}
+                                      {!isPointActive && isPointSkipped && (
+                                        <span className="text-muted font-medium">Saltado</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {point.description && (
+                                    <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${
+                                      isPointActive ? 'text-accent/85' : 'text-muted'
+                                    }`}>
+                                      {point.description}
+                                    </p>
+                                  )}
+
+                                  {presenterList.length > 0 && (
+                                    <div className="flex items-center gap-2 mt-2 pt-0.5">
+                                      <div className="flex items-center -space-x-1.5">
+                                        {presenterList.map((pName, pIdx) => {
+                                          const matched = DEFAULT_DISCORD_MEMBERS.find(
+                                            (member) =>
+                                              member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                              member.tag.toLowerCase().includes(pName.toLowerCase())
+                                          );
+                                          const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                          const initials = getInitials(matched?.globalName || pName);
+                                          return (
+                                            <div
+                                              key={pIdx}
+                                              title={pName}
+                                              style={{backgroundColor: `${color}35`, color}}
+                                              className="w-5 h-5 rounded-full border border-background flex items-center justify-center text-[9px] font-bold shadow-2xs shrink-0"
+                                            >
+                                              {initials}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                      <span className={`text-xs ${isPointActive ? 'text-accent/90 font-medium' : 'text-muted font-normal'}`}>
+                                        {point.presenter}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
