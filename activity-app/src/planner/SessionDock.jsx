@@ -136,7 +136,42 @@ export function SessionDock({
 
           {/* Microacciones rápidas + Siguiente */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Pausar / Reanudar */}
+            {/* 1. Grabar / Estado de Grabación (Primero) */}
+            {isRecording ? (
+              <button
+                type="button"
+                onClick={onPauseRecording}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-danger text-white text-[11px] font-medium cursor-pointer shadow-xs"
+                title="Pausar grabación"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
+              </button>
+            ) : isRecPaused ? (
+              <button
+                type="button"
+                onClick={onResumeRecording}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-warning text-white text-[11px] font-medium cursor-pointer shadow-xs"
+                title="Reanudar grabación"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
+              </button>
+            ) : (
+              <Button
+                variant="danger"
+                size="sm"
+                isIconOnly
+                onPress={onStartRecording}
+                isDisabled={isBusy}
+                aria-label="Grabar"
+                className="h-7 w-7 bg-danger text-white hover:bg-danger/90 shadow-xs"
+              >
+                <Microphone width={13} height={13} className="text-white" />
+              </Button>
+            )}
+
+            {/* 2. Pausar / Reanudar sesión */}
             <Button
               variant="ghost"
               size="sm"
@@ -149,42 +184,7 @@ export function SessionDock({
               {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
             </Button>
 
-            {/* Grabar / Estado */}
-            {isRecording ? (
-              <button
-                type="button"
-                onClick={onPauseRecording}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-danger/10 text-danger border border-danger/20 text-[11px] font-medium cursor-pointer"
-                title="Pausar grabación"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-danger animate-pulse" />
-                <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-              </button>
-            ) : isRecPaused ? (
-              <button
-                type="button"
-                onClick={onResumeRecording}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-warning/10 text-warning border border-warning/20 text-[11px] font-medium cursor-pointer"
-                title="Reanudar grabación"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-              </button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                onPress={onStartRecording}
-                isDisabled={isBusy}
-                aria-label="Grabar"
-                className="h-7 w-7 text-muted hover:text-foreground"
-              >
-                <Microphone width={13} height={13} className="text-danger" />
-              </Button>
-            )}
-
-            {/* Siguiente → */}
+            {/* 3. Siguiente → */}
             {renderAdvanceButton('primary', 'sm')}
           </div>
         </div>
@@ -236,8 +236,62 @@ export function SessionDock({
 
           {/* 3. Barra de acciones principal */}
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 pl-4 flex-wrap">
-            <div className="flex items-center gap-1 flex-wrap">
-              {/* Pausar / Reanudar */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* 1. Grabar / Estado de Grabación (Primero, rojo con texto blanco) */}
+              {isRecording ? (
+                <div className="flex items-center gap-1.5 bg-danger text-white rounded-lg px-2.5 py-1 text-xs shadow-xs font-medium">
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                  <span>Grabando</span>
+                  <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
+                  <button
+                    type="button"
+                    className="ml-1 text-white/90 hover:text-white underline font-medium cursor-pointer"
+                    onClick={onPauseRecording}
+                  >
+                    Pausar
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-white/90 hover:text-white underline font-medium cursor-pointer"
+                    onClick={onFinalizeRecording}
+                  >
+                    Fin
+                  </button>
+                </div>
+              ) : isRecPaused ? (
+                <div className="flex items-center gap-1.5 bg-warning text-white rounded-lg px-2.5 py-1 text-xs shadow-xs font-medium">
+                  <span className="h-2 w-2 rounded-full bg-white" />
+                  <span>Pausada</span>
+                  <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
+                  <button
+                    type="button"
+                    className="ml-1 text-white/90 hover:text-white underline font-medium cursor-pointer"
+                    onClick={onResumeRecording}
+                  >
+                    Reanudar
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-white/90 hover:text-white underline font-medium cursor-pointer"
+                    onClick={onFinalizeRecording}
+                  >
+                    Fin
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onPress={onStartRecording}
+                  isDisabled={isBusy}
+                  className="h-8 px-3 text-xs bg-danger text-white hover:bg-danger/90 font-medium shadow-xs"
+                >
+                  <Microphone width={13} height={13} className="text-white" />
+                  <span>Grabar</span>
+                </Button>
+              )}
+
+              {/* 2. Pausar / Reanudar sesión */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -248,60 +302,6 @@ export function SessionDock({
                 {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
                 <span>{isPaused ? 'Reanudar' : 'Pausar'}</span>
               </Button>
-
-              {/* Grabar / Estado de Grabación */}
-              {isRecording ? (
-                <div className="flex items-center gap-1.5 bg-danger/10 text-danger border border-danger/20 rounded-lg px-2.5 py-1 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />
-                  <span className="font-medium">Grabando</span>
-                  <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-                  <button
-                    type="button"
-                    className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
-                    onClick={onPauseRecording}
-                  >
-                    Pausar
-                  </button>
-                  <button
-                    type="button"
-                    className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
-                    onClick={onFinalizeRecording}
-                  >
-                    Fin
-                  </button>
-                </div>
-              ) : isRecPaused ? (
-                <div className="flex items-center gap-1.5 bg-warning/10 text-warning border border-warning/20 rounded-lg px-2.5 py-1 text-xs">
-                  <span className="h-2 w-2 rounded-full bg-warning" />
-                  <span className="font-medium">Pausada</span>
-                  <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-                  <button
-                    type="button"
-                    className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
-                    onClick={onResumeRecording}
-                  >
-                    Reanudar
-                  </button>
-                  <button
-                    type="button"
-                    className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
-                    onClick={onFinalizeRecording}
-                  >
-                    Fin
-                  </button>
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onPress={onStartRecording}
-                  isDisabled={isBusy}
-                  className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
-                >
-                  <Microphone width={13} height={13} className="text-danger" />
-                  <span>Grabar</span>
-                </Button>
-              )}
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0 ml-auto">
