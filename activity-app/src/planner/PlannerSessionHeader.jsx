@@ -18,6 +18,7 @@ import {
   ArrowRotateRight,
   Calendar,
   Clock,
+  ChevronLeft,
 } from '@gravity-ui/icons';
 import {
   SESSION_STATUS,
@@ -54,6 +55,7 @@ export function PlannerSessionHeader({
   onStartSession,
   onResumeSession,
   onInterruptSession,
+  onGoHome,
 }) {
   const {
     title = 'Sesión sin título',
@@ -409,6 +411,18 @@ export function PlannerSessionHeader({
         <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
 
         <div className="flex flex-col min-w-0 w-full pb-2">
+          {/* Breadcrumb de vuelta al Home */}
+          {onGoHome && !isEditing && (
+            <button
+              type="button"
+              onClick={onGoHome}
+              className="self-start inline-flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors font-medium mb-2.5 cursor-pointer select-none -ml-0.5"
+            >
+              <ChevronLeft width={13} height={13} />
+              <span>Planner</span>
+            </button>
+          )}
+
           {/* Fila 1: Título y Acción Principal */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">

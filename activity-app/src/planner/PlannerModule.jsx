@@ -787,6 +787,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           onStartSession={handleStartSession}
           onResumeSession={handleResumeSession}
           onInterruptSession={handleOpenInterrupt}
+          onGoHome={() => handleTabChange('home')}
         />
       )}
 
