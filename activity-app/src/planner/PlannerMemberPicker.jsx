@@ -325,9 +325,30 @@ export function SearchableParticipantMenu({
     let cleanTag = tag.trim();
     if (!cleanTag.startsWith('@')) cleanTag = `@${cleanTag}`;
 
-    const nextKeys = new Set(selectedKeys);
-    if (nextKeys.has(cleanTag)) {
+    const isCurrentlySelected =
+      selectedKeys.has(cleanTag) ||
+      selectedKeys.has(cleanTag.replace(/^@/, '')) ||
+      Array.from(selectedKeys).some(
+        (k) =>
+          k.toLowerCase() === cleanTag.toLowerCase() ||
+          `@${k.toLowerCase()}` === cleanTag.toLowerCase()
+      );
+
+    const nextKeys = new Set(
+      Array.from(selectedKeys).map((k) => (k.startsWith('@') ? k : `@${k}`))
+    );
+
+    if (isCurrentlySelected) {
       nextKeys.delete(cleanTag);
+      nextKeys.delete(cleanTag.replace(/^@/, ''));
+      for (const k of Array.from(nextKeys)) {
+        if (
+          k.toLowerCase() === cleanTag.toLowerCase() ||
+          `@${k.toLowerCase()}` === cleanTag.toLowerCase()
+        ) {
+          nextKeys.delete(k);
+        }
+      }
     } else {
       nextKeys.add(cleanTag);
     }
@@ -345,7 +366,14 @@ export function SearchableParticipantMenu({
       globalName: rawName,
       username: rawName.toLowerCase().replace(/\s+/g, '.'),
       tag: cleanTag,
-      avatarColor: DISCORD_PALETTES[Math.abs(rawName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % DISCORD_PALETTES.length],
+      avatarColor:
+        DISCORD_PALETTES[
+          Math.abs(
+            rawName
+              .split('')
+              .reduce((acc, c) => acc + c.charCodeAt(0), 0)
+          ) % DISCORD_PALETTES.length
+        ],
     });
 
     const nextKeys = new Set(selectedKeys);
@@ -356,10 +384,65 @@ export function SearchableParticipantMenu({
   };
 
   return (
-    <div className="flex flex-col min-w-[280px] max-w-xs text-xs">
-      {/* Search Header */}
-      <div className="p-2 border-b border-border/40">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-surface-secondary/70 border border-border/50 focus-within:border-accent/80 transition-colors">
+    <div className="flex flex-col min-w-[285px] max-w-xs text-xs">
+      {/* 1. ROLES DEL SERVIDOR (Superior) */}
+      <div className="p-2 pb-1.5 border-b border-border/40">
+        <div className="text-[10px] font-bold text-muted/70 px-1.5 pb-1.5 uppercase tracking-wider">
+          Roles del servidor
+        </div>
+        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+          {filteredRoles.map((role) => {
+            const isSelected =
+              selectedKeys.has(role.tag) ||
+              selectedKeys.has(role.name) ||
+              selectedKeys.has(`@${role.name}`) ||
+              Array.from(selectedKeys).some(
+                (k) =>
+                  k.toLowerCase() === role.tag.toLowerCase() ||
+                  k.toLowerCase() === `@${role.name.toLowerCase()}`
+              );
+
+            return (
+              <button
+                key={role.tag}
+                type="button"
+                onClick={() => handleToggle(role.tag)}
+                className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-accent/10 text-foreground font-semibold'
+                    : 'hover:bg-surface-secondary/70 text-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <span
+                    className="w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                    style={{backgroundColor: role.color}}
+                  >
+                    #
+                  </span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-xs font-medium text-foreground leading-tight truncate">
+                      {role.name}
+                    </span>
+                    <span className="text-[10.5px] text-muted leading-tight truncate">
+                      {role.tag}
+                    </span>
+                  </div>
+                </div>
+                <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
+                  {isSelected && (
+                    <Check width={14} height={14} className="text-accent" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 2. SEARCH INPUT (Medio) */}
+      <div className="p-2 border-b border-border/40 bg-surface-secondary/20">
+        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-surface border border-border/50 focus-within:border-accent/80 transition-colors shadow-2xs">
           <Magnifier width={13} height={13} className="text-muted shrink-0" />
           <input
             type="text"
@@ -371,9 +454,8 @@ export function SearchableParticipantMenu({
                 handleAddGuest(searchQuery);
               }
             }}
-            placeholder="Buscar miembro o rol..."
+            placeholder="Buscar miembro o agregar invitado..."
             className="text-xs bg-transparent border-0 outline-none p-0 w-full text-foreground placeholder:text-muted focus:ring-0"
-            autoFocus
           />
           {searchQuery && (
             <button
@@ -387,14 +469,15 @@ export function SearchableParticipantMenu({
         </div>
       </div>
 
-      <div className="max-h-72 overflow-y-auto p-1">
+      {/* 3. LISTA DE MIEMBROS Y CANAL (Inferior con gap entre elementos) */}
+      <div className="max-h-56 overflow-y-auto p-2 flex flex-col gap-1">
         {/* Opción para agregar invitado cuando escribe un nombre */}
         {searchQuery.trim() && !hasExactMatch && (
           <div className="mb-1 pb-1 border-b border-border/40">
             <button
               type="button"
               onClick={() => handleAddGuest(searchQuery)}
-              className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-accent hover:bg-accent/10 flex items-center gap-2 transition-colors cursor-pointer"
+              className="w-full text-left px-2.5 py-2 rounded-xl text-xs font-semibold text-accent hover:bg-accent/10 flex items-center gap-2 transition-colors cursor-pointer"
             >
               <Plus width={13} height={13} className="shrink-0" />
               <span className="truncate">
@@ -404,102 +487,64 @@ export function SearchableParticipantMenu({
           </div>
         )}
 
-        {/* Roles del servidor */}
-        {filteredRoles.length > 0 && (
-          <div className="mb-1.5">
-            <div className="text-[10px] font-bold text-muted/70 px-3 py-1 uppercase tracking-wider">
-              Roles del servidor
-            </div>
-            {filteredRoles.map((role) => {
-              const isSelected =
-                selectedKeys.has(role.tag) ||
-                selectedKeys.has(role.name) ||
-                selectedKeys.has(`@${role.name}`) ||
-                Array.from(selectedKeys).some(
-                  (k) => k.toLowerCase() === role.tag.toLowerCase() || k.toLowerCase() === `@${role.name.toLowerCase()}`
-                );
+        <div className="text-[10px] font-bold text-muted/70 px-1.5 pt-0.5 pb-1 uppercase tracking-wider">
+          Miembros del servidor y canal
+        </div>
 
-              return (
-                <button
-                  key={role.tag}
-                  type="button"
-                  onClick={() => handleToggle(role.tag)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
-                    isSelected ? 'bg-accent/10 text-foreground font-semibold' : 'hover:bg-surface-secondary/70 text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <span
-                      className="w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
-                      style={{backgroundColor: role.color}}
-                    >
-                      #
+        {filteredMembers.length > 0 ? (
+          filteredMembers.map((member) => {
+            const isSelected =
+              selectedKeys.has(member.tag) ||
+              selectedKeys.has(member.globalName) ||
+              selectedKeys.has(`@${member.globalName}`) ||
+              Array.from(selectedKeys).some(
+                (k) =>
+                  k.toLowerCase() === member.tag.toLowerCase() ||
+                  k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
+                  k.toLowerCase() === member.globalName.toLowerCase()
+              );
+
+            return (
+              <button
+                key={member.tag}
+                type="button"
+                onClick={() => handleToggle(member.tag)}
+                className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-accent/10 text-foreground font-semibold'
+                    : 'hover:bg-surface-secondary/70 text-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <Avatar
+                    name={member.globalName}
+                    size="xs"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                    style={{
+                      backgroundColor: `${member.avatarColor}30`,
+                      color: member.avatarColor,
+                    }}
+                  />
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-xs font-medium text-foreground leading-tight truncate">
+                      {member.globalName}
                     </span>
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-xs font-medium text-foreground leading-tight truncate">{role.name}</span>
-                      <span className="text-[10.5px] text-muted leading-tight truncate">{role.tag}</span>
-                    </div>
+                    <span className="text-[10.5px] text-muted leading-tight truncate">
+                      {member.tag}
+                    </span>
                   </div>
-                  <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
-                    {isSelected && <Check width={14} height={14} className="text-accent" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Miembros del servidor y canal */}
-        {filteredMembers.length > 0 && (
-          <div>
-            <div className="text-[10px] font-bold text-muted/70 px-3 py-1 uppercase tracking-wider">
-              Miembros del servidor y canal
-            </div>
-            {filteredMembers.map((member) => {
-              const isSelected =
-                selectedKeys.has(member.tag) ||
-                selectedKeys.has(member.globalName) ||
-                selectedKeys.has(`@${member.globalName}`) ||
-                Array.from(selectedKeys).some(
-                  (k) =>
-                    k.toLowerCase() === member.tag.toLowerCase() ||
-                    k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
-                    k.toLowerCase() === member.globalName.toLowerCase()
-                );
-
-              return (
-                <button
-                  key={member.tag}
-                  type="button"
-                  onClick={() => handleToggle(member.tag)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
-                    isSelected ? 'bg-accent/10 text-foreground font-semibold' : 'hover:bg-surface-secondary/70 text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <Avatar
-                      name={member.globalName}
-                      size="xs"
-                      className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
-                    />
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-xs font-medium text-foreground leading-tight truncate">{member.globalName}</span>
-                      <span className="text-[10.5px] text-muted leading-tight truncate">{member.tag}</span>
-                    </div>
-                  </div>
-                  <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
-                    {isSelected && <Check width={14} height={14} className="text-accent" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
-          <div className="px-3 py-4 text-center text-xs text-muted">
-            No se encontraron miembros ni roles.
+                </div>
+                <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
+                  {isSelected && (
+                    <Check width={14} height={14} className="text-accent" />
+                  )}
+                </div>
+              </button>
+            );
+          })
+        ) : (
+          <div className="px-3 py-3 text-center text-xs text-muted">
+            No se encontraron miembros con ese nombre.
           </div>
         )}
       </div>
