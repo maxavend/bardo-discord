@@ -11,8 +11,11 @@ import {
   Check,
 } from '@gravity-ui/icons';
 import {generateMinutesMarkdown} from './planner-store.js';
-import {POINT_STATUS, getPointStatus} from './session-runner.js';
+import {POINT_STATUS, getPointStatus, recalculateEstimatedEndTime} from './session-runner.js';
+import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
+
+const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
 function parseMentions(mentionsStr) {
   if (!mentionsStr) return [];
@@ -21,6 +24,23 @@ function parseMentions(mentionsStr) {
     return matches.map((m) => m.trim()).filter(Boolean);
   }
   return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
+}
+
+function formatDateSpanish(dateString) {
+  if (!dateString) return '';
+  const parts = dateString.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const dateObj = new Date(year, month, day);
+    if (!isNaN(dateObj.getTime())) {
+      const weekdays = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      return `${weekdays[dateObj.getDay()]} ${day} ${months[month]}`;
+    }
+  }
+  return dateString;
 }
 
 function buildMinutesHtml(state, sessionState, decisions) {
@@ -82,10 +102,10 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
   const [isSavingDoc, setIsSavingDoc] = useState(false);
 
   const {
-    title = 'Sesión',
+    title = 'Sesión sin título',
     description = '',
     date = '',
-    startTime = '10:00',
+    startTime = '17:45',
     host = '',
     mentions = '',
     totalCalculatedDuration = 0,
@@ -93,6 +113,23 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
   } = state;
 
   const participantsList = parseMentions(mentions);
+  const formattedDate = formatDateSpanish(date);
+  const totalPlannedMinutes = (blocks || []).reduce(
+    (accumulator, b) => accumulator + (b.durationMinutes || 0),
+    0
+  ) || totalCalculatedDuration || 0;
+  const estimatedEndTime = recalculateEstimatedEndTime(startTime, totalPlannedMinutes);
+  const formattedDuration = totalPlannedMinutes >= 60 && totalPlannedMinutes % 60 === 0
+    ? `${totalPlannedMinutes / 60} h`
+    : `${totalPlannedMinutes} min`;
+
+  const hostMember = DEFAULT_DISCORD_MEMBERS.find(
+    (m) =>
+      m.globalName.toLowerCase() === (host || '').toLowerCase() ||
+      m.tag.toLowerCase() === (host || '').toLowerCase() ||
+      `@${m.globalName.toLowerCase()}` === (host || '').toLowerCase()
+  );
+  const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
 
   // Recopilar todas las decisiones registradas tanto en la agenda como en vivo
   const decisions = [];
@@ -123,7 +160,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
     setIsSavingDoc(true);
     try {
       const docTitle = `Acta: ${title}`;
-      const docDescription = description || `Resumen consolidado y acuerdos de la sesión del ${date || 'día de hoy'}.`;
+      const docDescription = description || `Resumen consolidado y acuerdos de la sesión del ${formattedDate || 'día de hoy'}.`;
       const docBody = buildMinutesHtml(state, sessionState, decisions);
       const markdown = generateMinutesMarkdown(state, sessionState);
 
@@ -182,88 +219,100 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
   return (
     <section className="doc-route route-active animate-in fade-in duration-150">
       <article className="document-shell max-w-4xl mx-auto pb-24 px-4 sm:px-0">
-        {/* Barra superior de navegación y acciones de Acta */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-border/40">
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={onBack}
-            className="back-button h-8 px-2.5 text-xs text-muted hover:text-foreground font-medium flex items-center gap-1.5 self-start"
-          >
-            <ChevronLeft width={15} height={15} /> Volver a la agenda
-          </Button>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={handleSaveToDocs}
-              isDisabled={isSavingDoc}
-              className="h-8 px-3.5 font-semibold flex items-center gap-1.5 shadow-xs"
-            >
-              <FileText width={14} height={14} /> <span>Guardar en Docs</span>
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onPress={onCopyMarkdown}
-              className="h-8 px-3 font-medium flex items-center gap-1.5"
-            >
-              <Copy width={14} height={14} /> <span>Copiar Markdown</span>
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onPress={handlePublishDiscord}
-              className="h-8 px-3 font-medium flex items-center gap-1.5"
-            >
-              <ArrowUpRightFromSquare width={14} height={14} /> <span>Publicar en canal</span>
-            </Button>
-          </div>
-        </div>
-
-        {/* Cabecera del Documento (Bardo Docs Header Style) */}
+        {/* Cabecera del Documento exactamente con el layout de Bardo Docs */}
         <header className="doc-intro">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs text-muted font-medium">
-              Acta oficial de la sesión · Generada automáticamente
-            </span>
-          </div>
-          <h1 className="doc-title">Acta: {title}</h1>
-          <p className="doc-description">
-            {description || 'Resumen consolidado de acuerdos, decisiones y temas tratados durante la sesión.'}
-          </p>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <button
+              type="button"
+              onClick={onBack}
+              className="text-xs text-muted hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors font-medium select-none"
+            >
+              <ChevronLeft width={14} height={14} className="-ml-0.5" />
+              <span>Volver al planner</span>
+            </button>
 
-          <div className="doc-meta flex items-center gap-4 text-xs text-muted flex-wrap mt-4 pt-3 border-t border-border/40">
-            {date && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={handleSaveToDocs}
+                isDisabled={isSavingDoc}
+                className="h-7 px-3 text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+              >
+                <FileText width={13} height={13} /> <span>Guardar en Docs</span>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={onCopyMarkdown}
+                className="h-7 px-2.5 text-xs font-medium flex items-center gap-1.5"
+              >
+                <Copy width={13} height={13} /> <span>Copiar Markdown</span>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={handlePublishDiscord}
+                className="h-7 px-2.5 text-xs font-medium flex items-center gap-1.5"
+              >
+                <ArrowUpRightFromSquare width={13} height={13} /> <span>Publicar en canal</span>
+              </Button>
+            </div>
+          </div>
+
+          <h1 className="doc-title">{title}</h1>
+          {description && (
+            <p className="doc-description">{description}</p>
+          )}
+
+          <div className="doc-meta flex items-center gap-3 sm:gap-4 text-xs text-muted flex-wrap mt-4 pt-3 border-t border-border/40">
+            {formattedDate && (
               <span className="inline-flex items-center gap-1.5">
                 <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-                <span>{date}</span>
+                <span>{formattedDate}</span>
               </span>
             )}
             <span className="inline-flex items-center gap-1.5">
               <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-              <span>{startTime} ({totalCalculatedDuration} min)</span>
+              <span>{startTime}–{estimatedEndTime} · {formattedDuration}</span>
             </span>
             {host && (
               <span className="inline-flex items-center gap-1.5">
-                <Avatar name={host} size="xs" className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0" />
-                <span>Conduce: <strong className="font-semibold text-foreground">{host}</strong></span>
+                <Avatar
+                  name={hostMember?.globalName || host}
+                  size="sm"
+                  className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
+                  style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+                />
+                <span className="font-medium text-foreground">{host}</span>
               </span>
             )}
             {participantsList.length > 0 && (
               <span className="inline-flex items-center gap-1.5">
-                <div className="flex items-center -space-x-1.5">
-                  {participantsList.slice(0, 3).map((tag, i) => (
-                    <Avatar
-                      key={i}
-                      name={tag}
-                      size="xs"
-                      className="w-4.5 h-4.5 text-[8px] font-bold border border-background shadow-2xs shrink-0"
-                    />
-                  ))}
+                <div className="flex items-center -space-x-2">
+                  {participantsList.slice(0, 4).map((tag, i) => {
+                    const matched = DEFAULT_DISCORD_MEMBERS.find(
+                      (m) =>
+                        m.tag.toLowerCase() === tag.toLowerCase() ||
+                        `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                    );
+                    const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                    return (
+                      <Avatar
+                        key={i}
+                        name={matched?.globalName || tag}
+                        size="sm"
+                        className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
+                        style={{backgroundColor: `${color}35`, color}}
+                      />
+                    );
+                  })}
                 </div>
-                <span>{participantsList.length} participantes</span>
+                {participantsList.length > 4 && (
+                  <span className="text-xs font-semibold text-muted">
+                    +{participantsList.length - 4}
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -271,25 +320,8 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
 
         {/* Cuerpo del Documento (Bardo Docs Visual Layout) */}
         <div className="doc-body mt-8">
-          {/* Resumen Ejecutivo */}
-          <h2>🎯 Resumen Ejecutivo</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4 not-prose">
-            <div className="p-3.5 rounded-xl bg-surface-secondary/50 border border-border/50 flex flex-col gap-1">
-              <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Duración planificada</span>
-              <span className="text-lg font-bold text-foreground">{totalCalculatedDuration} min</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-surface-secondary/50 border border-border/50 flex flex-col gap-1">
-              <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Acuerdos alcanzados</span>
-              <span className="text-lg font-bold text-accent">{decisions.length} decisiones</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-surface-secondary/50 border border-border/50 flex flex-col gap-1">
-              <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Bloques de agenda</span>
-              <span className="text-lg font-bold text-foreground">{blocks.length} bloques</span>
-            </div>
-          </div>
-
           {/* Acuerdos y Decisiones */}
-          <h2>📋 Acuerdos y Decisiones ({decisions.length})</h2>
+          <h2>📋 Acuerdos y decisiones ({decisions.length})</h2>
           {decisions.length === 0 ? (
             <p className="italic text-muted">No se registraron decisiones formales en esta sesión.</p>
           ) : (
@@ -303,7 +335,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
                   <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                     <strong className="text-sm font-semibold text-foreground">{decision.content}</strong>
                     {decision.origin && (
-                      <span className="text-xs text-muted">Origen: {decision.origin}</span>
+                      <span className="text-xs text-muted">En: {decision.origin}</span>
                     )}
                   </div>
                 </li>
@@ -312,7 +344,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
           )}
 
           {/* Desglose de Temas Tratados */}
-          <h2>⏱️ Desglose de Temas Tratados</h2>
+          <h2>⏱️ Desglose de temas tratados</h2>
           {blocks.length === 0 ? (
             <p className="italic text-muted">No se configuraron bloques en la agenda.</p>
           ) : (
@@ -320,18 +352,15 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
               {blocks.map((block, bIdx) => (
                 <div key={block.id || bIdx} className="border-b border-border/30 pb-5 last:border-0 last:pb-0">
                   <h3 className="flex items-center justify-between text-base font-bold text-foreground">
-                    <span>{bIdx + 1}. {block.title}</span>
+                    <span>{block.title}</span>
                     <span className="text-xs font-mono font-normal text-muted">{block.durationMinutes} min</span>
                   </h3>
                   {block.introDesc && (
                     <p className="text-xs text-muted mt-1 mb-2">{block.introDesc}</p>
                   )}
-                  {block.leader && (
-                    <p className="text-xs text-muted mt-0.5 mb-2">Conduce: <strong className="font-semibold text-foreground">{block.leader}</strong></p>
-                  )}
 
                   {(block.subpoints || []).length > 0 && (
-                    <ul className="flex flex-col gap-2 mt-3 list-none pl-1">
+                    <ul className="flex flex-col gap-1.5 mt-2.5 list-none pl-1">
                       {block.subpoints.map((point) => {
                         const status = sessionState ? getPointStatus(sessionState, point.id) : point.status;
                         const isDone = status === POINT_STATUS.DONE;
@@ -373,7 +402,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
           )}
 
           {/* Convocados y Asistencia */}
-          <h2>👥 Convocados y Asistencia</h2>
+          <h2>👥 Convocados y asistencia</h2>
           <div className="flex flex-wrap gap-2 my-3">
             {participantsList.map((tag, i) => (
               <div key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary/50 border border-border/40 text-xs">
