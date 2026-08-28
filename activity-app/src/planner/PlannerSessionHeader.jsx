@@ -119,36 +119,38 @@ export function PlannerSessionHeader({
             <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
-          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))}>
+        <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-muted px-2 py-1">Fecha de la sesión</Header>
-              <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)">
+              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+                Fecha de la sesión
+              </Header>
+              <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)" className="px-3 py-2 rounded-xl">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col">
-                  <Label>Hoy</Label>
-                  <Description>Mié 19 ago 2026</Description>
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-xs font-semibold text-foreground leading-none">Hoy</Label>
+                  <Description className="text-[11px] text-muted leading-tight">Mié 19 ago 2026</Description>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)">
+              <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)" className="px-3 py-2 rounded-xl">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col">
-                  <Label>Mañana</Label>
-                  <Description>Jue 20 ago 2026</Description>
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-xs font-semibold text-foreground leading-none">Mañana</Label>
+                  <Description className="text-[11px] text-muted leading-tight">Jue 20 ago 2026</Description>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes">
+              <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes" className="px-3 py-2 rounded-xl">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col">
-                  <Label>Próximo Lunes</Label>
-                  <Description>Lun 24 ago 2026</Description>
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-xs font-semibold text-foreground leading-none">Próximo Lunes</Label>
+                  <Description className="text-[11px] text-muted leading-tight">Lun 24 ago 2026</Description>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles">
+              <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles" className="px-3 py-2 rounded-xl">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col">
-                  <Label>Próximo Miércoles</Label>
-                  <Description>Mié 26 ago 2026</Description>
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-xs font-semibold text-foreground leading-none">Próximo Miércoles</Label>
+                  <Description className="text-[11px] text-muted leading-tight">Mié 26 ago 2026</Description>
                 </div>
               </Dropdown.Item>
             </Dropdown.Section>
@@ -180,14 +182,16 @@ export function PlannerSessionHeader({
             <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[180px] max-h-64 overflow-y-auto">
-          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))}>
+        <Dropdown.Popover placement="bottom start" className="min-w-[200px] max-h-64 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-muted px-2 py-1">Hora de inicio</Header>
+              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+                Hora de inicio
+              </Header>
               {COMMON_START_TIMES.map((timeOption) => (
-                <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption}>
+                <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption} className="px-3 py-2 rounded-xl">
                   <Clock className="size-4 shrink-0 text-muted" />
-                  <Label>{timeOption}</Label>
+                  <Label className="text-xs font-medium text-foreground">{timeOption}</Label>
                 </Dropdown.Item>
               ))}
             </Dropdown.Section>
@@ -237,21 +241,23 @@ export function PlannerSessionHeader({
             <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
-          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
+        <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce la sesión</Header>
+              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+                Conduce la sesión
+              </Header>
               {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-2 rounded-xl">
                   <Avatar
                     name={member.globalName}
                     size="xs"
                     className="w-5 h-5 text-[9px] font-bold shrink-0"
                     style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                   />
-                  <div className="flex flex-col">
-                    <Label>{member.globalName}</Label>
-                    <Description>{member.tag}</Description>
+                  <div className="flex flex-col gap-0.5">
+                    <Label className="text-xs font-semibold text-foreground leading-none">{member.globalName}</Label>
+                    <Description className="text-[11px] text-muted leading-tight">{member.tag}</Description>
                   </div>
                 </Dropdown.Item>
               ))}
@@ -341,7 +347,7 @@ export function PlannerSessionHeader({
             <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom end" className="min-w-[260px]">
+        <Dropdown.Popover placement="bottom end" className="min-w-[270px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu
             selectionMode="multiple"
             selectedKeys={selectedNames}
@@ -349,20 +355,23 @@ export function PlannerSessionHeader({
               const arr = Array.from(keys);
               onUpdateHeaderField?.('mentions', arr.map((k) => `@${k}`).join(' '));
             }}
+            className="p-0"
           >
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-muted px-2 py-1">Convocados a la sesión</Header>
+              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+                Convocados a la sesión
+              </Header>
               {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName}>
+                <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName} className="px-3 py-2 rounded-xl">
                   <Avatar
                     name={member.globalName}
                     size="xs"
                     className="w-5 h-5 text-[9px] font-bold shrink-0"
                     style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                   />
-                  <div className="flex flex-col">
-                    <Label>{member.globalName}</Label>
-                    <Description>{member.tag}</Description>
+                  <div className="flex flex-col gap-0.5">
+                    <Label className="text-xs font-semibold text-foreground leading-none">{member.globalName}</Label>
+                    <Description className="text-[11px] text-muted leading-tight">{member.tag}</Description>
                   </div>
                   <Dropdown.ItemIndicator />
                 </Dropdown.Item>
