@@ -596,6 +596,23 @@ button { font-size: 14px; }
   }
 }
 
+/* Transitions.dev Global Micro-interaction Tokens */
+.transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: var(--ease-smooth-out);
+  transition-duration: var(--duration-quick);
+}
+.transition-all {
+  transition-property: all;
+  transition-timing-function: var(--ease-smooth-out);
+  transition-duration: var(--duration-fast);
+}
+.transition-opacity {
+  transition-property: opacity;
+  transition-timing-function: var(--ease-smooth-out);
+  transition-duration: var(--duration-quick);
+}
+
 .document-shell {
   width: min(var(--bardo-content), calc(100% - 32px));
   margin: 0 auto;
