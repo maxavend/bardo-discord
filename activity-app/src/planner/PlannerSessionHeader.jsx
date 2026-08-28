@@ -127,35 +127,35 @@ export function PlannerSessionHeader({
         <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
                 Fecha de la sesión
               </Header>
-              <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)" className="px-3 py-2 rounded-xl">
+              <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)" className="px-3 py-1.5 rounded-xl text-xs">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col gap-0.5">
-                  <Label className="text-xs font-semibold text-foreground leading-none">Hoy</Label>
-                  <Description className="text-[11px] text-muted leading-tight">Mié 19 ago 2026</Description>
+                <div className="flex flex-col min-w-0">
+                  <Label className="text-xs font-medium text-foreground leading-tight">Hoy</Label>
+                  <Description className="text-[10.5px] text-muted leading-tight">Mié 19 ago 2026</Description>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)" className="px-3 py-2 rounded-xl">
+              <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)" className="px-3 py-1.5 rounded-xl text-xs">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col gap-0.5">
-                  <Label className="text-xs font-semibold text-foreground leading-none">Mañana</Label>
-                  <Description className="text-[11px] text-muted leading-tight">Jue 20 ago 2026</Description>
+                <div className="flex flex-col min-w-0">
+                  <Label className="text-xs font-medium text-foreground leading-tight">Mañana</Label>
+                  <Description className="text-[10.5px] text-muted leading-tight">Jue 20 ago 2026</Description>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes" className="px-3 py-2 rounded-xl">
+              <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes" className="px-3 py-1.5 rounded-xl text-xs">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col gap-0.5">
-                  <Label className="text-xs font-semibold text-foreground leading-none">Próximo Lunes</Label>
-                  <Description className="text-[11px] text-muted leading-tight">Lun 24 ago 2026</Description>
+                <div className="flex flex-col min-w-0">
+                  <Label className="text-xs font-medium text-foreground leading-tight">Próximo Lunes</Label>
+                  <Description className="text-[10.5px] text-muted leading-tight">Lun 24 ago 2026</Description>
                 </div>
               </Dropdown.Item>
-              <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles" className="px-3 py-2 rounded-xl">
+              <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles" className="px-3 py-1.5 rounded-xl text-xs">
                 <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col gap-0.5">
-                  <Label className="text-xs font-semibold text-foreground leading-none">Próximo Miércoles</Label>
-                  <Description className="text-[11px] text-muted leading-tight">Mié 26 ago 2026</Description>
+                <div className="flex flex-col min-w-0">
+                  <Label className="text-xs font-medium text-foreground leading-tight">Próximo Miércoles</Label>
+                  <Description className="text-[10.5px] text-muted leading-tight">Mié 26 ago 2026</Description>
                 </div>
               </Dropdown.Item>
             </Dropdown.Section>
@@ -191,11 +191,11 @@ export function PlannerSessionHeader({
         <Dropdown.Popover placement="bottom start" className="min-w-[200px] max-h-64 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
                 Hora de inicio
               </Header>
               {COMMON_START_TIMES.map((timeOption) => (
-                <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption} className="px-3 py-2 rounded-xl">
+                <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption} className="px-3 py-1.5 rounded-xl text-xs">
                   <Clock className="size-4 shrink-0 text-muted" />
                   <Label className="text-xs font-medium text-foreground">{timeOption}</Label>
                 </Dropdown.Item>
@@ -251,20 +251,20 @@ export function PlannerSessionHeader({
         <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
                 Conduce la sesión
               </Header>
               {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-2 rounded-xl">
+                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                   <Avatar
                     name={member.globalName}
                     size="xs"
-                    className="w-5 h-5 text-[9px] font-bold shrink-0"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                     style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                   />
-                  <div className="flex flex-col gap-0.5">
-                    <Label className="text-xs font-semibold text-foreground leading-none">{member.globalName}</Label>
-                    <Description className="text-[11px] text-muted leading-tight">{member.tag}</Description>
+                  <div className="flex flex-col min-w-0">
+                    <Label className="text-xs font-medium text-foreground leading-tight">{member.globalName}</Label>
+                    <Description className="text-[10.5px] text-muted leading-tight">{member.tag}</Description>
                   </div>
                 </Dropdown.Item>
               ))}

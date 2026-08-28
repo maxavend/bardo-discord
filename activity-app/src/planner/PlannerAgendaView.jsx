@@ -125,24 +125,24 @@ export function PlannerAgendaView({
         <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})} className="p-0">
             <Dropdown.Section>
-              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
+              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
                 Conduce el bloque
               </Header>
-              <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo" className="px-3 py-2 rounded-xl">
-                <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
-                <Label className="text-xs font-semibold text-foreground leading-none">Todo el equipo</Label>
+              <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo" className="px-3 py-1.5 rounded-xl text-xs">
+                <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
+                <Label className="text-xs font-medium text-foreground">Todo el equipo</Label>
               </Dropdown.Item>
               {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-2 rounded-xl">
+                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                   <Avatar
                     name={member.globalName}
                     size="xs"
-                    className="w-5 h-5 text-[9px] font-bold shrink-0"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                     style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                   />
-                  <div className="flex flex-col gap-0.5">
-                    <Label className="text-xs font-semibold text-foreground leading-none">{member.globalName}</Label>
-                    <Description className="text-[11px] text-muted leading-tight">{member.tag}</Description>
+                  <div className="flex flex-col min-w-0">
+                    <Label className="text-xs font-medium text-foreground leading-tight">{member.globalName}</Label>
+                    <Description className="text-[10.5px] text-muted leading-tight">{member.tag}</Description>
                   </div>
                 </Dropdown.Item>
               ))}
@@ -600,7 +600,7 @@ export function PlannerAgendaView({
                                           <Dropdown.Trigger>
                                             <button
                                               type="button"
-                                              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none"
+                                              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
                                             >
                                               {point.presenter ? (
                                                 <>
@@ -618,32 +618,38 @@ export function PlannerAgendaView({
                                                         DISCORD_PALETTES[0],
                                                     }}
                                                   />
-                                                  <span className="text-muted hover:text-foreground font-medium">{point.presenter}</span>
+                                                  <span className="text-muted group-hover:text-foreground font-medium underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+                                                    {point.presenter}
+                                                  </span>
                                                 </>
                                               ) : (
-                                                <span className="text-muted hover:text-foreground">Asignar responsable</span>
+                                                <span className="text-muted group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+                                                  Asignar responsable
+                                                </span>
                                               )}
                                             </button>
                                           </Dropdown.Trigger>
-                                          <Dropdown.Popover placement="bottom start" className="min-w-[220px]">
-                                            <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})}>
+                                          <Dropdown.Popover placement="bottom start" className="min-w-[240px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+                                            <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})} className="p-0">
                                               <Dropdown.Section>
-                                                <Header className="text-xs font-semibold text-muted px-2 py-1">Responsable del punto</Header>
-                                                <Dropdown.Item id="Todos" textValue="Todos">
-                                                  <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
-                                                  <Label>Todos</Label>
+                                                <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
+                                                  Responsable del punto
+                                                </Header>
+                                                <Dropdown.Item id="Todos" textValue="Todos" className="px-3 py-1.5 rounded-xl text-xs">
+                                                  <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
+                                                  <Label className="text-xs font-medium text-foreground">Todos</Label>
                                                 </Dropdown.Item>
                                                 {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                                                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                                                     <Avatar
                                                       name={member.globalName}
                                                       size="xs"
-                                                      className="w-5 h-5 text-[9px] font-bold shrink-0"
+                                                      className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                                                       style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                                                     />
-                                                    <div className="flex flex-col">
-                                                      <Label>{member.globalName}</Label>
-                                                      <Description>{member.tag}</Description>
+                                                    <div className="flex flex-col min-w-0">
+                                                      <Label className="text-xs font-medium text-foreground leading-tight">{member.globalName}</Label>
+                                                      <Description className="text-[10.5px] text-muted leading-tight">{member.tag}</Description>
                                                     </div>
                                                   </Dropdown.Item>
                                                 ))}
