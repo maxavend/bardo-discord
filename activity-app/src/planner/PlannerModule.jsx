@@ -530,8 +530,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     setPlannerState(clean);
     const live = loadLiveSessionState(clean);
     commitSessionState(live);
-    setActiveTab('agenda');
-    toast('Sesión limpia iniciada');
+    setActiveTab('editor');
+    toast('Nueva sesión creada — configura los detalles');
   }, [commitSessionState]);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -768,10 +768,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
             handleLoadDemo();
             handleTabChange('agenda');
           }}
-          onNewCleanSession={() => {
-            handleCleanSession();
-            handleTabChange('agenda');
-          }}
+          onNewCleanSession={handleCleanSession}
         />
       )}
 
