@@ -46,6 +46,7 @@
   /* Border Radius */
   --radius: 1rem;
   --field-radius: 0.625rem;
+  --field-shadow: none;
 
   /* Font Family */
   --font-inter: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
@@ -88,7 +89,8 @@
   --warning: oklch(82.03% 0.1388 80.08);
   --warning-foreground: oklch(21.03% 0.0059 80.08);
 
-  /* Border Radius */
+  /* Border Radius & Shadows */
   --radius: 1rem;
   --field-radius: 0.625rem;
+  --field-shadow: none;
 }

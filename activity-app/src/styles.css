@@ -938,3 +938,19 @@ button { font-size: 14px; }
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Eliminación total de sombras en inputs, textareas, datepickers y campos de formulario */
+input,
+textarea,
+select,
+[data-slot="input-wrapper"],
+[data-slot="input"],
+[data-slot="base"],
+[data-slot="field-group"],
+.heroui-input,
+.heroui-input-wrapper,
+.heroui-text-field-input,
+.heroui-text-area-input {
+  box-shadow: none !important;
+}
+
