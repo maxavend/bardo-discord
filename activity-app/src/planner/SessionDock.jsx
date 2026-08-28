@@ -11,6 +11,7 @@ import {
 import {SESSION_STATUS} from './session-runner.js';
 import {formatMsToClock, getAssistantContextDetails} from './session-assistant-engine.js';
 import {RECORDING_STATUS} from './recording-controller.js';
+import {MaterialMorphShape} from './MaterialMorphShape.jsx';
 
 export function SessionDock({
   plannerState,
@@ -97,9 +98,12 @@ export function SessionDock({
         <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
           {/* Resumen operacional: Tema · #/# · Tiempo · Progreso */}
           <div className="flex items-center gap-2 min-w-0 flex-1 pl-1.5">
-            <span className={`h-2 w-2 rounded-full shrink-0 ${
-              isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
-            }`} />
+            <MaterialMorphShape
+              size={12}
+              color={isPaused ? 'warning' : isExpired ? 'danger' : is5MinWarning ? 'warning' : 'accent'}
+              isPaused={isPaused}
+              className="shrink-0"
+            />
 
             <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
               {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
@@ -194,9 +198,12 @@ export function SessionDock({
           {/* 1. Título + Contador (Break                    3/5) */}
           <div className="flex items-baseline justify-between gap-3 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`h-2 w-2 rounded-full shrink-0 ${
-                isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
-              }`} />
+              <MaterialMorphShape
+                size={14}
+                color={isPaused ? 'warning' : isExpired ? 'danger' : is5MinWarning ? 'warning' : 'accent'}
+                isPaused={isPaused}
+                className="shrink-0"
+              />
               <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
                 {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
               </h2>

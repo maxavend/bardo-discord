@@ -78,6 +78,10 @@ export function MaterialMorphShape({
       ? 'text-success'
       : 'text-accent';
 
+  // Frecuencia dinámica: Aumenta velocidad cuando se acaba el tiempo (<5m o overtime)
+  const morphDuration = color === 'danger' ? '1.6s' : color === 'warning' ? '3.2s' : '8s';
+  const rotationDuration = color === 'danger' ? '3s' : color === 'warning' ? '6s' : '16s';
+
   return (
     <div
       className={`relative flex items-center justify-center select-none ${className}`}
@@ -88,6 +92,9 @@ export function MaterialMorphShape({
         viewBox="0 0 32 32"
         width={size}
         height={size}
+        style={{
+          animationDuration: rotationDuration,
+        }}
         className={`m3-morph-svg ${colorClass} ${isPaused ? 'is-paused' : ''}`}
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
@@ -96,7 +103,7 @@ export function MaterialMorphShape({
           {!isPaused && (
             <animate
               attributeName="d"
-              dur="8s"
+              dur={morphDuration}
               repeatCount="indefinite"
               values={paths.morphValues}
               keyTimes="0; 0.25; 0.5; 0.75; 1"

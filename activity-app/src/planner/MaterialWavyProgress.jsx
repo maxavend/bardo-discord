@@ -50,11 +50,15 @@ export function MaterialWavyProgress({
   const currentLengthRef = useRef(targetLength);
   const [animatedLength, setAnimatedLength] = useState(targetLength);
 
+  // Frecuencia y velocidad dinámicas según el estado de urgencia de tiempo
+  const effectiveWavelength = color === 'danger' ? 36 : color === 'warning' ? 48 : wavelength;
+  const cycleDuration = color === 'danger' ? 800 : color === 'warning' ? 1400 : 2800; // ms
+
   // Smooth continuous phase animation + sub-pixel fluid fill loop (60fps)
   useEffect(() => {
     let rafId;
     let lastTime = performance.now();
-    const speed = wavelength / 2800; // px per ms
+    const speed = effectiveWavelength / cycleDuration; // px per ms
 
     const loop = (now) => {
       const delta = Math.min(64, now - lastTime);
@@ -62,7 +66,7 @@ export function MaterialWavyProgress({
 
       // 1. Phase update for continuous wave motion
       if (!isPaused) {
-        setPhase((prev) => (prev + delta * speed) % wavelength);
+        setPhase((prev) => (prev + delta * speed) % effectiveWavelength);
       }
 
       // 2. Smooth continuous sub-pixel progress fill (no discrete jumps)
@@ -80,9 +84,9 @@ export function MaterialWavyProgress({
 
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
-  }, [isPaused, wavelength, targetLength]);
+  }, [isPaused, effectiveWavelength, cycleDuration, targetLength]);
 
-  // Generate physics-based envelope sine path with animatedLength
+  // Generate physics-based envelope sine path with animatedLength and effectiveWavelength
   const wavePath = useMemo(() => {
     if (animatedLength <= 2) {
       return '';
@@ -106,7 +110,7 @@ export function MaterialWavyProgress({
       const easeOut = outFactor * outFactor * (3 - 2 * outFactor);
       const envelope = easeIn * easeOut;
 
-      const angle = (2 * Math.PI * (y + phase)) / wavelength;
+      const angle = (2 * Math.PI * (y + phase)) / effectiveWavelength;
       const x = cx + amplitude * envelope * Math.sin(angle);
 
       d += ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
@@ -115,7 +119,7 @@ export function MaterialWavyProgress({
     // Ensure final point lands precisely on center of track
     d += ` L ${cx} ${animatedLength.toFixed(2)}`;
     return d;
-  }, [animatedLength, phase, wavelength, amplitude]);
+  }, [animatedLength, phase, effectiveWavelength, amplitude]);
 
   const colorClass =
     color === 'danger'

@@ -106,11 +106,24 @@ export function PlannerAgendaView({
             const isLast = blockIndex === blocks.length - 1;
 
             let progressPercent = 0;
+            let blockColor = 'accent';
             if (isLive && sessionState) {
               const plannedMs = getBlockPlannedMs(block, sessionState);
               const elapsedMs = getElapsedActiveBlockMs(sessionState);
               const ratio = plannedMs > 0 ? Math.min(1, Math.max(0.04, elapsedMs / plannedMs)) : 0.04;
               progressPercent = ratio * 100;
+
+              const isExpired = plannedMs > 0 && elapsedMs > plannedMs;
+              const remainingMs = plannedMs - elapsedMs;
+              const is5MinWarning = !isExpired && remainingMs <= 5 * 60 * 1000 && remainingMs > 0;
+
+              blockColor = isPaused
+                ? 'warning'
+                : isExpired
+                ? 'danger'
+                : is5MinWarning
+                ? 'warning'
+                : 'accent';
             }
 
             if (isBreak && !isLive && (block.subpoints || []).length === 0 && (block.decisions || []).length === 0) {
@@ -122,11 +135,11 @@ export function PlannerAgendaView({
                       <span className="text-[11px] text-muted/60 hidden sm:inline">{blockEnd}</span>
                     </div>
 
-                    {/* Material Design 3 Vertical Progress Timeline Rail (4px) */}
+                    {/* Material Design 3 Vertical Progress Timeline Rail (4.5px) */}
                     <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-14px] w-4 select-none pointer-events-none z-0">
                       <div className="relative mt-2 z-10">
                         {isCompleted ? (
-                          <span className="h-2 w-2 rounded-full bg-accent ring-2 ring-surface block" />
+                          <span className="h-2 w-2 rounded-full bg-success ring-2 ring-surface block" />
                         ) : (
                           <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
                         )}
@@ -135,7 +148,7 @@ export function PlannerAgendaView({
                       {!isLast && (
                         <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[24px]">
                           {isCompleted ? (
-                            <div className="w-[4.5px] h-full bg-accent rounded-full" />
+                            <div className="w-[4.5px] h-full bg-success rounded-full" />
                           ) : (
                             <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
                           )}
@@ -167,7 +180,17 @@ export function PlannerAgendaView({
               <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-stretch relative z-10">
                 <div className="flex sm:flex-col items-center sm:items-end justify-between select-none pr-3 shrink-0 relative h-full">
                   <div className="flex flex-col items-end pt-1.5 shrink-0">
-                    <span className={`text-xs sm:text-sm font-bold leading-tight ${isLive ? 'text-accent' : 'text-foreground'}`}>{blockStart}</span>
+                    <span className={`text-xs sm:text-sm font-bold leading-tight ${
+                      isLive
+                        ? blockColor === 'danger'
+                          ? 'text-danger'
+                          : blockColor === 'warning'
+                          ? 'text-warning'
+                          : 'text-accent'
+                        : isCompleted
+                        ? 'text-foreground/80'
+                        : 'text-foreground'
+                    }`}>{blockStart}</span>
                     <span className="text-[11px] text-muted/70 leading-tight">{blockEnd}</span>
                     <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
                   </div>
@@ -178,11 +201,11 @@ export function PlannerAgendaView({
                       {isLive ? (
                         <MaterialMorphShape
                           size={14}
-                          color={sessionState?.isExpired ? 'danger' : 'accent'}
+                          color={blockColor}
                           isPaused={isPaused}
                         />
                       ) : isCompleted ? (
-                        <span className="h-2 w-2 rounded-full bg-accent ring-2 ring-surface block" />
+                        <span className="h-2 w-2 rounded-full bg-success ring-2 ring-surface block" />
                       ) : (
                         <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
                       )}
@@ -193,7 +216,7 @@ export function PlannerAgendaView({
                         {isLive ? (
                           <MaterialWavyProgress
                             value={progressPercent}
-                            color={sessionState?.isExpired ? 'danger' : 'accent'}
+                            color={blockColor}
                             isPaused={isPaused}
                             orientation="vertical"
                             strokeWidth={4.5}
@@ -201,7 +224,7 @@ export function PlannerAgendaView({
                             amplitude={3.5}
                           />
                         ) : isCompleted ? (
-                          <div className="w-[4.5px] h-full bg-accent rounded-full" />
+                          <div className="w-[4.5px] h-full bg-success rounded-full" />
                         ) : (
                           <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
                         )}
