@@ -747,7 +747,7 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
         />
       )}
 
-      {activeTab !== 'editor' && (
+      {activeTab === 'agenda' && (
         <PlannerSessionHeader
           state={plannerState}
           sessionState={sessionState}
