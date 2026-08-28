@@ -1,3 +1,4 @@
+import {useState, useEffect} from 'react';
 import {
   Button,
   Card,
@@ -41,6 +42,18 @@ export function PlannerAgendaView({
   const liveActivePointId = sessionState?.liveActivePointId || null;
   const isPaused = sessionState?.isPaused || false;
   let cursorMinutes = clockToMinutes(startTime);
+
+  // Ticker activo en vivo para actualizar la barra de progreso a medida que avanza el tiempo
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    if (!sessionState?.liveActiveBlockId || sessionState?.status === 'PAUSED' || sessionState?.status === 'COMPLETED') {
+      return;
+    }
+    const interval = setInterval(() => {
+      setClockTick((t) => (t + 1) % 100000);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [sessionState?.liveActiveBlockId, sessionState?.status, sessionState?.activeBlockStartedAt]);
 
   return (
     <div className="planner-agenda-container w-full max-w-4xl mx-auto pb-24 pt-2 flex flex-col gap-3">
@@ -95,19 +108,21 @@ export function PlannerAgendaView({
             if (isLive && sessionState) {
               const plannedMs = getBlockPlannedMs(block, sessionState);
               const elapsedMs = getElapsedActiveBlockMs(sessionState);
-              const ratio = plannedMs > 0 ? Math.min(1, Math.max(0.06, elapsedMs / plannedMs)) : 0.5;
+              const ratio = plannedMs > 0 ? Math.min(1, Math.max(0.04, elapsedMs / plannedMs)) : 0.04;
               progressPercent = Math.round(ratio * 100);
             }
 
             if (isBreak && !isLive && (block.subpoints || []).length === 0 && (block.decisions || []).length === 0) {
               return (
-                <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-center relative z-10">
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start select-none pr-3 shrink-0 relative h-full">
-                    <span className="text-xs font-semibold text-muted">{blockStart}</span>
-                    <span className="text-[11px] text-muted/60 hidden sm:inline">{blockEnd}</span>
+                <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-stretch relative z-10">
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between select-none pr-3 shrink-0 relative h-full">
+                    <div className="flex flex-col items-end pt-1 shrink-0">
+                      <span className="text-xs font-semibold text-muted">{blockStart}</span>
+                      <span className="text-[11px] text-muted/60 hidden sm:inline">{blockEnd}</span>
+                    </div>
 
                     {/* Material Design 3 Vertical Progress Timeline Rail (4px) */}
-                    <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-12px] w-4 select-none pointer-events-none z-0">
+                    <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-14px] w-4 select-none pointer-events-none z-0">
                       <div className="relative mt-2 z-10">
                         {isCompleted ? (
                           <span className="h-2 w-2 rounded-full bg-accent ring-2 ring-surface block" />
@@ -117,11 +132,11 @@ export function PlannerAgendaView({
                       </div>
 
                       {!isLast && (
-                        <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
+                        <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[24px]">
                           {isCompleted ? (
-                            <div className="w-[4px] h-full bg-accent rounded-full my-1" />
+                            <div className="w-[4px] h-full bg-accent rounded-full" />
                           ) : (
-                            <div className="w-[4px] h-full bg-border/40 rounded-full my-1" />
+                            <div className="w-[4px] h-full bg-border/40 rounded-full" />
                           )}
                         </div>
                       )}
@@ -148,14 +163,16 @@ export function PlannerAgendaView({
             }
 
             return (
-              <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start relative z-10">
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start pt-1.5 select-none pr-3 shrink-0 relative h-full">
-                  <span className={`text-xs sm:text-sm font-bold leading-tight ${isLive ? 'text-accent' : 'text-foreground'}`}>{blockStart}</span>
-                  <span className="text-[11px] text-muted/70 leading-tight">{blockEnd}</span>
-                  <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
+              <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-stretch relative z-10">
+                <div className="flex sm:flex-col items-center sm:items-end justify-between select-none pr-3 shrink-0 relative h-full">
+                  <div className="flex flex-col items-end pt-1.5 shrink-0">
+                    <span className={`text-xs sm:text-sm font-bold leading-tight ${isLive ? 'text-accent' : 'text-foreground'}`}>{blockStart}</span>
+                    <span className="text-[11px] text-muted/70 leading-tight">{blockEnd}</span>
+                    <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
+                  </div>
 
                   {/* Material Design 3 Vertical Progress Timeline Rail (4px) */}
-                  <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-12px] w-4 select-none pointer-events-none z-0">
+                  <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-14px] w-4 select-none pointer-events-none z-0">
                     <div className="relative mt-2.5 z-10">
                       {isLive ? (
                         <div className="relative flex items-center justify-center">
@@ -170,7 +187,7 @@ export function PlannerAgendaView({
                     </div>
 
                     {!isLast && (
-                      <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
+                      <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[32px]">
                         {isLive ? (
                           <MaterialWavyProgress
                             value={progressPercent}
@@ -182,9 +199,9 @@ export function PlannerAgendaView({
                             amplitude={3.5}
                           />
                         ) : isCompleted ? (
-                          <div className="w-[4px] h-full bg-accent rounded-full my-1" />
+                          <div className="w-[4px] h-full bg-accent rounded-full" />
                         ) : (
-                          <div className="w-[4px] h-full bg-border/40 rounded-full my-1" />
+                          <div className="w-[4px] h-full bg-border/40 rounded-full" />
                         )}
                       </div>
                     )}

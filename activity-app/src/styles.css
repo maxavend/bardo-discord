@@ -903,12 +903,10 @@ button { font-size: 14px; }
 }
 
 .m3-wavy-progress-root.vertical {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   width: 16px;
+  height: 100%;
+  min-height: 24px;
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -919,6 +917,8 @@ button { font-size: 14px; }
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 4px;
   background: color-mix(in srgb, var(--border) 40%, transparent);
   border-radius: 9999px;
@@ -931,7 +931,7 @@ button { font-size: 14px; }
   width: 100%;
   overflow: hidden;
   border-radius: 9999px;
-  transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: height 0.4s ease-out;
 }
 
 .m3-wavy-svg {
