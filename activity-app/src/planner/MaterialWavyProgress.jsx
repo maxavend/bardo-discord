@@ -69,15 +69,15 @@ export function MaterialWavyProgress({
       const delta = Math.min(64, now - lastTime);
       lastTime = now;
 
-      // 1. Phase update for continuous wave motion (solo si hay amplitud)
-      if (currentAmplitudeRef.current > 0.05) {
+      // 1. Phase update for continuous wave motion (fluye mientras se aplana)
+      if (!isPaused || currentAmplitudeRef.current > 0.02) {
         setPhase((prev) => (prev + delta * speed) % effectiveWavelength);
       }
 
-      // 2. Transición suave de amplitud (recta al pausar, onda al reanudar)
+      // 2. Transición suave de amplitud (se aplana suavemente a 0 manteniéndose estirada en su posición)
       const ampDiff = targetAmplitude - currentAmplitudeRef.current;
       if (Math.abs(ampDiff) > 0.01) {
-        currentAmplitudeRef.current += ampDiff * Math.min(1, delta * 0.012);
+        currentAmplitudeRef.current += ampDiff * Math.min(1, delta * 0.010);
         setAnimatedAmplitude(currentAmplitudeRef.current);
       } else if (currentAmplitudeRef.current !== targetAmplitude) {
         currentAmplitudeRef.current = targetAmplitude;
@@ -108,6 +108,12 @@ export function MaterialWavyProgress({
     }
 
     const cx = 10;
+
+    // Si la amplitud ya está en 0 (pausado), trazo recto perfecto sin oscilación
+    if (animatedAmplitude <= 0.02) {
+      return `M ${cx} 0 L ${cx} ${animatedLength.toFixed(2)}`;
+    }
+
     const step = 3; // 3px resolution gives smooth 60fps spline
     const dampZone = Math.min(28, animatedLength * 0.35); // Transition zone at edges
 
