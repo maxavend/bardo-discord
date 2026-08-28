@@ -1,6 +1,5 @@
 import {
   Button,
-  ProgressBar,
   Dropdown,
   Label,
   Description,
@@ -151,17 +150,53 @@ export function SessionDock({
             <span className="text-muted shrink-0">{details.estimatedEndDisplay}</span>
           </div>
 
-          <ProgressBar
-            aria-label="Tiempo consumido del bloque activo"
-            value={details.blockProgressPercent}
-            color={isExpired ? 'danger' : is5MinWarning ? 'warning' : 'accent'}
-            size="xs"
-            className="w-full"
+          {/* Segmented Session Timeline Progress Bar by Block */}
+          <div
+            className="flex items-center gap-1.5 w-full h-1 pt-0.5"
+            role="progressbar"
+            aria-label="Progreso temporal de la sesión por bloques"
+            aria-valuenow={details.sessionProgressPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
           >
-            <ProgressBar.Track className="h-1 bg-surface-secondary/70 rounded-full overflow-hidden">
-              <ProgressBar.Fill className="h-1 rounded-full" />
-            </ProgressBar.Track>
-          </ProgressBar>
+            {(plannerState.blocks || []).map((b, idx) => {
+              const isCompleted = (sessionState?.completedBlockIds || []).includes(b.id);
+              const isCurrent = b.id === sessionState?.liveActiveBlockId;
+              const isSkipped = (sessionState?.skippedBlockIds || []).includes(b.id);
+              const blockDuration = Math.max(Number(b.durationMinutes) || 10, 1);
+
+              let fillWidthPercent = 0;
+              let fillColor = 'bg-accent';
+
+              if (isCompleted) {
+                fillWidthPercent = 100;
+                fillColor = 'bg-accent/80';
+              } else if (isCurrent) {
+                const extMin = sessionState?.blockExtensions?.[b.id]?.extensionMinutes || 0;
+                const plannedMs = Math.max((blockDuration + extMin) * 60 * 1000, 1);
+                fillWidthPercent = details.isUnlimited
+                  ? 100
+                  : Math.min(100, Math.max(0, (details.elapsedBlockMs / plannedMs) * 100));
+                fillColor = isExpired ? 'bg-danger' : is5MinWarning ? 'bg-warning' : 'bg-accent';
+              } else if (isSkipped) {
+                fillWidthPercent = 0;
+              }
+
+              return (
+                <div
+                  key={b.id || idx}
+                  className="relative h-1 bg-surface-secondary/70 rounded-full overflow-hidden transition-all"
+                  style={{flex: blockDuration}}
+                  title={`${b.title} (${blockDuration} min)`}
+                >
+                  <div
+                    className={`h-full ${fillColor} rounded-full transition-all duration-300 ease-out`}
+                    style={{width: `${fillWidthPercent}%`}}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {showInitialPrompt && (
