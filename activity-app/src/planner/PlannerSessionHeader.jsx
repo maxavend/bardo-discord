@@ -368,7 +368,7 @@ export function PlannerSessionHeader({
                     <Dropdown.Trigger>
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
+                        className="inline-flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
                       >
                         <div
                           style={{
@@ -380,11 +380,11 @@ export function PlannerSessionHeader({
                               DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase() === host.toLowerCase())?.avatarColor ||
                               DISCORD_PALETTES[0],
                           }}
-                          className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8.5px] font-bold shrink-0"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
                         >
                           {getInitials(host || 'Host')}
                         </div>
-                        <span className="font-medium">{host || 'Asignar conductor'}</span>
+                        <span className="font-medium text-xs">{host || 'Asignar conductor'}</span>
                       </button>
                     </Dropdown.Trigger>
                     <Dropdown.Popover placement="bottom start">
@@ -416,7 +416,7 @@ export function PlannerSessionHeader({
                         <div className="flex items-center gap-1.5">
                           <div
                             style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                            className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8.5px] font-bold shrink-0"
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
                           >
                             {hostInitials}
                           </div>
@@ -439,7 +439,7 @@ export function PlannerSessionHeader({
                     }`}
                     aria-label={`Ver ${participantsList.length} participantes convocados`}
                   >
-                    <div className="flex items-center -space-x-1.5">
+                    <div className="flex items-center -space-x-2">
                       {participantsList.slice(0, 4).map((tag, i) => {
                         const matched = DEFAULT_DISCORD_MEMBERS.find(
                           (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
@@ -449,15 +449,15 @@ export function PlannerSessionHeader({
                           <div
                             key={i}
                             style={{backgroundColor: `${color}35`, color}}
-                            className="w-5 h-5 rounded-full border border-background flex items-center justify-center text-[9px] font-bold shadow-2xs"
+                            className="w-7 h-7 rounded-full border-2 border-background flex items-center justify-center text-[10.5px] font-bold shadow-2xs shrink-0"
                           >
                             {getInitials(matched?.globalName || tag)}
                           </div>
                         );
                       })}
                     </div>
-                    {participantsList.length > 4 && <span className="text-[11px] font-medium text-muted">+{participantsList.length - 4}</span>}
-                    {isEditing && <span className="text-xs text-accent font-medium ml-1">+ Convocados</span>}
+                    {participantsList.length > 4 && <span className="text-xs font-semibold text-muted ml-0.5">+{participantsList.length - 4}</span>}
+                    {isEditing && <span className="text-xs text-accent font-medium ml-1.5">+ Convocados</span>}
                   </button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom end" className="w-80 p-3 rounded-xl bg-surface border border-border shadow-xl">
