@@ -67,7 +67,6 @@ export function SessionDock({
   const isUnlimited = details.isUnlimited;
   const is5MinWarning = details.is5MinWarning;
   const isExtended = details.isExtended;
-  const activeDescription = details.activePointDescription || details.activeBlockDescription || '';
   const advanceLabel = details.nextAction.label;
 
   const renderAdvanceButton = (variant = 'primary', size = 'sm') => (
@@ -207,27 +206,19 @@ export function SessionDock({
         /* ── Modo Expandido (Al tope del documento) ────────────────────────── */
         <div className="w-full session-dock-glass rounded-2xl px-4 py-3.5 flex flex-col gap-2.5 transition-all duration-200">
           {/* 1. Título + Contador (Break                    3/5) */}
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <div className="flex items-baseline justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`h-2 w-2 rounded-full shrink-0 ${
-                  isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
-                }`} />
-                <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
-                  {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
-                </h2>
-              </div>
-
-              <span className="text-xs font-mono text-muted shrink-0 tabular-nums">
-                {details.activeBlockIndex >= 0 ? `${details.activeBlockIndex + 1}/${details.totalBlocksCount}` : ''}
-              </span>
+          <div className="flex items-baseline justify-between gap-3 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${
+                isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
+              }`} />
+              <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
+                {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
+              </h2>
             </div>
 
-            {activeDescription && (
-              <p className="text-xs text-muted leading-relaxed pl-4 line-clamp-2">
-                {activeDescription}
-              </p>
-            )}
+            <span className="text-xs font-mono text-muted shrink-0 tabular-nums">
+              {details.activeBlockIndex >= 0 ? `${details.activeBlockIndex + 1}/${details.totalBlocksCount}` : ''}
+            </span>
           </div>
 
           {/* 2. Métricas de tiempo y estado en una línea limpia */}
