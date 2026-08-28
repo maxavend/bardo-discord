@@ -266,17 +266,20 @@ export function PlannerSessionHeader({
           {/* Fila de metadatos: Fecha, Hora, Duración, Host (izq) y Participantes (der) */}
           <div className="flex items-center justify-between gap-3 text-xs text-muted font-normal flex-wrap pt-0.5">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              {isEditing ? (
-                <Popover placement="bottom start">
-                  <Popover.Trigger>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
-                    >
-                      <Calendar width={13} height={13} className="text-accent shrink-0" />
-                      <span>{formattedDate || 'Seleccionar fecha'}</span>
-                    </button>
-                  </Popover.Trigger>
+              <Popover placement="bottom start">
+                <Popover.Trigger>
+                  <button
+                    type="button"
+                    disabled={!isEditing}
+                    className={`inline-flex items-center gap-1.5 transition-colors ${
+                      isEditing ? 'cursor-pointer hover:text-foreground' : 'cursor-default'
+                    }`}
+                  >
+                    <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
+                    <span>{formattedDate || 'Seleccionar fecha'}</span>
+                  </button>
+                </Popover.Trigger>
+                {isEditing && (
                   <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
                     <div className="flex flex-col gap-2">
                       <Label className="text-xs font-semibold text-foreground">Fecha de la sesión</Label>
@@ -288,28 +291,25 @@ export function PlannerSessionHeader({
                       />
                     </div>
                   </Popover.Content>
-                </Popover>
-              ) : (
-                formattedDate && (
-                  <span className="flex items-center gap-1.5">
-                    <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-                    <span>{formattedDate}</span>
-                  </span>
-                )
-              )}
-              {formattedDate && <span className="text-muted/40">·</span>}
+                )}
+              </Popover>
 
-              {isEditing ? (
-                <Popover placement="bottom start">
-                  <Popover.Trigger>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
-                    >
-                      <Clock width={13} height={13} className="text-accent shrink-0" />
-                      <span>{startTime}</span>
-                    </button>
-                  </Popover.Trigger>
+              <span className="text-muted/40">·</span>
+
+              <Popover placement="bottom start">
+                <Popover.Trigger>
+                  <button
+                    type="button"
+                    disabled={!isEditing}
+                    className={`inline-flex items-center gap-1.5 transition-colors ${
+                      isEditing ? 'cursor-pointer hover:text-foreground' : 'cursor-default'
+                    }`}
+                  >
+                    <Clock width={13} height={13} className="text-muted/70 shrink-0" />
+                    <span>{startTime}–{estimatedEndTime}</span>
+                  </button>
+                </Popover.Trigger>
+                {isEditing && (
                   <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
                     <div className="flex flex-col gap-2">
                       <Label className="text-xs font-semibold text-foreground">Hora de inicio</Label>
@@ -321,81 +321,69 @@ export function PlannerSessionHeader({
                       />
                     </div>
                   </Popover.Content>
-                </Popover>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-                  <span>{startTime}–{estimatedEndTime}</span>
-                </span>
-              )}
+                )}
+              </Popover>
+
               <span className="text-muted/40">·</span>
 
               <span>{formattedDuration}</span>
 
-              {isEditing ? (
+              {host && (
                 <>
                   <span className="text-muted/40">·</span>
-                  <Dropdown>
-                    <Dropdown.Trigger>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
-                      >
+                  {(() => {
+                    const hostMember = DEFAULT_DISCORD_MEMBERS.find(
+                      (m) =>
+                        m.globalName.toLowerCase() === host.toLowerCase() ||
+                        m.tag.toLowerCase() === host.toLowerCase() ||
+                        `@${m.globalName.toLowerCase()}` === host.toLowerCase()
+                    );
+                    const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
+
+                    if (isEditing) {
+                      return (
+                        <Dropdown>
+                          <Dropdown.Trigger>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <Avatar
+                                name={hostMember?.globalName || host}
+                                size="sm"
+                                className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
+                                style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+                              />
+                              <span className="text-foreground/90 font-medium">{host}</span>
+                            </button>
+                          </Dropdown.Trigger>
+                          <Dropdown.Popover placement="bottom start">
+                            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
+                              {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                                  <Label>{member.globalName}</Label>
+                                  <Description>{member.tag}</Description>
+                                </Dropdown.Item>
+                              ))}
+                            </Dropdown.Menu>
+                          </Dropdown.Popover>
+                        </Dropdown>
+                      );
+                    }
+
+                    return (
+                      <div className="flex items-center gap-1.5">
                         <Avatar
-                          name={host || 'Host'}
+                          name={hostMember?.globalName || host}
                           size="sm"
                           className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                          style={{
-                            backgroundColor: `${
-                              DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase() === host.toLowerCase())?.avatarColor ||
-                              DISCORD_PALETTES[0]
-                            }30`,
-                            color:
-                              DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase() === host.toLowerCase())?.avatarColor ||
-                              DISCORD_PALETTES[0],
-                          }}
+                          style={{backgroundColor: `${hostColor}30`, color: hostColor}}
                         />
-                        <span className="font-medium text-xs">{host || 'Asignar conductor'}</span>
-                      </button>
-                    </Dropdown.Trigger>
-                    <Dropdown.Popover placement="bottom start">
-                      <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
-                        {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                          <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                            <Label>{member.globalName}</Label>
-                            <Description>{member.tag}</Description>
-                          </Dropdown.Item>
-                        ))}
-                      </Dropdown.Menu>
-                    </Dropdown.Popover>
-                  </Dropdown>
+                        <span className="text-foreground/90 font-medium">{host}</span>
+                      </div>
+                    );
+                  })()}
                 </>
-              ) : (
-                host && (
-                  <>
-                    <span className="text-muted/40">·</span>
-                    {(() => {
-                      const hostMember = DEFAULT_DISCORD_MEMBERS.find(
-                        (m) =>
-                          m.globalName.toLowerCase() === host.toLowerCase() ||
-                          m.tag.toLowerCase() === host.toLowerCase() ||
-                          `@${m.globalName.toLowerCase()}` === host.toLowerCase()
-                      );
-                      const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
-                      return (
-                        <div className="flex items-center gap-1.5">
-                          <Avatar
-                            name={hostMember?.globalName || host}
-                            size="sm"
-                            className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                            style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                          />
-                          <span className="text-foreground/90 font-medium">{host}</span>
-                        </div>
-                      );
-                    })()}
-                  </>
-                )
               )}
             </div>
 
@@ -404,9 +392,7 @@ export function PlannerSessionHeader({
                 <Popover.Trigger>
                   <button
                     type="button"
-                    className={`inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer select-none ${
-                      isEditing ? 'px-2 py-0.5 rounded-lg bg-surface-secondary border border-border/60' : ''
-                    }`}
+                    className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer select-none"
                     aria-label={`Ver ${participantsList.length} participantes convocados`}
                   >
                     <div className="flex items-center -space-x-2">
@@ -427,7 +413,6 @@ export function PlannerSessionHeader({
                       })}
                     </div>
                     {participantsList.length > 4 && <span className="text-xs font-semibold text-muted ml-0.5">+{participantsList.length - 4}</span>}
-                    {isEditing && <span className="text-xs text-accent font-medium ml-1.5">+ Convocados</span>}
                   </button>
                 </Popover.Trigger>
                 <Popover.Content placement="bottom end" className="w-80 p-3 rounded-xl bg-surface border border-border shadow-xl">

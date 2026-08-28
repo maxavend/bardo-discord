@@ -5,6 +5,7 @@ import {
   Card,
   Checkbox,
   Dropdown,
+  Popover,
   Label,
   Description,
 } from '@heroui/react';
@@ -228,7 +229,7 @@ export function PlannerAgendaView({
                             : 'bg-surface border-border/80'
                     }`}
                   >
-                    <div className="flex flex-col gap-2">
+                                   <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         {isEditing ? (
                           <input
@@ -242,20 +243,34 @@ export function PlannerAgendaView({
                           <h3 className="text-base font-bold tracking-tight text-foreground min-w-0">{block.title}</h3>
                         )}
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           {isEditing ? (
-                            <div className="flex items-center gap-1.5 bg-surface-secondary/60 px-2 py-0.5 rounded-lg border border-border/40">
-                              <input
-                                type="number"
-                                min="1"
-                                max="240"
-                                value={block.durationMinutes || 30}
-                                onChange={(e) => onUpdateBlock?.(block.id, {durationMinutes: Number(e.target.value) || 15})}
-                                className="w-10 text-xs font-semibold text-foreground text-center bg-transparent border-0 outline-none p-0"
-                              />
-                              <span className="text-xs text-muted">min</span>
-                            </div>
-                          ) : null}
+                            <Popover placement="bottom end">
+                              <Popover.Trigger>
+                                <button
+                                  type="button"
+                                  className="text-xs font-semibold text-muted hover:text-foreground px-2 py-0.5 rounded-lg bg-surface-secondary/50 hover:bg-surface-secondary transition-colors cursor-pointer"
+                                >
+                                  {block.durationMinutes || 30} min
+                                </button>
+                              </Popover.Trigger>
+                              <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
+                                <div className="flex flex-col gap-2">
+                                  <Label className="text-xs font-semibold text-foreground">Duración del bloque (min)</Label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="240"
+                                    value={block.durationMinutes || 30}
+                                    onChange={(e) => onUpdateBlock?.(block.id, {durationMinutes: Number(e.target.value) || 15})}
+                                    className="px-2.5 py-1.5 rounded-lg bg-field text-xs text-foreground border border-border outline-none focus:border-accent w-24"
+                                  />
+                                </div>
+                              </Popover.Content>
+                            </Popover>
+                          ) : (
+                            <span className="text-xs text-muted font-medium">{block.durationMinutes || 30} min</span>
+                          )}
 
                           {isEditing && (
                             <Dropdown>
@@ -291,49 +306,48 @@ export function PlannerAgendaView({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
+                      <div className="flex items-center gap-1.5 text-xs text-muted flex-wrap">
+                        <span>Conduce:</span>
                         {isEditing ? (
-                          <div className="flex items-center gap-2 w-full flex-wrap">
-                            <span className="text-xs text-muted font-medium shrink-0">Conduce:</span>
-                            <Dropdown>
-                              <Dropdown.Trigger>
-                                <button
-                                  type="button"
-                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
-                                >
-                                  <span className="font-medium text-xs">{block.leader || 'Todo el equipo'}</span>
-                                </button>
-                              </Dropdown.Trigger>
-                              <Dropdown.Popover placement="bottom start">
-                                <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})}>
-                                  <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo">
-                                    <Label>Todo el equipo</Label>
+                          <Dropdown>
+                            <Dropdown.Trigger>
+                              <button
+                                type="button"
+                                className="font-semibold text-foreground hover:text-accent transition-colors cursor-pointer"
+                              >
+                                {block.leader || 'Todo el equipo'}
+                              </button>
+                            </Dropdown.Trigger>
+                            <Dropdown.Popover placement="bottom start">
+                              <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})}>
+                                <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo">
+                                  <Label>Todo el equipo</Label>
+                                </Dropdown.Item>
+                                {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                                    <Label>{member.globalName}</Label>
+                                    <Description>{member.tag}</Description>
                                   </Dropdown.Item>
-                                  {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                    <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                                      <Label>{member.globalName}</Label>
-                                      <Description>{member.tag}</Description>
-                                    </Dropdown.Item>
-                                  ))}
-                                </Dropdown.Menu>
-                              </Dropdown.Popover>
-                            </Dropdown>
-
-                            <span className="text-muted/40">·</span>
-                            <span className="text-xs text-muted font-medium shrink-0">Participantes:</span>
-                            <input
-                              type="text"
-                              value={block.participants || ''}
-                              onChange={(e) => onUpdateBlock?.(block.id, {participants: e.target.value})}
-                              placeholder="Ej: Diseño & SD + Carol, Karola y Nico"
-                              className="text-xs text-foreground bg-surface-secondary/40 px-2 py-1 rounded-lg border border-border/40 outline-none focus:border-accent flex-1 min-w-[160px]"
-                            />
-                          </div>
+                                ))}
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown>
                         ) : (
-                          <>
-                            {block.leader && <span>Líder: <strong className="font-medium text-foreground">{block.leader}</strong></span>}
-                            {block.participants && <span className="hidden sm:inline">· {block.participants}</span>}
-                          </>
+                          <strong className="font-semibold text-foreground">{block.leader || 'Todo el equipo'}</strong>
+                        )}
+
+                        <span className="text-muted/40">·</span>
+                        <span>Participantes:</span>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={block.participants || ''}
+                            onChange={(e) => onUpdateBlock?.(block.id, {participants: e.target.value})}
+                            placeholder="Diseño & SD + Carol, Karola y Nico"
+                            className="text-xs text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0"
+                          />
+                        ) : (
+                          <span>{block.participants || 'Todos los convocados'}</span>
                         )}
                       </div>
                     </div>
@@ -367,7 +381,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={point.id}
-                              className={`relative flex items-start gap-3 p-3 rounded-lg transition-all ${
+                              className={`group relative flex items-start gap-3 p-3 rounded-lg transition-all ${
                                 isPointActive
                                   ? 'bg-accent/15 text-accent shadow-xs'
                                   : isDone || isPointSkipped
@@ -375,36 +389,12 @@ export function PlannerAgendaView({
                                     : 'bg-surface-secondary/50 hover:bg-surface-secondary/70 text-foreground'
                               }`}
                             >
-
-                              {isEditing ? (
-                                <div className="flex flex-col items-center gap-0.5 shrink-0 pl-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => onMoveSubpoint?.(block.id, point.id, -1)}
-                                    disabled={pointIndex === 0}
-                                    aria-label="Mover punto arriba"
-                                    className="p-0.5 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-default"
-                                  >
-                                    <ChevronUp width={12} height={12} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => onMoveSubpoint?.(block.id, point.id, 1)}
-                                    disabled={pointIndex === (block.subpoints || []).length - 1}
-                                    aria-label="Mover punto abajo"
-                                    className="p-0.5 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-default"
-                                  >
-                                    <ChevronDown width={12} height={12} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <Checkbox
-                                  size="sm"
-                                  isSelected={isDone}
-                                  onChange={(event) => onToggleSubpointStatus(block.id, point.id, event.target.checked)}
-                                  className="mt-0.5 shrink-0 pl-1"
-                                />
-                              )}
+                              <Checkbox
+                                size="sm"
+                                isSelected={isDone}
+                                onChange={(event) => onToggleSubpointStatus(block.id, point.id, event.target.checked)}
+                                className="mt-0.5 shrink-0 pl-1"
+                              />
 
                               <div className="flex flex-col min-w-0 flex-1">
                                 <div className="flex items-baseline justify-between gap-2 flex-wrap">
@@ -447,16 +437,34 @@ export function PlannerAgendaView({
                                   )}
 
                                   {isEditing && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      isIconOnly
-                                      onPress={() => onDeleteSubpoint?.(block.id, point.id)}
-                                      className="h-6 w-6 text-muted hover:text-danger shrink-0"
-                                      aria-label="Eliminar punto"
-                                    >
-                                      <TrashBin width={12} height={12} />
-                                    </Button>
+                                    <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
+                                      <button
+                                        type="button"
+                                        onClick={() => onMoveSubpoint?.(block.id, point.id, -1)}
+                                        disabled={pointIndex === 0}
+                                        aria-label="Mover punto arriba"
+                                        className="p-1 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer"
+                                      >
+                                        <ChevronUp width={12} height={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => onMoveSubpoint?.(block.id, point.id, 1)}
+                                        disabled={pointIndex === (block.subpoints || []).length - 1}
+                                        aria-label="Mover punto abajo"
+                                        className="p-1 text-muted hover:text-foreground disabled:opacity-20 cursor-pointer"
+                                      >
+                                        <ChevronDown width={12} height={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => onDeleteSubpoint?.(block.id, point.id)}
+                                        aria-label="Eliminar punto"
+                                        className="p-1 text-muted hover:text-danger cursor-pointer ml-0.5"
+                                      >
+                                        <TrashBin width={12} height={12} />
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
 
@@ -465,7 +473,7 @@ export function PlannerAgendaView({
                                     type="text"
                                     value={point.description || ''}
                                     onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {description: e.target.value})}
-                                    placeholder="Descripción o detalle del punto..."
+                                    placeholder={point.description ? '' : 'Añadir descripción o detalle...'}
                                     className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-0 mt-0.5"
                                   />
                                 ) : (
@@ -480,19 +488,18 @@ export function PlannerAgendaView({
 
                                 {isEditing ? (
                                   <div className="flex items-center gap-2 mt-2 pt-0.5">
-                                    <span className="text-[11px] text-muted">Responsable:</span>
                                     <Dropdown>
                                       <Dropdown.Trigger>
                                         <button
                                           type="button"
-                                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-secondary/70 hover:bg-surface-secondary text-foreground text-xs cursor-pointer"
+                                          className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none"
                                         >
                                           {point.presenter ? (
                                             <>
                                               <Avatar
                                                 name={point.presenter}
                                                 size="xs"
-                                                className="w-4 h-4 text-[8px] font-bold shrink-0"
+                                                className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 shadow-2xs"
                                                 style={{
                                                   backgroundColor: `${
                                                     DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
@@ -503,10 +510,10 @@ export function PlannerAgendaView({
                                                     DISCORD_PALETTES[0],
                                                 }}
                                               />
-                                              <span>{point.presenter}</span>
+                                              <span className="text-muted hover:text-foreground font-medium">{point.presenter}</span>
                                             </>
                                           ) : (
-                                            <span className="text-muted">Asignar responsable</span>
+                                            <span className="text-muted hover:text-foreground">Asignar responsable</span>
                                           )}
                                         </button>
                                       </Dropdown.Trigger>
@@ -559,14 +566,13 @@ export function PlannerAgendaView({
                         })}
 
                         {isEditing && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onPress={() => onAddSubpoint?.(block.id)}
-                            className="h-7 text-xs text-muted hover:text-foreground self-start gap-1 font-medium mt-0.5"
+                          <button
+                            type="button"
+                            onClick={() => onAddSubpoint?.(block.id)}
+                            className="text-xs text-muted/70 hover:text-foreground flex items-center gap-1.5 py-1 px-1 transition-colors self-start mt-0.5 cursor-pointer font-medium"
                           >
-                            <Plus width={12} height={12} /> Añadir punto
-                          </Button>
+                            <Plus width={12} height={12} className="text-accent" /> <span>Añadir punto</span>
+                          </button>
                         )}
                       </div>
                     )}
@@ -578,7 +584,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={decision.id}
-                              className="px-3 py-2.5 rounded-lg bg-surface-secondary/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
+                              className="group px-3 py-2.5 rounded-lg bg-surface-secondary/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
                             >
                               <div className="flex items-start gap-2.5 min-w-0">
                                 <CircleCheck width={14} height={14} className="text-success shrink-0 mt-0.5" />
@@ -592,7 +598,7 @@ export function PlannerAgendaView({
                                 size="sm"
                                 isIconOnly
                                 aria-label="Eliminar acuerdo"
-                                className="h-6 w-6 text-muted hover:text-danger shrink-0"
+                                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 h-6 w-6 text-muted hover:text-danger shrink-0 transition-opacity"
                                 onPress={() => onDeleteDecision?.(block.id, decision.id)}
                               >
                                 <TrashBin width={12} height={12} />
