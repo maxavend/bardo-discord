@@ -11,7 +11,6 @@ import {
   TextArea,
   TextField,
   Label,
-  ProgressBar,
   Dropdown,
   Description,
   toast,
@@ -24,8 +23,6 @@ import {
   ChevronUp,
   ChevronDown,
   EllipsisVertical,
-  Clock,
-  TriangleExclamation,
 } from '@gravity-ui/icons';
 import {
   computePlannerTimes,
@@ -33,6 +30,15 @@ import {
   formatShortDuration,
 } from './time-engine.js';
 import {PlannerMemberPicker} from './PlannerMemberPicker.jsx';
+
+function formatDurationCompact(minutes = 0) {
+  if (!minutes) return '0 min';
+  const hours = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  if (hours > 0 && rem === 0) return `${hours}h`;
+  if (hours > 0) return `${hours}h${rem < 10 ? `0${rem}` : rem}`;
+  return `${minutes} min`;
+}
 
 export function PlannerEditorView({
   initialState,
@@ -62,9 +68,28 @@ export function PlannerEditorView({
   const handleTargetDurationChange = (val) => {
     setTargetDurationInput(val);
     const parsed = parseSmartDuration(val);
-    if (parsed && parsed > 0) {
-      setFormData((prev) => ({...prev, targetDuration: parsed}));
+    if (parsed > 0) {
+      updateHeaderField('targetDuration', parsed);
     }
+  };
+
+  const addBlock = () => {
+    const newId = `b-${Date.now()}`;
+    setFormData((prev) => {
+      const nextBlocks = [
+        ...prev.blocks,
+        {
+          id: newId,
+          title: `Bloque #${prev.blocks.length + 1}`,
+          durationMinutes: 30,
+          leader: '',
+          participants: '',
+          subpoints: [],
+          decisions: [],
+        },
+      ];
+      return computePlannerTimes({...prev, blocks: nextBlocks});
+    });
   };
 
   const updateBlockField = (bIdx, field, value) => {
@@ -87,21 +112,13 @@ export function PlannerEditorView({
     });
   };
 
-  const addBlock = () => {
-    const newId = `b-${Date.now()}`;
+  const _moveBlock = (index, direction) => {
     setFormData((prev) => {
-      const nextBlocks = [
-        ...prev.blocks,
-        {
-          id: newId,
-          title: `Bloque #${prev.blocks.length + 1}`,
-          durationMinutes: 30,
-          leader: '',
-          participants: '',
-          subpoints: [],
-          decisions: [],
-        },
-      ];
+      const nextBlocks = [...prev.blocks];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= nextBlocks.length) return prev;
+      const [moved] = nextBlocks.splice(index, 1);
+      nextBlocks.splice(targetIndex, 0, moved);
       return computePlannerTimes({...prev, blocks: nextBlocks});
     });
   };
@@ -184,10 +201,9 @@ export function PlannerEditorView({
     onSave(computed);
   };
 
-  // Time Budget metrics
+  // Time metrics
   const totalAllocated = formData.totalCalculatedDuration || 0;
-  const targetDuration = formData.targetDuration || 60;
-  const budgetPercentage = Math.min(Math.round((totalAllocated / targetDuration) * 100), 100);
+  const targetDuration = formData.targetDuration || totalAllocated || 60;
   const isOverBudget = totalAllocated > targetDuration;
   const diffMinutes = Math.abs(targetDuration - totalAllocated);
 
@@ -219,201 +235,179 @@ export function PlannerEditorView({
 
           {/* 1. Información General */}
           <Card className="p-5 sm:p-6 flex flex-col gap-4 rounded-xl">
-        <h2 className="text-sm font-semibold text-foreground">
-          Información general
-        </h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              Información general
+            </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField className="w-full">
-            <Label className="text-xs font-medium text-muted">
-              Título de la sesión
-            </Label>
-            <Input
-              value={formData.title}
-              onChange={(e) => updateHeaderField('title', e.target.value)}
-              placeholder="Ej: Weekly de Producto"
-            />
-          </TextField>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TextField className="w-full">
+                <Label className="text-xs font-medium text-muted">
+                  Título de la sesión
+                </Label>
+                <Input
+                  value={formData.title}
+                  onChange={(e) => updateHeaderField('title', e.target.value)}
+                  placeholder="Ej: Weekly de Producto"
+                />
+              </TextField>
 
-          <TextField className="w-full">
-            <Label className="text-xs font-medium text-muted">
-              Organizador / Conduce
-            </Label>
-            <Input
-              value={formData.host || ''}
-              onChange={(e) => updateHeaderField('host', e.target.value)}
-              placeholder="Ej: Paula Molina"
-            />
-          </TextField>
-        </div>
+              <TextField className="w-full">
+                <Label className="text-xs font-medium text-muted">
+                  Organizador / Conduce
+                </Label>
+                <Input
+                  value={formData.host || ''}
+                  onChange={(e) => updateHeaderField('host', e.target.value)}
+                  placeholder="Ej: Paula Molina"
+                />
+              </TextField>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <DatePicker
-            className="w-full"
-            value={formData.date ? (() => {
-              try {
-                return parseDate(formData.date);
-              } catch {
-                return null;
-              }
-            })() : null}
-            onChange={(val) => {
-              if (val) {
-                updateHeaderField(
-                  'date',
-                  `${val.year}-${String(val.month).padStart(2, '0')}-${String(val.day).padStart(2, '0')}`
-                );
-              } else {
-                updateHeaderField('date', '');
-              }
-            }}
-          >
-            <Label className="text-xs font-medium text-muted">Fecha</Label>
-            <DateField.Group fullWidth>
-              <DateField.Input>
-                {(segment) => <DateField.Segment segment={segment} />}
-              </DateField.Input>
-              <DateField.Suffix>
-                <DatePicker.Trigger>
-                  <DatePicker.TriggerIndicator />
-                </DatePicker.Trigger>
-              </DateField.Suffix>
-            </DateField.Group>
-            <DatePicker.Popover>
-              <Calendar aria-label="Fecha de la sesión">
-                <Calendar.Header>
-                  <Calendar.YearPickerTrigger>
-                    <Calendar.YearPickerTriggerHeading />
-                    <Calendar.YearPickerTriggerIndicator />
-                  </Calendar.YearPickerTrigger>
-                  <Calendar.NavButton slot="previous" />
-                  <Calendar.NavButton slot="next" />
-                </Calendar.Header>
-                <Calendar.Grid>
-                  <Calendar.GridHeader>
-                    {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-                  </Calendar.GridHeader>
-                  <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
-                </Calendar.Grid>
-                <Calendar.YearPickerGrid>
-                  <Calendar.YearPickerGridBody>
-                    {({year}) => <Calendar.YearPickerCell year={year} />}
-                  </Calendar.YearPickerGridBody>
-                </Calendar.YearPickerGrid>
-              </Calendar>
-            </DatePicker.Popover>
-          </DatePicker>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <DatePicker
+                className="w-full"
+                value={formData.date ? (() => {
+                  try {
+                    return parseDate(formData.date);
+                  } catch {
+                    return null;
+                  }
+                })() : null}
+                onChange={(val) => {
+                  if (val) {
+                    updateHeaderField(
+                      'date',
+                      `${val.year}-${String(val.month).padStart(2, '0')}-${String(val.day).padStart(2, '0')}`
+                    );
+                  } else {
+                    updateHeaderField('date', '');
+                  }
+                }}
+              >
+                <Label className="text-xs font-medium text-muted">Fecha</Label>
+                <DateField.Group fullWidth>
+                  <DateField.Input>
+                    {(segment) => <DateField.Segment segment={segment} />}
+                  </DateField.Input>
+                  <DateField.Suffix>
+                    <DatePicker.Trigger>
+                      <DatePicker.TriggerIndicator />
+                    </DatePicker.Trigger>
+                  </DateField.Suffix>
+                </DateField.Group>
+                <DatePicker.Popover>
+                  <Calendar aria-label="Fecha de la sesión">
+                    <Calendar.Header>
+                      <Calendar.YearPickerTrigger>
+                        <Calendar.YearPickerTriggerHeading />
+                        <Calendar.YearPickerTriggerIndicator />
+                      </Calendar.YearPickerTrigger>
+                      <Calendar.NavButton slot="previous" />
+                      <Calendar.NavButton slot="next" />
+                    </Calendar.Header>
+                    <Calendar.Grid>
+                      <Calendar.GridHeader>
+                        {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
+                      </Calendar.GridHeader>
+                      <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
+                    </Calendar.Grid>
+                    <Calendar.YearPickerGrid>
+                      <Calendar.YearPickerGridBody>
+                        {({year}) => <Calendar.YearPickerCell year={year} />}
+                      </Calendar.YearPickerGridBody>
+                    </Calendar.YearPickerGrid>
+                  </Calendar>
+                </DatePicker.Popover>
+              </DatePicker>
 
-          <TimeField
-            className="w-full"
-            value={formData.startTime ? (() => {
-              try {
-                return parseTime(formData.startTime);
-              } catch {
-                return null;
-              }
-            })() : null}
-            onChange={(val) => {
-              if (val) {
-                updateHeaderField(
-                  'startTime',
-                  `${String(val.hour).padStart(2, '0')}:${String(val.minute).padStart(2, '0')}`
-                );
-              } else {
-                updateHeaderField('startTime', '10:00');
-              }
-            }}
-          >
-            <Label className="text-xs font-medium text-muted">Hora de inicio</Label>
-            <TimeField.Group fullWidth>
-              <TimeField.Input>
-                {(segment) => <TimeField.Segment segment={segment} />}
-              </TimeField.Input>
-            </TimeField.Group>
-          </TimeField>
+              <TimeField
+                className="w-full"
+                value={formData.startTime ? (() => {
+                  try {
+                    return parseTime(formData.startTime);
+                  } catch {
+                    return null;
+                  }
+                })() : null}
+                onChange={(val) => {
+                  if (val) {
+                    updateHeaderField(
+                      'startTime',
+                      `${String(val.hour).padStart(2, '0')}:${String(val.minute).padStart(2, '0')}`
+                    );
+                  } else {
+                    updateHeaderField('startTime', '10:00');
+                  }
+                }}
+              >
+                <Label className="text-xs font-medium text-muted">Hora</Label>
+                <TimeField.Group fullWidth>
+                  <TimeField.Input>
+                    {(segment) => <TimeField.Segment segment={segment} />}
+                  </TimeField.Input>
+                </TimeField.Group>
+              </TimeField>
 
-          <TextField className="w-full">
-            <Label className="text-xs font-medium text-muted">
-              Presupuesto objetivo
-            </Label>
-            <Input
-              value={targetDurationInput}
-              onChange={(e) => handleTargetDurationChange(e.target.value)}
-              placeholder="ej: 1h, 60m, 3h"
-            />
-          </TextField>
-        </div>
+              <TextField className="w-full">
+                <Label className="text-xs font-medium text-muted">
+                  Duración prevista
+                </Label>
+                <Input
+                  value={targetDurationInput}
+                  onChange={(e) => handleTargetDurationChange(e.target.value)}
+                  placeholder="ej: 1h, 60m, 3h"
+                />
+              </TextField>
+            </div>
 
-        <TextField className="w-full">
-          <Label className="text-xs font-medium text-muted">
-            Contexto y objetivos (opcional)
-          </Label>
-          <TextArea
-            value={formData.description || ''}
-            onChange={(e) => updateHeaderField('description', e.target.value)}
-            placeholder="Describe el propósito y lo que se espera lograr en la reunión..."
-          />
-        </TextField>
+            <TextField className="w-full">
+              <Label className="text-xs font-medium text-muted">
+                Contexto
+              </Label>
+              <TextArea
+                value={formData.description || ''}
+                onChange={(e) => updateHeaderField('description', e.target.value)}
+                placeholder="Describe el propósito y lo que se espera lograr en la reunión..."
+              />
+            </TextField>
 
-        <div className="flex flex-col gap-1.5 w-full">
-          <Label className="text-xs font-medium text-muted">
-            Participantes convocados (@menciones de Discord)
-          </Label>
-          <PlannerMemberPicker
-            value={formData.mentions || ''}
-            onChange={(val) => updateHeaderField('mentions', val)}
-          />
-        </div>
-      </Card>
+            <div className="flex flex-col gap-1.5 w-full">
+              <Label className="text-xs font-medium text-muted">
+                Participantes
+              </Label>
+              <PlannerMemberPicker
+                value={formData.mentions || ''}
+                onChange={(val) => updateHeaderField('mentions', val)}
+              />
+            </div>
+          </Card>
 
-      {/* 2. Presupuesto de Tiempo (Mismo Section Surface pattern) */}
-      <Card className="p-5 sm:p-6 flex flex-col gap-3.5">
-        <div className="flex items-center justify-between gap-4 text-xs font-medium">
-          <div className="flex items-center gap-1.5">
-            <Clock width={14} height={14} className="text-muted" />
-            <strong className="text-foreground">Presupuesto de tiempo</strong>
-          </div>
-          <div className="text-muted text-xs flex items-center gap-1.5">
-            <strong className="text-foreground">{totalAllocated}m</strong> / {targetDuration}m
-            {isOverBudget ? (
-              <span className="text-danger font-semibold ml-2 flex items-center gap-1">
-                <TriangleExclamation width={12} height={12} />
-                <span>Excedido en {diffMinutes}m</span>
-              </span>
-            ) : diffMinutes === 0 ? (
-              <span className="text-success font-medium ml-2">· Tiempo exacto</span>
-            ) : (
-              <span className="text-muted ml-2">· {diffMinutes}m disponibles</span>
-            )}
-          </div>
-        </div>
-
-        <ProgressBar
-          aria-label="Presupuesto de tiempo de la sesión"
-          value={budgetPercentage}
-          color={isOverBudget ? 'danger' : 'accent'}
-          size="sm"
-          className="w-full"
-        >
-          <ProgressBar.Track>
-            <ProgressBar.Fill />
-          </ProgressBar.Track>
-        </ProgressBar>
-      </Card>
-
-      {/* 3. Bloques de la Agenda */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-foreground">Bloques de la agenda</h2>
-            <p className="text-xs text-muted">
-              Organiza los temas en bloques secuenciales con su respectiva duración.
-            </p>
-          </div>
-          <Button variant="secondary" size="sm" onPress={addBlock}>
-            <Plus width={14} height={14} /> Añadir bloque
-          </Button>
-        </div>
+          {/* 2. Bloques de la Agenda */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-foreground">Bloques de la agenda</h2>
+                <p className="text-xs text-muted mt-0.5">
+                  {formData.blocks.length} {formData.blocks.length === 1 ? 'bloque' : 'bloques'} · {formatDurationCompact(totalAllocated)}
+                  {isOverBudget ? (
+                    <>
+                      {' · '}
+                      <span className="text-warning font-medium">
+                        {diffMinutes} min sobre la duración prevista
+                      </span>
+                    </>
+                  ) : diffMinutes > 0 ? (
+                    <>
+                      {' · '}
+                      <span>Quedan {diffMinutes} min sin asignar</span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+              <Button variant="secondary" size="sm" onPress={addBlock} className="h-8 px-3 shrink-0">
+                <Plus width={14} height={14} /> Añadir bloque
+              </Button>
+            </div>
 
         {formData.blocks.length === 0 ? (
           <div className="p-8 border border-dashed border-border rounded-xl text-center bg-surface-secondary/20 flex flex-col items-center gap-2">
