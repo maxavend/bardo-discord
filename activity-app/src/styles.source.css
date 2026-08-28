@@ -560,6 +560,42 @@ button { font-size: 14px; }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
+/* Transitions.dev Refined Dropdowns & Popovers Asymmetry */
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="popover"][data-entering],
+  [role="dialog"][data-entering] {
+    animation: t-dropdown-open var(--duration-fast) var(--ease-smooth-out) both;
+  }
+  [data-slot="popover"][data-exiting],
+  [role="dialog"][data-exiting] {
+    animation: t-dropdown-close var(--duration-quick) var(--ease-smooth-out) both;
+  }
+}
+
+@keyframes t-dropdown-open {
+  from {
+    opacity: 0;
+    transform: scale(var(--scale-medium));
+    filter: blur(var(--blur-small));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes t-dropdown-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(var(--scale-tiny));
+  }
+}
+
 .document-shell {
   width: min(var(--bardo-content), calc(100% - 32px));
   margin: 0 auto;
