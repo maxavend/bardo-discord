@@ -151,6 +151,12 @@ export function PlannerSessionHeader({
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-secondary text-muted select-none">Próxima</span>
                 )}
               </div>
+
+              {description && (
+                <p className="text-xs sm:text-sm text-muted leading-relaxed whitespace-pre-line pt-0.5">
+                  {description}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
@@ -322,12 +328,6 @@ export function PlannerSessionHeader({
               </>
             )}
           </div>
-
-          {description && (
-            <p className="text-xs sm:text-sm text-muted leading-relaxed whitespace-pre-line pt-0.5">
-              {description}
-            </p>
-          )}
         </div>
       </div>
 
