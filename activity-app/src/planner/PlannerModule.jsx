@@ -528,6 +528,170 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
     toast('Sesión limpia iniciada');
   }, [commitSessionState]);
 
+  const [isEditing, setIsEditing] = useState(false);
+
+  const handleToggleEditMode = useCallback(() => {
+    setIsEditing((previous) => {
+      const next = !previous;
+      if (!next) {
+        toast('Cambios guardados en la agenda');
+      }
+      return next;
+    });
+  }, []);
+
+  const handleUpdateHeaderField = useCallback((field, value) => {
+    setPlannerState((previous) => {
+      const next = computePlannerTimes({...previous, [field]: value});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
+  const handleUpdateBlock = useCallback((blockId, updates) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) =>
+        block.id === blockId ? {...block, ...updates} : block
+      );
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
+  const handleAddBlock = useCallback((atIndex = null) => {
+    const newId = `b-${Date.now()}`;
+    const newBlock = {
+      id: newId,
+      title: 'Nuevo bloque',
+      durationMinutes: 30,
+      leader: '',
+      participants: '',
+      subpoints: [
+        {
+          id: `p-${Date.now()}`,
+          title: 'Punto de partida',
+          presenter: '',
+          status: 'pending',
+        },
+      ],
+      decisions: [],
+    };
+    setPlannerState((previous) => {
+      const blocks = [...previous.blocks];
+      if (typeof atIndex === 'number' && atIndex >= 0) {
+        blocks.splice(atIndex, 0, newBlock);
+      } else {
+        blocks.push(newBlock);
+      }
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+    toast('Bloque añadido a la agenda');
+  }, []);
+
+  const handleDeleteBlock = useCallback((blockId) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.filter((block) => block.id !== blockId);
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+    toast('Bloque eliminado');
+  }, []);
+
+  const handleMoveBlock = useCallback((blockId, direction) => {
+    setPlannerState((previous) => {
+      const blocks = [...previous.blocks];
+      const index = blocks.findIndex((b) => b.id === blockId);
+      const targetIndex = index + direction;
+      if (index === -1 || targetIndex < 0 || targetIndex >= blocks.length) return previous;
+      const [moved] = blocks.splice(index, 1);
+      blocks.splice(targetIndex, 0, moved);
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
+  const handleAddSubpoint = useCallback((blockId) => {
+    const newPointId = `p-${Date.now()}`;
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) => {
+        if (block.id !== blockId) return block;
+        const subpoints = [
+          ...(block.subpoints || []),
+          {
+            id: newPointId,
+            title: '',
+            presenter: '',
+            status: 'pending',
+          },
+        ];
+        return {...block, subpoints};
+      });
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
+  const handleUpdateSubpoint = useCallback((blockId, pointId, updates) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) => {
+        if (block.id !== blockId) return block;
+        const subpoints = (block.subpoints || []).map((point) =>
+          point.id === pointId ? {...point, ...updates} : point
+        );
+        return {...block, subpoints};
+      });
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
+  const handleDeleteSubpoint = useCallback((blockId, pointId) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) => {
+        if (block.id !== blockId) return block;
+        const subpoints = (block.subpoints || []).filter((point) => point.id !== pointId);
+        return {...block, subpoints};
+      });
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
+  const handleMoveSubpoint = useCallback((blockId, pointId, direction) => {
+    setPlannerState((previous) => {
+      const blocks = previous.blocks.map((block) => {
+        if (block.id !== blockId) return block;
+        const subpoints = [...(block.subpoints || [])];
+        const index = subpoints.findIndex((p) => p.id === pointId);
+        const targetIndex = index + direction;
+        if (index === -1 || targetIndex < 0 || targetIndex >= subpoints.length) return block;
+        const [moved] = subpoints.splice(index, 1);
+        subpoints.splice(targetIndex, 0, moved);
+        return {...block, subpoints};
+      });
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
   const isLive = sessionState.status === SESSION_STATUS.RUNNING || sessionState.status === SESSION_STATUS.PAUSED;
   const showUpcomingBanner = !isLive &&
     sessionState.status === SESSION_STATUS.IDLE &&
@@ -556,7 +720,9 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
           sessionState={sessionState}
           activeTab={activeTab}
           onTabChange={handleTabChange}
-          onOpenEditor={() => handleTabChange('editor')}
+          isEditing={isEditing}
+          onToggleEditMode={handleToggleEditMode}
+          onUpdateHeaderField={handleUpdateHeaderField}
           onCopyAnnouncement={handleCopyAnnouncement}
           onNewCleanSession={handleCleanSession}
           onLoadDemo={handleLoadDemo}
@@ -570,7 +736,16 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         <PlannerAgendaView
           state={plannerState}
           sessionState={sessionState}
-          dockSlot={isLive ? (
+          isEditing={isEditing}
+          onUpdateBlock={handleUpdateBlock}
+          onAddBlock={handleAddBlock}
+          onDeleteBlock={handleDeleteBlock}
+          onMoveBlock={handleMoveBlock}
+          onAddSubpoint={handleAddSubpoint}
+          onUpdateSubpoint={handleUpdateSubpoint}
+          onDeleteSubpoint={handleDeleteSubpoint}
+          onMoveSubpoint={handleMoveSubpoint}
+          dockSlot={isLive && !isEditing ? (
             <SessionDock
               plannerState={plannerState}
               sessionState={sessionState}
@@ -595,7 +770,6 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
               onFinishSession={handleFinishSession}
             />
           ) : null}
-          onOpenEditor={() => handleTabChange('editor')}
           onToggleSubpointStatus={handleToggleSubpointStatus}
           onOpenCapture={(kind, blockId) => handleOpenDecisionCapture(blockId)}
           onDeleteDecision={handleDeleteDecision}
