@@ -58,14 +58,14 @@ export function SessionDock({
     <aside
       role="region"
       aria-label="Asistente de sesión en vivo"
-      className="session-toolbar-sticky w-full mb-3 animate-in fade-in slide-in-from-top-1 duration-150"
+      className="session-toolbar-sticky w-full mb-3 animate-in fade-in slide-in-from-top-2 duration-250"
       style={{
         position: 'sticky',
         top: 'calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap, 12px))',
         zIndex: 45,
       }}
     >
-      <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
+      <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-150 shadow-sm animate-in fade-in zoom-in-95 duration-150">
         {/* Resumen operacional: MorphDot + Tema · Tiempo */}
         <div className="flex items-center gap-2 min-w-0 flex-1 pl-1.5 sm:pl-2">
           <MaterialMorphShape

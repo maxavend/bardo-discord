@@ -15,7 +15,7 @@ export function PlannerUpcomingBanner({
   const firstBlock = (plannerState?.blocks || [])[0];
 
   return (
-    <div className="w-full max-w-4xl mx-auto mb-2 animate-in fade-in slide-in-from-top-2 duration-200">
+    <div className="w-full max-w-4xl mx-auto mb-2 animate-in fade-in slide-in-from-top-2 duration-300">
       <div className="flex items-center justify-between gap-3 p-3 sm:py-2.5 sm:px-4 rounded-xl bg-accent/10 border border-accent/30 text-foreground">
         <div className="flex items-center gap-2.5 min-w-0">
           <Clock width={16} height={16} className="text-accent shrink-0" />
