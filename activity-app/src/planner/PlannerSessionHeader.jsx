@@ -17,6 +17,8 @@ import {
   Play,
   Check,
   ArrowRotateRight,
+  Calendar,
+  Clock,
 } from '@gravity-ui/icons';
 import {
   SESSION_STATUS,
@@ -259,18 +261,51 @@ export function PlannerSessionHeader({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted font-normal">
-            {formattedDate && <span>{formattedDate}</span>}
-            {formattedDate && <span className="text-muted/40">·</span>}
-            <span>{startTime}–{estimatedEndTime}</span>
-            <span className="text-muted/40">·</span>
-            <span>{formattedDuration}</span>
-            {host && <span className="text-muted/40">·</span>}
-            {host && <span className="text-foreground/90 font-medium">{host}</span>}
+          {/* Fila de metadatos: Fecha, Hora, Duración, Host (izq) y Participantes (der) */}
+          <div className="flex items-center justify-between gap-3 text-xs text-muted font-normal flex-wrap pt-0.5">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {formattedDate && (
+                <span className="flex items-center gap-1.5">
+                  <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
+                  <span>{formattedDate}</span>
+                </span>
+              )}
+              {formattedDate && <span className="text-muted/40">·</span>}
+
+              <span className="flex items-center gap-1.5">
+                <Clock width={13} height={13} className="text-muted/70 shrink-0" />
+                <span>{startTime}–{estimatedEndTime}</span>
+              </span>
+              <span className="text-muted/40">·</span>
+
+              <span>{formattedDuration}</span>
+
+              {host && <span className="text-muted/40">·</span>}
+              {host && (() => {
+                const hostMember = DEFAULT_DISCORD_MEMBERS.find(
+                  (m) =>
+                    m.globalName.toLowerCase() === host.toLowerCase() ||
+                    m.tag.toLowerCase() === host.toLowerCase() ||
+                    `@${m.globalName.toLowerCase()}` === host.toLowerCase()
+                );
+                const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
+                const hostInitials = getInitials(hostMember?.globalName || host);
+                return (
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+                      className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-[8.5px] font-bold shrink-0"
+                    >
+                      {hostInitials}
+                    </div>
+                    <span className="text-foreground/90 font-medium">{host}</span>
+                  </div>
+                );
+              })()}
+            </div>
 
             {participantsList.length > 0 && (
-              <>
-                <span className="text-muted/40">·</span>
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                 <Popover>
                   <Popover.Trigger>
                     <button
@@ -279,7 +314,7 @@ export function PlannerSessionHeader({
                       aria-label={`Ver ${participantsList.length} participantes convocados`}
                     >
                       <div className="flex items-center -space-x-1.5">
-                        {participantsList.slice(0, 3).map((tag, i) => {
+                        {participantsList.slice(0, 4).map((tag, i) => {
                           const matched = DEFAULT_DISCORD_MEMBERS.find(
                             (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
                           );
@@ -295,7 +330,7 @@ export function PlannerSessionHeader({
                           );
                         })}
                       </div>
-                      {participantsList.length > 3 && <span className="text-[11px] font-medium text-muted">+{participantsList.length - 3}</span>}
+                      {participantsList.length > 4 && <span className="text-[11px] font-medium text-muted">+{participantsList.length - 4}</span>}
                     </button>
                   </Popover.Trigger>
                   <Popover.Content className="w-64 p-3 rounded-xl bg-surface border border-border shadow-xl">
@@ -325,7 +360,7 @@ export function PlannerSessionHeader({
                     </Popover.Dialog>
                   </Popover.Content>
                 </Popover>
-              </>
+              </div>
             )}
           </div>
         </div>
