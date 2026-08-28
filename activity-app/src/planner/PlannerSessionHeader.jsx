@@ -2,7 +2,6 @@ import {
   Avatar,
   Button,
   Dropdown,
-  Popover,
   Label,
   Description,
   Header,
@@ -100,100 +99,84 @@ export function PlannerSessionHeader({
   const participantsList = parseMentions(mentions);
 
   const renderDateSelector = () => {
-    if (isEditing) {
-      return (
-        <Dropdown>
-          <Dropdown.Trigger>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground transition-colors cursor-pointer"
-            >
-              <Calendar width={13} height={13} className="text-accent shrink-0" />
-              <span className="font-medium underline decoration-dotted underline-offset-2">{formattedDate || 'Seleccionar fecha'}</span>
-            </button>
-          </Dropdown.Trigger>
-          <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
-            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))}>
-              <Dropdown.Section>
-                <Header className="text-xs font-semibold text-muted px-2 py-1">Fecha de la sesión</Header>
-                <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)">
-                  <Calendar className="size-4 shrink-0 text-muted" />
-                  <div className="flex flex-col">
-                    <Label>Hoy</Label>
-                    <Description>Mié 19 ago 2026</Description>
-                  </div>
-                </Dropdown.Item>
-                <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)">
-                  <Calendar className="size-4 shrink-0 text-muted" />
-                  <div className="flex flex-col">
-                    <Label>Mañana</Label>
-                    <Description>Jue 20 ago 2026</Description>
-                  </div>
-                </Dropdown.Item>
-                <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes">
-                  <Calendar className="size-4 shrink-0 text-muted" />
-                  <div className="flex flex-col">
-                    <Label>Próximo Lunes</Label>
-                    <Description>Lun 24 ago 2026</Description>
-                  </div>
-                </Dropdown.Item>
-                <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles">
-                  <Calendar className="size-4 shrink-0 text-muted" />
-                  <div className="flex flex-col">
-                    <Label>Próximo Miércoles</Label>
-                    <Description>Mié 26 ago 2026</Description>
-                  </div>
-                </Dropdown.Item>
-              </Dropdown.Section>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-      );
-    }
-
     return (
-      <span className="inline-flex items-center gap-1.5">
-        <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-        <span>{formattedDate || 'Seleccionar fecha'}</span>
-      </span>
+      <Dropdown>
+        <Dropdown.Trigger>
+          <button
+            type="button"
+            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+          >
+            <Calendar width={13} height={13} className="text-muted group-hover:text-foreground shrink-0 transition-colors" />
+            <span className="font-medium text-foreground">{formattedDate || 'Seleccionar fecha'}</span>
+            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
+          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))}>
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-muted px-2 py-1">Fecha de la sesión</Header>
+              <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)">
+                <Calendar className="size-4 shrink-0 text-muted" />
+                <div className="flex flex-col">
+                  <Label>Hoy</Label>
+                  <Description>Mié 19 ago 2026</Description>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)">
+                <Calendar className="size-4 shrink-0 text-muted" />
+                <div className="flex flex-col">
+                  <Label>Mañana</Label>
+                  <Description>Jue 20 ago 2026</Description>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes">
+                <Calendar className="size-4 shrink-0 text-muted" />
+                <div className="flex flex-col">
+                  <Label>Próximo Lunes</Label>
+                  <Description>Lun 24 ago 2026</Description>
+                </div>
+              </Dropdown.Item>
+              <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles">
+                <Calendar className="size-4 shrink-0 text-muted" />
+                <div className="flex flex-col">
+                  <Label>Próximo Miércoles</Label>
+                  <Description>Mié 26 ago 2026</Description>
+                </div>
+              </Dropdown.Item>
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     );
   };
 
   const renderTimeSelector = () => {
-    if (isEditing) {
-      return (
-        <Dropdown>
-          <Dropdown.Trigger>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground transition-colors cursor-pointer"
-            >
-              <Clock width={13} height={13} className="text-accent shrink-0" />
-              <span className="font-medium underline decoration-dotted underline-offset-2">{startTime}–{estimatedEndTime}</span>
-            </button>
-          </Dropdown.Trigger>
-          <Dropdown.Popover placement="bottom start" className="min-w-[180px] max-h-64 overflow-y-auto">
-            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))}>
-              <Dropdown.Section>
-                <Header className="text-xs font-semibold text-muted px-2 py-1">Hora de inicio</Header>
-                {COMMON_START_TIMES.map((timeOption) => (
-                  <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption}>
-                    <Clock className="size-4 shrink-0 text-muted" />
-                    <Label>{timeOption}</Label>
-                  </Dropdown.Item>
-                ))}
-              </Dropdown.Section>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-      );
-    }
-
     return (
-      <span className="inline-flex items-center gap-1.5">
-        <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-        <span>{startTime}–{estimatedEndTime}</span>
-      </span>
+      <Dropdown>
+        <Dropdown.Trigger>
+          <button
+            type="button"
+            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+          >
+            <Clock width={13} height={13} className="text-muted group-hover:text-foreground shrink-0 transition-colors" />
+            <span className="font-medium text-foreground">{startTime}–{estimatedEndTime}</span>
+            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom start" className="min-w-[180px] max-h-64 overflow-y-auto">
+          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))}>
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-muted px-2 py-1">Hora de inicio</Header>
+              {COMMON_START_TIMES.map((timeOption) => (
+                <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption}>
+                  <Clock className="size-4 shrink-0 text-muted" />
+                  <Label>{timeOption}</Label>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     );
   };
 
@@ -206,148 +189,68 @@ export function PlannerSessionHeader({
     );
     const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
 
-    if (isEditing) {
-      return (
-        <Dropdown>
-          <Dropdown.Trigger>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
-            >
-              <Avatar
-                name={hostMember?.globalName || host}
-                size="sm"
-                className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-              />
-              <span className="text-foreground font-medium underline decoration-dotted underline-offset-2">{host}</span>
-            </button>
-          </Dropdown.Trigger>
-          <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
-            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
-              <Dropdown.Section>
-                <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce la sesión</Header>
-                {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                    <Avatar
-                      name={member.globalName}
-                      size="xs"
-                      className="w-5 h-5 text-[9px] font-bold shrink-0"
-                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
-                    />
-                    <div className="flex flex-col">
-                      <Label>{member.globalName}</Label>
-                      <Description>{member.tag}</Description>
-                    </div>
-                  </Dropdown.Item>
-                ))}
-              </Dropdown.Section>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-      );
-    }
-
     return (
-      <div className="flex items-center gap-1.5">
-        <Avatar
-          name={hostMember?.globalName || host}
-          size="sm"
-          className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-          style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-        />
-        <span className="text-foreground/90 font-medium">{host}</span>
-      </div>
+      <Dropdown>
+        <Dropdown.Trigger>
+          <button
+            type="button"
+            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+          >
+            <Avatar
+              name={hostMember?.globalName || host || 'Conductor'}
+              size="sm"
+              className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
+              style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+            />
+            <span className="font-medium text-foreground">{host || 'Asignar conductor'}</span>
+            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
+          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce la sesión</Header>
+              {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                  <Avatar
+                    name={member.globalName}
+                    size="xs"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0"
+                    style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                  />
+                  <div className="flex flex-col">
+                    <Label>{member.globalName}</Label>
+                    <Description>{member.tag}</Description>
+                  </div>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     );
   };
 
   const renderParticipantsPicker = () => {
-    if (isEditing) {
-      const selectedNames = new Set(
-        participantsList.map((tag) => {
-          const found = DEFAULT_DISCORD_MEMBERS.find(
-            (m) =>
-              m.tag.toLowerCase() === tag.toLowerCase() ||
-              `@${m.globalName.toLowerCase()}` === tag.toLowerCase() ||
-              m.globalName.toLowerCase() === tag.toLowerCase()
-          );
-          return found ? found.globalName : tag.replace(/^@/, '');
-        })
-      );
-
-      return (
-        <Dropdown>
-          <Dropdown.Trigger>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer select-none"
-              aria-label={`Editar ${participantsList.length} convocados`}
-            >
-              <div className="flex items-center -space-x-2">
-                {participantsList.slice(0, 4).map((tag, i) => {
-                  const matched = DEFAULT_DISCORD_MEMBERS.find(
-                    (m) =>
-                      m.tag.toLowerCase() === tag.toLowerCase() ||
-                      `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-                  );
-                  const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                  return (
-                    <Avatar
-                      key={i}
-                      name={matched?.globalName || tag}
-                      size="sm"
-                      className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
-                      style={{backgroundColor: `${color}35`, color}}
-                    />
-                  );
-                })}
-              </div>
-              {participantsList.length > 4 && (
-                <span className="text-xs font-semibold text-muted ml-0.5">
-                  +{participantsList.length - 4}
-                </span>
-              )}
-            </button>
-          </Dropdown.Trigger>
-          <Dropdown.Popover placement="bottom end" className="min-w-[260px]">
-            <Dropdown.Menu
-              selectionMode="multiple"
-              selectedKeys={selectedNames}
-              onSelectionChange={(keys) => {
-                const arr = Array.from(keys);
-                onUpdateHeaderField?.('mentions', arr.map((k) => `@${k}`).join(' '));
-              }}
-            >
-              <Dropdown.Section>
-                <Header className="text-xs font-semibold text-muted px-2 py-1">Convocados a la sesión</Header>
-                {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                  <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName}>
-                    <Avatar
-                      name={member.globalName}
-                      size="xs"
-                      className="w-5 h-5 text-[9px] font-bold shrink-0"
-                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
-                    />
-                    <div className="flex flex-col">
-                      <Label>{member.globalName}</Label>
-                      <Description>{member.tag}</Description>
-                    </div>
-                  </Dropdown.Item>
-                ))}
-              </Dropdown.Section>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-      );
-    }
+    const selectedNames = new Set(
+      participantsList.map((tag) => {
+        const found = DEFAULT_DISCORD_MEMBERS.find(
+          (m) =>
+            m.tag.toLowerCase() === tag.toLowerCase() ||
+            `@${m.globalName.toLowerCase()}` === tag.toLowerCase() ||
+            m.globalName.toLowerCase() === tag.toLowerCase()
+        );
+        return found ? found.globalName : tag.replace(/^@/, '');
+      })
+    );
 
     return (
-      <Popover placement="bottom end">
-        <Popover.Trigger>
+      <Dropdown>
+        <Dropdown.Trigger>
           <button
             type="button"
-            className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer select-none"
-            aria-label={`Ver ${participantsList.length} participantes convocados`}
+            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            aria-label={`Editar ${participantsList.length} convocados`}
           >
             <div className="flex items-center -space-x-2">
               {participantsList.slice(0, 4).map((tag, i) => {
@@ -362,54 +265,50 @@ export function PlannerSessionHeader({
                     key={i}
                     name={matched?.globalName || tag}
                     size="sm"
-                    className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
+                    className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
                     style={{backgroundColor: `${color}35`, color}}
                   />
                 );
               })}
             </div>
             {participantsList.length > 4 && (
-              <span className="text-xs font-semibold text-muted ml-0.5">
+              <span className="text-xs font-semibold text-muted">
                 +{participantsList.length - 4}
               </span>
             )}
+            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
-        </Popover.Trigger>
-        <Popover.Content className="w-64 p-3 rounded-xl bg-surface border border-border shadow-xl">
-          <Popover.Dialog>
-            <Popover.Heading className="text-xs font-semibold text-foreground mb-2 pb-1.5 border-b border-border/40">
-              Convocados a la sesión ({participantsList.length})
-            </Popover.Heading>
-            <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
-              {participantsList.map((tag, i) => {
-                const matched = DEFAULT_DISCORD_MEMBERS.find(
-                  (m) =>
-                    m.tag.toLowerCase() === tag.toLowerCase() ||
-                    `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-                );
-                const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                return (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-secondary/70 transition-colors"
-                  >
-                    <Avatar
-                      name={matched?.globalName || tag}
-                      size="xs"
-                      className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
-                      style={{backgroundColor: `${color}35`, color}}
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-medium text-foreground truncate">{matched?.globalName || tag}</span>
-                      {matched?.tag && <span className="text-[10px] text-muted truncate">{matched.tag}</span>}
-                    </div>
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom end" className="min-w-[260px]">
+          <Dropdown.Menu
+            selectionMode="multiple"
+            selectedKeys={selectedNames}
+            onSelectionChange={(keys) => {
+              const arr = Array.from(keys);
+              onUpdateHeaderField?.('mentions', arr.map((k) => `@${k}`).join(' '));
+            }}
+          >
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-muted px-2 py-1">Convocados a la sesión</Header>
+              {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName}>
+                  <Avatar
+                    name={member.globalName}
+                    size="xs"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0"
+                    style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                  />
+                  <div className="flex flex-col">
+                    <Label>{member.globalName}</Label>
+                    <Description>{member.tag}</Description>
                   </div>
-                );
-              })}
-            </div>
-          </Popover.Dialog>
-        </Popover.Content>
-      </Popover>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
     );
   };
 
