@@ -98,25 +98,31 @@ export function SessionDock({
       }}
     >
       <div className="w-full bg-surface/95 backdrop-blur-md border border-border/70 rounded-xl shadow-xs px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-3">
-        <div className="flex flex-col gap-1 min-w-0">
-          <div className="flex items-center gap-2 text-[11px] text-muted min-w-0">
+        {/* 1. Context Unit: Non-redundant parent / current topic hierarchy */}
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-1.5 text-[11px] text-muted min-w-0">
             <span className={`h-2 w-2 rounded-full shrink-0 ${
-              isPaused ? 'bg-warning' : isExpired ? 'bg-danger' : is5MinWarning ? 'bg-warning' : 'bg-accent'
+              isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
             }`} />
-            <span className="font-medium text-foreground truncate">{activeBlock?.title || 'Sesión en vivo'}</span>
-            <span className="text-muted/50">·</span>
-            <span className="shrink-0">{details.blockProgressLabel}</span>
+            <span className="font-medium text-foreground/80">{details.blockProgressLabel}</span>
+            {activePoint && activePoint.title && activePoint.title !== activeBlock?.title && (
+              <>
+                <span className="text-muted/40">·</span>
+                <span className="text-muted truncate">{activeBlock?.title}</span>
+              </>
+            )}
+            {details.pointProgressLabel && (
+              <>
+                <span className="text-muted/40">·</span>
+                <span className="text-muted shrink-0">{details.pointProgressLabel}</span>
+              </>
+            )}
           </div>
 
-          <div className="pl-4 min-w-0">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
-                {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
-              </h2>
-              {details.pointProgressLabel && (
-                <span className="text-xs text-muted shrink-0">{details.pointProgressLabel}</span>
-              )}
-            </div>
+          <div className="pl-3.5 min-w-0">
+            <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
+              {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
+            </h2>
             {activeDescription && (
               <p className="text-xs text-muted leading-relaxed mt-0.5 line-clamp-2">
                 {activeDescription}
@@ -125,7 +131,8 @@ export function SessionDock({
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5 pl-4">
+        {/* 2. Temporal Metrics & Segmented Timeline Progress */}
+        <div className="flex flex-col gap-1.5 pl-3.5">
           <div className="flex items-center justify-between gap-x-3 gap-y-1 text-xs flex-wrap">
             <div className="flex items-center gap-1.5 text-muted">
               {isPaused ? (
@@ -133,11 +140,11 @@ export function SessionDock({
               ) : isExpired ? (
                 <span className="text-danger font-medium">Tiempo cumplido · +{formatMsToClock(details.overtimeMs)}</span>
               ) : isUnlimited ? (
-                <span className="text-accent font-medium">Sin límite · {formatMsToClock(details.elapsedBlockMs)} transcurridos</span>
+                <span className="text-accent font-medium">Sin límite · +{formatMsToClock(details.elapsedBlockMs)}</span>
               ) : (
                 <span className={is5MinWarning ? 'text-warning font-medium' : 'text-foreground'}>
-                  {formatMsToClock(details.remainingBlockMs)} restantes del bloque
-                  {isExtended ? ` · +${details.extensionMinutes} min` : ''}
+                  {formatMsToClock(details.remainingBlockMs)} restantes
+                  {isExtended ? ` (+${details.extensionMinutes}m)` : ''}
                 </span>
               )}
               {details.totalPoints > 0 && (
