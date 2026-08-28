@@ -18,6 +18,7 @@ import {
   ChevronUp,
   ChevronDown,
   ArrowRight,
+  Pencil,
 } from '@gravity-ui/icons';
 import {clockToMinutes, minutesToClock} from './time-engine.js';
 import {
@@ -72,6 +73,158 @@ export function PlannerAgendaView({
     }, 500);
     return () => clearInterval(interval);
   }, [sessionState?.liveActiveBlockId, sessionState?.status, sessionState?.activeBlockStartedAt]);
+
+  const renderBlockLeader = (block) => {
+    const leaderStr = block.leader || 'Todo el equipo';
+    const leaderNames = leaderStr.split(/(?:,|\s+y\s+|\s+and\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean);
+
+    return (
+      <Dropdown>
+        <Dropdown.Trigger>
+          <button
+            type="button"
+            className="group inline-flex items-center gap-1.5 px-2 py-0.5 -my-0.5 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+          >
+            <div className="flex items-center -space-x-1.5">
+              {leaderNames.slice(0, 2).map((lName, idx) => {
+                const matched = DEFAULT_DISCORD_MEMBERS.find(
+                  (m) =>
+                    m.globalName.toLowerCase().includes(lName.toLowerCase()) ||
+                    m.tag.toLowerCase().includes(lName.toLowerCase()) ||
+                    lName.toLowerCase().includes(m.globalName.toLowerCase())
+                );
+                const color = matched?.avatarColor || DISCORD_PALETTES[idx % DISCORD_PALETTES.length];
+                return (
+                  <Avatar
+                    key={idx}
+                    name={matched?.globalName || lName}
+                    size="sm"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0 border border-background shadow-2xs"
+                    style={{backgroundColor: `${color}30`, color}}
+                  />
+                );
+              })}
+            </div>
+            <span className="font-medium text-foreground">{leaderStr}</span>
+            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
+          <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})}>
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce el bloque</Header>
+              <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo">
+                <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
+                <Label>Todo el equipo</Label>
+              </Dropdown.Item>
+              {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                  <Avatar
+                    name={member.globalName}
+                    size="xs"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0"
+                    style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                  />
+                  <div className="flex flex-col">
+                    <Label>{member.globalName}</Label>
+                    <Description>{member.tag}</Description>
+                  </div>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+    );
+  };
+
+  const renderBlockParticipants = (block) => {
+    const rawParticipants = block.participants || '';
+    const parsed = rawParticipants
+      ? rawParticipants.split(/(?:,|\s+y\s+|\s+and\s+|\s*\+\s*|\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean)
+      : [];
+
+    const participantsList = parsed.length > 0 ? parsed : ['Diseño & SD', 'Carol', 'Karola', 'Nico'];
+
+    const selectedNames = new Set(
+      participantsList.map((tag) => {
+        const found = DEFAULT_DISCORD_MEMBERS.find(
+          (m) =>
+            m.tag.toLowerCase().includes(tag.toLowerCase()) ||
+            m.globalName.toLowerCase().includes(tag.toLowerCase()) ||
+            tag.toLowerCase().includes(m.globalName.toLowerCase())
+        );
+        return found ? found.globalName : tag;
+      })
+    );
+
+    return (
+      <Dropdown>
+        <Dropdown.Trigger>
+          <button
+            type="button"
+            className="group inline-flex items-center gap-1.5 px-2 py-0.5 -my-0.5 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            aria-label="Editar participantes del bloque"
+          >
+            <div className="flex items-center -space-x-2">
+              {participantsList.slice(0, 4).map((tag, i) => {
+                const matched = DEFAULT_DISCORD_MEMBERS.find(
+                  (m) =>
+                    m.tag.toLowerCase().includes(tag.toLowerCase()) ||
+                    m.globalName.toLowerCase().includes(tag.toLowerCase()) ||
+                    tag.toLowerCase().includes(m.globalName.toLowerCase())
+                );
+                const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                return (
+                  <Avatar
+                    key={i}
+                    name={matched?.globalName || tag}
+                    size="sm"
+                    className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
+                    style={{backgroundColor: `${color}35`, color}}
+                  />
+                );
+              })}
+            </div>
+            {participantsList.length > 4 && (
+              <span className="text-xs font-semibold text-muted">
+                +{participantsList.length - 4}
+              </span>
+            )}
+            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+          </button>
+        </Dropdown.Trigger>
+        <Dropdown.Popover placement="bottom end" className="min-w-[260px]">
+          <Dropdown.Menu
+            selectionMode="multiple"
+            selectedKeys={selectedNames}
+            onSelectionChange={(keys) => {
+              const arr = Array.from(keys);
+              onUpdateBlock?.(block.id, {participants: arr.join(', ')});
+            }}
+          >
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-muted px-2 py-1">Participantes del bloque</Header>
+              {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName}>
+                  <Avatar
+                    name={member.globalName}
+                    size="xs"
+                    className="w-5 h-5 text-[9px] font-bold shrink-0"
+                    style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                  />
+                  <div className="flex flex-col">
+                    <Label>{member.globalName}</Label>
+                    <Description>{member.tag}</Description>
+                  </div>
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+    );
+  };
 
   return (
     <div className="planner-agenda-container w-full max-w-4xl mx-auto pb-24 pt-2 flex flex-col gap-3">
@@ -322,61 +475,10 @@ export function PlannerAgendaView({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-xs text-muted flex-wrap">
-                        <span>Conduce:</span>
-                        {isEditing ? (
-                          <Dropdown>
-                            <Dropdown.Trigger>
-                              <button
-                                type="button"
-                                className="font-semibold text-foreground hover:text-accent transition-colors cursor-pointer underline decoration-dotted underline-offset-2"
-                              >
-                                {block.leader || 'Todo el equipo'}
-                              </button>
-                            </Dropdown.Trigger>
-                            <Dropdown.Popover placement="bottom start" className="min-w-[220px]">
-                              <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})}>
-                                <Dropdown.Section>
-                                  <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce el bloque</Header>
-                                  <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo">
-                                    <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
-                                    <Label>Todo el equipo</Label>
-                                  </Dropdown.Item>
-                                  {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                    <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                                      <Avatar
-                                        name={member.globalName}
-                                        size="xs"
-                                        className="w-5 h-5 text-[9px] font-bold shrink-0"
-                                        style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
-                                      />
-                                      <div className="flex flex-col">
-                                        <Label>{member.globalName}</Label>
-                                        <Description>{member.tag}</Description>
-                                      </div>
-                                    </Dropdown.Item>
-                                  ))}
-                                </Dropdown.Section>
-                              </Dropdown.Menu>
-                            </Dropdown.Popover>
-                          </Dropdown>
-                        ) : (
-                          <strong className="font-semibold text-foreground">{block.leader || 'Todo el equipo'}</strong>
-                        )}
-
+                      <div className="flex items-center gap-2 text-xs text-muted flex-wrap">
+                        {renderBlockLeader(block)}
                         <span className="text-muted/40">·</span>
-                        <span>Participantes:</span>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={block.participants || ''}
-                            onChange={(e) => onUpdateBlock?.(block.id, {participants: e.target.value})}
-                            placeholder="Diseño & SD + Carol, Karola y Nico"
-                            className="text-xs text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0"
-                          />
-                        ) : (
-                          <span>{block.participants || 'Todos los convocados'}</span>
-                        )}
+                        {renderBlockParticipants(block)}
                       </div>
                     </div>
 
