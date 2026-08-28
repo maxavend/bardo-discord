@@ -74,7 +74,7 @@ export function SessionDock({
       size={size}
       onPress={onAdvance}
       isDisabled={isBusy}
-      className={`font-medium text-xs ${size === 'sm' ? 'h-8 px-3' : 'h-7 px-2.5'}`}
+      className={`font-medium text-xs rounded-full ${size === 'sm' ? 'h-8 px-3.5' : 'h-7 px-3'}`}
     >
       <span>{isBusy ? 'Guardando…' : advanceLabel}</span>
       {!isBusy && details.nextAction.target !== 'session' && <ArrowRight width={12} height={12} />}
@@ -92,11 +92,11 @@ export function SessionDock({
         zIndex: 45,
       }}
     >
-      {/* ── Modo Sticky Compacto (Al hacer scroll) ────────────────────────── */}
+      {/* ── Modo Sticky Compacto (Al hacer scroll: border-radius 9999px) ──── */}
       {isScrolled ? (
-        <div className="w-full session-dock-glass rounded-xl px-3.5 py-1.5 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
+        <div className="w-full session-dock-glass rounded-full px-4 py-1.5 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
           {/* Resumen operacional: Tema · #/# · Tiempo · Progreso */}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1 pl-1">
             <span className={`h-2 w-2 rounded-full shrink-0 ${
               isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
             }`} />
@@ -135,13 +135,13 @@ export function SessionDock({
           </div>
 
           {/* Microacciones rápidas + Siguiente */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 pr-0.5">
             {/* 1. Grabar / Estado de Grabación (Primero) */}
             {isRecording ? (
               <button
                 type="button"
                 onClick={onPauseRecording}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-danger text-white text-[11px] font-medium cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-danger text-white text-[11px] font-medium cursor-pointer shadow-xs"
                 title="Pausar grabación"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
@@ -151,7 +151,7 @@ export function SessionDock({
               <button
                 type="button"
                 onClick={onResumeRecording}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-warning text-white text-[11px] font-medium cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-warning text-white text-[11px] font-medium cursor-pointer shadow-xs"
                 title="Reanudar grabación"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-white" />
@@ -165,7 +165,7 @@ export function SessionDock({
                 onPress={onStartRecording}
                 isDisabled={isBusy}
                 aria-label="Grabar"
-                className="h-7 w-7 bg-danger text-white hover:bg-danger/90 shadow-xs"
+                className="h-7 w-7 rounded-full bg-danger text-white hover:bg-danger/90 shadow-xs"
               >
                 <Microphone width={13} height={13} className="text-white" />
               </Button>
@@ -179,7 +179,7 @@ export function SessionDock({
               onPress={isPaused ? onResumeSession : onPauseSession}
               isDisabled={isBusy}
               aria-label={isPaused ? 'Reanudar' : 'Pausar'}
-              className="h-7 w-7 text-muted hover:text-foreground"
+              className="h-7 w-7 rounded-full text-muted hover:text-foreground"
             >
               {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
             </Button>
