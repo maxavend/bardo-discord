@@ -180,7 +180,7 @@ export function PlannerSessionHeader({
                     <EllipsisVertical width={14} height={14} />
                   </Button>
                 </Dropdown.Trigger>
-                <Dropdown.Popover>
+                <Dropdown.Popover placement="bottom end">
                   <Dropdown.Menu
                     onAction={(key) => {
                       if (key === 'view-minutes') onTabChange('minutes');
@@ -306,7 +306,7 @@ export function PlannerSessionHeader({
 
             {participantsList.length > 0 && (
               <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                <Popover>
+                <Popover placement="bottom end">
                   <Popover.Trigger>
                     <button
                       type="button"
@@ -333,7 +333,7 @@ export function PlannerSessionHeader({
                       {participantsList.length > 4 && <span className="text-[11px] font-medium text-muted">+{participantsList.length - 4}</span>}
                     </button>
                   </Popover.Trigger>
-                  <Popover.Content className="w-64 p-3 rounded-xl bg-surface border border-border shadow-xl">
+                  <Popover.Content placement="bottom end" className="w-64 p-3 rounded-xl bg-surface border border-border shadow-xl">
                     <Popover.Dialog>
                       <Popover.Heading className="text-xs font-semibold text-foreground mb-2 pb-1.5 border-b border-border/40">
                         Convocados a la sesión ({participantsList.length})
