@@ -131,38 +131,24 @@ export function PlannerSessionHeader({
   return (
     <header className="w-full max-w-4xl mx-auto pt-2 pb-3 animate-in fade-in duration-150">
       <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
-        <div className="hidden sm:flex items-center justify-end pr-2 pt-1 select-none">
-          <button
-            type="button"
-            onClick={() => {
-              if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') onTabChange('agenda');
-              else window.location.hash = '';
-            }}
-            aria-label="Volver"
-            className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary/60 transition-colors cursor-pointer"
-          >
-            <ChevronLeft width={16} height={16} />
-          </button>
-        </div>
+        <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
 
         <div className="flex flex-col gap-3 min-w-0 w-full">
-          <div className="flex sm:hidden items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') onTabChange('agenda');
-                else window.location.hash = '';
-              }}
-              className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground font-medium transition-colors cursor-pointer"
-            >
-              <ChevronLeft width={14} height={14} />
-              <span>Volver</span>
-            </button>
-          </div>
-
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border/40 pb-3">
             <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeTab === 'editor' || activeTab === 'minutes' || activeTab === 'recap') onTabChange('agenda');
+                    else window.location.hash = '';
+                  }}
+                  aria-label="Volver"
+                  className="inline-flex items-center justify-center h-8 w-8 -ml-1 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary/70 transition-colors cursor-pointer shrink-0"
+                >
+                  <ChevronLeft width={18} height={18} />
+                </button>
+
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">{title}</h1>
 
                 {isRunning && (
