@@ -23,7 +23,10 @@ import {
   SESSION_STATUS,
   recalculateEstimatedEndTime,
 } from './session-runner.js';
-import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
+import {
+  DEFAULT_DISCORD_MEMBERS,
+  getAllDiscordEntities,
+} from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 const COMMON_START_TIMES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '17:45', '18:00', '19:00', '20:00'];
@@ -269,15 +272,17 @@ export function PlannerSessionHeader({
   };
 
   const renderParticipantsPicker = () => {
-    const selectedNames = new Set(
+    const {members, roles} = getAllDiscordEntities();
+
+    const selectedKeys = new Set(
       participantsList.map((tag) => {
-        const found = DEFAULT_DISCORD_MEMBERS.find(
+        const found = [...members, ...roles].find(
           (m) =>
             m.tag.toLowerCase() === tag.toLowerCase() ||
-            `@${m.globalName.toLowerCase()}` === tag.toLowerCase() ||
-            m.globalName.toLowerCase() === tag.toLowerCase()
+            `@${(m.globalName || m.name || '').toLowerCase()}` === tag.toLowerCase() ||
+            (m.globalName || m.name || '').toLowerCase() === tag.toLowerCase()
         );
-        return found ? found.globalName : tag.replace(/^@/, '');
+        return found ? found.tag : tag;
       })
     );
 
@@ -286,16 +291,34 @@ export function PlannerSessionHeader({
         <div className="flex items-center gap-1.5">
           <div className="flex items-center -space-x-2">
             {participantsList.slice(0, 4).map((tag, i) => {
-              const matched = DEFAULT_DISCORD_MEMBERS.find(
+              const matchedMember = members.find(
                 (m) =>
                   m.tag.toLowerCase() === tag.toLowerCase() ||
                   `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
               );
-              const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+              const matchedRole = roles.find(
+                (r) =>
+                  r.tag.toLowerCase() === tag.toLowerCase() ||
+                  `@${r.name.toLowerCase()}` === tag.toLowerCase()
+              );
+              const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+
+              if (matchedRole) {
+                return (
+                  <span
+                    key={i}
+                    className="w-5 h-5 rounded-md border-2 border-background text-[9px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+                    style={{backgroundColor: color}}
+                  >
+                    #
+                  </span>
+                );
+              }
+
               return (
                 <Avatar
                   key={i}
-                  name={matched?.globalName || tag}
+                  name={matchedMember?.globalName || tag}
                   size="sm"
                   className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
                   style={{backgroundColor: `${color}35`, color}}
@@ -322,16 +345,34 @@ export function PlannerSessionHeader({
           >
             <div className="flex items-center -space-x-2">
               {participantsList.slice(0, 4).map((tag, i) => {
-                const matched = DEFAULT_DISCORD_MEMBERS.find(
+                const matchedMember = members.find(
                   (m) =>
                     m.tag.toLowerCase() === tag.toLowerCase() ||
                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                 );
-                const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                const matchedRole = roles.find(
+                  (r) =>
+                    r.tag.toLowerCase() === tag.toLowerCase() ||
+                    `@${r.name.toLowerCase()}` === tag.toLowerCase()
+                );
+                const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+
+                if (matchedRole) {
+                  return (
+                    <span
+                      key={i}
+                      className="w-5 h-5 rounded-md border-2 border-background text-[9px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+                      style={{backgroundColor: color}}
+                    >
+                      #
+                    </span>
+                  );
+                }
+
                 return (
                   <Avatar
                     key={i}
-                    name={matched?.globalName || tag}
+                    name={matchedMember?.globalName || tag}
                     size="sm"
                     className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
                     style={{backgroundColor: `${color}35`, color}}
@@ -347,22 +388,43 @@ export function PlannerSessionHeader({
             <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom end" className="min-w-[270px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+        <Dropdown.Popover placement="bottom end" className="min-w-[280px] max-h-80 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu
             selectionMode="multiple"
-            selectedKeys={selectedNames}
+            selectedKeys={selectedKeys}
             onSelectionChange={(keys) => {
               const arr = Array.from(keys);
-              onUpdateHeaderField?.('mentions', arr.map((k) => `@${k}`).join(' '));
+              onUpdateHeaderField?.('mentions', arr.join(' '));
             }}
             className="p-0"
           >
             <Dropdown.Section>
               <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 mb-1">
-                Convocados a la sesión
+                Roles del servidor
               </Header>
-              {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName} className="px-3 py-2 rounded-xl">
+              {roles.map((role) => (
+                <Dropdown.Item key={role.tag} id={role.tag} textValue={role.name} className="px-3 py-2 rounded-xl">
+                  <span
+                    className="w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                    style={{backgroundColor: role.color}}
+                  >
+                    #
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <Label className="text-xs font-semibold text-foreground leading-none">{role.name}</Label>
+                    <Description className="text-[11px] text-muted leading-tight">{role.tag}</Description>
+                  </div>
+                  <Dropdown.ItemIndicator />
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Section>
+
+            <Dropdown.Section>
+              <Header className="text-xs font-semibold text-foreground px-3 pt-2 pb-2 border-b border-border/40 my-1">
+                Miembros del servidor y canal
+              </Header>
+              {members.map((member) => (
+                <Dropdown.Item key={member.tag} id={member.tag} textValue={member.globalName} className="px-3 py-2 rounded-xl">
                   <Avatar
                     name={member.globalName}
                     size="xs"
