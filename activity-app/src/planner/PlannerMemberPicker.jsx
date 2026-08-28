@@ -1,6 +1,6 @@
 import {useState, useRef, useEffect} from 'react';
 import {Avatar} from '@heroui/react';
-import {Xmark, Plus, Check} from '@gravity-ui/icons';
+import {Xmark, Plus, Check, Magnifier} from '@gravity-ui/icons';
 
 export const DEFAULT_DISCORD_MEMBERS = [
   {id: 'u-1', type: 'user', username: 'nico.g', globalName: 'Nico G', tag: '@Nico G', avatarColor: '#5865F2'},
@@ -294,6 +294,194 @@ export function PlannerMemberPicker({value = '', onChange}) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+export function SearchableParticipantMenu({
+  selectedKeys = new Set(),
+  onSelectionChange,
+  onAddCustomParticipant,
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const {members, roles} = getAllDiscordEntities();
+
+  const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
+  const filteredRoles = roles.filter(
+    (r) => !q || r.name.toLowerCase().includes(q) || r.tag.toLowerCase().includes(q)
+  );
+  const filteredMembers = members.filter(
+    (m) => !q || m.globalName.toLowerCase().includes(q) || m.tag.toLowerCase().includes(q)
+  );
+
+  const hasExactMatch = [...roles, ...members].some(
+    (e) =>
+      e.tag.toLowerCase() === `@${q}`.toLowerCase() ||
+      e.tag.toLowerCase() === searchQuery.toLowerCase() ||
+      (e.globalName || e.name || '').toLowerCase() === q
+  );
+
+  const handleToggle = (tag) => {
+    let cleanTag = tag.trim();
+    if (!cleanTag.startsWith('@')) cleanTag = `@${cleanTag}`;
+
+    const nextKeys = new Set(selectedKeys);
+    if (nextKeys.has(cleanTag)) {
+      nextKeys.delete(cleanTag);
+    } else {
+      nextKeys.add(cleanTag);
+    }
+    onSelectionChange(Array.from(nextKeys));
+  };
+
+  const handleAddGuest = (name) => {
+    const rawName = name.trim().replace(/^@/, '');
+    if (!rawName) return;
+    const cleanTag = `@${rawName}`;
+
+    saveCustomParticipant({
+      id: `custom-${Date.now().toString(36)}`,
+      type: 'user',
+      globalName: rawName,
+      username: rawName.toLowerCase().replace(/\s+/g, '.'),
+      tag: cleanTag,
+      avatarColor: DISCORD_PALETTES[Math.abs(rawName.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % DISCORD_PALETTES.length],
+    });
+
+    const nextKeys = new Set(selectedKeys);
+    nextKeys.add(cleanTag);
+    onSelectionChange(Array.from(nextKeys));
+    onAddCustomParticipant?.(cleanTag);
+    setSearchQuery('');
+  };
+
+  return (
+    <div className="flex flex-col min-w-[280px] max-w-xs text-xs">
+      {/* Search Header */}
+      <div className="p-2 border-b border-border/40">
+        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-surface-secondary/70 border border-border/50 focus-within:border-accent/80 transition-colors">
+          <Magnifier width={13} height={13} className="text-muted shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                e.preventDefault();
+                handleAddGuest(searchQuery);
+              }
+            }}
+            placeholder="Buscar miembro o rol..."
+            className="text-xs bg-transparent border-0 outline-none p-0 w-full text-foreground placeholder:text-muted focus:ring-0"
+            autoFocus
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-muted hover:text-foreground cursor-pointer"
+            >
+              <Xmark width={12} height={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="max-h-72 overflow-y-auto p-1">
+        {/* Opción para agregar invitado cuando escribe un nombre */}
+        {searchQuery.trim() && !hasExactMatch && (
+          <div className="mb-1 pb-1 border-b border-border/40">
+            <button
+              type="button"
+              onClick={() => handleAddGuest(searchQuery)}
+              className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-accent hover:bg-accent/10 flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Plus width={13} height={13} className="shrink-0" />
+              <span className="truncate">
+                Agregar invitado "<strong>{searchQuery.trim()}</strong>"
+              </span>
+            </button>
+          </div>
+        )}
+
+        {/* Roles del servidor */}
+        {filteredRoles.length > 0 && (
+          <div className="mb-1.5">
+            <div className="text-[10px] font-bold text-muted/70 px-3 py-1 uppercase tracking-wider">
+              Roles del servidor
+            </div>
+            {filteredRoles.map((role) => {
+              const isSelected = selectedKeys.has(role.tag);
+              return (
+                <button
+                  key={role.tag}
+                  type="button"
+                  onClick={() => handleToggle(role.tag)}
+                  className={`w-full text-left px-3 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                    isSelected ? 'bg-accent/10 text-foreground font-semibold' : 'hover:bg-surface-secondary/70 text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span
+                      className="w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                      style={{backgroundColor: role.color}}
+                    >
+                      #
+                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium text-foreground leading-tight truncate">{role.name}</span>
+                      <span className="text-[10.5px] text-muted leading-tight truncate">{role.tag}</span>
+                    </div>
+                  </div>
+                  {isSelected && <Check width={13} height={13} className="text-accent shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Miembros del servidor y canal */}
+        {filteredMembers.length > 0 && (
+          <div>
+            <div className="text-[10px] font-bold text-muted/70 px-3 py-1 uppercase tracking-wider">
+              Miembros del servidor y canal
+            </div>
+            {filteredMembers.map((member) => {
+              const isSelected = selectedKeys.has(member.tag);
+              return (
+                <button
+                  key={member.tag}
+                  type="button"
+                  onClick={() => handleToggle(member.tag)}
+                  className={`w-full text-left px-3 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                    isSelected ? 'bg-accent/10 text-foreground font-semibold' : 'hover:bg-surface-secondary/70 text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar
+                      name={member.globalName}
+                      size="xs"
+                      className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium text-foreground leading-tight truncate">{member.globalName}</span>
+                      <span className="text-[10.5px] text-muted leading-tight truncate">{member.tag}</span>
+                    </div>
+                  </div>
+                  {isSelected && <Check width={13} height={13} className="text-accent shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
+          <div className="px-3 py-4 text-center text-xs text-muted">
+            No se encontraron miembros ni roles.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
