@@ -45,6 +45,7 @@ export function PlannerAgendaView({
   isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
+  onAddBreak,
   onDeleteBlock,
   onMoveBlock,
   onAddSubpoint,
@@ -829,14 +830,25 @@ export function PlannerAgendaView({
           {isEditing && (
             <div className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch mt-3">
               <div className="w-[52px] sm:w-16 shrink-0" />
-              <button
-                type="button"
-                onClick={() => onAddBlock?.()}
-                className="w-full py-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-accent/60 bg-surface-secondary/20 hover:bg-surface-secondary/40 text-xs font-semibold text-muted hover:text-foreground transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
-              >
-                <Plus width={15} height={15} className="text-accent" />
-                <span>Añadir bloque a la agenda</span>
-              </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={() => onAddBlock?.()}
+                  className="flex-1 py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-accent/60 bg-surface-secondary/20 hover:bg-surface-secondary/40 text-xs font-semibold text-muted hover:text-foreground transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
+                >
+                  <Plus width={14} height={14} className="text-accent" />
+                  <span>Añadir bloque a la agenda</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => (onAddBreak ? onAddBreak() : onAddBlock?.({title: 'Break', type: 'break', durationMinutes: 10, isBreak: true, subpoints: []}))}
+                  className="py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-accent/60 bg-surface-secondary/20 hover:bg-surface-secondary/40 text-xs font-semibold text-muted hover:text-foreground transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none sm:w-auto"
+                >
+                  <Cup width={13} height={13} className="text-muted/70" />
+                  <span>Añadir break</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

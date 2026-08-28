@@ -599,6 +599,34 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
     toast('Bloque añadido a la agenda');
   }, []);
 
+  const handleAddBreak = useCallback((atIndex = null) => {
+    const newId = `b-${Date.now()}`;
+    const breakBlock = {
+      id: newId,
+      title: 'Break',
+      type: 'break',
+      durationMinutes: 10,
+      isBreak: true,
+      leader: '',
+      participants: '',
+      subpoints: [],
+      decisions: [],
+    };
+    setPlannerState((previous) => {
+      const blocks = [...previous.blocks];
+      if (typeof atIndex === 'number' && atIndex >= 0) {
+        blocks.splice(atIndex, 0, breakBlock);
+      } else {
+        blocks.push(breakBlock);
+      }
+      const next = computePlannerTimes({...previous, blocks});
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+    toast('Break añadido a la agenda');
+  }, []);
+
   const handleDeleteBlock = useCallback((blockId) => {
     setPlannerState((previous) => {
       const blocks = previous.blocks.filter((block) => block.id !== blockId);
@@ -746,6 +774,7 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLi
           isTransitioning={isTransitioning}
           onUpdateBlock={handleUpdateBlock}
           onAddBlock={handleAddBlock}
+          onAddBreak={handleAddBreak}
           onDeleteBlock={handleDeleteBlock}
           onMoveBlock={handleMoveBlock}
           onAddSubpoint={handleAddSubpoint}
