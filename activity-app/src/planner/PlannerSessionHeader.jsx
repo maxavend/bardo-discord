@@ -1,4 +1,3 @@
-import {useState, useEffect} from 'react';
 import {
   Avatar,
   Button,
@@ -6,6 +5,7 @@ import {
   Popover,
   Label,
   Description,
+  Header,
 } from '@heroui/react';
 import {
   ChevronLeft,
@@ -25,9 +25,10 @@ import {
   SESSION_STATUS,
   recalculateEstimatedEndTime,
 } from './session-runner.js';
-import {PlannerMemberPicker, DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
+import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
+const COMMON_START_TIMES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '17:45', '18:00', '19:00', '20:00'];
 
 function parseMentions(mentionsStr = '') {
   if (!mentionsStr) return [];
@@ -36,30 +37,6 @@ function parseMentions(mentionsStr = '') {
     return matches.map((m) => m.trim()).filter(Boolean);
   }
   return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
-}
-
-function formatSessionDate(dateStr) {
-  if (!dateStr) return '';
-  try {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d) return dateStr;
-    const date = new Date(y, m - 1, d);
-    const dayName = date.toLocaleDateString('es-ES', {weekday: 'short'});
-    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1).replace('.', '');
-    const monthName = date.toLocaleDateString('es-ES', {month: 'short'}).replace('.', '');
-    return `${capitalizedDay} ${d} ${monthName}`;
-  } catch {
-    return dateStr;
-  }
-}
-
-function formatHeaderDuration(minutes = 0) {
-  if (!minutes) return '0 min';
-  const hours = Math.floor(minutes / 60);
-  const rem = minutes % 60;
-  if (hours > 0 && rem === 0) return `${hours} h`;
-  if (hours > 0) return `${hours} h ${rem} min`;
-  return `${minutes} min`;
 }
 
 export function PlannerSessionHeader({
@@ -77,33 +54,364 @@ export function PlannerSessionHeader({
   onResumeSession,
   onInterruptSession,
 }) {
-  const [isSticky, setIsSticky] = useState(false);
-
   const {
     title = 'Sesión sin título',
     description = '',
     date = '',
-    startTime = '10:00',
+    startTime = '17:45',
+    blocks = [],
     totalCalculatedDuration = 0,
     host = '',
     mentions = '',
-  } = state;
+  } = state || {};
+
+  const totalPlannedMinutes = (blocks || []).reduce(
+    (accumulator, b) => accumulator + (b.durationMinutes || 0),
+    0
+  ) || totalCalculatedDuration || 0;
+  const estimatedEndTime = recalculateEstimatedEndTime(
+    startTime,
+    totalPlannedMinutes
+  );
 
   const isRunning = sessionState?.status === SESSION_STATUS.RUNNING;
   const isPaused = sessionState?.status === SESSION_STATUS.PAUSED;
   const isCompleted = sessionState?.status === SESSION_STATUS.COMPLETED;
   const isInterrupted = sessionState?.status === SESSION_STATUS.INTERRUPTED;
 
-  const formattedDate = formatSessionDate(date);
-  const estimatedEndTime = recalculateEstimatedEndTime(state, sessionState);
-  const formattedDuration = formatHeaderDuration(totalCalculatedDuration);
+  let formattedDate = date;
+  try {
+    const [year, month, day] = (date || '').split('-').map(Number);
+    if (year && month && day) {
+      const d = new Date(year, month - 1, day);
+      const weekday = new Intl.DateTimeFormat('es-ES', {weekday: 'short'}).format(d);
+      const monthName = new Intl.DateTimeFormat('es-ES', {month: 'short'}).format(d);
+      formattedDate = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${monthName}`;
+    }
+  } catch {
+    formattedDate = date;
+  }
+
+  const hours = Math.floor(totalPlannedMinutes / 60);
+  const mins = totalPlannedMinutes % 60;
+  const formattedDuration =
+    hours > 0 ? (mins > 0 ? `${hours} h ${mins} min` : `${hours} h`) : `${mins} min`;
+
   const participantsList = parseMentions(mentions);
 
-  useEffect(() => {
-    const handleScroll = () => setIsSticky(window.scrollY > 140);
-    window.addEventListener('scroll', handleScroll, {passive: true});
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const renderDateSelector = () => {
+    if (isEditing) {
+      return (
+        <Dropdown>
+          <Dropdown.Trigger>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground transition-colors cursor-pointer"
+            >
+              <Calendar width={13} height={13} className="text-accent shrink-0" />
+              <span className="font-medium underline decoration-dotted underline-offset-2">{formattedDate || 'Seleccionar fecha'}</span>
+            </button>
+          </Dropdown.Trigger>
+          <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
+            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))}>
+              <Dropdown.Section>
+                <Header className="text-xs font-semibold text-muted px-2 py-1">Fecha de la sesión</Header>
+                <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)">
+                  <Calendar className="size-4 shrink-0 text-muted" />
+                  <div className="flex flex-col">
+                    <Label>Hoy</Label>
+                    <Description>Mié 19 ago 2026</Description>
+                  </div>
+                </Dropdown.Item>
+                <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)">
+                  <Calendar className="size-4 shrink-0 text-muted" />
+                  <div className="flex flex-col">
+                    <Label>Mañana</Label>
+                    <Description>Jue 20 ago 2026</Description>
+                  </div>
+                </Dropdown.Item>
+                <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes">
+                  <Calendar className="size-4 shrink-0 text-muted" />
+                  <div className="flex flex-col">
+                    <Label>Próximo Lunes</Label>
+                    <Description>Lun 24 ago 2026</Description>
+                  </div>
+                </Dropdown.Item>
+                <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles">
+                  <Calendar className="size-4 shrink-0 text-muted" />
+                  <div className="flex flex-col">
+                    <Label>Próximo Miércoles</Label>
+                    <Description>Mié 26 ago 2026</Description>
+                  </div>
+                </Dropdown.Item>
+              </Dropdown.Section>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
+        <span>{formattedDate || 'Seleccionar fecha'}</span>
+      </span>
+    );
+  };
+
+  const renderTimeSelector = () => {
+    if (isEditing) {
+      return (
+        <Dropdown>
+          <Dropdown.Trigger>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground transition-colors cursor-pointer"
+            >
+              <Clock width={13} height={13} className="text-accent shrink-0" />
+              <span className="font-medium underline decoration-dotted underline-offset-2">{startTime}–{estimatedEndTime}</span>
+            </button>
+          </Dropdown.Trigger>
+          <Dropdown.Popover placement="bottom start" className="min-w-[180px] max-h-64 overflow-y-auto">
+            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))}>
+              <Dropdown.Section>
+                <Header className="text-xs font-semibold text-muted px-2 py-1">Hora de inicio</Header>
+                {COMMON_START_TIMES.map((timeOption) => (
+                  <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption}>
+                    <Clock className="size-4 shrink-0 text-muted" />
+                    <Label>{timeOption}</Label>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Section>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Clock width={13} height={13} className="text-muted/70 shrink-0" />
+        <span>{startTime}–{estimatedEndTime}</span>
+      </span>
+    );
+  };
+
+  const renderHostSelector = () => {
+    const hostMember = DEFAULT_DISCORD_MEMBERS.find(
+      (m) =>
+        m.globalName.toLowerCase() === (host || '').toLowerCase() ||
+        m.tag.toLowerCase() === (host || '').toLowerCase() ||
+        `@${m.globalName.toLowerCase()}` === (host || '').toLowerCase()
+    );
+    const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
+
+    if (isEditing) {
+      return (
+        <Dropdown>
+          <Dropdown.Trigger>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
+            >
+              <Avatar
+                name={hostMember?.globalName || host}
+                size="sm"
+                className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
+                style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+              />
+              <span className="text-foreground font-medium underline decoration-dotted underline-offset-2">{host}</span>
+            </button>
+          </Dropdown.Trigger>
+          <Dropdown.Popover placement="bottom start" className="min-w-[240px]">
+            <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
+              <Dropdown.Section>
+                <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce la sesión</Header>
+                {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                    <Avatar
+                      name={member.globalName}
+                      size="xs"
+                      className="w-5 h-5 text-[9px] font-bold shrink-0"
+                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                    />
+                    <div className="flex flex-col">
+                      <Label>{member.globalName}</Label>
+                      <Description>{member.tag}</Description>
+                    </div>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Section>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1.5">
+        <Avatar
+          name={hostMember?.globalName || host}
+          size="sm"
+          className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
+          style={{backgroundColor: `${hostColor}30`, color: hostColor}}
+        />
+        <span className="text-foreground/90 font-medium">{host}</span>
+      </div>
+    );
+  };
+
+  const renderParticipantsPicker = () => {
+    if (isEditing) {
+      const selectedNames = new Set(
+        participantsList.map((tag) => {
+          const found = DEFAULT_DISCORD_MEMBERS.find(
+            (m) =>
+              m.tag.toLowerCase() === tag.toLowerCase() ||
+              `@${m.globalName.toLowerCase()}` === tag.toLowerCase() ||
+              m.globalName.toLowerCase() === tag.toLowerCase()
+          );
+          return found ? found.globalName : tag.replace(/^@/, '');
+        })
+      );
+
+      return (
+        <Dropdown>
+          <Dropdown.Trigger>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer select-none"
+              aria-label={`Editar ${participantsList.length} convocados`}
+            >
+              <div className="flex items-center -space-x-2">
+                {participantsList.slice(0, 4).map((tag, i) => {
+                  const matched = DEFAULT_DISCORD_MEMBERS.find(
+                    (m) =>
+                      m.tag.toLowerCase() === tag.toLowerCase() ||
+                      `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                  );
+                  const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                  return (
+                    <Avatar
+                      key={i}
+                      name={matched?.globalName || tag}
+                      size="sm"
+                      className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
+                      style={{backgroundColor: `${color}35`, color}}
+                    />
+                  );
+                })}
+              </div>
+              {participantsList.length > 4 && (
+                <span className="text-xs font-semibold text-muted ml-0.5">
+                  +{participantsList.length - 4}
+                </span>
+              )}
+            </button>
+          </Dropdown.Trigger>
+          <Dropdown.Popover placement="bottom end" className="min-w-[260px]">
+            <Dropdown.Menu
+              selectionMode="multiple"
+              selectedKeys={selectedNames}
+              onSelectionChange={(keys) => {
+                const arr = Array.from(keys);
+                onUpdateHeaderField?.('mentions', arr.map((k) => `@${k}`).join(' '));
+              }}
+            >
+              <Dropdown.Section>
+                <Header className="text-xs font-semibold text-muted px-2 py-1">Convocados a la sesión</Header>
+                {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                  <Dropdown.Item key={member.globalName} id={member.globalName} textValue={member.globalName}>
+                    <Avatar
+                      name={member.globalName}
+                      size="xs"
+                      className="w-5 h-5 text-[9px] font-bold shrink-0"
+                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                    />
+                    <div className="flex flex-col">
+                      <Label>{member.globalName}</Label>
+                      <Description>{member.tag}</Description>
+                    </div>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Section>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      );
+    }
+
+    return (
+      <Popover placement="bottom end">
+        <Popover.Trigger>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer select-none"
+            aria-label={`Ver ${participantsList.length} participantes convocados`}
+          >
+            <div className="flex items-center -space-x-2">
+              {participantsList.slice(0, 4).map((tag, i) => {
+                const matched = DEFAULT_DISCORD_MEMBERS.find(
+                  (m) =>
+                    m.tag.toLowerCase() === tag.toLowerCase() ||
+                    `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                );
+                const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                return (
+                  <Avatar
+                    key={i}
+                    name={matched?.globalName || tag}
+                    size="sm"
+                    className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
+                    style={{backgroundColor: `${color}35`, color}}
+                  />
+                );
+              })}
+            </div>
+            {participantsList.length > 4 && (
+              <span className="text-xs font-semibold text-muted ml-0.5">
+                +{participantsList.length - 4}
+              </span>
+            )}
+          </button>
+        </Popover.Trigger>
+        <Popover.Content className="w-64 p-3 rounded-xl bg-surface border border-border shadow-xl">
+          <Popover.Dialog>
+            <Popover.Heading className="text-xs font-semibold text-foreground mb-2 pb-1.5 border-b border-border/40">
+              Convocados a la sesión ({participantsList.length})
+            </Popover.Heading>
+            <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+              {participantsList.map((tag, i) => {
+                const matched = DEFAULT_DISCORD_MEMBERS.find(
+                  (m) =>
+                    m.tag.toLowerCase() === tag.toLowerCase() ||
+                    `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                );
+                const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-secondary/70 transition-colors"
+                  >
+                    <Avatar
+                      name={matched?.globalName || tag}
+                      size="xs"
+                      className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
+                      style={{backgroundColor: `${color}35`, color}}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium text-foreground truncate">{matched?.globalName || tag}</span>
+                      {matched?.tag && <span className="text-[10px] text-muted truncate">{matched.tag}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Popover.Dialog>
+        </Popover.Content>
+      </Popover>
+    );
+  };
 
   return (
     <header className="w-full max-w-4xl mx-auto px-4 py-5 sm:px-0 sm:py-3 animate-in fade-in duration-150">
@@ -256,187 +564,17 @@ export function PlannerSessionHeader({
           <div className="flex flex-col gap-3 mt-4 sm:hidden">
             {/* Fila 3 Mobile: Cuándo (Fecha · Hora · Duración) */}
             <div className="flex items-center gap-2 text-xs text-muted font-normal flex-wrap">
-              <Popover placement="bottom start">
-                <Popover.Trigger>
-                  <button
-                    type="button"
-                    disabled={!isEditing}
-                    className={`inline-flex items-center gap-1.5 transition-colors ${
-                      isEditing ? 'cursor-pointer hover:text-foreground' : 'cursor-default'
-                    }`}
-                  >
-                    <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-                    <span>{formattedDate || 'Seleccionar fecha'}</span>
-                  </button>
-                </Popover.Trigger>
-                {isEditing && (
-                  <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-semibold text-foreground">Fecha de la sesión</Label>
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => onUpdateHeaderField?.('date', e.target.value)}
-                        className="px-2.5 py-1.5 rounded-lg bg-field text-xs text-foreground border border-border outline-none focus:border-accent"
-                      />
-                    </div>
-                  </Popover.Content>
-                )}
-              </Popover>
-
+              {renderDateSelector()}
               <span className="text-muted/40">·</span>
-
-              <Popover placement="bottom start">
-                <Popover.Trigger>
-                  <button
-                    type="button"
-                    disabled={!isEditing}
-                    className={`inline-flex items-center gap-1.5 transition-colors ${
-                      isEditing ? 'cursor-pointer hover:text-foreground' : 'cursor-default'
-                    }`}
-                  >
-                    <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-                    <span>{startTime}–{estimatedEndTime}</span>
-                  </button>
-                </Popover.Trigger>
-                {isEditing && (
-                  <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-semibold text-foreground">Hora de inicio</Label>
-                      <input
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
-                        className="px-2.5 py-1.5 rounded-lg bg-field text-xs text-foreground border border-border outline-none focus:border-accent"
-                      />
-                    </div>
-                  </Popover.Content>
-                )}
-              </Popover>
-
+              {renderTimeSelector()}
               <span className="text-muted/40">·</span>
-
               <span>{formattedDuration}</span>
             </div>
 
             {/* Fila 4 Mobile: Quiénes (Host a la izquierda, Participantes a la derecha) */}
             <div className="flex items-center justify-between gap-2 text-xs text-muted font-normal pt-0.5">
-              {host ? (() => {
-                const hostMember = DEFAULT_DISCORD_MEMBERS.find(
-                  (m) =>
-                    m.globalName.toLowerCase() === host.toLowerCase() ||
-                    m.tag.toLowerCase() === host.toLowerCase() ||
-                    `@${m.globalName.toLowerCase()}` === host.toLowerCase()
-                );
-                const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
-
-                if (isEditing) {
-                  return (
-                    <Dropdown>
-                      <Dropdown.Trigger>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <Avatar
-                            name={hostMember?.globalName || host}
-                            size="sm"
-                            className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                            style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                          />
-                          <span className="text-foreground/90 font-medium">{host}</span>
-                        </button>
-                      </Dropdown.Trigger>
-                      <Dropdown.Popover placement="bottom start">
-                        <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
-                          {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                            <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                              <Label>{member.globalName}</Label>
-                              <Description>{member.tag}</Description>
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Menu>
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  );
-                }
-
-                return (
-                  <div className="flex items-center gap-1.5">
-                    <Avatar
-                      name={hostMember?.globalName || host}
-                      size="sm"
-                      className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                      style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                    />
-                    <span className="text-foreground/90 font-medium">{host}</span>
-                  </div>
-                );
-              })() : <div />}
-
-              <Popover placement="bottom end">
-                <Popover.Trigger>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer select-none"
-                    aria-label={`Ver ${participantsList.length} participantes convocados`}
-                  >
-                    <div className="flex items-center -space-x-2">
-                      {participantsList.slice(0, 4).map((tag, i) => {
-                        const matched = DEFAULT_DISCORD_MEMBERS.find(
-                          (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
-                        );
-                        const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                        return (
-                          <Avatar
-                            key={i}
-                            name={matched?.globalName || tag}
-                            size="sm"
-                            className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
-                            style={{backgroundColor: `${color}35`, color}}
-                          />
-                        );
-                      })}
-                    </div>
-                    {participantsList.length > 4 && <span className="text-xs font-semibold text-muted ml-0.5">+{participantsList.length - 4}</span>}
-                  </button>
-                </Popover.Trigger>
-                <Popover.Content placement="bottom end" className="w-80 p-3 rounded-xl bg-surface border border-border shadow-xl">
-                  <Popover.Dialog>
-                    <Popover.Heading className="text-xs font-semibold text-foreground mb-2 pb-1.5 border-b border-border/40">
-                      Convocados a la sesión ({participantsList.length})
-                    </Popover.Heading>
-                    {isEditing ? (
-                      <div className="flex flex-col gap-2">
-                        <PlannerMemberPicker
-                          value={mentions}
-                          onChange={(val) => onUpdateHeaderField?.('mentions', val)}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                        {participantsList.map((tag, i) => {
-                          const matched = DEFAULT_DISCORD_MEMBERS.find(
-                            (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
-                          );
-                          const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                          return (
-                            <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                              <Avatar
-                                name={matched?.globalName || tag}
-                                size="xs"
-                                className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
-                                style={{backgroundColor: `${color}35`, color}}
-                              />
-                              <span className="text-foreground">{matched?.globalName || tag}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </Popover.Dialog>
-                </Popover.Content>
-              </Popover>
+              {renderHostSelector()}
+              {renderParticipantsPicker()}
             </div>
           </div>
 
@@ -444,221 +582,22 @@ export function PlannerSessionHeader({
           <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-4 sm:mt-4 text-xs text-muted font-normal">
             {/* Banda temporal izquierda */}
             <div className="flex items-center gap-2 flex-wrap">
-              <Popover placement="bottom start">
-                <Popover.Trigger>
-                  <button
-                    type="button"
-                    disabled={!isEditing}
-                    className={`inline-flex items-center gap-1.5 transition-colors ${
-                      isEditing ? 'cursor-pointer hover:text-foreground' : 'cursor-default'
-                    }`}
-                  >
-                    <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-                    <span>{formattedDate || 'Seleccionar fecha'}</span>
-                  </button>
-                </Popover.Trigger>
-                {isEditing && (
-                  <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-semibold text-foreground">Fecha de la sesión</Label>
-                      <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => onUpdateHeaderField?.('date', e.target.value)}
-                        className="px-2.5 py-1.5 rounded-lg bg-field text-xs text-foreground border border-border outline-none focus:border-accent"
-                      />
-                    </div>
-                  </Popover.Content>
-                )}
-              </Popover>
-
+              {renderDateSelector()}
               <span className="text-muted/40">·</span>
-
-              <Popover placement="bottom start">
-                <Popover.Trigger>
-                  <button
-                    type="button"
-                    disabled={!isEditing}
-                    className={`inline-flex items-center gap-1.5 transition-colors ${
-                      isEditing ? 'cursor-pointer hover:text-foreground' : 'cursor-default'
-                    }`}
-                  >
-                    <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-                    <span>{startTime}–{estimatedEndTime}</span>
-                  </button>
-                </Popover.Trigger>
-                {isEditing && (
-                  <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-semibold text-foreground">Hora de inicio</Label>
-                      <input
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
-                        className="px-2.5 py-1.5 rounded-lg bg-field text-xs text-foreground border border-border outline-none focus:border-accent"
-                      />
-                    </div>
-                  </Popover.Content>
-                )}
-              </Popover>
-
+              {renderTimeSelector()}
               <span className="text-muted/40">·</span>
-
               <span>{formattedDuration}</span>
             </div>
 
             {/* Banda de personas derecha: Entidad unificada [Paula Molina · ◉◉◉ +3] */}
             <div className="flex items-center gap-2.5 shrink-0">
-              {host && (() => {
-                const hostMember = DEFAULT_DISCORD_MEMBERS.find(
-                  (m) =>
-                    m.globalName.toLowerCase() === host.toLowerCase() ||
-                    m.tag.toLowerCase() === host.toLowerCase() ||
-                    `@${m.globalName.toLowerCase()}` === host.toLowerCase()
-                );
-                const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
-
-                if (isEditing) {
-                  return (
-                    <Dropdown>
-                      <Dropdown.Trigger>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
-                        >
-                          <Avatar
-                            name={hostMember?.globalName || host}
-                            size="sm"
-                            className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                            style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                          />
-                          <span className="text-foreground/90 font-medium">{host}</span>
-                        </button>
-                      </Dropdown.Trigger>
-                      <Dropdown.Popover placement="bottom start">
-                        <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))}>
-                          {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                            <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                              <Label>{member.globalName}</Label>
-                              <Description>{member.tag}</Description>
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Menu>
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  );
-                }
-
-                return (
-                  <div className="flex items-center gap-1.5">
-                    <Avatar
-                      name={hostMember?.globalName || host}
-                      size="sm"
-                      className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                      style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                    />
-                    <span className="text-foreground/90 font-medium">{host}</span>
-                  </div>
-                );
-              })()}
-
-              {host && participantsList.length > 0 && <span className="text-muted/40">·</span>}
-
-              <Popover placement="bottom end">
-                <Popover.Trigger>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer select-none"
-                    aria-label={`Ver ${participantsList.length} participantes convocados`}
-                  >
-                    <div className="flex items-center -space-x-2">
-                      {participantsList.slice(0, 4).map((tag, i) => {
-                        const matched = DEFAULT_DISCORD_MEMBERS.find(
-                          (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
-                        );
-                        const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                        return (
-                          <Avatar
-                            key={i}
-                            name={matched?.globalName || tag}
-                            size="sm"
-                            className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
-                            style={{backgroundColor: `${color}35`, color}}
-                          />
-                        );
-                      })}
-                    </div>
-                    {participantsList.length > 4 && <span className="text-xs font-semibold text-muted ml-0.5">+{participantsList.length - 4}</span>}
-                  </button>
-                </Popover.Trigger>
-                <Popover.Content placement="bottom end" className="w-80 p-3 rounded-xl bg-surface border border-border shadow-xl">
-                  <Popover.Dialog>
-                    <Popover.Heading className="text-xs font-semibold text-foreground mb-2 pb-1.5 border-b border-border/40">
-                      Convocados a la sesión ({participantsList.length})
-                    </Popover.Heading>
-                    {isEditing ? (
-                      <div className="flex flex-col gap-2">
-                        <PlannerMemberPicker
-                          value={mentions}
-                          onChange={(val) => onUpdateHeaderField?.('mentions', val)}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                        {participantsList.map((tag, i) => {
-                          const matched = DEFAULT_DISCORD_MEMBERS.find(
-                            (member) => member.tag.toLowerCase() === tag.toLowerCase() || `@${member.globalName.toLowerCase()}` === tag.toLowerCase()
-                          );
-                          const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                          return (
-                            <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                              <Avatar
-                                name={matched?.globalName || tag}
-                                size="xs"
-                                className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
-                                style={{backgroundColor: `${color}35`, color}}
-                              />
-                              <span className="text-foreground">{matched?.globalName || tag}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </Popover.Dialog>
-                </Popover.Content>
-              </Popover>
+              {renderHostSelector()}
+              {participantsList.length > 0 && <span className="text-muted/40">·</span>}
+              {renderParticipantsPicker()}
             </div>
           </div>
         </div>
       </div>
-
-      {isSticky && (
-        <div className="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border py-2.5 px-4 shadow-sm transition-all animate-in fade-in duration-200">
-          <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-sm font-bold text-foreground truncate">{title}</span>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {!isRunning && !isPaused && !isCompleted && (
-                <Button variant="primary" size="sm" onPress={onStartSession}>
-                  <Play width={12} height={12} /> <span>Iniciar</span>
-                </Button>
-              )}
-              {isCompleted && (
-                <Button variant="primary" size="sm" onPress={() => onTabChange('recap')}>
-                  <FileText width={12} height={12} /> <span>Resumen</span>
-                </Button>
-              )}
-              {onToggleEditMode && (
-                <Button variant="ghost" size="sm" isIconOnly onPress={onToggleEditMode} aria-label="Editar sesión">
-                  <Pencil width={13} height={13} />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

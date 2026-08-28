@@ -4,9 +4,9 @@ import {
   Button,
   Card,
   Dropdown,
-  Popover,
   Label,
   Description,
+  Header,
 } from '@heroui/react';
 import {
   Plus,
@@ -248,29 +248,28 @@ export function PlannerAgendaView({
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {isEditing ? (
-                            <Popover placement="bottom end">
-                              <Popover.Trigger>
+                            <Dropdown>
+                              <Dropdown.Trigger>
                                 <button
                                   type="button"
                                   className="text-xs font-semibold text-muted hover:text-foreground px-2 py-0.5 rounded-lg bg-surface-secondary/50 hover:bg-surface-secondary transition-colors cursor-pointer"
                                 >
                                   {block.durationMinutes || 30} min
                                 </button>
-                              </Popover.Trigger>
-                              <Popover.Content className="p-3 rounded-xl bg-surface border border-border shadow-xl">
-                                <div className="flex flex-col gap-2">
-                                  <Label className="text-xs font-semibold text-foreground">Duración del bloque (min)</Label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max="240"
-                                    value={block.durationMinutes || 30}
-                                    onChange={(e) => onUpdateBlock?.(block.id, {durationMinutes: Number(e.target.value) || 15})}
-                                    className="px-2.5 py-1.5 rounded-lg bg-field text-xs text-foreground border border-border outline-none focus:border-accent w-24"
-                                  />
-                                </div>
-                              </Popover.Content>
-                            </Popover>
+                              </Dropdown.Trigger>
+                              <Dropdown.Popover placement="bottom end" className="min-w-[160px] max-h-60 overflow-y-auto">
+                                <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {durationMinutes: Number(key) || 30})}>
+                                  <Dropdown.Section>
+                                    <Header className="text-xs font-semibold text-muted px-2 py-1">Duración del bloque</Header>
+                                    {[5, 10, 15, 20, 25, 30, 45, 60, 90, 120].map((mins) => (
+                                      <Dropdown.Item key={mins} id={String(mins)} textValue={`${mins} min`}>
+                                        <Label>{mins} min</Label>
+                                      </Dropdown.Item>
+                                    ))}
+                                  </Dropdown.Section>
+                                </Dropdown.Menu>
+                              </Dropdown.Popover>
+                            </Dropdown>
                           ) : (
                             <span className="text-xs text-muted font-medium">{block.durationMinutes || 30} min</span>
                           )}
@@ -316,22 +315,34 @@ export function PlannerAgendaView({
                             <Dropdown.Trigger>
                               <button
                                 type="button"
-                                className="font-semibold text-foreground hover:text-accent transition-colors cursor-pointer"
+                                className="font-semibold text-foreground hover:text-accent transition-colors cursor-pointer underline decoration-dotted underline-offset-2"
                               >
                                 {block.leader || 'Todo el equipo'}
                               </button>
                             </Dropdown.Trigger>
-                            <Dropdown.Popover placement="bottom start">
+                            <Dropdown.Popover placement="bottom start" className="min-w-[220px]">
                               <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})}>
-                                <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo">
-                                  <Label>Todo el equipo</Label>
-                                </Dropdown.Item>
-                                {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                                    <Label>{member.globalName}</Label>
-                                    <Description>{member.tag}</Description>
+                                <Dropdown.Section>
+                                  <Header className="text-xs font-semibold text-muted px-2 py-1">Conduce el bloque</Header>
+                                  <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo">
+                                    <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
+                                    <Label>Todo el equipo</Label>
                                   </Dropdown.Item>
-                                ))}
+                                  {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                                    <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                                      <Avatar
+                                        name={member.globalName}
+                                        size="xs"
+                                        className="w-5 h-5 text-[9px] font-bold shrink-0"
+                                        style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                                      />
+                                      <div className="flex flex-col">
+                                        <Label>{member.globalName}</Label>
+                                        <Description>{member.tag}</Description>
+                                      </div>
+                                    </Dropdown.Item>
+                                  ))}
+                                </Dropdown.Section>
                               </Dropdown.Menu>
                             </Dropdown.Popover>
                           </Dropdown>
@@ -540,17 +551,29 @@ export function PlannerAgendaView({
                                           )}
                                         </button>
                                       </Dropdown.Trigger>
-                                      <Dropdown.Popover placement="bottom start">
+                                      <Dropdown.Popover placement="bottom start" className="min-w-[220px]">
                                         <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})}>
-                                          <Dropdown.Item id="Todos" textValue="Todos">
-                                            <Label>Todos</Label>
-                                          </Dropdown.Item>
-                                          {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                            <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
-                                              <Label>{member.globalName}</Label>
-                                              <Description>{member.tag}</Description>
+                                          <Dropdown.Section>
+                                            <Header className="text-xs font-semibold text-muted px-2 py-1">Responsable del punto</Header>
+                                            <Dropdown.Item id="Todos" textValue="Todos">
+                                              <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0" />
+                                              <Label>Todos</Label>
                                             </Dropdown.Item>
-                                          ))}
+                                            {DEFAULT_DISCORD_MEMBERS.map((member) => (
+                                              <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName}>
+                                                <Avatar
+                                                  name={member.globalName}
+                                                  size="xs"
+                                                  className="w-5 h-5 text-[9px] font-bold shrink-0"
+                                                  style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
+                                                />
+                                                <div className="flex flex-col">
+                                                  <Label>{member.globalName}</Label>
+                                                  <Description>{member.tag}</Description>
+                                                </div>
+                                              </Dropdown.Item>
+                                            ))}
+                                          </Dropdown.Section>
                                         </Dropdown.Menu>
                                       </Dropdown.Popover>
                                     </Dropdown>
