@@ -12,7 +12,7 @@ import {
 } from '@gravity-ui/icons';
 import {generateMinutesMarkdown} from './planner-store.js';
 import {POINT_STATUS, getPointStatus, recalculateEstimatedEndTime} from './session-runner.js';
-import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
+import {getAllDiscordEntities} from './PlannerMemberPicker.jsx';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
@@ -123,7 +123,8 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
     ? `${totalPlannedMinutes / 60} h`
     : `${totalPlannedMinutes} min`;
 
-  const hostMember = DEFAULT_DISCORD_MEMBERS.find(
+  const {members: allDiscordMembers} = getAllDiscordEntities();
+  const hostMember = allDiscordMembers.find(
     (m) =>
       m.globalName.toLowerCase() === (host || '').toLowerCase() ||
       m.tag.toLowerCase() === (host || '').toLowerCase() ||
@@ -291,7 +292,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
               <span className="inline-flex items-center gap-1.5">
                 <div className="flex items-center -space-x-2">
                   {participantsList.slice(0, 4).map((tag, i) => {
-                    const matched = DEFAULT_DISCORD_MEMBERS.find(
+                    const matched = allDiscordMembers.find(
                       (m) =>
                         m.tag.toLowerCase() === tag.toLowerCase() ||
                         `@${m.globalName.toLowerCase()}` === tag.toLowerCase()

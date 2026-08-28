@@ -31,7 +31,6 @@ import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 import {MaterialWavyProgress} from './MaterialWavyProgress.jsx';
 import {MaterialMorphShape} from './MaterialMorphShape.jsx';
 import {
-  DEFAULT_DISCORD_MEMBERS,
   getAllDiscordEntities,
   SearchableParticipantMenu,
 } from './PlannerMemberPicker.jsx';
@@ -81,8 +80,9 @@ export function PlannerAgendaView({
   }, [sessionState?.liveActiveBlockId, sessionState?.status, sessionState?.activeBlockStartedAt]);
 
   const renderBlockLeader = (block) => {
+    const {members} = getAllDiscordEntities();
     const leaderStr = block.leader || 'Todo el equipo';
-    const leaderMember = DEFAULT_DISCORD_MEMBERS.find(
+    const leaderMember = members.find(
       (m) =>
         m.globalName.toLowerCase() === leaderStr.toLowerCase() ||
         m.tag.toLowerCase() === leaderStr.toLowerCase() ||
@@ -122,7 +122,7 @@ export function PlannerAgendaView({
             </span>
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+        <Dropdown.Popover placement="bottom start" className="min-w-[260px] max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu onAction={(key) => onUpdateBlock?.(block.id, {leader: String(key)})} className="p-0">
             <Dropdown.Section>
               <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
@@ -132,8 +132,8 @@ export function PlannerAgendaView({
                 <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
                 <Label className="text-xs font-medium text-foreground">Todo el equipo</Label>
               </Dropdown.Item>
-              {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
+              {members.map((member) => (
+                <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                   <Avatar
                     name={member.globalName}
                     size="xs"
@@ -610,11 +610,11 @@ export function PlannerAgendaView({
                                                     className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 shadow-2xs"
                                                     style={{
                                                       backgroundColor: `${
-                                                        DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
+                                                        getAllDiscordEntities().members.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
                                                         DISCORD_PALETTES[0]
                                                       }30`,
                                                       color:
-                                                        DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
+                                                        getAllDiscordEntities().members.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
                                                         DISCORD_PALETTES[0],
                                                     }}
                                                   />
@@ -629,7 +629,7 @@ export function PlannerAgendaView({
                                               )}
                                             </button>
                                           </Dropdown.Trigger>
-                                          <Dropdown.Popover placement="bottom start" className="min-w-[240px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+                                          <Dropdown.Popover placement="bottom start" className="min-w-[240px] max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
                                             <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})} className="p-0">
                                               <Dropdown.Section>
                                                 <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
@@ -639,8 +639,8 @@ export function PlannerAgendaView({
                                                   <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
                                                   <Label className="text-xs font-medium text-foreground">Todos</Label>
                                                 </Dropdown.Item>
-                                                {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                                                  <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
+                                                {getAllDiscordEntities().members.map((member) => (
+                                                  <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                                                     <Avatar
                                                       name={member.globalName}
                                                       size="xs"
@@ -661,7 +661,7 @@ export function PlannerAgendaView({
                                         <div className="flex items-center gap-1.5">
                                           <div className="flex items-center -space-x-1.5">
                                             {presenterList.map((pName, pIdx) => {
-                                              const matched = DEFAULT_DISCORD_MEMBERS.find(
+                                              const matched = getAllDiscordEntities().members.find(
                                                 (member) =>
                                                   member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                                   member.tag.toLowerCase().includes(pName.toLowerCase())

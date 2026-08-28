@@ -24,7 +24,6 @@ import {
   recalculateEstimatedEndTime,
 } from './session-runner.js';
 import {
-  DEFAULT_DISCORD_MEMBERS,
   getAllDiscordEntities,
   SearchableParticipantMenu,
 } from './PlannerMemberPicker.jsx';
@@ -208,7 +207,8 @@ export function PlannerSessionHeader({
   };
 
   const renderHostSelector = () => {
-    const hostMember = DEFAULT_DISCORD_MEMBERS.find(
+    const {members} = getAllDiscordEntities();
+    const hostMember = members.find(
       (m) =>
         m.globalName.toLowerCase() === (host || '').toLowerCase() ||
         m.tag.toLowerCase() === (host || '').toLowerCase() ||
@@ -248,14 +248,14 @@ export function PlannerSessionHeader({
             </span>
           </button>
         </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
+        <Dropdown.Popover placement="bottom start" className="min-w-[260px] max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
           <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))} className="p-0">
             <Dropdown.Section>
               <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
                 Conduce la sesión
               </Header>
-              {DEFAULT_DISCORD_MEMBERS.map((member) => (
-                <Dropdown.Item key={member.id} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
+              {members.map((member) => (
+                <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                   <Avatar
                     name={member.globalName}
                     size="xs"
