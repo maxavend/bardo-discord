@@ -92,11 +92,11 @@ export function SessionDock({
         zIndex: 45,
       }}
     >
-      {/* ── Modo Sticky Compacto (Al hacer scroll: border-radius 9999px) ──── */}
+      {/* ── Modo Sticky Compacto (Al hacer scroll: padding uniforme en los 4 lados) ──── */}
       {isScrolled ? (
-        <div className="w-full session-dock-glass rounded-full px-4 py-1.5 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
+        <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-200 shadow-sm animate-in fade-in zoom-in-95 duration-100">
           {/* Resumen operacional: Tema · #/# · Tiempo · Progreso */}
-          <div className="flex items-center gap-2 min-w-0 flex-1 pl-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1 pl-1.5">
             <span className={`h-2 w-2 rounded-full shrink-0 ${
               isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
             }`} />
@@ -135,7 +135,7 @@ export function SessionDock({
           </div>
 
           {/* Microacciones rápidas + Siguiente */}
-          <div className="flex items-center gap-1.5 shrink-0 pr-0.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* 1. Grabar / Estado de Grabación (Primero) */}
             {isRecording ? (
               <button
