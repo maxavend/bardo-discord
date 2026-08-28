@@ -61,7 +61,7 @@ import {
   hydrateRecordingBinary,
 } from './recording-storage.js';
 
-export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
+export function PlannerModule({initialTab = 'agenda', onSwitchTab, onSaveDocToLibrary}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -801,6 +801,7 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
           sessionState={sessionState}
           onBack={() => handleTabChange('agenda')}
           onCopyMarkdown={handleCopyMinutes}
+          onSaveDocToLibrary={onSaveDocToLibrary}
         />
       )}
 

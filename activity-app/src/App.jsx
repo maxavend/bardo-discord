@@ -2143,6 +2143,25 @@ function App() {
         <PlannerModule
           initialTab={route.tab || 'agenda'}
           onSwitchTab={(tab) => go(tab === 'agenda' ? '#planner' : `#planner-${tab}`, {skipTransition: true})}
+          onSaveDocToLibrary={(docData) => {
+            const now = new Date().toISOString();
+            const doc = {
+              id: docData.id || `local-${Date.now().toString(36)}`,
+              title: docData.title || 'Acta de sesión',
+              description: docData.description || '',
+              body: docData.body || '',
+              origin: 'Acta de Bardo Planner',
+              createdAt: now,
+              updatedAt: now,
+              createdByName: docData.createdByName || currentEditorName(),
+              updatedByName: docData.updatedByName || currentEditorName(),
+              builtin: false,
+              stress: false,
+            };
+            setStore((prev) => ({...prev, docs: [doc, ...(prev.docs || []).filter((d) => d.id !== doc.id)]}));
+            showToast('Minuta guardada en Bardo Docs');
+            go(`#doc-${doc.id}`);
+          }}
         />
       )}
       {route.type === 'library' && (
