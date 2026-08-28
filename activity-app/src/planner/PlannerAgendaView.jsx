@@ -39,16 +39,31 @@ export function PlannerAgendaView({
 
   return (
     <div className="planner-agenda-container w-full max-w-4xl mx-auto pb-24 pt-2 flex flex-col gap-3">
-      {(dockSlot || description) && (
+      {dockSlot && (
+        <div
+          className="session-toolbar-sticky w-full"
+          style={{
+            position: 'sticky',
+            top: 'calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap, 12px))',
+            zIndex: 40,
+          }}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
+            <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 w-full">
+              {dockSlot}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!dockSlot && description && (
         <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start mb-1">
           <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-          <div className="flex flex-col gap-2 min-w-0 w-full">
-            {dockSlot}
-            {!dockSlot && description && (
-              <p className="text-xs sm:text-sm text-muted leading-relaxed whitespace-pre-line py-0.5">
-                {description}
-              </p>
-            )}
+          <div className="min-w-0 w-full">
+            <p className="text-xs sm:text-sm text-muted leading-relaxed whitespace-pre-line py-0.5">
+              {description}
+            </p>
           </div>
         </div>
       )}

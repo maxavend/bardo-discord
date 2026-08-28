@@ -668,6 +668,13 @@ button { font-size: 14px; }
 .editor-toolbar-sticky > * {
   pointer-events: auto;
 }
+.session-toolbar-sticky {
+  position: sticky;
+  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap, 12px));
+  z-index: 45;
+  width: 100%;
+  scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap, 12px));
+}
 .editor-toolbar-container {
   display: flex;
   align-items: center;
