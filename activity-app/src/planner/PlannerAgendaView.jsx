@@ -818,8 +818,11 @@ export function PlannerAgendaView({
 
             if (isEditing) {
               return (
-                <div key={block.id} className="w-full">
-                  {blockCardElement}
+                <div key={block.id} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-start">
+                  <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0 w-full">
+                    {blockCardElement}
+                  </div>
                 </div>
               );
             }
@@ -887,8 +890,9 @@ export function PlannerAgendaView({
           })}
 
           {isEditing && (
-            <div className="w-full mt-3">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-start mt-3">
+              <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full min-w-0">
                 <button
                   type="button"
                   onClick={() => onAddBlock?.()}
