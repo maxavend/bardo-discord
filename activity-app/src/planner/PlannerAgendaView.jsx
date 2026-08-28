@@ -145,13 +145,19 @@ export function PlannerAgendaView({
                         )}
                       </div>
 
-                      {!isLast && (
-                        <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[24px]">
-                          {isCompleted ? (
-                            <div className="w-[4.5px] h-full bg-success rounded-full" />
-                          ) : (
-                            <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
-                          )}
+                      <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[24px]">
+                        {isCompleted ? (
+                          <div className="w-[4.5px] h-full bg-success rounded-full" />
+                        ) : (
+                          <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
+                        )}
+                      </div>
+
+                      {isLast && (
+                        <div className="relative mb-2 z-10 flex items-center justify-center">
+                          <span className={`h-2 w-2 rounded-full ring-2 ring-surface block ${
+                            isCompleted ? 'bg-success' : 'bg-border'
+                          }`} />
                         </div>
                       )}
                     </div>
@@ -195,6 +201,15 @@ export function PlannerAgendaView({
                     <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
                   </div>
 
+                  {isLast && (
+                    <div className="hidden sm:flex flex-col items-end pb-2 shrink-0">
+                      <span className={`text-xs sm:text-sm font-bold leading-tight ${
+                        isCompleted ? 'text-success' : 'text-muted'
+                      }`}>{blockEnd}</span>
+                      <span className="text-[10px] text-muted/70 font-medium">Fin</span>
+                    </div>
+                  )}
+
                   {/* Material Design 3 Vertical Progress Timeline Rail (4.5px) */}
                   <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-14px] w-4 select-none pointer-events-none z-0">
                     <div className="relative mt-2 z-10 flex items-center justify-center">
@@ -211,23 +226,29 @@ export function PlannerAgendaView({
                       )}
                     </div>
 
-                    {!isLast && (
-                      <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[32px]">
-                        {isLive ? (
-                          <MaterialWavyProgress
-                            value={progressPercent}
-                            color={blockColor}
-                            isPaused={isPaused}
-                            orientation="vertical"
-                            strokeWidth={4.5}
-                            wavelength={72}
-                            amplitude={3.5}
-                          />
-                        ) : isCompleted ? (
-                          <div className="w-[4.5px] h-full bg-success rounded-full" />
-                        ) : (
-                          <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
-                        )}
+                    <div className="flex-1 w-full relative flex justify-center items-stretch my-2 min-h-[32px]">
+                      {isLive ? (
+                        <MaterialWavyProgress
+                          value={progressPercent}
+                          color={blockColor}
+                          isPaused={isPaused}
+                          orientation="vertical"
+                          strokeWidth={4.5}
+                          wavelength={72}
+                          amplitude={3.5}
+                        />
+                      ) : isCompleted ? (
+                        <div className="w-[4.5px] h-full bg-success rounded-full" />
+                      ) : (
+                        <div className="w-[4.5px] h-full bg-border/40 rounded-full" />
+                      )}
+                    </div>
+
+                    {isLast && (
+                      <div className="relative mb-2 z-10 flex items-center justify-center">
+                        <span className={`h-2 w-2 rounded-full ring-2 ring-surface block ${
+                          isCompleted ? 'bg-success' : 'bg-border'
+                        }`} />
                       </div>
                     )}
                   </div>
