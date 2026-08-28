@@ -82,7 +82,7 @@ export function SessionDock({
         zIndex: 45,
       }}
     >
-      <div className="w-full bg-surface/95 backdrop-blur-md border border-border/70 rounded-xl shadow-xs px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-2.5">
+      <div className="w-full session-dock-glass rounded-2xl px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-2.5 transition-all">
         {/* 1. Title + Block Index (Check-in, contexto y novedades              1/5) */}
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-baseline justify-between gap-3">
