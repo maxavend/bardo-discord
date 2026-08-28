@@ -1,5 +1,6 @@
 import {useState, useEffect} from 'react';
 import {
+  Avatar,
   Button,
   Card,
   Checkbox,
@@ -29,14 +30,6 @@ import {MaterialMorphShape} from './MaterialMorphShape.jsx';
 import {DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
-
-function getInitials(name = '') {
-  const clean = name.replace(/^@/, '').trim();
-  const parts = clean.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 export function PlannerAgendaView({
   state,
@@ -373,7 +366,7 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={point.id}
-                              className={`relative overflow-hidden flex items-start gap-3 p-3 rounded-lg transition-all ${
+                              className={`relative flex items-start gap-3 p-3 rounded-lg transition-all ${
                                 isPointActive
                                   ? 'bg-accent/15 text-accent shadow-xs'
                                   : isDone || isPointSkipped
@@ -381,10 +374,6 @@ export function PlannerAgendaView({
                                     : 'bg-surface-secondary/50 hover:bg-surface-secondary/70 text-foreground'
                               }`}
                             >
-                              {/* Franja vertical indicadora únicamente en el punto activo */}
-                              {isPointActive && (
-                                <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg bg-accent" />
-                              )}
 
                               {isEditing ? (
                                 <div className="flex flex-col items-center gap-0.5 shrink-0 pl-1">
@@ -499,7 +488,10 @@ export function PlannerAgendaView({
                                         >
                                           {point.presenter ? (
                                             <>
-                                              <div
+                                              <Avatar
+                                                name={point.presenter}
+                                                size="xs"
+                                                className="w-4 h-4 text-[8px] font-bold shrink-0"
                                                 style={{
                                                   backgroundColor: `${
                                                     DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
@@ -509,10 +501,7 @@ export function PlannerAgendaView({
                                                     DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
                                                     DISCORD_PALETTES[0],
                                                 }}
-                                                className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
-                                              >
-                                                {getInitials(point.presenter)}
-                                              </div>
+                                              />
                                               <span>{point.presenter}</span>
                                             </>
                                           ) : (
@@ -546,16 +535,14 @@ export function PlannerAgendaView({
                                               member.tag.toLowerCase().includes(pName.toLowerCase())
                                           );
                                           const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
-                                          const initials = getInitials(matched?.globalName || pName);
                                           return (
-                                            <div
+                                            <Avatar
                                               key={pIdx}
-                                              title={pName}
+                                              name={matched?.globalName || pName}
+                                              size="xs"
+                                              className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
                                               style={{backgroundColor: `${color}35`, color}}
-                                              className="w-5 h-5 rounded-full border border-background flex items-center justify-center text-[9px] font-bold shadow-2xs shrink-0"
-                                            >
-                                              {initials}
-                                            </div>
+                                            />
                                           );
                                         })}
                                       </div>

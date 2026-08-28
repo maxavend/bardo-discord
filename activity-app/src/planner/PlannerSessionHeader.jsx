@@ -1,5 +1,6 @@
 import {useState, useEffect} from 'react';
 import {
+  Avatar,
   Button,
   Dropdown,
   Popover,
@@ -27,14 +28,6 @@ import {
 import {PlannerMemberPicker, DEFAULT_DISCORD_MEMBERS} from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
-
-function getInitials(name = '') {
-  const clean = name.replace(/^@/, '').trim();
-  const parts = clean.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 function parseMentions(mentionsStr = '') {
   if (!mentionsStr) return [];
@@ -370,7 +363,10 @@ export function PlannerSessionHeader({
                         type="button"
                         className="inline-flex items-center gap-2 px-2 py-0.5 rounded-lg bg-surface-secondary hover:bg-surface-secondary/80 text-foreground cursor-pointer transition-colors"
                       >
-                        <div
+                        <Avatar
+                          name={host || 'Host'}
+                          size="sm"
+                          className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
                           style={{
                             backgroundColor: `${
                               DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase() === host.toLowerCase())?.avatarColor ||
@@ -380,10 +376,7 @@ export function PlannerSessionHeader({
                               DEFAULT_DISCORD_MEMBERS.find((m) => m.globalName.toLowerCase() === host.toLowerCase())?.avatarColor ||
                               DISCORD_PALETTES[0],
                           }}
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                        >
-                          {getInitials(host || 'Host')}
-                        </div>
+                        />
                         <span className="font-medium text-xs">{host || 'Asignar conductor'}</span>
                       </button>
                     </Dropdown.Trigger>
@@ -411,15 +404,14 @@ export function PlannerSessionHeader({
                           `@${m.globalName.toLowerCase()}` === host.toLowerCase()
                       );
                       const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
-                      const hostInitials = getInitials(hostMember?.globalName || host);
                       return (
                         <div className="flex items-center gap-1.5">
-                          <div
+                          <Avatar
+                            name={hostMember?.globalName || host}
+                            size="sm"
+                            className="w-7 h-7 text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
                             style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-bold shrink-0 border border-background shadow-2xs"
-                          >
-                            {hostInitials}
-                          </div>
+                          />
                           <span className="text-foreground/90 font-medium">{host}</span>
                         </div>
                       );
@@ -446,13 +438,13 @@ export function PlannerSessionHeader({
                         );
                         const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                         return (
-                          <div
+                          <Avatar
                             key={i}
+                            name={matched?.globalName || tag}
+                            size="sm"
+                            className="w-7 h-7 border-2 border-background text-[10.5px] font-bold shadow-2xs shrink-0"
                             style={{backgroundColor: `${color}35`, color}}
-                            className="w-7 h-7 rounded-full border-2 border-background flex items-center justify-center text-[10.5px] font-bold shadow-2xs shrink-0"
-                          >
-                            {getInitials(matched?.globalName || tag)}
-                          </div>
+                          />
                         );
                       })}
                     </div>
@@ -481,12 +473,12 @@ export function PlannerSessionHeader({
                           const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                           return (
                             <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                              <div
+                              <Avatar
+                                name={matched?.globalName || tag}
+                                size="xs"
+                                className="w-6 h-6 text-[10px] font-bold shrink-0"
                                 style={{backgroundColor: `${color}25`, color}}
-                                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
-                              >
-                                {getInitials(matched?.globalName || tag)}
-                              </div>
+                              />
                               <span className="font-medium text-foreground truncate">{matched?.globalName || tag}</span>
                             </div>
                           );

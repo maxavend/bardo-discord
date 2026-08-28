@@ -1,4 +1,5 @@
 import {useState, useRef, useEffect} from 'react';
+import {Avatar} from '@heroui/react';
 import {Xmark, Plus, Check} from '@gravity-ui/icons';
 
 export const DEFAULT_DISCORD_MEMBERS = [
@@ -13,14 +14,6 @@ export const DEFAULT_DISCORD_MEMBERS = [
 ];
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
-
-function getInitials(name = '') {
-  const clean = name.replace(/^@/, '').trim();
-  const parts = clean.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 function parseMentionsToArray(mentionsStr = '') {
   if (!mentionsStr) return [];
@@ -103,20 +96,19 @@ export function PlannerMemberPicker({value = '', onChange}) {
             (m) => m.tag.toLowerCase() === tag.toLowerCase() || `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
           );
           const color = matchedMember?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-          const initials = getInitials(matchedMember?.globalName || tag);
 
           return (
             <div
               key={tag}
               className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-surface-secondary/80 hover:bg-surface-secondary text-xs font-medium text-foreground border border-border/30 select-none h-6"
             >
-              <div
+              <Avatar
+                name={matchedMember?.globalName || tag}
+                size="xs"
+                className="w-4 h-4 text-[9px] font-bold shrink-0"
                 style={{backgroundColor: `${color}25`, color}}
-                className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
                 aria-hidden="true"
-              >
-                {initials}
-              </div>
+              />
               <span className="max-w-[130px] truncate text-xs">{matchedMember?.globalName || tag}</span>
               <button
                 type="button"
@@ -170,12 +162,12 @@ export function PlannerMemberPicker({value = '', onChange}) {
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div
+                    <Avatar
+                      name={member.globalName}
+                      size="xs"
+                      className="w-6 h-6 text-[10px] font-bold shrink-0"
                       style={{backgroundColor: `${member.avatarColor}25`, color: member.avatarColor}}
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-                    >
-                      {getInitials(member.globalName)}
-                    </div>
+                    />
                     <div className="flex flex-col min-w-0">
                       <span className="font-medium truncate">{member.globalName}</span>
                       <span className="text-[10px] text-muted truncate">@{member.username}</span>
