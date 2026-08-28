@@ -428,19 +428,18 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
   }, [commitSessionState]);
 
   const handleOpenDecisionCapture = useCallback((targetBlockId = null) => {
+    const selectedBlockId = targetBlockId || sessionStateRef.current.liveActiveBlockId || plannerStateRef.current.blocks[0]?.id;
     setCaptureModal({
       isOpen: true,
-      blockId: sessionStateRef.current.liveActiveBlockId || targetBlockId || plannerStateRef.current.blocks[0]?.id,
+      blockId: selectedBlockId,
     });
   }, []);
 
   const handleCaptureSubmit = useCallback(({blockId, content}) => {
     const liveSession = sessionStateRef.current;
-    const isLiveContext = liveSession.status === SESSION_STATUS.RUNNING || liveSession.status === SESSION_STATUS.PAUSED;
-    const resolvedBlockId = isLiveContext
-      ? liveSession.liveActiveBlockId
-      : (blockId || plannerStateRef.current.blocks[0]?.id);
-    const pointId = isLiveContext ? liveSession.liveActivePointId : null;
+    const resolvedBlockId = blockId || liveSession.liveActiveBlockId || plannerStateRef.current.blocks[0]?.id;
+    const isTargetLiveBlock = liveSession.liveActiveBlockId === resolvedBlockId;
+    const pointId = isTargetLiveBlock ? liveSession.liveActivePointId : null;
     const timestamp = Date.now();
     const decision = {
       id: `d-${timestamp}`,
@@ -468,7 +467,8 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
       decisions: [...(liveSession.decisions || []), decision],
     };
     commitSessionState(nextSession);
-    toast(pointId ? 'Decisión registrada en el punto actual' : 'Decisión registrada en el bloque actual');
+    const targetBlock = plannerStateRef.current.blocks.find((b) => b.id === resolvedBlockId);
+    toast(`Acuerdo agregado al bloque "${targetBlock?.title || 'seleccionado'}"`);
   }, [commitSessionState]);
 
   const handleDeleteDecision = useCallback((blockId, decisionId) => {
@@ -641,7 +641,7 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         onSubmit={handleCaptureSubmit}
         initialBlockId={captureModal.blockId}
         blocks={plannerState.blocks}
-        lockContext={isLive}
+        lockContext={false}
         contextLabel={activePoint ? `${activeBlock?.title} → ${activePoint.title}` : activeBlock?.title}
       />
 
