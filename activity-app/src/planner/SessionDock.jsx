@@ -101,7 +101,7 @@ export function SessionDock({
             isPaused ? 'text-warning' : isExpired ? 'text-danger font-semibold' : is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'
           }`}>
             {isPaused
-              ? `${formatMsToClock(details.remainingBlockMs)} · pausado`
+              ? `${isExpired ? `+${formatMsToClock(details.overtimeMs)}` : formatMsToClock(Math.max(0, details.remainingBlockMs))} · pausado`
               : isExpired
               ? `+${formatMsToClock(details.overtimeMs)}`
               : isUnlimited
@@ -155,9 +155,13 @@ export function SessionDock({
             onPress={isPaused ? onResumeSession : onPauseSession}
             isDisabled={isBusy}
             aria-label={isPaused ? 'Reanudar' : 'Pausar'}
-            className="h-7 w-7 rounded-full text-muted hover:text-foreground"
+            className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors ${
+              isPaused
+                ? 'text-warning hover:text-warning-foreground hover:bg-warning/20'
+                : 'text-muted hover:text-foreground'
+            }`}
           >
-            {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
+            {isPaused ? <Play width={13} height={13} fill="currentColor" /> : <Pause width={13} height={13} />}
           </Button>
 
           {/* 3. Siguiente → */}
