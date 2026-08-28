@@ -138,28 +138,6 @@ export function PlannerSessionHeader({
                 ) : (
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">{title}</h1>
                 )}
-
-                {isRunning && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent/15 text-accent select-none">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" /> En curso
-                  </span>
-                )}
-                {isPaused && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning select-none">En pausa</span>
-                )}
-                {isCompleted && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success/15 text-success select-none">
-                    <Check width={11} height={11} /> Finalizada
-                  </span>
-                )}
-                {isInterrupted && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning select-none">Interrumpida</span>
-                )}
-                {!isRunning && !isPaused && !isCompleted && !isInterrupted && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-surface-secondary text-muted select-none">
-                    {isEditing ? 'Editando' : 'Próxima'}
-                  </span>
-                )}
               </div>
 
               {isEditing ? (
