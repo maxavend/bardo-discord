@@ -478,10 +478,23 @@ export function PlannerAgendaView({
                           const isPointActive = isLive && point.id === liveActivePointId && !isEditing;
                           const isDone = storedStatus === POINT_STATUS.DONE;
                           const isPointSkipped = storedStatus === POINT_STATUS.SKIPPED;
-                          const presenterList = (point.presenter || '')
-                            .split(/[/,]/)
-                            .map((p) => p.trim())
-                            .filter(Boolean);
+                          const rawPointParticipants = point.presenter || '';
+                          const {members: allDiscordMembers, roles: allDiscordRoles} = getAllDiscordEntities();
+                          const pointPresenterList = rawPointParticipants
+                            ? rawPointParticipants.split(/(?:,|\s+y\s+|\s+and\s+|\s*\+\s*)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean)
+                            : [];
+
+                          const selectedPointKeys = new Set(
+                            pointPresenterList.map((tag) => {
+                              const found = [...allDiscordMembers, ...allDiscordRoles].find(
+                                (m) =>
+                                  m.tag.toLowerCase() === tag.toLowerCase() ||
+                                  `@${(m.globalName || m.name || '').toLowerCase()}` === tag.toLowerCase() ||
+                                  (m.globalName || m.name || '').toLowerCase() === tag.toLowerCase()
+                              );
+                              return found ? found.tag : tag.startsWith('@') ? tag : `@${tag}`;
+                            })
+                          );
 
                           return (
                             <div
@@ -573,7 +586,7 @@ export function PlannerAgendaView({
                                 )}
                               </div>
 
-                              {/* Descripción opcional */}
+                              {/* Fila 2: Descripción (editable en modo edición) */}
                               {isEditing ? (
                                 <input
                                   type="text"
@@ -591,9 +604,9 @@ export function PlannerAgendaView({
                               ) : null}
 
                               {/* Fila inferior: Presentador a la izquierda y Botón de avance abajo a la derecha (abajo en mobile) */}
-                              {(isEditing || presenterList.length > 0 || (isPointActive && onAdvance)) && (
+                              {(isEditing || pointPresenterList.length > 0 || (isPointActive && onAdvance)) && (
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-0.5 min-w-0">
-                                  {(isEditing || presenterList.length > 0) ? (
+                                  {(isEditing || pointPresenterList.length > 0) ? (
                                     <div className="flex items-center gap-2 shrink-0">
                                       {isEditing ? (
                                         <Dropdown>
@@ -602,26 +615,31 @@ export function PlannerAgendaView({
                                               type="button"
                                               className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
                                             >
-                                              {point.presenter ? (
-                                                <>
-                                                  <Avatar
-                                                    name={point.presenter}
-                                                    size="xs"
-                                                    className="w-4.5 h-4.5 text-[8.5px] font-bold shrink-0 shadow-2xs"
-                                                    style={{
-                                                      backgroundColor: `${
-                                                        getAllDiscordEntities().members.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
-                                                        DISCORD_PALETTES[0]
-                                                      }30`,
-                                                      color:
-                                                        getAllDiscordEntities().members.find((m) => m.globalName.toLowerCase().includes(point.presenter.toLowerCase()))?.avatarColor ||
-                                                        DISCORD_PALETTES[0],
-                                                    }}
-                                                  />
+                                              {pointPresenterList.length > 0 ? (
+                                                <div className="inline-flex items-center gap-1.5">
+                                                  <div className="flex items-center -space-x-1.5">
+                                                    {pointPresenterList.slice(0, 3).map((pName, pIdx) => {
+                                                      const matched = allDiscordMembers.find(
+                                                        (m) =>
+                                                          m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                                          m.tag.toLowerCase().includes(pName.toLowerCase())
+                                                      );
+                                                      const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                                      return (
+                                                        <Avatar
+                                                          key={pIdx}
+                                                          name={matched?.globalName || pName}
+                                                          size="xs"
+                                                          className="w-4.5 h-4.5 border border-background text-[8px] font-bold shadow-2xs shrink-0"
+                                                          style={{backgroundColor: `${color}35`, color}}
+                                                        />
+                                                      );
+                                                    })}
+                                                  </div>
                                                   <span className="text-muted group-hover:text-foreground font-medium underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                                                    {point.presenter}
+                                                    {pointPresenterList.join(', ')}
                                                   </span>
-                                                </>
+                                                </div>
                                               ) : (
                                                 <span className="text-muted group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
                                                   Asignar responsable
@@ -629,39 +647,33 @@ export function PlannerAgendaView({
                                               )}
                                             </button>
                                           </Dropdown.Trigger>
-                                          <Dropdown.Popover placement="bottom start" className="min-w-[240px] max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
-                                            <Dropdown.Menu onAction={(key) => onUpdateSubpoint?.(block.id, point.id, {presenter: String(key)})} className="p-0">
-                                              <Dropdown.Section>
-                                                <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
-                                                  Responsable del punto
-                                                </Header>
-                                                <Dropdown.Item id="Todos" textValue="Todos" className="px-3 py-1.5 rounded-xl text-xs">
-                                                  <Avatar name="Todos" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
-                                                  <Label className="text-xs font-medium text-foreground">Todos</Label>
-                                                </Dropdown.Item>
-                                                {getAllDiscordEntities().members.map((member) => (
-                                                  <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
-                                                    <Avatar
-                                                      name={member.globalName}
-                                                      size="xs"
-                                                      className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                                                      style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
-                                                    />
-                                                    <div className="flex flex-col min-w-0">
-                                                      <Label className="text-xs font-medium text-foreground leading-tight">{member.globalName}</Label>
-                                                      <Description className="text-[10.5px] text-muted leading-tight">{member.tag}</Description>
-                                                    </div>
-                                                  </Dropdown.Item>
-                                                ))}
-                                              </Dropdown.Section>
-                                            </Dropdown.Menu>
+                                          <Dropdown.Popover placement="bottom start" className="p-0 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl overflow-hidden">
+                                            <SearchableParticipantMenu
+                                              selectedKeys={selectedPointKeys}
+                                              onSelectionChange={(keys) => {
+                                                const names = keys.map((k) => {
+                                                  const found = [...allDiscordMembers, ...allDiscordRoles].find(
+                                                    (m) => m.tag.toLowerCase() === k.toLowerCase() || (m.globalName || m.name || '').toLowerCase() === k.replace(/^@/, '').toLowerCase()
+                                                  );
+                                                  return found ? (found.globalName || found.name) : k.replace(/^@/, '');
+                                                });
+                                                onUpdateSubpoint?.(block.id, point.id, {presenter: names.join(', ')});
+                                              }}
+                                              onAddCustomParticipant={(tag) => {
+                                                const cleanName = tag.replace(/^@/, '');
+                                                const updated = pointPresenterList.includes(cleanName)
+                                                  ? pointPresenterList
+                                                  : [...pointPresenterList, cleanName];
+                                                onUpdateSubpoint?.(block.id, point.id, {presenter: updated.join(', ')});
+                                              }}
+                                            />
                                           </Dropdown.Popover>
                                         </Dropdown>
                                       ) : (
                                         <div className="flex items-center gap-1.5">
                                           <div className="flex items-center -space-x-1.5">
-                                            {presenterList.map((pName, pIdx) => {
-                                              const matched = getAllDiscordEntities().members.find(
+                                            {pointPresenterList.map((pName, pIdx) => {
+                                              const matched = allDiscordMembers.find(
                                                 (member) =>
                                                   member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                                   member.tag.toLowerCase().includes(pName.toLowerCase())
@@ -679,7 +691,7 @@ export function PlannerAgendaView({
                                             })}
                                           </div>
                                           <span className={`text-xs ${isPointActive ? 'text-accent/90 font-medium' : 'text-muted font-normal'}`}>
-                                            {point.presenter}
+                                            {pointPresenterList.join(', ')}
                                           </span>
                                         </div>
                                       )}
