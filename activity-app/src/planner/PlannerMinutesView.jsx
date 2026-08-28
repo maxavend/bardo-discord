@@ -101,11 +101,11 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown}
             ) : (
               <div className="flex flex-col gap-2">
                 {decisions.map((decision, index) => (
-                  <div key={decision.id || index} className="p-3 rounded-lg bg-surface-secondary/40 border border-border/40 flex items-start gap-2.5">
+                  <div key={decision.id || index} className="p-3 rounded-xl bg-surface-secondary/60 flex items-start gap-2.5">
                     <CircleCheck width={14} height={14} className="text-success mt-0.5 shrink-0" />
                     <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                       <span className="text-xs font-semibold text-foreground">{decision.content}</span>
-                      {decision.origin && <span className="text-[11px] text-muted">En: {decision.origin}</span>}
+                      {decision.origin && <span className="text-xs text-muted">En: {decision.origin}</span>}
                     </div>
                   </div>
                 ))}

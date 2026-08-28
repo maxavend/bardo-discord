@@ -348,13 +348,13 @@ export function PlannerAgendaView({
                           return (
                             <div
                               key={decision.id}
-                              className="px-3 py-2 rounded-xl bg-surface-secondary/60 border border-border/50 text-xs text-foreground flex items-center justify-between gap-2"
+                              className="px-3 py-2.5 rounded-xl bg-surface-secondary/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
                             >
-                              <div className="flex items-start gap-2 min-w-0">
+                              <div className="flex items-start gap-2.5 min-w-0">
                                 <CircleCheck width={14} height={14} className="text-success shrink-0 mt-0.5" />
                                 <span className="min-w-0">
-                                  <span className="font-medium break-words">{decision.content}</span>
-                                  {point && <span className="block text-[11px] text-muted mt-0.5">{point.title}</span>}
+                                  <span className="font-medium break-words leading-snug">{decision.content}</span>
+                                  {point && <span className="block text-xs text-muted mt-0.5">{point.title}</span>}
                                 </span>
                               </div>
                               <Button
