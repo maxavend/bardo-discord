@@ -1,8 +1,7 @@
 /*
- * HeroUI Theme Customization
- * Add this to your global.css after importing @heroui/styles
- * Only includes variables users need to customize
- * @see https://heroui.com/docs/react/getting-started/theming
+ * HeroUI Theme Customization with Tailwind CSS Palette
+ * Gray (Neutrals), Violet (Theme/Accent), Emerald (Success), Amber (Warning), Red (Danger)
+ * @see https://tailwindcss.com/docs/colors
  */
 
 :root,
@@ -10,40 +9,40 @@
 .default,
 [data-theme="light"],
 [data-theme="default"] {
-  /* Theme Colors (Light Mode) */
-  --accent: oklch(46.90% 0.2430 285.03);
-  --accent-foreground: oklch(99.11% 0 0);
-  --background: oklch(97.02% 0.0000 285.03);
-  --border: oklch(89.50% 0.0000 285.03);
-  --danger: oklch(58.00% 0.2300 29.48);
-  --danger-foreground: oklch(99.11% 0 0);
-  --default: oklch(94.00% 0.0000 285.03);
-  --default-foreground: oklch(21.03% 0.0059 285.03);
-  --field-background: oklch(95.60% 0.0000 285.03);
-  --field-border: oklch(89.50% 0.0000 285.03);
-  --field-foreground: oklch(21.03% 0.0000 285.03);
-  --field-placeholder: oklch(55.17% 0.0000 285.03);
-  --focus: oklch(46.90% 0.2430 285.03);
-  --foreground: oklch(21.03% 0.0000 285.03);
-  --muted: oklch(50.00% 0.0000 285.03);
-  --overlay: oklch(100.00% 0.0000 285.03);
-  --overlay-foreground: oklch(21.03% 0.0000 285.03);
-  --scrollbar: oklch(87.10% 0.0000 285.03);
-  --segment: oklch(100.00% 0.0000 285.03);
-  --segment-foreground: oklch(21.03% 0.0000 285.03);
-  --separator: oklch(91.00% 0.0000 285.03);
-  --success: oklch(48.50% 0.1850 154.55);
-  --success-foreground: oklch(99.11% 0 0);
-  --surface: oklch(100.00% 0.0000 285.03);
-  --surface-foreground: oklch(21.03% 0.0000 285.03);
-  --surface-secondary: oklch(95.24% 0.0000 285.03);
-  --surface-secondary-foreground: oklch(21.03% 0.0000 285.03);
-  --surface-tertiary: oklch(93.73% 0.0000 285.03);
-  --surface-tertiary-foreground: oklch(21.03% 0.0000 285.03);
-  --warning: oklch(62.00% 0.1650 76.07);
-  --warning-foreground: oklch(99.11% 0 0);
+  /* Theme Colors (Light Mode - Tailwind CSS) */
+  --accent: #7c3aed; /* violet-600 */
+  --accent-foreground: #ffffff;
+  --background: #f9fafb; /* gray-50 */
+  --border: #e5e7eb; /* gray-200 */
+  --danger: #dc2626; /* red-600 */
+  --danger-foreground: #ffffff;
+  --default: #f3f4f6; /* gray-100 */
+  --default-foreground: #111827; /* gray-900 */
+  --field-background: #ffffff; /* white */
+  --field-border: #e5e7eb; /* gray-200 */
+  --field-foreground: #111827; /* gray-900 */
+  --field-placeholder: #9ca3af; /* gray-400 */
+  --focus: #7c3aed; /* violet-600 */
+  --foreground: #111827; /* gray-900 */
+  --muted: #6b7280; /* gray-500 */
+  --overlay: #ffffff;
+  --overlay-foreground: #111827; /* gray-900 */
+  --scrollbar: #d1d5db; /* gray-300 */
+  --segment: #ffffff;
+  --segment-foreground: #111827; /* gray-900 */
+  --separator: #e5e7eb; /* gray-200 */
+  --success: #059669; /* emerald-600 */
+  --success-foreground: #ffffff;
+  --surface: #ffffff;
+  --surface-foreground: #111827; /* gray-900 */
+  --surface-secondary: #f3f4f6; /* gray-100 */
+  --surface-secondary-foreground: #111827; /* gray-900 */
+  --surface-tertiary: #e5e7eb; /* gray-200 */
+  --surface-tertiary-foreground: #111827; /* gray-900 */
+  --warning: #d97706; /* amber-600 */
+  --warning-foreground: #ffffff;
 
-  /* Border Radius */
+  /* Border Radius & Shadows */
   --radius: 1rem;
   --field-radius: 0.625rem;
   --field-shadow: none;
@@ -56,38 +55,38 @@
 .dark,
 [data-theme="dark"] {
   color-scheme: dark;
-  /* Theme Colors (Dark Mode) */
-  --accent: oklch(46.90% 0.2430 285.03);
-  --accent-foreground: oklch(99.11% 0 0);
-  --background: oklch(12.00% 0.0000 285.03);
-  --border: oklch(28.00% 0.0000 285.03);
-  --danger: oklch(59.40% 0.1967 28.37);
-  --danger-foreground: oklch(99.11% 0 0);
-  --default: oklch(27.40% 0.0000 285.03);
-  --default-foreground: oklch(99.11% 0 0);
-  --field-background: oklch(21.03% 0.0000 285.03);
-  --field-border: oklch(28.00% 0.0000 285.03);
-  --field-foreground: oklch(99.11% 0.0000 285.03);
-  --field-placeholder: oklch(70.50% 0.0000 285.03);
-  --focus: oklch(46.90% 0.2430 285.03);
-  --foreground: oklch(99.11% 0.0000 285.03);
-  --muted: oklch(70.50% 0.0000 285.03);
-  --overlay: oklch(21.03% 0.0000 285.03);
-  --overlay-foreground: oklch(99.11% 0 0);
-  --scrollbar: oklch(70.50% 0.0000 285.03);
-  --segment: oklch(39.64% 0.0000 285.03);
-  --segment-foreground: oklch(99.11% 0 0);
-  --separator: oklch(25.00% 0.0000 285.03);
-  --success: oklch(73.29% 0.1935 154.55);
-  --success-foreground: oklch(21.03% 0.0059 154.55);
-  --surface: oklch(21.03% 0.0000 285.03);
-  --surface-foreground: oklch(99.11% 0.0000 285.03);
-  --surface-secondary: oklch(25.70% 0.0000 285.03);
-  --surface-secondary-foreground: oklch(99.11% 0.0000 285.03);
-  --surface-tertiary: oklch(27.21% 0.0000 285.03);
-  --surface-tertiary-foreground: oklch(99.11% 0.0000 285.03);
-  --warning: oklch(82.03% 0.1388 80.08);
-  --warning-foreground: oklch(21.03% 0.0059 80.08);
+  /* Theme Colors (Dark Mode - Tailwind CSS) */
+  --accent: #8b5cf6; /* violet-500 */
+  --accent-foreground: #ffffff;
+  --background: #111827; /* gray-900 */
+  --border: #374151; /* gray-700 */
+  --danger: #ef4444; /* red-500 */
+  --danger-foreground: #ffffff;
+  --default: #1f2937; /* gray-800 */
+  --default-foreground: #f9fafb; /* gray-50 */
+  --field-background: #1f2937; /* gray-800 */
+  --field-border: #374151; /* gray-700 */
+  --field-foreground: #f9fafb; /* gray-50 */
+  --field-placeholder: #6b7280; /* gray-500 */
+  --focus: #a78bfa; /* violet-400 */
+  --foreground: #f9fafb; /* gray-50 */
+  --muted: #9ca3af; /* gray-400 */
+  --overlay: #1f2937; /* gray-800 */
+  --overlay-foreground: #f9fafb; /* gray-50 */
+  --scrollbar: #4b5563; /* gray-600 */
+  --segment: #374151; /* gray-700 */
+  --segment-foreground: #f9fafb; /* gray-50 */
+  --separator: #374151; /* gray-700 */
+  --success: #10b981; /* emerald-500 */
+  --success-foreground: #ffffff;
+  --surface: #1f2937; /* gray-800 */
+  --surface-foreground: #f9fafb; /* gray-50 */
+  --surface-secondary: #374151; /* gray-700 */
+  --surface-secondary-foreground: #f9fafb; /* gray-50 */
+  --surface-tertiary: #4b5563; /* gray-600 */
+  --surface-tertiary-foreground: #f9fafb; /* gray-50 */
+  --warning: #f59e0b; /* amber-500 */
+  --warning-foreground: #ffffff;
 
   /* Border Radius & Shadows */
   --radius: 1rem;
