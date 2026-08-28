@@ -1,5 +1,11 @@
 import {useState, useEffect, useRef, useCallback} from 'react';
-import {toast} from '@heroui/react';
+import {toast, Button} from '@heroui/react';
+import {
+  Play,
+  Check,
+  ArrowRight,
+  FileText,
+} from '@gravity-ui/icons';
 import {PlannerSessionHeader} from './PlannerSessionHeader.jsx';
 import {PlannerAgendaView} from './PlannerAgendaView.jsx';
 import {PlannerEditorView} from './PlannerEditorView.jsx';
@@ -48,6 +54,7 @@ import {
   evaluateSessionAssistant,
   ASSISTANT_EVENT,
   formatMsToClock,
+  getAssistantContextDetails,
 } from './session-assistant-engine.js';
 import {RecordingController, RECORDING_STATUS} from './recording-controller.js';
 import {
@@ -837,6 +844,56 @@ export function PlannerModule({initialTab = 'agenda', onSwitchTab}) {
         onClose={() => setInterruptModal({isOpen: false})}
         onConfirmInterrupt={handleConfirmInterrupt}
       />
+
+      {/* FAB móvil persistente y sin glow en la esquina inferior derecha */}
+      {activeTab === 'agenda' && (() => {
+        let fabLabel = 'Iniciar sesión';
+        let fabIcon = <Play width={13} height={13} />;
+        let fabAction = handleStartSession;
+        let fabDisabled = false;
+
+        if (isEditing) {
+          fabLabel = 'Listo';
+          fabIcon = <Check width={14} height={14} />;
+          fabAction = handleToggleEditMode;
+        } else if (isLive) {
+          const details = getAssistantContextDetails(plannerState, sessionState);
+          const isRecSaving = recordingStatus === RECORDING_STATUS.FINALIZING;
+          const isBusy = isTransitioning || isRecSaving;
+          fabLabel = isBusy ? 'Guardando…' : details.nextAction.label;
+          fabIcon = !isBusy && details.nextAction.target !== 'session' ? <ArrowRight width={14} height={14} /> : null;
+          fabAction = handleAdvance;
+          fabDisabled = isBusy;
+        } else if (sessionState.status === SESSION_STATUS.INTERRUPTED) {
+          fabLabel = 'Reanudar sesión';
+          fabIcon = <Play width={13} height={13} />;
+          fabAction = handleResumeSession;
+        } else if (sessionState.status === SESSION_STATUS.COMPLETED) {
+          fabLabel = 'Ver resumen';
+          fabIcon = <FileText width={13} height={13} />;
+          fabAction = () => handleTabChange('recap');
+        }
+
+        return (
+          <div
+            className="fixed right-4 z-50 sm:hidden animate-in fade-in slide-in-from-bottom-2 duration-150"
+            style={{
+              bottom: 'calc(var(--bardo-visual-viewport-bottom, 0px) + var(--bardo-safe-bottom, 0px) + 16px)',
+            }}
+          >
+            <Button
+              variant="primary"
+              size="md"
+              onPress={fabAction}
+              isDisabled={fabDisabled}
+              className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 active:scale-95 transition-all shadow-lg border border-white/10"
+            >
+              {fabIcon}
+              <span>{fabLabel}</span>
+            </Button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

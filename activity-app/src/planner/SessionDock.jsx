@@ -164,30 +164,11 @@ export function SessionDock({
             {isPaused ? <Play width={13} height={13} fill="currentColor" /> : <Pause width={13} height={13} />}
           </Button>
 
-          {/* 3. Siguiente → (En desktop en el dock, en mobile como FAB abajo a la derecha) */}
+          {/* 3. Siguiente → (En desktop en el dock) */}
           <div className="hidden sm:inline-flex">
             {renderAdvanceButton('primary', 'sm')}
           </div>
         </div>
-      </div>
-
-      {/* FAB móvil abajo a la derecha */}
-      <div
-        className="fixed right-4 z-50 sm:hidden animate-in fade-in slide-in-from-bottom-3 duration-200"
-        style={{
-          bottom: 'calc(var(--bardo-visual-viewport-bottom, 0px) + var(--bardo-safe-bottom, 0px) + 16px)',
-        }}
-      >
-        <Button
-          variant="primary"
-          size="md"
-          onPress={onAdvance}
-          isDisabled={isBusy}
-          className="shadow-xl shadow-accent/30 font-semibold text-xs rounded-full h-11 px-4.5 flex items-center gap-2 active:scale-95 transition-transform"
-        >
-          <span>{isBusy ? 'Guardando…' : advanceLabel}</span>
-          {!isBusy && details.nextAction.target !== 'session' && <ArrowRight width={14} height={14} />}
-        </Button>
       </div>
     </aside>
   );
