@@ -86,6 +86,7 @@ export function PlannerSessionHeader({
 
   const {
     title = 'Sesión sin título',
+    description = '',
     date = '',
     startTime = '10:00',
     totalCalculatedDuration = 0,
@@ -355,6 +356,12 @@ export function PlannerSessionHeader({
               </>
             )}
           </div>
+
+          {description && (
+            <p className="text-xs sm:text-sm text-muted leading-relaxed whitespace-pre-line pt-0.5">
+              {description}
+            </p>
+          )}
 
           {!isRunning && !isPaused && totalPoints > 0 && (
             <div className="flex items-center justify-between gap-3 pt-1">

@@ -28,7 +28,6 @@ export function PlannerAgendaView({
   onDeleteDecision,
 }) {
   const {
-    description = '',
     startTime = '10:00',
     blocks = [],
   } = state;
@@ -53,17 +52,6 @@ export function PlannerAgendaView({
             <div className="min-w-0 w-full">
               {dockSlot}
             </div>
-          </div>
-        </div>
-      )}
-
-      {!dockSlot && description && (
-        <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start mb-1">
-          <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-          <div className="min-w-0 w-full">
-            <p className="text-xs sm:text-sm text-muted leading-relaxed whitespace-pre-line py-0.5">
-              {description}
-            </p>
           </div>
         </div>
       )}
