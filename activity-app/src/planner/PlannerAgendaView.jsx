@@ -274,7 +274,7 @@ export function PlannerAgendaView({
                               key={point.id}
                               className={`flex items-start justify-between gap-3 px-3 py-2.5 rounded-xl transition-colors ${
                                 isPointActive
-                                  ? 'bg-accent/12 text-foreground'
+                                  ? 'bg-accent/12 text-accent'
                                   : isDone || isPointSkipped
                                     ? 'bg-surface-secondary/40'
                                     : 'hover:bg-surface-secondary/50'
@@ -294,13 +294,13 @@ export function PlannerAgendaView({
                                       : isPointSkipped
                                       ? 'text-muted font-normal'
                                       : isPointActive
-                                      ? 'font-semibold text-foreground'
+                                      ? 'font-semibold text-accent'
                                       : 'font-medium text-foreground'
                                   }`}>
                                     {point.title || '(Punto sin título)'}
                                   </span>
                                   {isPointActive && point.description && (
-                                    <span className="text-xs text-muted mt-0.5 line-clamp-2">{point.description}</span>
+                                    <span className="text-xs text-accent/80 mt-0.5 line-clamp-2">{point.description}</span>
                                   )}
                                 </span>
                               </label>
@@ -318,7 +318,9 @@ export function PlannerAgendaView({
                                   <span className="text-muted font-medium">Saltado</span>
                                 )}
                                 {point.presenter && (
-                                  <span className="text-muted">· {point.presenter}</span>
+                                  <span className={isPointActive ? 'text-accent/90 font-medium' : 'text-muted'}>
+                                    · {point.presenter}
+                                  </span>
                                 )}
                               </div>
                             </div>
