@@ -151,14 +151,28 @@ export function PlannerAgendaView({
                     <span>{blockStart}</span>
                     <span className="text-[10px] sm:text-[11px] text-muted/60">{blockEnd}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-surface-secondary/40 border border-border/40 text-xs text-muted">
-                    <div className="flex items-center gap-2">
-                      <Cup width={14} height={14} className="text-muted/80 shrink-0" />
-                      <span className="font-semibold text-foreground">{block.title}</span>
-                      {block.introDesc && <span>· {block.introDesc}</span>}
+                  <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border text-xs text-muted transition-all ${
+                    isLive
+                      ? 'bg-accent/10 border-accent/40 shadow-xs'
+                      : 'bg-surface-secondary/40 border-border/40'
+                  }`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Cup width={14} height={14} className={isLive ? 'text-accent shrink-0' : 'text-muted/80 shrink-0'} />
+                      <span className={`font-semibold truncate ${isLive ? 'text-accent font-bold' : 'text-foreground'}`}>{block.title}</span>
+                      {block.introDesc && <span className="truncate hidden sm:inline">· {block.introDesc}</span>}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0">
                       <span>{blockDuration} min</span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onPress={onAdvance}
+                        isDisabled={isTransitioning}
+                        className="h-6.5 px-2.5 rounded-full text-xs font-medium text-foreground/90 hover:text-foreground bg-surface/90 hover:bg-surface border border-border/60 shadow-2xs inline-flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                      >
+                        <span>Continuar</span>
+                        <ArrowRight width={11} height={11} className="text-muted shrink-0" />
+                      </Button>
                     </div>
                   </div>
                 </div>
