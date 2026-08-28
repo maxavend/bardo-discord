@@ -2,7 +2,6 @@ import {
   Button,
   Dropdown,
   Label,
-  Description,
 } from '@heroui/react';
 import {
   Microphone,
@@ -25,7 +24,7 @@ export function SessionDock({
   sessionState,
   recordingStatus,
   recordingElapsedMs,
-  recordingContext,
+  recordingContext: _recordingContext,
   isTransitioning = false,
   onPauseSession,
   onResumeSession,
@@ -38,7 +37,7 @@ export function SessionDock({
   onFinalizeRecording,
   onPauseRecording,
   onResumeRecording,
-  onDismissRecordingPrompt,
+  onDismissRecordingPrompt: _onDismissRecordingPrompt,
   onOpenDecisionCapture,
   onInterruptSession,
 }) {
@@ -63,8 +62,6 @@ export function SessionDock({
   const isUnlimited = details.isUnlimited;
   const is5MinWarning = details.is5MinWarning;
   const isExtended = details.isExtended;
-  const showInitialPrompt = details.showInitialRecordingPrompt && !isRecording && !isRecPaused && !isBusy;
-  const activeRecordingName = recordingContext?.recordingName || activePoint?.title || activeBlock?.title || 'Grabación';
   const activeDescription = details.activePointDescription || details.activeBlockDescription || '';
   const advanceLabel = details.nextAction.label;
 
@@ -97,69 +94,51 @@ export function SessionDock({
         zIndex: 45,
       }}
     >
-      <div className="w-full bg-surface/95 backdrop-blur-md border border-border/70 rounded-xl shadow-xs px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-3">
-        {/* 1. Context Unit: Non-redundant parent / current topic hierarchy */}
+      <div className="w-full bg-surface/95 backdrop-blur-md border border-border/70 rounded-xl shadow-xs px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-2.5">
+        {/* 1. Title + Block Index (Check-in, contexto y novedades              1/5) */}
         <div className="flex flex-col gap-0.5 min-w-0">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted min-w-0">
-            <span className={`h-2 w-2 rounded-full shrink-0 ${
-              isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
-            }`} />
-            <span className="font-medium text-foreground/80">{details.blockProgressLabel}</span>
-            {activePoint && activePoint.title && activePoint.title !== activeBlock?.title && (
-              <>
-                <span className="text-muted/40">·</span>
-                <span className="text-muted truncate">{activeBlock?.title}</span>
-              </>
-            )}
-            {details.pointProgressLabel && (
-              <>
-                <span className="text-muted/40">·</span>
-                <span className="text-muted shrink-0">{details.pointProgressLabel}</span>
-              </>
-            )}
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${
+                isPaused ? 'bg-warning' : isExpired ? 'bg-danger animate-pulse' : is5MinWarning ? 'bg-warning animate-pulse' : 'bg-accent'
+              }`} />
+              <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
+                {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
+              </h2>
+            </div>
+
+            <span className="text-xs font-mono text-muted shrink-0 tabular-nums">
+              {details.activeBlockIndex >= 0 ? `${details.activeBlockIndex + 1}/${details.totalBlocksCount}` : ''}
+            </span>
           </div>
 
-          <div className="pl-3.5 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-foreground leading-snug break-words">
-              {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
-            </h2>
-            {activeDescription && (
-              <p className="text-xs text-muted leading-relaxed mt-0.5 line-clamp-2">
-                {activeDescription}
-              </p>
-            )}
-          </div>
+          {activeDescription && (
+            <p className="text-xs text-muted leading-relaxed pl-4 line-clamp-2">
+              {activeDescription}
+            </p>
+          )}
         </div>
 
-        {/* 2. Temporal Metrics & Segmented Timeline Progress */}
-        <div className="flex flex-col gap-1.5 pl-3.5">
-          <div className="flex items-center justify-between gap-x-3 gap-y-1 text-xs flex-wrap">
-            <div className="flex items-center gap-1.5 text-muted">
-              {isPaused ? (
-                <span className="text-warning font-medium">{formatMsToClock(details.remainingBlockMs)} restantes · Pausada</span>
-              ) : isExpired ? (
-                <span className="text-danger font-medium">Tiempo cumplido · +{formatMsToClock(details.overtimeMs)}</span>
-              ) : isUnlimited ? (
-                <span className="text-accent font-medium">Sin límite · +{formatMsToClock(details.elapsedBlockMs)}</span>
-              ) : (
-                <span className={is5MinWarning ? 'text-warning font-medium' : 'text-foreground'}>
-                  {formatMsToClock(details.remainingBlockMs)} restantes
-                  {isExtended ? ` (+${details.extensionMinutes}m)` : ''}
-                </span>
-              )}
-              {details.totalPoints > 0 && (
-                <>
-                  <span className="text-muted/40">·</span>
-                  <span>{details.completedPoints} de {details.totalPoints} tratados</span>
-                </>
-              )}
-            </div>
-            <span className="text-muted shrink-0">{details.estimatedEndDisplay}</span>
-          </div>
+        {/* 2. Block Timer (04:47 restantes) */}
+        <div className="flex items-center gap-2 pl-4 text-xs">
+          {isPaused ? (
+            <span className="text-warning font-medium">{formatMsToClock(details.remainingBlockMs)} restantes · Pausada</span>
+          ) : isExpired ? (
+            <span className="text-danger font-medium">Tiempo cumplido (+{formatMsToClock(details.overtimeMs)})</span>
+          ) : isUnlimited ? (
+            <span className="text-accent font-medium">Sin límite (+{formatMsToClock(details.elapsedBlockMs)})</span>
+          ) : (
+            <span className={is5MinWarning ? 'text-warning font-medium' : 'text-foreground font-medium'}>
+              {formatMsToClock(details.remainingBlockMs)} restantes
+              {isExtended ? ` (+${details.extensionMinutes}m)` : ''}
+            </span>
+          )}
+        </div>
 
-          {/* Segmented Session Timeline Progress Bar by Block */}
+        {/* 3. Segmented Timeline Progress Bar (━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━) */}
+        <div className="pl-4">
           <div
-            className="flex items-center gap-1.5 w-full h-1 pt-0.5"
+            className="flex items-center gap-1.5 w-full h-1"
             role="progressbar"
             aria-label="Progreso temporal de la sesión por bloques"
             aria-valuenow={details.sessionProgressPercent}
@@ -206,58 +185,19 @@ export function SessionDock({
           </div>
         </div>
 
-        {showInitialPrompt && (
-          <div className="flex items-center justify-between gap-2 pl-4 text-xs">
-            <div className="flex items-center gap-1.5 text-foreground/80 min-w-0">
-              <Microphone width={13} height={13} className="text-muted shrink-0" />
-              <span className="truncate">{activePoint ? '¿Grabar este punto?' : '¿Grabar este bloque?'}</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="ghost" size="sm" onPress={onStartRecording} className="h-7 px-2 text-xs">
-                Grabar
-              </Button>
-              <Button variant="ghost" size="sm" onPress={onDismissRecordingPrompt} className="h-7 px-2 text-xs text-muted">
-                Ahora no
-              </Button>
-            </div>
-          </div>
-        )}
+        {/* 4. Session Meta (0/11 puntos · Fin ~20:45) */}
+        <div className="flex items-center justify-between text-xs text-muted pl-4">
+          <span>
+            {details.completedPoints} de {details.totalPoints} puntos
+            {details.estimatedEndTime ? ` · Fin ~${details.estimatedEndTime}` : ''}
+          </span>
+        </div>
 
-        {(isRecording || isRecPaused) && (
-          <div className="flex items-center justify-between gap-2 pl-4 text-xs flex-wrap">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`h-2 w-2 rounded-full shrink-0 ${isRecording ? 'bg-danger' : 'bg-warning'}`} />
-              <span className="font-medium text-foreground">{isRecording ? 'Grabando' : 'Grabación pausada'}</span>
-              <span className="text-muted truncate max-w-[180px] sm:max-w-[280px]">· {activeRecordingName}</span>
-              <span className="text-muted tabular-nums shrink-0">· {formatMsToClock(recordingElapsedMs)}</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={isRecording ? onPauseRecording : onResumeRecording}
-                isDisabled={isBusy}
-                className="h-7 px-2 text-xs text-muted"
-              >
-                {isRecording ? 'Pausar grabación' : 'Continuar grabación'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={onFinalizeRecording}
-                isDisabled={isBusy}
-                className="h-7 px-2 text-xs text-muted"
-              >
-                Finalizar
-              </Button>
-            </div>
-          </div>
-        )}
-
+        {/* 5. Minimal Action Row (⏸ Pausar ◉ Grabar + Decisión ⋮ Siguiente →) */}
         {isExpired && !isUnlimited ? (
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 flex-wrap pl-4">
             <span className="text-xs text-foreground font-medium">
-              {activePoint ? `Punto actual: ${activePoint.title}` : 'El bloque agotó su tiempo'}
+              {activePoint ? `Punto actual: ${activePoint.title}` : '¿Seguimos con este bloque?'}
             </span>
             <div className="flex items-center gap-1.5 shrink-0 ml-auto">
               <Button variant="ghost" size="sm" isDisabled={isBusy} onPress={() => onExtendBlock(sessionState.liveActiveBlockId, 5)} className="h-8 text-xs px-2.5">
@@ -272,7 +212,7 @@ export function SessionDock({
 
               <Dropdown>
                 <Dropdown.Trigger>
-                  <Button variant="ghost" size="sm" isIconOnly isDisabled={isBusy} aria-label="Más opciones" className="h-8 w-8 text-muted">
+                  <Button variant="ghost" size="sm" isIconOnly isDisabled={isBusy} aria-label="Más opciones" className="h-8 w-8 text-muted hover:text-foreground">
                     <EllipsisVertical width={13} height={13} />
                   </Button>
                 </Dropdown.Trigger>
@@ -305,63 +245,124 @@ export function SessionDock({
               {renderAdvanceButton()}
             </div>
           </div>
-        ) : isPaused ? (
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 flex-wrap pl-4">
-            <span className="text-xs text-muted">Tiempo del bloque pausado</span>
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <Button variant="primary" size="sm" onPress={onResumeSession} isDisabled={isBusy} className="h-8 px-3.5 text-xs font-medium">
-                <Play width={12} height={12} /> Reanudar sesión
-              </Button>
-              {renderAdvanceButton('ghost')}
-            </div>
-          </div>
         ) : (
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 pl-4">
-            <div className="flex items-center gap-1 min-w-0">
-              <Button variant="ghost" size="sm" onPress={onOpenDecisionCapture} isDisabled={isBusy} className="h-8 px-2 text-xs text-muted">
-                <Plus width={12} height={12} /> Decisión
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/30 pl-4 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
+              {/* Pausar / Reanudar */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={isPaused ? onResumeSession : onPauseSession}
+                isDisabled={isBusy}
+                className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+              >
+                {isPaused ? <Play width={13} height={13} /> : <Pause width={13} height={13} />}
+                <span>{isPaused ? 'Reanudar' : 'Pausar'}</span>
               </Button>
-              {!isRecording && !isRecPaused && !showInitialPrompt && (
-                <Button variant="ghost" size="sm" onPress={onStartRecording} isDisabled={isBusy} className="h-8 px-2 text-xs text-muted">
-                  <Microphone width={12} height={12} /> Grabar
+
+              {/* Grabar / Estado de Grabación */}
+              {isRecording ? (
+                <div className="flex items-center gap-1.5 bg-danger/10 text-danger border border-danger/20 rounded-lg px-2.5 py-1 text-xs">
+                  <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />
+                  <span className="font-medium">Grabando</span>
+                  <span className="tabular-nums font-mono">({formatMsToClock(recordingElapsedMs)})</span>
+                  <button
+                    type="button"
+                    className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
+                    onClick={onPauseRecording}
+                  >
+                    Pausar
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-danger hover:text-danger/80 underline font-medium cursor-pointer"
+                    onClick={onFinalizeRecording}
+                  >
+                    Fin
+                  </button>
+                </div>
+              ) : isRecPaused ? (
+                <div className="flex items-center gap-1.5 bg-warning/10 text-warning border border-warning/20 rounded-lg px-2.5 py-1 text-xs">
+                  <span className="h-2 w-2 rounded-full bg-warning" />
+                  <span className="font-medium">Pausada</span>
+                  <span className="tabular-nums font-mono">({formatMsToClock(recordingElapsedMs)})</span>
+                  <button
+                    type="button"
+                    className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
+                    onClick={onResumeRecording}
+                  >
+                    Reanudar
+                  </button>
+                  <button
+                    type="button"
+                    className="ml-1 text-warning hover:text-warning/80 underline font-medium cursor-pointer"
+                    onClick={onFinalizeRecording}
+                  >
+                    Fin
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={onStartRecording}
+                  isDisabled={isBusy}
+                  className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+                >
+                  <Microphone width={13} height={13} className="text-danger" />
+                  <span>Grabar</span>
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onPress={onPauseSession} isDisabled={isBusy} className="h-8 px-2 text-xs text-muted">
-                <Pause width={12} height={12} /> Pausar
+
+              {/* Decisión */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={onOpenDecisionCapture}
+                isDisabled={isBusy}
+                className="h-8 px-2 text-xs text-muted hover:text-foreground font-normal"
+              >
+                <Plus width={13} height={13} />
+                <span>Decisión</span>
               </Button>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0 ml-auto">
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
               <Dropdown>
                 <Dropdown.Trigger>
-                  <Button variant="ghost" size="sm" isIconOnly isDisabled={isBusy} aria-label="Más opciones" className="h-8 w-8 text-muted">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    isIconOnly
+                    isDisabled={isBusy}
+                    aria-label="Más opciones"
+                    className="h-8 w-8 text-muted hover:text-foreground"
+                  >
                     <EllipsisVertical width={13} height={13} />
                   </Button>
                 </Dropdown.Trigger>
                 <Dropdown.Popover>
                   <Dropdown.Menu onAction={(key) => {
-                    if (key === 'skip') handleSecondarySkip();
                     if (key === 'unlimited') onSetUnlimited(sessionState.liveActiveBlockId);
+                    if (key === 'skip') handleSecondarySkip();
                     if (key === 'interrupt') onInterruptSession?.();
                   }}>
                     <Dropdown.Item id="unlimited" textValue="Seguir sin límite">
                       <ArrowsRotateLeft />
                       <Label>Seguir sin límite</Label>
-                      <Description>Desactivar alertas de tiempo del bloque</Description>
                     </Dropdown.Item>
                     <Dropdown.Item id="skip" textValue={activePoint ? 'Saltar punto' : 'Saltar bloque'}>
                       <ForwardStep />
                       <Label>{activePoint ? 'Saltar punto' : 'Saltar bloque'}</Label>
-                      <Description>{activePoint ? 'Continuar sin marcarlo tratado' : 'Continuar con el siguiente bloque'}</Description>
                     </Dropdown.Item>
                     <Dropdown.Item id="interrupt" variant="danger" textValue="Interrumpir sesión">
                       <CircleExclamation />
                       <Label>Interrumpir sesión</Label>
-                      <Description>Conservar progreso y artefactos</Description>
                     </Dropdown.Item>
                   </Dropdown.Menu>
                 </Dropdown.Popover>
               </Dropdown>
+
               {renderAdvanceButton()}
             </div>
           </div>
