@@ -23,6 +23,7 @@ import {
 } from './session-runner.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 import {MaterialWavyProgress} from './MaterialWavyProgress.jsx';
+import {MaterialMorphShape} from './MaterialMorphShape.jsx';
 
 export function PlannerAgendaView({
   state,
@@ -173,12 +174,13 @@ export function PlannerAgendaView({
 
                   {/* Material Design 3 Vertical Progress Timeline Rail (4.5px) */}
                   <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-14px] w-4 select-none pointer-events-none z-0">
-                    <div className="relative mt-2.5 z-10">
+                    <div className="relative mt-2 z-10 flex items-center justify-center">
                       {isLive ? (
-                        <div className="relative flex items-center justify-center">
-                          <span className="absolute h-4 w-4 rounded-full bg-accent/30 animate-ping" />
-                          <span className="relative h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-surface shadow-xs block" />
-                        </div>
+                        <MaterialMorphShape
+                          size={14}
+                          color={sessionState?.isExpired ? 'danger' : 'accent'}
+                          isPaused={isPaused}
+                        />
                       ) : isCompleted ? (
                         <span className="h-2 w-2 rounded-full bg-accent ring-2 ring-surface block" />
                       ) : (

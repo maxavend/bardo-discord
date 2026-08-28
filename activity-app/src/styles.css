@@ -892,7 +892,7 @@ button { font-size: 14px; }
   .continue-row:hover strong { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 }
 
-/* ── Material Design 3 Expressive Wavy Progress Track ───────────────────── */
+/* ── Material Design 3 Expressive Wavy Progress & Morph Shapes ──────────── */
 .m3-wavy-progress-root.vertical {
   position: relative;
   width: 20px;
@@ -902,6 +902,25 @@ button { font-size: 14px; }
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+@keyframes m3-morph-rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.m3-morph-svg {
+  animation: m3-morph-rotation 16s linear infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.m3-morph-svg.is-paused {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
