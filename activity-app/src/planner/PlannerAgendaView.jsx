@@ -21,36 +21,7 @@ import {
   getBlockPlannedMs,
 } from './session-runner.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
-
-function WavyVerticalTrack({isExpired = false, isPaused = false, progressPercent = 50}) {
-  const periods = 20; // 20 * 56 = 1120px
-  let d = 'M 8 0';
-  for (let i = 0; i < periods; i++) {
-    const y0 = i * 56;
-    d += ` C 12.5 ${y0 + 9}, 12.5 ${y0 + 19}, 8 ${y0 + 28}`;
-    d += ` C 3.5 ${y0 + 37}, 3.5 ${y0 + 47}, 8 ${y0 + 56}`;
-  }
-
-  return (
-    <div className={`m3-wavy-track-container ${isPaused ? 'is-paused' : ''}`} aria-hidden="true">
-      {/* 1. Fondo de riel gris sutil de 4px */}
-      <div className="m3-wavy-track-bg" />
-
-      {/* 2. Relleno activo con onda Material 3 de 4px que avanza según el progreso */}
-      <div className="m3-wavy-track-fill" style={{height: `${progressPercent}%`}}>
-        <svg className={`m3-wavy-track-svg ${isExpired ? 'text-danger' : 'text-accent'}`} viewBox="0 0 16 1120" fill="none">
-          <path
-            d={d}
-            stroke="currentColor"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </div>
-  );
-}
+import {MaterialWavyProgress} from './MaterialWavyProgress.jsx';
 
 export function PlannerAgendaView({
   state,
@@ -201,7 +172,15 @@ export function PlannerAgendaView({
                     {!isLast && (
                       <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
                         {isLive ? (
-                          <WavyVerticalTrack isPaused={isPaused} progressPercent={progressPercent} />
+                          <MaterialWavyProgress
+                            value={progressPercent}
+                            color={sessionState?.isExpired ? 'danger' : 'accent'}
+                            isPaused={isPaused}
+                            orientation="vertical"
+                            strokeWidth={4}
+                            wavelength={52}
+                            amplitude={3.5}
+                          />
                         ) : isCompleted ? (
                           <div className="w-[4px] h-full bg-accent rounded-full my-1" />
                         ) : (
