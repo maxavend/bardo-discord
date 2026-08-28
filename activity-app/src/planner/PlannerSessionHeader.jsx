@@ -7,7 +7,6 @@ import {
   Header,
 } from '@heroui/react';
 import {
-  ChevronLeft,
   FileText,
   Pencil,
   Copy,
@@ -41,7 +40,7 @@ function parseMentions(mentionsStr = '') {
 export function PlannerSessionHeader({
   state,
   sessionState,
-  activeTab,
+  _activeTab,
   onTabChange,
   isEditing = false,
   onToggleEditMode,
@@ -319,35 +318,23 @@ export function PlannerSessionHeader({
 
         <div className="flex flex-col min-w-0 w-full pb-2">
           {/* Fila 1: Título y Acción Principal */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isEditing && onToggleEditMode) onToggleEditMode();
-                  else if (activeTab === 'minutes' || activeTab === 'recap') onTabChange('agenda');
-                  else window.location.hash = '';
-                }}
-                aria-label="Volver"
-                className="inline-flex items-center justify-center h-8 w-8 -ml-1 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary/70 transition-colors cursor-pointer shrink-0"
-              >
-                <ChevronLeft width={18} height={18} />
-              </button>
-
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
               {isEditing ? (
-                <input
-                  type="text"
+                <textarea
+                  rows={1}
                   value={title}
                   onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
                   placeholder="Título de la sesión"
-                  className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0"
+                  className="doc-title doc-title-input"
+                  aria-label="Título de la sesión"
                 />
               ) : (
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">{title}</h1>
+                <h1 className="doc-title">{title || 'Sesión sin título'}</h1>
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 pt-1">
               {!isEditing && !isRunning && !isPaused && (
                 <Button variant="ghost" size="sm" onPress={onCopyAnnouncement} className="text-xs text-muted hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium">
                   <Copy width={13} height={13} /> <span>Copiar anuncio</span>
@@ -444,19 +431,18 @@ export function PlannerSessionHeader({
             </div>
           </div>
 
-          {/* Fila 2: Descripción (gap de 8px / mt-2) */}
+          {/* Fila 2: Descripción con estilos idénticos a Docs */}
           {isEditing ? (
             <textarea
-              rows={2}
+              rows={1}
               value={description}
               onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
-              placeholder="Revisión de los avances de proyectos, feedback y acuerdos del equipo..."
-              className="text-sm text-muted bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 mt-2"
+              placeholder="Agrega una descripción..."
+              className="doc-description doc-description-input"
+              aria-label="Descripción de la sesión"
             />
           ) : description ? (
-            <p className="text-sm text-muted leading-relaxed whitespace-pre-line mt-2">
-              {description}
-            </p>
+            <p className="doc-description">{description}</p>
           ) : null}
 
           {/* Versión MOBILE: Separación conceptual de 'Cuándo' y 'Quiénes' */}
