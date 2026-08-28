@@ -15,29 +15,39 @@ import {
   Microphone,
 } from '@gravity-ui/icons';
 import {clockToMinutes, minutesToClock} from './time-engine.js';
-import {POINT_STATUS} from './session-runner.js';
+import {
+  POINT_STATUS,
+  getElapsedActiveBlockMs,
+  getBlockPlannedMs,
+} from './session-runner.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 
-function WavyVerticalTrack({isExpired = false, isPaused = false}) {
-  const periods = 30; // 30 * 32 = 960px
-  let d = 'M 7 0';
+function WavyVerticalTrack({isExpired = false, isPaused = false, progressPercent = 50}) {
+  const periods = 20; // 20 * 56 = 1120px
+  let d = 'M 8 0';
   for (let i = 0; i < periods; i++) {
-    const y0 = i * 32;
-    d += ` C 12 ${y0 + 5}, 12 ${y0 + 11}, 7 ${y0 + 16}`;
-    d += ` C 2 ${y0 + 21}, 2 ${y0 + 27}, 7 ${y0 + 32}`;
+    const y0 = i * 56;
+    d += ` C 12.5 ${y0 + 9}, 12.5 ${y0 + 19}, 8 ${y0 + 28}`;
+    d += ` C 3.5 ${y0 + 37}, 3.5 ${y0 + 47}, 8 ${y0 + 56}`;
   }
 
   return (
-    <div className={`m3-wavy-track ${isPaused ? 'is-paused' : ''}`} aria-hidden="true">
-      <svg className={`m3-wavy-track-svg ${isExpired ? 'text-danger' : 'text-accent'}`} viewBox="0 0 14 960" fill="none">
-        <path
-          d={d}
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+    <div className={`m3-wavy-track-container ${isPaused ? 'is-paused' : ''}`} aria-hidden="true">
+      {/* 1. Fondo de riel gris sutil de 4px */}
+      <div className="m3-wavy-track-bg" />
+
+      {/* 2. Relleno activo con onda Material 3 de 4px que avanza según el progreso */}
+      <div className="m3-wavy-track-fill" style={{height: `${progressPercent}%`}}>
+        <svg className={`m3-wavy-track-svg ${isExpired ? 'text-danger' : 'text-accent'}`} viewBox="0 0 16 1120" fill="none">
+          <path
+            d={d}
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -110,6 +120,14 @@ export function PlannerAgendaView({
             const blockRecordings = (sessionState?.recordings || []).filter((recording) => recording.blockId === block.id);
             const isLast = blockIndex === blocks.length - 1;
 
+            let progressPercent = 0;
+            if (isLive && sessionState) {
+              const plannedMs = getBlockPlannedMs(block, sessionState);
+              const elapsedMs = getElapsedActiveBlockMs(sessionState);
+              const ratio = plannedMs > 0 ? Math.min(1, Math.max(0.06, elapsedMs / plannedMs)) : 0.5;
+              progressPercent = Math.round(ratio * 100);
+            }
+
             if (isBreak && !isLive && (block.subpoints || []).length === 0 && (block.decisions || []).length === 0) {
               return (
                 <div key={block.id || blockIndex} className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-center relative z-10">
@@ -117,7 +135,7 @@ export function PlannerAgendaView({
                     <span className="text-xs font-semibold text-muted">{blockStart}</span>
                     <span className="text-[11px] text-muted/60 hidden sm:inline">{blockEnd}</span>
 
-                    {/* Material Design 3 Vertical Progress Timeline Rail */}
+                    {/* Material Design 3 Vertical Progress Timeline Rail (4px) */}
                     <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-12px] w-4 select-none pointer-events-none z-0">
                       <div className="relative mt-2 z-10">
                         {isCompleted ? (
@@ -130,9 +148,9 @@ export function PlannerAgendaView({
                       {!isLast && (
                         <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
                           {isCompleted ? (
-                            <div className="w-[2px] h-full bg-accent rounded-full my-1" />
+                            <div className="w-[4px] h-full bg-accent rounded-full my-1" />
                           ) : (
-                            <div className="w-[1.5px] h-full bg-border/50 my-1" />
+                            <div className="w-[4px] h-full bg-border/40 rounded-full my-1" />
                           )}
                         </div>
                       )}
@@ -165,7 +183,7 @@ export function PlannerAgendaView({
                   <span className="text-[11px] text-muted/70 leading-tight">{blockEnd}</span>
                   <span className="text-[11px] text-muted mt-1">{blockDuration}m</span>
 
-                  {/* Material Design 3 Vertical Progress Timeline Rail */}
+                  {/* Material Design 3 Vertical Progress Timeline Rail (4px) */}
                   <div className="hidden sm:flex flex-col items-center absolute right-[-8px] top-0 bottom-[-12px] w-4 select-none pointer-events-none z-0">
                     <div className="relative mt-2.5 z-10">
                       {isLive ? (
@@ -183,11 +201,11 @@ export function PlannerAgendaView({
                     {!isLast && (
                       <div className="flex-1 w-full relative flex justify-center items-stretch min-h-[24px]">
                         {isLive ? (
-                          <WavyVerticalTrack isPaused={isPaused} />
+                          <WavyVerticalTrack isPaused={isPaused} progressPercent={progressPercent} />
                         ) : isCompleted ? (
-                          <div className="w-[2px] h-full bg-accent rounded-full my-1" />
+                          <div className="w-[4px] h-full bg-accent rounded-full my-1" />
                         ) : (
-                          <div className="w-[1.5px] h-full bg-border/50 my-1" />
+                          <div className="w-[4px] h-full bg-border/40 rounded-full my-1" />
                         )}
                       </div>
                     )}
