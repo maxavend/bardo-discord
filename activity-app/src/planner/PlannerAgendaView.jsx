@@ -344,16 +344,18 @@ export function PlannerAgendaView({
                     </div>
                     <div className="flex items-center gap-2.5 shrink-0">
                       <span>{blockDuration} min</span>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onPress={onAdvance}
-                        isDisabled={isTransitioning}
-                        className="h-6.5 px-2.5 rounded-full text-xs font-medium text-foreground/90 hover:text-foreground bg-surface/90 hover:bg-surface border border-border/60 shadow-2xs inline-flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-                      >
-                        <span>Continuar</span>
-                        <ArrowRight width={11} height={11} className="text-muted shrink-0" />
-                      </Button>
+                      {isLive && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onPress={onAdvance}
+                          isDisabled={isTransitioning}
+                          className="h-6 px-2 rounded-lg text-xs font-medium text-muted hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <span>Continuar</span>
+                          <ArrowRight width={11} height={11} className="text-muted/70" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
