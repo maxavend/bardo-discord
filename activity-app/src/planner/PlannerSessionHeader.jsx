@@ -115,11 +115,12 @@ export function PlannerSessionHeader({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
           >
-            <Calendar width={13} height={13} className="text-muted group-hover:text-foreground shrink-0 transition-colors" />
-            <span className="font-medium text-foreground">{formattedDate || 'Seleccionar fecha'}</span>
-            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+            <Calendar width={13} height={13} className="text-muted/70 group-hover:text-foreground shrink-0 transition-colors" />
+            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+              {formattedDate || 'Seleccionar fecha'}
+            </span>
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
@@ -178,11 +179,12 @@ export function PlannerSessionHeader({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
           >
-            <Clock width={13} height={13} className="text-muted group-hover:text-foreground shrink-0 transition-colors" />
-            <span className="font-medium text-foreground">{startTime}–{estimatedEndTime}</span>
-            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+            <Clock width={13} height={13} className="text-muted/70 group-hover:text-foreground shrink-0 transition-colors" />
+            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+              {startTime}–{estimatedEndTime}
+            </span>
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom start" className="min-w-[200px] max-h-64 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
@@ -232,7 +234,7 @@ export function PlannerSessionHeader({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
           >
             <Avatar
               name={hostMember?.globalName || host || 'Conductor'}
@@ -240,8 +242,9 @@ export function PlannerSessionHeader({
               className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
               style={{backgroundColor: `${hostColor}30`, color: hostColor}}
             />
-            <span className="font-medium text-foreground">{host || 'Asignar conductor'}</span>
-            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+              {host || 'Asignar conductor'}
+            </span>
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
@@ -340,7 +343,7 @@ export function PlannerSessionHeader({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="group inline-flex items-center gap-1.5 px-2 py-1 -my-1 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
             aria-label={`Editar ${participantsList.length} convocados`}
           >
             <div className="flex items-center -space-x-2">
@@ -385,7 +388,6 @@ export function PlannerSessionHeader({
                 +{participantsList.length - 4}
               </span>
             )}
-            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom end" className="min-w-[280px] max-h-80 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">

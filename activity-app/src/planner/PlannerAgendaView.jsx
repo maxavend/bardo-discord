@@ -18,7 +18,6 @@ import {
   ChevronUp,
   ChevronDown,
   ArrowRight,
-  Pencil,
 } from '@gravity-ui/icons';
 import {clockToMinutes, minutesToClock} from './time-engine.js';
 import {
@@ -79,33 +78,13 @@ export function PlannerAgendaView({
 
   const renderBlockLeader = (block) => {
     const leaderStr = block.leader || 'Todo el equipo';
-    const leaderNames = leaderStr.split(/(?:,|\s+y\s+|\s+and\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean);
 
     if (!isEditing) {
       return (
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center -space-x-1.5">
-            {leaderNames.slice(0, 2).map((lName, idx) => {
-              const matched = DEFAULT_DISCORD_MEMBERS.find(
-                (m) =>
-                  m.globalName.toLowerCase().includes(lName.toLowerCase()) ||
-                  m.tag.toLowerCase().includes(lName.toLowerCase()) ||
-                  lName.toLowerCase().includes(m.globalName.toLowerCase())
-              );
-              const color = matched?.avatarColor || DISCORD_PALETTES[idx % DISCORD_PALETTES.length];
-              return (
-                <Avatar
-                  key={idx}
-                  name={matched?.globalName || lName}
-                  size="sm"
-                  className="w-5 h-5 text-[9px] font-bold shrink-0 border border-background shadow-2xs"
-                  style={{backgroundColor: `${color}30`, color}}
-                />
-              );
-            })}
-          </div>
-          <span className="font-medium text-foreground">{leaderStr}</span>
-        </div>
+        <span className="inline-flex items-center gap-1">
+          <span className="text-muted">Conduce:</span>
+          <strong className="font-semibold text-foreground">{leaderStr}</strong>
+        </span>
       );
     }
 
@@ -114,30 +93,12 @@ export function PlannerAgendaView({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="group inline-flex items-center gap-1.5 px-2 py-0.5 -my-0.5 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            className="inline-flex items-center gap-1 cursor-pointer text-xs text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none group"
           >
-            <div className="flex items-center -space-x-1.5">
-              {leaderNames.slice(0, 2).map((lName, idx) => {
-                const matched = DEFAULT_DISCORD_MEMBERS.find(
-                  (m) =>
-                    m.globalName.toLowerCase().includes(lName.toLowerCase()) ||
-                    m.tag.toLowerCase().includes(lName.toLowerCase()) ||
-                    lName.toLowerCase().includes(m.globalName.toLowerCase())
-                );
-                const color = matched?.avatarColor || DISCORD_PALETTES[idx % DISCORD_PALETTES.length];
-                return (
-                  <Avatar
-                    key={idx}
-                    name={matched?.globalName || lName}
-                    size="sm"
-                    className="w-5 h-5 text-[9px] font-bold shrink-0 border border-background shadow-2xs"
-                    style={{backgroundColor: `${color}30`, color}}
-                  />
-                );
-              })}
-            </div>
-            <span className="font-medium text-foreground">{leaderStr}</span>
-            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+            <span className="text-muted">Conduce:</span>
+            <span className="font-semibold text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+              {leaderStr}
+            </span>
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
@@ -173,12 +134,12 @@ export function PlannerAgendaView({
 
   const renderBlockParticipants = (block) => {
     const rawParticipants = block.participants || '';
-    const parsed = rawParticipants
-      ? rawParticipants.split(/(?:,|\s+y\s+|\s+and\s+|\s*\+\s*|\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean)
-      : [];
-
-    const participantsList = parsed.length > 0 ? parsed : ['Diseño & SD', 'Carol', 'Karola', 'Nico'];
+    const participantsStr = rawParticipants || 'Diseño & SD + Carol, Karola y Nico';
     const {members, roles} = getAllDiscordEntities();
+
+    const participantsList = rawParticipants
+      ? rawParticipants.split(/(?:,|\s+y\s+|\s+and\s+|\s*\+\s*|\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean)
+      : ['Diseño & SD', 'Carol', 'Karola', 'Nico'];
 
     const selectedKeys = new Set(
       participantsList.map((tag) => {
@@ -194,50 +155,10 @@ export function PlannerAgendaView({
 
     if (!isEditing) {
       return (
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center -space-x-2">
-            {participantsList.slice(0, 4).map((tag, i) => {
-              const matchedMember = members.find(
-                (m) =>
-                  m.tag.toLowerCase() === tag.toLowerCase() ||
-                  `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-              );
-              const matchedRole = roles.find(
-                (r) =>
-                  r.tag.toLowerCase() === tag.toLowerCase() ||
-                  `@${r.name.toLowerCase()}` === tag.toLowerCase()
-              );
-              const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-
-              if (matchedRole) {
-                return (
-                  <span
-                    key={i}
-                    className="w-5 h-5 rounded-md border-2 border-background text-[9px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
-                    style={{backgroundColor: color}}
-                  >
-                    #
-                  </span>
-                );
-              }
-
-              return (
-                <Avatar
-                  key={i}
-                  name={matchedMember?.globalName || tag}
-                  size="sm"
-                  className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
-                  style={{backgroundColor: `${color}35`, color}}
-                />
-              );
-            })}
-          </div>
-          {participantsList.length > 4 && (
-            <span className="text-xs font-semibold text-muted">
-              +{participantsList.length - 4}
-            </span>
-          )}
-        </div>
+        <span className="inline-flex items-center gap-1">
+          <span className="text-muted">Participantes:</span>
+          <span className="text-muted font-normal">{participantsStr}</span>
+        </span>
       );
     }
 
@@ -246,52 +167,13 @@ export function PlannerAgendaView({
         <Dropdown.Trigger>
           <button
             type="button"
-            className="group inline-flex items-center gap-1.5 px-2 py-0.5 -my-0.5 rounded-lg hover:bg-surface-secondary/70 transition-colors text-foreground text-xs font-normal cursor-pointer select-none border border-transparent hover:border-border/40"
+            className="inline-flex items-center gap-1 cursor-pointer text-xs text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none group"
             aria-label="Editar participantes del bloque"
           >
-            <div className="flex items-center -space-x-2">
-              {participantsList.slice(0, 4).map((tag, i) => {
-                const matchedMember = members.find(
-                  (m) =>
-                    m.tag.toLowerCase() === tag.toLowerCase() ||
-                    `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-                );
-                const matchedRole = roles.find(
-                  (r) =>
-                    r.tag.toLowerCase() === tag.toLowerCase() ||
-                    `@${r.name.toLowerCase()}` === tag.toLowerCase()
-                );
-                const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-
-                if (matchedRole) {
-                  return (
-                    <span
-                      key={i}
-                      className="w-5 h-5 rounded-md border-2 border-background text-[9px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
-                      style={{backgroundColor: color}}
-                    >
-                      #
-                    </span>
-                  );
-                }
-
-                return (
-                  <Avatar
-                    key={i}
-                    name={matchedMember?.globalName || tag}
-                    size="sm"
-                    className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
-                    style={{backgroundColor: `${color}35`, color}}
-                  />
-                );
-              })}
-            </div>
-            {participantsList.length > 4 && (
-              <span className="text-xs font-semibold text-muted">
-                +{participantsList.length - 4}
-              </span>
-            )}
-            <Pencil width={11} height={11} className="text-muted/60 group-hover:text-foreground shrink-0 transition-colors ml-0.5" />
+            <span className="text-muted">Participantes:</span>
+            <span className="text-foreground font-normal underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+              {participantsStr}
+            </span>
           </button>
         </Dropdown.Trigger>
         <Dropdown.Popover placement="bottom end" className="min-w-[280px] max-h-80 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
