@@ -154,9 +154,9 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
                     <Description>Formato, persistencia y segmentos</Description>
                   </Dropdown.Item>
                   {onDelete && (
-                    <Dropdown.Item id="delete" variant="danger" textValue="Eliminar grabación">
+                  <Dropdown.Item id="delete" textValue="Eliminar grabación" className="text-danger">
                       <TrashBin />
-                      <Label>Eliminar grabación</Label>
+                      <Label className="text-danger">Eliminar grabación</Label>
                     </Dropdown.Item>
                   )}
                 </Dropdown.Menu>

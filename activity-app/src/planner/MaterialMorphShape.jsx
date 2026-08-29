@@ -1,71 +1,116 @@
-import {useMemo} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
+
+const MORPH_EASING = [0.77, 0, 0.175, 1];
+const COMPLETION_MORPH_DURATION = 220;
+
+function cubicBezier(x1, y1, x2, y2) {
+  const sampleCurveX = (t) => ((1 - 3 * x2 + 3 * x1) * t * t * t) + ((3 * x2 - 6 * x1) * t * t) + (3 * x1 * t);
+  const sampleCurveY = (t) => ((1 - 3 * y2 + 3 * y1) * t * t * t) + ((3 * y2 - 6 * y1) * t * t) + (3 * y1 * t);
+  const sampleCurveDerivativeX = (t) => (3 * (1 - 3 * x2 + 3 * x1) * t * t) + (2 * (3 * x2 - 6 * x1) * t) + (3 * x1);
+
+  return (progress) => {
+    let t = progress;
+
+    // Newton-Raphson converges quickly for the monotonic x curve used here.
+    for (let index = 0; index < 5; index += 1) {
+      const derivative = sampleCurveDerivativeX(t);
+      if (Math.abs(derivative) < 0.0001) break;
+      t -= (sampleCurveX(t) - progress) / derivative;
+    }
+
+    // Keep the result stable on slower devices if Newton-Raphson lands outside
+    // the curve's domain during a dropped frame.
+    t = Math.min(1, Math.max(0, t));
+    return sampleCurveY(t);
+  };
+}
+
+function interpolateNumbers(from, to, progress) {
+  return from.map((value, index) => value + (to[index] - value) * progress);
+}
+
+function buildPath(numbers) {
+  let cursor = 0;
+  let path = `M ${numbers[cursor++].toFixed(2)} ${numbers[cursor++].toFixed(2)}`;
+
+  for (let index = 0; index < 16; index += 1) {
+    path += ` C ${numbers[cursor++].toFixed(2)} ${numbers[cursor++].toFixed(2)}, ${numbers[cursor++].toFixed(2)} ${numbers[cursor++].toFixed(2)}, ${numbers[cursor++].toFixed(2)} ${numbers[cursor++].toFixed(2)}`;
+  }
+
+  return `${path} Z`;
+}
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
 
 /**
- * Material Design 3 Expressive Morphing Shape Indicator
- * Smoothly morphs between iconic Material 3 Expressive shapes:
- * 1. Squircle / Smooth Circle
- * 2. 5-point Rounded Flower / Pentagon
- * 3. Angled Pebble / Oblong
- * 4. 8-point Scallop Flower / Daisy
+ * Material Design 3 Expressive morphing shape indicator.
+ *
+ * Every shape uses the same 16 cubic segments, so the active loop and the
+ * active-to-complete transition can interpolate the path without changing
+ * topology or snapping to a new DOM element.
  */
 export function MaterialMorphShape({
   size = 14,
   color = 'accent',
   isPaused = false,
+  isActive = true,
+  isCompleted = false,
   className = '',
 }) {
   const paths = useMemo(() => {
     const cx = 16;
     const cy = 16;
     const numPoints = 16;
+    const deltaTheta = (2 * Math.PI) / numPoints;
 
-    const generatePath = (rFunc) => {
-      const pts = [];
+    const generateShape = (rFunc) => {
+      const points = [];
       const tangents = [];
-      const deltaTheta = (2 * Math.PI) / numPoints;
+      const numbers = [];
 
-      for (let i = 0; i < numPoints; i++) {
-        const theta = i * deltaTheta;
-        const r = rFunc(theta);
-        const px = cx + r * Math.cos(theta);
-        const py = cy + r * Math.sin(theta);
-        pts.push({x: px, y: py});
+      for (let index = 0; index < numPoints; index += 1) {
+        const theta = index * deltaTheta;
+        const radius = rFunc(theta);
+        const point = {
+          x: cx + radius * Math.cos(theta),
+          y: cy + radius * Math.sin(theta),
+        };
+        const derivative = (rFunc(theta + 0.01) - rFunc(theta - 0.01)) / 0.02;
+        const tangentScale = deltaTheta / 3;
 
-        // Tangent vector
-        const dr_dtheta = (rFunc(theta + 0.01) - rFunc(theta - 0.01)) / 0.02;
-        const tx = (dr_dtheta * Math.cos(theta) - r * Math.sin(theta)) * (deltaTheta / 3);
-        const ty = (dr_dtheta * Math.sin(theta) + r * Math.cos(theta)) * (deltaTheta / 3);
-        tangents.push({x: tx, y: ty});
+        points.push(point);
+        tangents.push({
+          x: (derivative * Math.cos(theta) - radius * Math.sin(theta)) * tangentScale,
+          y: (derivative * Math.sin(theta) + radius * Math.cos(theta)) * tangentScale,
+        });
       }
 
-      let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
-      for (let i = 0; i < numPoints; i++) {
-        const next = (i + 1) % numPoints;
-        const cp1x = pts[i].x + tangents[i].x;
-        const cp1y = pts[i].y + tangents[i].y;
-        const cp2x = pts[next].x - tangents[next].x;
-        const cp2y = pts[next].y - tangents[next].y;
-        d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${pts[next].x.toFixed(2)} ${pts[next].y.toFixed(2)}`;
+      numbers.push(points[0].x, points[0].y);
+      for (let index = 0; index < numPoints; index += 1) {
+        const next = (index + 1) % numPoints;
+        numbers.push(
+          points[index].x + tangents[index].x,
+          points[index].y + tangents[index].y,
+          points[next].x - tangents[next].x,
+          points[next].y - tangents[next].y,
+          points[next].x,
+          points[next].y,
+        );
       }
-      d += ' Z';
-      return d;
+
+      return {numbers, d: buildPath(numbers)};
     };
 
-    // 1. Circle / Squircle
-    const dCircle = generatePath(() => 12);
-    // 2. 5-point Rounded Pentagon / Flower
-    const d5Gon = generatePath((th) => 11.5 + 2.8 * Math.cos(5 * th - Math.PI / 2));
-    // 3. Angled Pebble / Oblong
-    const dPebble = generatePath((th) => 11.5 + 3.4 * Math.cos(2 * th - 0.7));
-    // 4. 8-point Scallop Flower
-    const d8Scallop = generatePath((th) => 11.2 + 2.4 * Math.cos(8 * th));
+    const circle = generateShape(() => 12);
+    const fivePoint = generateShape((theta) => 11.5 + 2.8 * Math.cos(5 * theta - Math.PI / 2));
+    const pebble = generateShape((theta) => 11.5 + 3.4 * Math.cos(2 * theta - 0.7));
+    const scallop = generateShape((theta) => 11.2 + 2.4 * Math.cos(8 * theta));
 
     return {
-      dCircle,
-      d5Gon,
-      dPebble,
-      d8Scallop,
-      morphValues: `${dCircle}; ${d5Gon}; ${dPebble}; ${d8Scallop}; ${dCircle}`,
+      sequence: [circle, fivePoint, pebble, scallop, circle],
+      circle,
     };
   }, []);
 
@@ -78,9 +123,100 @@ export function MaterialMorphShape({
       ? 'text-success'
       : 'text-accent';
 
-  // Frecuencia dinámica: Aumenta velocidad cuando se acaba el tiempo (<5m o overtime)
-  const morphDuration = color === 'danger' ? '1.6s' : color === 'warning' ? '3.2s' : '8s';
+  // Frecuencia dinámica: aumenta velocidad cuando se acaba el tiempo (<5m o overtime).
+  const morphDurationMs = color === 'danger' ? 1600 : color === 'warning' ? 3200 : 8000;
   const rotationDuration = color === 'danger' ? '3s' : color === 'warning' ? '6s' : '16s';
+  const [pathD, setPathD] = useState(paths.circle.d);
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
+  const motionRef = useRef({
+    mode: isActive ? 'loop' : 'static',
+    phase: 0,
+    currentNumbers: paths.circle.numbers,
+    completionFrom: null,
+    completionStartedAt: null,
+  });
+  const wasActiveRef = useRef(isActive);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!mediaQuery) return undefined;
+
+    const updatePreference = () => setReducedMotion(mediaQuery.matches);
+    updatePreference();
+    mediaQuery.addEventListener?.('change', updatePreference);
+    return () => mediaQuery.removeEventListener?.('change', updatePreference);
+  }, []);
+
+  useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = isActive;
+
+    if (isActive) {
+      motionRef.current.mode = 'loop';
+      motionRef.current.completionFrom = null;
+      motionRef.current.completionStartedAt = null;
+      return;
+    }
+
+    if (isCompleted && wasActive) {
+      motionRef.current.mode = 'completion';
+      motionRef.current.completionFrom = motionRef.current.currentNumbers.slice();
+      motionRef.current.completionStartedAt = null;
+    } else if (!isCompleted) {
+      motionRef.current.mode = 'static';
+    }
+  }, [isActive, isCompleted]);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      motionRef.current.mode = 'static';
+      motionRef.current.currentNumbers = paths.circle.numbers;
+      setPathD(paths.circle.d);
+      return undefined;
+    }
+
+    if (isPaused || (!isActive && motionRef.current.mode !== 'completion')) {
+      return undefined;
+    }
+
+    let frameId;
+    let lastTime = null;
+    const easing = cubicBezier(...MORPH_EASING);
+
+    const tick = (now) => {
+      const motion = motionRef.current;
+      const delta = lastTime === null ? 0 : Math.min(64, now - lastTime);
+      lastTime = now;
+
+      if (motion.mode === 'completion') {
+        if (motion.completionStartedAt === null) motion.completionStartedAt = now;
+        const rawProgress = Math.min(1, (now - motion.completionStartedAt) / COMPLETION_MORPH_DURATION);
+        const progress = easing(rawProgress);
+        motion.currentNumbers = interpolateNumbers(motion.completionFrom, paths.circle.numbers, progress);
+        setPathD(buildPath(motion.currentNumbers));
+
+        if (rawProgress >= 1) {
+          motion.mode = 'static';
+          motion.currentNumbers = paths.circle.numbers;
+          setPathD(paths.circle.d);
+          return;
+        }
+      } else if (motion.mode === 'loop') {
+        motion.phase = (motion.phase + (delta / morphDurationMs) * 4) % 4;
+        const segmentIndex = Math.floor(motion.phase);
+        const segmentProgress = easing(motion.phase - segmentIndex);
+        const from = paths.sequence[segmentIndex];
+        const to = paths.sequence[segmentIndex + 1];
+        motion.currentNumbers = interpolateNumbers(from.numbers, to.numbers, segmentProgress);
+        setPathD(buildPath(motion.currentNumbers));
+      }
+
+      frameId = requestAnimationFrame(tick);
+    };
+
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [isActive, isPaused, morphDurationMs, paths, reducedMotion]);
 
   return (
     <div
@@ -92,26 +228,12 @@ export function MaterialMorphShape({
         viewBox="0 0 32 32"
         width={size}
         height={size}
-        style={{
-          animationDuration: rotationDuration,
-        }}
+        style={{animationDuration: rotationDuration}}
         className={`m3-morph-svg ${colorClass} ${isPaused ? 'is-paused' : ''}`}
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
       >
-        <path d={paths.dCircle}>
-          {!isPaused && (
-            <animate
-              attributeName="d"
-              dur={morphDuration}
-              repeatCount="indefinite"
-              values={paths.morphValues}
-              keyTimes="0; 0.25; 0.5; 0.75; 1"
-              calcMode="spline"
-              keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"
-            />
-          )}
-        </path>
+        <path d={pathD} />
       </svg>
     </div>
   );

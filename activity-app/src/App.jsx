@@ -18,6 +18,7 @@ import {
   ToggleButtonGroup,
   Toolbar,
   toast,
+  useTheme,
 } from '@heroui/react';
 import {
   ArrowRotateLeft,
@@ -25,6 +26,8 @@ import {
   ArrowUturnCwRight,
   Bold,
   Calendar,
+  Check,
+  Circle,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -45,12 +48,14 @@ import {
   ListUl,
   Magnifier,
   Minus,
+  Moon,
   Pencil,
   Plus,
   Printer,
   QuoteOpen,
   SquareCheck,
   Strikethrough,
+  Sun,
   Text,
   TrashBin,
   Underline,
@@ -58,7 +63,8 @@ import {
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
-export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
+import {applyDiscordTheme} from './discord-theme.js';
+export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
 const STORE_KEY = 'bardo.docs.heroui.v1';
 const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
@@ -376,7 +382,7 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
         size="sm"
         variant="ghost"
         aria-label={triggerLabel}
-        className="text-muted hover:text-foreground shrink-0"
+        className="icon-button-circle text-muted hover:text-foreground shrink-0"
       >
         <EllipsisVertical width={16} height={16} />
       </Button>
@@ -430,9 +436,9 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
               <Label>Imprimir / PDF</Label>
             </Dropdown.Item>
           </Dropdown.Section>
-          <Dropdown.Item id="delete" textValue="Eliminar" variant="danger">
+          <Dropdown.Item id="delete" textValue="Eliminar" className="text-danger">
             <TrashBin width={15} height={15} className="text-danger" />
-            <Label>Eliminar</Label>
+            <Label className="text-danger">Eliminar</Label>
           </Dropdown.Item>
         </Dropdown.Menu>
       </Dropdown.Popover>
@@ -498,12 +504,77 @@ function DocsHeader({children, actions, className = ''}) {
   return (
     <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
       <div className="topbar-left">{children}</div>
-      <div className="topbar-right header-actions">{actions}</div>
+      <div className="topbar-right header-actions">
+        {actions}
+        <ThemeModeMenu />
+      </div>
     </header>
   );
 }
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule}) {
+const THEME_MODE_LABELS = {
+  light: 'Claro',
+  dark: 'Oscuro',
+  system: 'Sistema',
+};
+
+const THEME_MODE_ICONS = {
+  light: Sun,
+  dark: Moon,
+  system: Circle,
+};
+
+function ThemeModeMenu() {
+  const {theme: preference, setTheme} = useTheme('system');
+  const CurrentIcon = THEME_MODE_ICONS[preference] || Circle;
+  const currentLabel = THEME_MODE_LABELS[preference] || THEME_MODE_LABELS.system;
+
+  useEffect(() => {
+    const syncDiscordTheme = () => {
+      if (preference === 'system') applyDiscordTheme();
+    };
+    window.addEventListener('discord-theme-change', syncDiscordTheme);
+    return () => window.removeEventListener('discord-theme-change', syncDiscordTheme);
+  }, [preference]);
+
+  return (
+    <Dropdown>
+      <Button
+        isIconOnly
+        size="sm"
+        variant="ghost"
+        className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted hover:text-foreground"
+        aria-label={`Tema: ${currentLabel}`}
+        title={`Tema: ${currentLabel}`}
+      >
+        <CurrentIcon width={16} height={16} />
+      </Button>
+      <Dropdown.Popover placement="bottom end">
+        <Dropdown.Menu
+          aria-label="Seleccionar tema"
+          onAction={key => {
+            const nextTheme = String(key);
+            setTheme(nextTheme);
+            applyDiscordTheme();
+          }}
+        >
+          {Object.entries(THEME_MODE_LABELS).map(([id, label]) => {
+            const Icon = THEME_MODE_ICONS[id];
+            return (
+              <Dropdown.Item key={id} id={id} textValue={label}>
+                <Icon width={15} height={15} className="text-muted" />
+                <Label>{label}</Label>
+                {preference === id && <Check width={15} height={15} className="theme-mode-check text-accent" />}
+              </Dropdown.Item>
+            );
+          })}
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, onPlannerDemo}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
@@ -513,6 +584,26 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       className={isLibrary || isPlanner ? 'library-header' : ''}
       actions={isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
+          {route.tab === 'home' && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={onPlannerNew}
+                className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+              >
+                <Plus width={14} height={14} /> Nueva sesión
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={onPlannerDemo}
+                className="h-8 px-2.5 font-medium text-xs flex items-center gap-1.5 text-muted hover:text-foreground"
+              >
+                <ArrowRotateLeft width={14} height={14} /> Demo
+              </Button>
+            </>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -547,7 +638,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
             <FileArrowUp width={14} height={14} /> Subir
           </Button>
-          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Nuevo documento" className="h-8 w-8 rounded-lg">
+          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Nuevo documento" className="icon-button-circle h-8 w-8">
             <Plus width={16} height={16} />
           </Button>
         </div>
@@ -561,12 +652,17 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       ) : null}
     >
       {isPlanner ? (
-        <div key="planner-brand" className="flex items-center gap-2 header-slot-enter">
-          <span className="topbar-title font-bold text-sm tracking-tight text-foreground">Bardo Planner</span>
-          <Chip size="sm" variant="soft" color="accent" className="font-semibold text-[10.5px] px-2 h-5">
-            Release 2.0
-          </Chip>
-        </div>
+        <Button
+          key="planner-brand"
+          variant="ghost"
+          size="sm"
+          onPress={() => onNavigateModule?.('docs')}
+          aria-label="Volver al home de Bardo Docs"
+          className="topbar-title header-slot-enter h-8 px-1.5 -ml-1 font-bold text-sm tracking-tight text-foreground hover:bg-surface-secondary/50"
+        >
+          <ChevronLeft width={15} height={15} />
+          <span>Bardo Planner</span>
+        </Button>
       ) : isLibrary ? (
         <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
           <span>Bardo Docs</span>
@@ -729,7 +825,7 @@ function BlockTypeDropdown({value, onSelect}) {
                 <ItemIcon width={16} height={16} />
                 <Label>{item.label}</Label>
                 {item.shortcut && (
-                  <Kbd variant="light" size="sm">
+                  <Kbd variant="light">
                     <Kbd.Content>{item.shortcut}</Kbd.Content>
                   </Kbd>
                 )}
@@ -1451,6 +1547,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
           </Chip>
         </div>
         <div className="topbar-right flex items-center gap-2">
+          <ThemeModeMenu />
           <Button variant="primary" size="sm" onPress={finish} className="save-action-button">
             <span key={isDirty ? 'dirty' : 'saved'} className="save-action-label">
               {isDirty ? 'Guardar' : 'Listo'}
@@ -2136,6 +2233,8 @@ function App() {
           onAction={docAction}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
+          onPlannerNew={() => go('#planner-new')}
+          onPlannerDemo={() => go('#planner-demo')}
           onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
         />
       )}

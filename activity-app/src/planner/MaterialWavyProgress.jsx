@@ -69,32 +69,42 @@ export function MaterialWavyProgress({
       const delta = Math.min(64, now - lastTime);
       lastTime = now;
 
-      // 1. Phase update for continuous wave motion (fluye mientras se aplana)
-      if (!isPaused || currentAmplitudeRef.current > 0.02) {
+      // 1. Keep the wave phase frozen for the whole pause transition.
+      // The amplitude still eases to zero below, leaving a straight line.
+      if (!isPaused) {
         setPhase((prev) => (prev + delta * speed) % effectiveWavelength);
       }
 
-      // 2. Transición suave de amplitud (se aplana suavemente a 0 manteniéndose estirada en su posición)
+      // 2. Smoothly flatten the wave to a straight line while paused.
       const ampDiff = targetAmplitude - currentAmplitudeRef.current;
+      let needsFrame = !isPaused;
       if (Math.abs(ampDiff) > 0.01) {
         currentAmplitudeRef.current += ampDiff * Math.min(1, delta * 0.010);
         setAnimatedAmplitude(currentAmplitudeRef.current);
+        needsFrame = true;
       } else if (currentAmplitudeRef.current !== targetAmplitude) {
         currentAmplitudeRef.current = targetAmplitude;
         setAnimatedAmplitude(targetAmplitude);
+        needsFrame = true;
       }
 
-      // 3. Smooth continuous sub-pixel progress fill (no discrete jumps)
-      const diff = targetLength - currentLengthRef.current;
-      if (Math.abs(diff) > 0.02) {
-        currentLengthRef.current += diff * Math.min(1, delta * 0.006);
-        setAnimatedLength(currentLengthRef.current);
-      } else if (currentLengthRef.current !== targetLength) {
-        currentLengthRef.current = targetLength;
-        setAnimatedLength(targetLength);
+      // 3. Smooth continuous sub-pixel progress fill (no discrete jumps).
+      // Once paused, keep the current fill length fixed; only the wave shape
+      // flattens so the progress cannot keep creeping forward.
+      if (!isPaused) {
+        const diff = targetLength - currentLengthRef.current;
+        if (Math.abs(diff) > 0.02) {
+          currentLengthRef.current += diff * Math.min(1, delta * 0.006);
+          setAnimatedLength(currentLengthRef.current);
+          needsFrame = true;
+        } else if (currentLengthRef.current !== targetLength) {
+          currentLengthRef.current = targetLength;
+          setAnimatedLength(targetLength);
+          needsFrame = true;
+        }
       }
 
-      rafId = requestAnimationFrame(loop);
+      if (needsFrame) rafId = requestAnimationFrame(loop);
     };
 
     rafId = requestAnimationFrame(loop);
@@ -167,10 +177,10 @@ export function MaterialWavyProgress({
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
       >
-        {/* 1. Background Inactive Gray Track (Full Height, 4.5px, Rounded Caps) */}
+        {/* 1. Remaining inactive track. The active wave consumes the track above it. */}
         <line
           x1="10"
-          y1="0"
+          y1={Math.min(containerHeight, Math.max(0, animatedLength))}
           x2="10"
           y2={containerHeight}
           stroke="color-mix(in srgb, var(--border) 40%, transparent)"

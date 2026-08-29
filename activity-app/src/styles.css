@@ -5,6 +5,7 @@
   --bardo-topbar: 52px;
   --bardo-toolbar-gap: 16px;
   --bardo-content: 690px;
+  --font-inter: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --bardo-visual-viewport-top: 0px;
   --bardo-visual-viewport-left: 0px;
   /* Discord publishes these in Activities so the iframe clears its native chrome. */
@@ -43,6 +44,20 @@
   --blur-small: 2px;
   --blur-medium: 3px;
   --blur-large: 8px;
+  --bardo-card-shadow: 0 1px 12px color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+
+/* Dark mode uses surface contrast and borders instead of elevation. */
+.dark,
+[data-theme="dark"] {
+  --bardo-card-shadow: none;
+}
+
+.dark,
+.dark *,
+[data-theme="dark"],
+[data-theme="dark"] * {
+  box-shadow: none !important;
 }
 
 * { box-sizing: border-box; }
@@ -479,6 +494,7 @@ button { font-size: 14px; }
 }
 .doc-symbol { display: grid; place-items: center; color: var(--muted); }
 .doc-row-main { min-width: 0; min-height: 68px; border: 0; background: transparent; text-align: left; padding: 12px 0; cursor: pointer; }
+.event-row-selected { background: color-mix(in oklab, var(--accent) 5%, transparent); }
 
 /* Reader + editor share exactly the same navigation geometry. */
 .doc-route {
@@ -513,6 +529,9 @@ button { font-size: 14px; }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .topbar-center { color: var(--muted); font-size: 12px; line-height: 1.3; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.icon-button-circle { border-radius: 9999px !important; }
+.theme-mode-trigger { flex: 0 0 auto; }
+.theme-mode-check { margin-left: auto; }
 .header-slot-enter {
   display: flex;
   align-items: center;
@@ -764,19 +783,19 @@ button { font-size: 14px; }
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--bardo-card-shadow);
 }
 [data-theme="dark"] .session-dock-glass {
   background: color-mix(in srgb, var(--surface) 68%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--bardo-card-shadow);
 }
 .heroui-card,
 [data-slot="card"],
 .bardo-card,
 .planner-card,
 .card-soft-shadow {
-  box-shadow: var(--card-shadow) !important;
+  box-shadow: var(--bardo-card-shadow) !important;
 }
 .editor-toolbar-container {
   display: flex;
@@ -877,9 +896,12 @@ button { font-size: 14px; }
   background: var(--separator);
 }
 .mobile-more-separator { display: block; }
-.dropdown-item[data-variant="danger"] svg,
-.dropdown-item.is-danger svg,
-[data-variant="danger"] > svg {
+[data-slot="menu-item"].text-danger svg {
+  color: var(--danger) !important;
+}
+
+/* Destructive actions keep icon and label semantically aligned. */
+[data-slot="menu-item"].text-danger {
   color: var(--danger) !important;
 }
 .editable-body { min-height: 45vh; }
@@ -1004,6 +1026,18 @@ button { font-size: 14px; }
   will-change: transform;
 }
 
+.session-toggle-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  line-height: 0;
+  transition: none !important;
+  transform: none !important;
+}
+
 .m3-morph-svg.is-paused {
   animation-play-state: paused;
 }
@@ -1028,14 +1062,151 @@ button { font-size: 14px; }
 input,
 textarea,
 select,
-[data-slot="input-wrapper"],
-[data-slot="input"],
-[data-slot="base"],
-[data-slot="field-group"],
-.heroui-input,
-.heroui-input-wrapper,
-.heroui-text-field-input,
-.heroui-text-area-input {
+.input,
+.textarea,
+.textfield [data-slot="input"],
+.textfield [data-slot="textarea"],
+.input-group,
+.search-field [data-slot="search-field-group"] {
   box-shadow: none !important;
 }
 
+/* ─── Design system: HeroUI form fields ──────────────────────────────────────
+   Se aplica a TODOS los campos del sistema (Input, TextArea, DatePicker,
+   TimeField, DateField) sin necesidad de hardcoding por componente.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Label — scoped a contextos de campo de formulario */
+.textfield > [data-slot="label"],
+.search-field > [data-slot="label"] {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+/* Wrapper del campo: el contenedor visual principal */
+.input,
+.textarea,
+.input-group,
+.search-field [data-slot="search-field-group"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--field-radius, 10px) !important;
+  height: auto !important;
+  min-height: 38px !important;
+  padding-inline: 10px !important;
+  padding-block: 6px !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease !important;
+  box-shadow: none !important;
+  color: var(--foreground) !important;
+}
+
+.input:focus,
+.textarea:focus,
+.input-group:focus-within,
+.search-field [data-slot="search-field-group"]:focus-within {
+  border-color: var(--focus, var(--accent)) !important;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--focus, var(--accent)) 18%, transparent) !important;
+  outline: none !important;
+}
+
+/* El input nativo interno */
+.textfield [data-slot="input"],
+.textfield [data-slot="textarea"],
+.input,
+.textarea,
+.input-group [data-slot="input-group-input"],
+.input-group [data-slot="input-group-textarea"],
+.search-field [data-slot="search-field-input"] {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font-size: 13.5px !important;
+  color: var(--foreground) !important;
+  height: auto !important;
+  min-height: unset !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  width: 100% !important;
+}
+
+/* TextArea wrapper y elemento */
+.textfield:has([data-slot="textarea"]) {
+  height: auto !important;
+  min-height: 80px !important;
+  align-items: flex-start !important;
+  padding-block: 8px !important;
+}
+
+.textfield [data-slot="textarea"],
+.input-group [data-slot="input-group-textarea"] {
+  resize: vertical !important;
+  min-height: 72px !important;
+}
+
+/* Placeholder */
+.textfield [data-slot="input"]::placeholder,
+.textfield [data-slot="textarea"]::placeholder,
+.input::placeholder,
+.textarea::placeholder,
+.input-group [data-slot="input-group-input"]::placeholder,
+.input-group [data-slot="input-group-textarea"]::placeholder,
+.search-field [data-slot="search-field-input"]::placeholder {
+  color: var(--field-placeholder, var(--muted)) !important;
+  opacity: 0.6 !important;
+}
+
+/* Segmentos de DateField y TimeField */
+[data-slot="segment"],
+[data-type="literal"] {
+  font-size: 13.5px !important;
+  color: var(--foreground) !important;
+  font-family: inherit !important;
+  background: transparent !important;
+  border-radius: 4px !important;
+  padding-inline: 1px !important;
+}
+
+[data-slot="segment"]:focus,
+[data-slot="segment"][data-focused] {
+  background: color-mix(in oklab, var(--accent) 16%, transparent) !important;
+  color: var(--foreground) !important;
+  outline: none !important;
+}
+
+[data-slot="segment"][data-placeholder] {
+  color: var(--field-placeholder, var(--muted)) !important;
+  opacity: 0.55 !important;
+}
+
+/* Sufijo (icono del DatePicker) */
+.input-group [data-slot="input-group-suffix"] [data-slot="button"],
+.search-field [data-slot="search-field-clear-button"] {
+  color: var(--muted) !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 2px !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.input-group [data-slot="input-group-suffix"] [data-slot="button"]:hover,
+.search-field [data-slot="search-field-clear-button"]:hover {
+  color: var(--foreground) !important;
+  background: color-mix(in oklab, var(--foreground) 8%, transparent) !important;
+}
+
+/* Description / Error */
+[data-slot="description"] {
+  font-size: 11.5px !important;
+  color: var(--muted) !important;
+  margin-top: 3px !important;
+}
+
+[data-slot="error-message"] {
+  font-size: 11.5px !important;
+  color: var(--danger, #ef4444) !important;
+  margin-top: 3px !important;
+}

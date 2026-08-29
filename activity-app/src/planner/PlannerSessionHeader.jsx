@@ -18,7 +18,6 @@ import {
   ArrowRotateRight,
   Calendar,
   Clock,
-  ChevronLeft,
 } from '@gravity-ui/icons';
 import {
   SESSION_STATUS,
@@ -55,7 +54,7 @@ export function PlannerSessionHeader({
   onStartSession,
   onResumeSession,
   onInterruptSession,
-  onGoHome,
+  onGoHome: _onGoHome,
 }) {
   const {
     title = 'Sesión sin título',
@@ -260,7 +259,7 @@ export function PlannerSessionHeader({
                 <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                   <Avatar
                     name={member.globalName}
-                    size="xs"
+                    size="sm"
                     className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                     style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                   />
@@ -411,18 +410,6 @@ export function PlannerSessionHeader({
         <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
 
         <div className="flex flex-col min-w-0 w-full pb-2">
-          {/* Breadcrumb de vuelta al Home */}
-          {onGoHome && !isEditing && (
-            <button
-              type="button"
-              onClick={onGoHome}
-              className="self-start inline-flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors font-medium mb-2.5 cursor-pointer select-none -ml-0.5"
-            >
-              <ChevronLeft width={13} height={13} />
-              <span>Planner</span>
-            </button>
-          )}
-
           {/* Fila 1: Título y Acción Principal */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -502,9 +489,9 @@ export function PlannerSessionHeader({
                         </Dropdown.Item>
                       )}
                       {(isRunning || isPaused) && (
-                        <Dropdown.Item id="interrupt" variant="danger" textValue="Interrumpir sesión">
+                        <Dropdown.Item id="interrupt" textValue="Interrumpir sesión" className="text-danger">
                           <ArrowRotateLeft />
-                          <Label>Interrumpir sesión</Label>
+                          <Label className="text-danger">Interrumpir sesión</Label>
                           <Description>Pausar y conservar grabaciones</Description>
                         </Dropdown.Item>
                       )}

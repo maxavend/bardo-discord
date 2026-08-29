@@ -1,22 +1,15 @@
 import {useState} from 'react';
-import {Button, Avatar, Dropdown, Label, toast} from '@heroui/react';
+import {Button, Avatar, toast} from '@heroui/react';
 import {
-  Copy,
   ChevronLeft,
   ArrowUpRightFromSquare,
-  Calendar,
-  Clock,
   CircleCheck,
   FileText,
   Check,
-  EllipsisVertical,
 } from '@gravity-ui/icons';
 import {generateMinutesMarkdown} from './planner-store.js';
-import {POINT_STATUS, getPointStatus, recalculateEstimatedEndTime} from './session-runner.js';
-import {getAllDiscordEntities} from './PlannerMemberPicker.jsx';
+import {POINT_STATUS, getPointStatus} from './session-runner.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
-
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
 function parseMentions(mentionsStr) {
   if (!mentionsStr) return [];
@@ -106,33 +99,13 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
     title = 'Sesión sin título',
     description = '',
     date = '',
-    startTime = '17:45',
     host = '',
     mentions = '',
-    totalCalculatedDuration = 0,
     blocks = [],
   } = state;
 
   const participantsList = parseMentions(mentions);
   const formattedDate = formatDateSpanish(date);
-  const totalPlannedMinutes = (blocks || []).reduce(
-    (accumulator, b) => accumulator + (b.durationMinutes || 0),
-    0
-  ) || totalCalculatedDuration || 0;
-  const estimatedEndTime = recalculateEstimatedEndTime(startTime, totalPlannedMinutes);
-  const formattedDuration = totalPlannedMinutes >= 60 && totalPlannedMinutes % 60 === 0
-    ? `${totalPlannedMinutes / 60} h`
-    : `${totalPlannedMinutes} min`;
-
-  const {members: allDiscordMembers} = getAllDiscordEntities();
-  const hostMember = allDiscordMembers.find(
-    (m) =>
-      m.globalName.toLowerCase() === (host || '').toLowerCase() ||
-      m.tag.toLowerCase() === (host || '').toLowerCase() ||
-      `@${m.globalName.toLowerCase()}` === (host || '').toLowerCase()
-  );
-  const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
-
   // Recopilar todas las decisiones registradas tanto en la agenda como en vivo
   const decisions = [];
   blocks.forEach((block) => {
@@ -230,7 +203,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
               className="text-xs text-muted hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors font-medium select-none shrink-0"
             >
               <ChevronLeft width={14} height={14} className="-ml-0.5" />
-              <span>Volver al planner</span>
+              <span>Volver</span>
             </button>
 
             <div className="flex items-center gap-1.5 shrink-0">
@@ -244,53 +217,14 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
                 <FileText width={13} height={13} /> <span>Guardar en Docs</span>
               </Button>
 
-              {/* Acciones secundarias: visibles en desktop, colapsadas en mobile */}
-              <div className="hidden sm:flex items-center gap-1.5">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onPress={onCopyMarkdown}
-                  className="h-8 px-3 text-xs font-medium flex items-center gap-1.5"
-                >
-                  <Copy width={13} height={13} /> <span>Copiar</span>
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onPress={handlePublishDiscord}
-                  className="h-8 px-3 text-xs font-medium flex items-center gap-1.5"
-                >
-                  <ArrowUpRightFromSquare width={13} height={13} /> <span>Publicar</span>
-                </Button>
-              </div>
-
-              {/* Menú ⋮ en mobile */}
-              <div className="sm:hidden">
-                <Dropdown>
-                  <Dropdown.Trigger>
-                    <Button variant="ghost" size="sm" isIconOnly aria-label="Más acciones" className="h-8 w-8 text-muted hover:text-foreground">
-                      <EllipsisVertical width={14} height={14} />
-                    </Button>
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover placement="bottom end">
-                    <Dropdown.Menu
-                      onAction={(key) => {
-                        if (key === 'copy') onCopyMarkdown?.();
-                        if (key === 'publish') handlePublishDiscord();
-                      }}
-                    >
-                      <Dropdown.Item id="copy" textValue="Copiar Markdown">
-                        <Copy />
-                        <Label>Copiar Markdown</Label>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="publish" textValue="Publicar en canal">
-                        <ArrowUpRightFromSquare />
-                        <Label>Publicar en canal</Label>
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onPress={handlePublishDiscord}
+                className="h-8 px-3 text-xs font-medium flex items-center gap-1.5"
+              >
+                <ArrowUpRightFromSquare width={13} height={13} /> <span>Publicar</span>
+              </Button>
             </div>
           </div>
 
@@ -299,57 +233,6 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
             <p className="doc-description">{description}</p>
           )}
 
-          <div className="doc-meta flex items-center gap-3 sm:gap-4 text-xs text-muted flex-wrap mt-4 pt-3 border-t border-border/40">
-            {formattedDate && (
-              <span className="inline-flex items-center gap-1.5">
-                <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-                <span>{formattedDate}</span>
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1.5">
-              <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-              <span>{startTime}–{estimatedEndTime} · {formattedDuration}</span>
-            </span>
-            {host && (
-              <span className="inline-flex items-center gap-1.5">
-                <Avatar
-                  name={hostMember?.globalName || host}
-                  size="sm"
-                  className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
-                  style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-                />
-                <span className="font-medium text-foreground">{host}</span>
-              </span>
-            )}
-            {participantsList.length > 0 && (
-              <span className="inline-flex items-center gap-1.5">
-                <div className="flex items-center -space-x-2">
-                  {participantsList.slice(0, 4).map((tag, i) => {
-                    const matched = allDiscordMembers.find(
-                      (m) =>
-                        m.tag.toLowerCase() === tag.toLowerCase() ||
-                        `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-                    );
-                    const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-                    return (
-                      <Avatar
-                        key={i}
-                        name={matched?.globalName || tag}
-                        size="sm"
-                        className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
-                        style={{backgroundColor: `${color}35`, color}}
-                      />
-                    );
-                  })}
-                </div>
-                {participantsList.length > 4 && (
-                  <span className="text-xs font-semibold text-muted">
-                    +{participantsList.length - 4}
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
         </header>
 
         {/* Cuerpo del Documento (Bardo Docs Visual Layout) */}
@@ -440,7 +323,7 @@ export function PlannerMinutesView({state, sessionState, onBack, onCopyMarkdown,
           <div className="flex flex-wrap gap-2 my-3">
             {participantsList.map((tag, i) => (
               <div key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary/50 border border-border/40 text-xs">
-                <Avatar name={tag} size="xs" className="w-5 h-5 text-[9px] font-bold" />
+                <Avatar name={tag} size="sm" className="w-5 h-5 text-[9px] font-bold" />
                 <span className="font-medium text-foreground">{tag}</span>
               </div>
             ))}

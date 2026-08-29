@@ -169,7 +169,7 @@ export function PlannerMemberPicker({value = '', onChange}) {
               ) : (
                 <Avatar
                   name={matchedMember?.globalName || tag}
-                  size="xs"
+                  size="sm"
                   className="w-3.5 h-3.5 text-[8px] font-bold"
                   style={{backgroundColor: `${color}35`, color}}
                 />
@@ -271,7 +271,7 @@ export function PlannerMemberPicker({value = '', onChange}) {
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Avatar
                         name={member.globalName}
-                        size="xs"
+                        size="sm"
                         className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                         style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                       />
@@ -518,7 +518,7 @@ export function SearchableParticipantMenu({
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <Avatar
                     name={member.globalName}
-                    size="xs"
+                    size="sm"
                     className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                     style={{
                       backgroundColor: `${member.avatarColor}30`,

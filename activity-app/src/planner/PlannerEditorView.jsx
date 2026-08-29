@@ -30,6 +30,7 @@ import {
   formatShortDuration,
 } from './time-engine.js';
 import {PlannerMemberPicker} from './PlannerMemberPicker.jsx';
+import {fieldValue} from './planner-field-value.js';
 
 function formatDurationCompact(minutes = 0) {
   if (!minutes) return '0 min';
@@ -246,7 +247,7 @@ export function PlannerEditorView({
                 </Label>
                 <Input
                   value={formData.title}
-                  onChange={(e) => updateHeaderField('title', e.target.value)}
+                  onChange={(value) => updateHeaderField('title', fieldValue(value))}
                   placeholder="Ej: Weekly de Producto"
                 />
               </TextField>
@@ -257,7 +258,7 @@ export function PlannerEditorView({
                 </Label>
                 <Input
                   value={formData.host || ''}
-                  onChange={(e) => updateHeaderField('host', e.target.value)}
+                  onChange={(value) => updateHeaderField('host', fieldValue(value))}
                   placeholder="Ej: Paula Molina"
                 />
               </TextField>
@@ -354,7 +355,7 @@ export function PlannerEditorView({
                 </Label>
                 <Input
                   value={targetDurationInput}
-                  onChange={(e) => handleTargetDurationChange(e.target.value)}
+                  onChange={(value) => handleTargetDurationChange(fieldValue(value))}
                   placeholder="ej: 1h, 60m, 3h"
                 />
               </TextField>
@@ -366,7 +367,7 @@ export function PlannerEditorView({
               </Label>
               <TextArea
                 value={formData.description || ''}
-                onChange={(e) => updateHeaderField('description', e.target.value)}
+                onChange={(value) => updateHeaderField('description', fieldValue(value))}
                 placeholder="Describe el propósito y lo que se espera lograr en la reunión..."
               />
             </TextField>
@@ -448,9 +449,9 @@ export function PlannerEditorView({
                           if (key === 'delete') confirmDeleteBlock(bIdx);
                         }}
                       >
-                        <Dropdown.Item id="delete" variant="danger" textValue="Eliminar bloque">
+                        <Dropdown.Item id="delete" textValue="Eliminar bloque" className="text-danger">
                           <TrashBin />
-                          <Label>Eliminar bloque</Label>
+                          <Label className="text-danger">Eliminar bloque</Label>
                           <Description>Quitar de la agenda</Description>
                         </Dropdown.Item>
                       </Dropdown.Menu>
@@ -466,7 +467,7 @@ export function PlannerEditorView({
                     </Label>
                     <Input
                       value={block.title}
-                      onChange={(e) => updateBlockField(bIdx, 'title', e.target.value)}
+                      onChange={(value) => updateBlockField(bIdx, 'title', fieldValue(value))}
                       placeholder="Título del bloque..."
                       className="font-semibold text-foreground text-sm"
                     />
@@ -479,7 +480,7 @@ export function PlannerEditorView({
                       </Label>
                       <Input
                         value={block.leader || ''}
-                        onChange={(e) => updateBlockField(bIdx, 'leader', e.target.value)}
+                        onChange={(value) => updateBlockField(bIdx, 'leader', fieldValue(value))}
                         placeholder="Ej: Paula, Cami"
                       />
                     </TextField>
@@ -490,7 +491,7 @@ export function PlannerEditorView({
                       </Label>
                       <Input
                         value={block.participants || ''}
-                        onChange={(e) => updateBlockField(bIdx, 'participants', e.target.value)}
+                        onChange={(value) => updateBlockField(bIdx, 'participants', fieldValue(value))}
                         placeholder="Ej: Todo el equipo"
                       />
                     </TextField>
@@ -501,7 +502,7 @@ export function PlannerEditorView({
                       </Label>
                       <Input
                         value={`${block.durationMinutes}m`}
-                        onChange={(e) => updateBlockDuration(bIdx, e.target.value)}
+                        onChange={(value) => updateBlockDuration(bIdx, fieldValue(value))}
                         placeholder="ej: 30m, 1h"
                         className="text-center font-medium"
                       />
@@ -550,7 +551,7 @@ export function PlannerEditorView({
                           <div className="flex-1 min-w-0">
                             <Input
                               value={p.title}
-                              onChange={(e) => updateSubpointField(bIdx, pIdx, 'title', e.target.value)}
+                              onChange={(value) => updateSubpointField(bIdx, pIdx, 'title', fieldValue(value))}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
@@ -567,7 +568,7 @@ export function PlannerEditorView({
                           <div className="w-full sm:w-48 shrink-0">
                             <Input
                               value={p.presenter || ''}
-                              onChange={(e) => updateSubpointField(bIdx, pIdx, 'presenter', e.target.value)}
+                              onChange={(value) => updateSubpointField(bIdx, pIdx, 'presenter', fieldValue(value))}
                               placeholder="Responsable (@Nombre)"
                               className="text-xs w-full"
                               aria-label="Responsable asignado"

@@ -20,6 +20,7 @@ import {
   loadPlannerState,
   savePlannerState,
   loadLiveSessionState,
+  loadPlannerEvents,
   saveLiveSessionState,
   resetToDemoFixture,
   resetToCleanSession,
@@ -65,6 +66,8 @@ import {
 export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
+  const [plannerEvents] = useState(loadPlannerEvents);
+  const [selectedEventId, setSelectedEventId] = useState(() => plannerState.eventId || null);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
   const [recordingStatus, setRecordingStatus] = useState(RECORDING_STATUS.IDLE);
@@ -517,11 +520,25 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
 
   const handleLoadDemo = useCallback(() => {
     const demo = resetToDemoFixture();
+    setSelectedEventId('event-weekly-design');
     plannerStateRef.current = demo;
     setPlannerState(demo);
     const live = loadLiveSessionState(demo);
     commitSessionState(live);
     toast('Datos de demostración cargados');
+  }, [commitSessionState]);
+
+  const handleSelectEvent = useCallback((event) => {
+    if (!event?.eventId) return;
+    const next = computePlannerTimes({...event});
+    resetToCleanSession();
+    savePlannerState(next);
+    plannerStateRef.current = next;
+    setPlannerState(next);
+    setSelectedEventId(event.eventId);
+    commitSessionState(loadLiveSessionState(next));
+    setActiveTab('agenda');
+    toast(`Evento abierto: ${event.title}`);
   }, [commitSessionState]);
 
   const handleCleanSession = useCallback(() => {
@@ -533,6 +550,15 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     setActiveTab('editor');
     toast('Nueva sesión creada — configura los detalles');
   }, [commitSessionState]);
+
+  useEffect(() => {
+    if (initialTab === 'new') {
+      handleCleanSession();
+    } else if (initialTab === 'demo') {
+      handleLoadDemo();
+      setActiveTab('agenda');
+    }
+  }, [initialTab, handleCleanSession, handleLoadDemo]);
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -753,6 +779,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         <PlannerHomeView
           plannerState={plannerState}
           sessionState={sessionState}
+          events={plannerEvents}
+          selectedEventId={selectedEventId}
+          onSelectEvent={handleSelectEvent}
           onStartSession={() => {
             handleStartSession();
             handleTabChange('agenda');

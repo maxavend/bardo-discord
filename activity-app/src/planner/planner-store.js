@@ -118,8 +118,116 @@ export const DEMO_PLANNER_FIXTURE = {
       ],
       decisions: [{id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.'}],
     },
+    {
+      id: 'b-6',
+      title: 'Revisión de producto y analítica',
+      durationMinutes: 35,
+      manualDuration: 35,
+      leader: 'Nico G',
+      participants: 'Diseño & SD + @Devs',
+      introDesc: 'Cruzar señales de producto con las decisiones de diseño.',
+      phases: {context: 5, review: 25, closing: 5},
+      subpoints: [
+        {id: 'p-12', title: 'Hallazgos de uso y embudo de activación', presenter: 'Nico G', status: 'pending'},
+        {id: 'p-13', title: 'Eventos faltantes para medir el nuevo flujo', presenter: 'Max Avendaño', status: 'pending'},
+        {id: 'p-14', title: 'Riesgos de instrumentación antes del release', presenter: 'Equipo de Desarrollo', status: 'pending'},
+      ],
+      decisions: [
+        {id: 'd-6', content: 'Definir un dueño por evento antes de cerrar la especificación.'},
+      ],
+    },
+    {
+      id: 'b-7',
+      title: 'Priorización y próximos pasos',
+      durationMinutes: 25,
+      manualDuration: 25,
+      leader: 'Paula Molina',
+      participants: 'Todo el equipo',
+      introDesc: 'Convertir la revisión en compromisos claros para la semana.',
+      phases: {context: 3, review: 17, closing: 5},
+      subpoints: [
+        {id: 'p-15', title: 'Dependencias y bloqueos activos', presenter: 'Pau', status: 'pending'},
+        {id: 'p-16', title: 'Responsables y fechas de seguimiento', presenter: 'Todos', status: 'pending'},
+      ],
+      decisions: [],
+    },
+    {
+      id: 'b-8',
+      title: 'Cierre y síntesis',
+      durationMinutes: 10,
+      manualDuration: 10,
+      leader: 'Todo el equipo',
+      participants: 'Diseño & SD',
+      introDesc: 'Recapitular acuerdos y confirmar la próxima sesión.',
+      phases: {context: 2, review: 5, closing: 3},
+      subpoints: [
+        {id: 'p-17', title: 'Confirmar acuerdos que pasan a la minuta', presenter: 'Pau', status: 'pending'},
+      ],
+      decisions: [{id: 'd-7', content: 'La minuta se comparte en el canal antes del cierre del día.'}],
+    },
   ],
 };
+
+function clonePlannerState(state) {
+  return JSON.parse(JSON.stringify(state));
+}
+
+function createDemoEvent(eventId, overrides = {}) {
+  const event = clonePlannerState(DEMO_PLANNER_FIXTURE);
+  return {
+    ...event,
+    eventId,
+    eventStatus: 'scheduled',
+    ...overrides,
+    blocks: overrides.blocks || event.blocks,
+  };
+}
+
+// Home fixture: intentionally varied so the event index exercises dates,
+// durations, participants, completed work and dense agendas together.
+export const DEMO_PLANNER_EVENTS = [
+  createDemoEvent('event-weekly-design', {
+    eventStatus: 'scheduled',
+    title: 'Weekly de diseño & SD',
+    date: '2026-08-19',
+    startTime: '17:45',
+    description: 'Revisión semanal de avances, feedback y acuerdos del equipo.',
+  }),
+  createDemoEvent('event-orion-review', {
+    eventStatus: 'in_progress',
+    title: 'Revisión de producto · ORION',
+    date: '2026-08-20',
+    startTime: '10:00',
+    host: 'Camila Carreño',
+    description: 'Validación del flujo de Mi Plan y próximos ajustes del prototipo.',
+    blocks: DEMO_PLANNER_FIXTURE.blocks.slice(1, 3).map((block) => clonePlannerState(block)),
+  }),
+  createDemoEvent('event-ecommerce-critique', {
+    eventStatus: 'scheduled',
+    title: 'Crítica de diseño · Ecommerce',
+    date: '2026-08-21',
+    startTime: '15:30',
+    host: 'Daniela',
+    description: 'Sesión de crítica para catálogo, landing y factibilidad comercial.',
+    blocks: DEMO_PLANNER_FIXTURE.blocks.slice(3, 5).map((block) => clonePlannerState(block)),
+  }),
+  createDemoEvent('event-retro-release', {
+    eventStatus: 'completed',
+    title: 'Retro de release 2.0',
+    date: '2026-08-22',
+    startTime: '11:00',
+    host: 'Paula Molina',
+    description: 'Qué funcionó, qué debemos ajustar y qué llevamos al siguiente ciclo.',
+    blocks: DEMO_PLANNER_FIXTURE.blocks.map((block) => ({
+      ...clonePlannerState(block),
+      subpoints: (block.subpoints || []).slice(0, 2).map((point) => ({...point, status: 'done'})),
+    })),
+  }),
+];
+
+export function loadPlannerEvents() {
+  return DEMO_PLANNER_EVENTS.map(clonePlannerState);
+}
 
 export function loadPlannerState() {
   try {

@@ -1,6 +1,6 @@
 import React, {lazy, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
-import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
+import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
 import {installProductionImportNormalizer} from './production-import-normalizer.js';
@@ -119,7 +119,6 @@ function DocumentOnlyUnavailable({message, onRetry}) {
 }
 
 function ThemedApp({productionState, onRetry}) {
-  useThemeMode();
   if (productionState?.active && !productionState?.ready) {
     return <DocumentOnlyUnavailable message={productionState.message || 'No se pudo cargar el documento.'} onRetry={onRetry} />;
   }

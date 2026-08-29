@@ -1,6 +1,5 @@
 import {Button, Card, Avatar, Chip} from '@heroui/react';
 import {
-  Play,
   FileText,
   Plus,
   ArrowRotateLeft,
@@ -8,7 +7,7 @@ import {
   Calendar,
   CircleCheck,
   Microphone,
-  ArrowRotateRight,
+  ChevronRight,
 } from '@gravity-ui/icons';
 import {SESSION_STATUS, recalculateEstimatedEndTime} from './session-runner.js';
 import {getAllDiscordEntities} from './PlannerMemberPicker.jsx';
@@ -33,13 +32,12 @@ function isDefaultEmptySession(plannerState) {
 export function PlannerHomeView({
   plannerState,
   sessionState,
-  onStartSession,
-  onResumeSession,
   onViewAgenda,
-  onViewMinutes,
-  onViewRecap,
   onLoadDemo,
   onNewCleanSession,
+  events = [],
+  selectedEventId = null,
+  onSelectEvent,
 }) {
   const {
     title = 'Sesión sin título',
@@ -97,70 +95,14 @@ export function PlannerHomeView({
     if (isPaused) return <Chip size="sm" color="warning" variant="soft" className="text-[10.5px] font-semibold">Pausada</Chip>;
     if (isInterrupted) return <Chip size="sm" color="danger" variant="soft" className="text-[10.5px] font-semibold">Interrumpida</Chip>;
     if (isCompleted) return <Chip size="sm" color="success" variant="soft" className="text-[10.5px] font-semibold">Completada</Chip>;
-    return <Chip size="sm" variant="flat" className="text-[10.5px] font-semibold text-muted">Pendiente</Chip>;
+    return <Chip size="sm" variant="tertiary" className="text-[10.5px] font-semibold text-muted">Pendiente</Chip>;
   };
-
-  // ─── Acción principal contextual ──────────────────────────────────────────
-  const PrimaryActions = () => (
-    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
-      {isIdle && (
-        <>
-          <Button variant="primary" size="sm" onPress={onStartSession}
-            className="flex-1 sm:flex-none font-semibold text-xs h-8 px-4 flex items-center justify-center gap-1.5">
-            <Play width={13} height={13} /> Iniciar sesión
-          </Button>
-          <Button variant="secondary" size="sm" onPress={onViewAgenda}
-            className="flex-1 sm:flex-none text-xs font-medium h-8 px-4">
-            Ver agenda
-          </Button>
-        </>
-      )}
-      {isLive && (
-        <>
-          <Button variant="primary" size="sm" onPress={onViewAgenda}
-            className="flex-1 sm:flex-none font-semibold text-xs h-8 px-4 flex items-center justify-center gap-1.5">
-            <ArrowRotateRight width={13} height={13} /> Continuar sesión
-          </Button>
-          <Button variant="secondary" size="sm" onPress={onViewMinutes}
-            className="flex-1 sm:flex-none text-xs font-medium h-8 px-4 flex items-center gap-1.5">
-            <FileText width={12} height={12} /> Ver acta
-          </Button>
-        </>
-      )}
-      {isInterrupted && (
-        <>
-          <Button variant="primary" size="sm" onPress={onResumeSession}
-            className="flex-1 sm:flex-none font-semibold text-xs h-8 px-4 flex items-center justify-center gap-1.5">
-            <Play width={13} height={13} /> Reanudar
-          </Button>
-          <Button variant="secondary" size="sm" onPress={onViewMinutes}
-            className="flex-1 sm:flex-none text-xs font-medium h-8 px-4 flex items-center gap-1.5">
-            <FileText width={12} height={12} /> Ver acta
-          </Button>
-        </>
-      )}
-      {isCompleted && (
-        <>
-          <Button variant="primary" size="sm" onPress={onViewRecap}
-            className="flex-1 sm:flex-none font-semibold text-xs h-8 px-4 flex items-center justify-center gap-1.5">
-            <ArrowRotateRight width={13} height={13} /> Ver resumen
-          </Button>
-          <Button variant="secondary" size="sm" onPress={onViewMinutes}
-            className="flex-1 sm:flex-none text-xs font-medium h-8 px-4 flex items-center gap-1.5">
-            <FileText width={12} height={12} /> Ver acta
-          </Button>
-        </>
-      )}
-    </div>
-  );
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-0 pt-2 pb-28 flex flex-col gap-5 animate-in fade-in duration-200">
 
       {/* ── Sesión actual / Empty state ─────────────────────────────────────── */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-[11px] font-semibold text-muted uppercase tracking-wider px-0.5">Sesión actual</h3>
-
         {isEmpty && isIdle ? (
           /* Empty state */
           <Card className="p-5 flex flex-col items-center gap-3 rounded-2xl shadow-2xs border-border/80 bg-surface text-center">
@@ -184,7 +126,17 @@ export function PlannerHomeView({
           </Card>
         ) : (
           /* Session card — mismo estilo que block cards */
-          <Card className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs ${
+          <Card
+            role="button"
+            tabIndex={0}
+            onClick={onViewAgenda}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onViewAgenda?.();
+              }
+            }}
+            className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs cursor-pointer hover:bg-surface-secondary/25 focus-visible:outline-2 focus-visible:outline-focus ${
             isLive
               ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
               : isCompleted
@@ -192,8 +144,7 @@ export function PlannerHomeView({
                 : 'border-border/80 bg-surface'
           }`}>
             {/* Status + fecha + horario */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <StatusBadge />
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               {formattedDate && (
                 <span className="text-xs text-muted flex items-center gap-1">
                   <Calendar width={11} height={11} className="shrink-0" />
@@ -206,6 +157,7 @@ export function PlannerHomeView({
                   {startTime}–{estimatedEnd} · {formattedDuration}
                 </span>
               )}
+              <span className="ml-auto"><StatusBadge /></span>
             </div>
 
             {/* Título */}
@@ -233,7 +185,7 @@ export function PlannerHomeView({
                       <Avatar
                         key={i}
                         name={matched?.globalName || tag.replace(/^@/, '')}
-                        size="xs"
+                        size="sm"
                         className="w-5 h-5 text-[8.5px] font-bold border-2 border-surface shadow-2xs shrink-0"
                         style={{backgroundColor: `${color}30`, color}}
                       />
@@ -271,83 +223,51 @@ export function PlannerHomeView({
               </div>
             )}
 
-            <PrimaryActions />
           </Card>
         )}
       </section>
 
-      {/* ── Agenda: preview compacta ──────────────────────────────────────────── */}
-      {!isEmpty && blocks.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-[11px] font-semibold text-muted uppercase tracking-wider px-0.5">Agenda</h3>
-          <div className="flex flex-col gap-1.5">
-            {blocks.map((block, i) => {
-              const donePoints = (block.subpoints || []).filter((p) => p.status === 'done').length;
-              const totalBlockPoints = (block.subpoints || []).length;
-              const isBlockActive = sessionState?.liveActiveBlockId === block.id;
+      {/* ── Event index / stress fixture ─────────────────────────────────── */}
+      {events.length > 0 && (
+        <section className="library-section recent-section">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="section-title mb-0">Eventos ({events.length})</h3>
+            <span className="text-[11px] text-muted self-center">Explora tus agendas</span>
+          </div>
+          <div className="docs-list">
+            {events.map((event) => {
+              const eventMinutes = (event.blocks || []).reduce((sum, block) => sum + (block.durationMinutes || 0), 0);
+              const eventDate = event.date
+                ? new Intl.DateTimeFormat('es-ES', {weekday: 'short', day: 'numeric', month: 'short'}).format(new Date(`${event.date}T12:00:00`))
+                : 'Fecha por confirmar';
+              const eventStatus = event.eventStatus === 'completed'
+                ? 'Completado'
+                : event.eventStatus === 'in_progress'
+                  ? 'En curso'
+                  : 'Programado';
+              const isSelected = selectedEventId === event.eventId;
               return (
-                <button
-                  key={block.id}
-                  type="button"
-                  onClick={onViewAgenda}
-                  className={`flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border transition-colors text-left w-full cursor-pointer ${
-                    isBlockActive
-                      ? 'border-accent/40 bg-accent/5'
-                      : 'border-border/60 bg-surface hover:bg-surface-secondary/40'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`text-[11px] font-bold w-4 shrink-0 tabular-nums ${isBlockActive ? 'text-accent' : 'text-muted/50'}`}>
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span className={`text-sm font-medium truncate ${isBlockActive ? 'text-accent' : 'text-foreground'}`}>
-                      {block.title}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {totalBlockPoints > 0 && (
-                      <span className="text-xs text-muted">{donePoints}/{totalBlockPoints}</span>
-                    )}
-                    <span className="text-xs text-muted">{block.durationMinutes} min</span>
-                    {isBlockActive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                    )}
-                  </div>
-                </button>
+                <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
+                  <span className="doc-symbol">
+                    {event.eventStatus === 'completed' ? <CircleCheck width={18} height={18} className="text-success" /> : <Calendar width={18} height={18} />}
+                  </span>
+                  <button
+                    className="doc-row-main"
+                    type="button"
+                    onClick={() => onSelectEvent?.(event)}
+                    aria-label={`Abrir evento ${event.title}`}
+                  >
+                    <strong>{event.title}</strong>
+                    <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
+                  </button>
+                  <ChevronRight width={16} height={16} className="text-muted" aria-hidden="true" />
+                </article>
               );
             })}
           </div>
         </section>
       )}
 
-      {/* ── Acciones ──────────────────────────────────────────────────────────── */}
-      <section className="flex flex-col gap-2">
-        <h3 className="text-[11px] font-semibold text-muted uppercase tracking-wider px-0.5">Acciones</h3>
-        <div className="flex flex-col gap-1.5">
-          <button
-            type="button"
-            onClick={onNewCleanSession}
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-border/60 bg-surface hover:bg-surface-secondary/40 transition-colors text-left cursor-pointer"
-          >
-            <Plus width={14} height={14} className="text-muted shrink-0" />
-            <div className="min-w-0 flex items-baseline gap-2">
-              <span className="text-sm font-medium text-foreground">Nueva sesión</span>
-              <span className="text-xs text-muted">Comenzar con agenda vacía</span>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={onLoadDemo}
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-border/60 bg-surface hover:bg-surface-secondary/40 transition-colors text-left cursor-pointer"
-          >
-            <ArrowRotateLeft width={14} height={14} className="text-muted shrink-0" />
-            <div className="min-w-0 flex items-baseline gap-2">
-              <span className="text-sm font-medium text-foreground">Cargar demo Weekly</span>
-              <span className="text-xs text-muted">Agenda de Diseño & SD</span>
-            </div>
-          </button>
-        </div>
-      </section>
     </div>
   );
 }

@@ -86,7 +86,7 @@ export function SessionDock({
             isPaused ? 'text-warning' : isExpired ? 'text-danger font-semibold' : is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'
           }`}>
             {isPaused
-              ? `${isExpired ? `+${formatMsToClock(details.overtimeMs)}` : formatMsToClock(Math.max(0, details.remainingBlockMs))} · pausado`
+              ? `${isExpired ? `+${formatMsToClock(details.overtimeMs)}` : formatMsToClock(Math.max(0, details.remainingBlockMs))}`
               : isExpired
               ? `+${formatMsToClock(details.overtimeMs)}`
               : isUnlimited
@@ -146,7 +146,9 @@ export function SessionDock({
                 : 'text-muted hover:text-foreground hover:bg-surface-secondary'
             }`}
           >
-            {isPaused ? <Play width={14} height={14} fill="currentColor" /> : <Pause width={14} height={14} />}
+            <span className="session-toggle-icon" aria-hidden="true">
+              {isPaused ? <Play width={14} height={14} fill="currentColor" /> : <Pause width={14} height={14} fill="currentColor" />}
+            </span>
           </Button>
         </div>
       </div>

@@ -23,6 +23,7 @@ import {
 import {clockToMinutes, minutesToClock} from './time-engine.js';
 import {
   POINT_STATUS,
+  SESSION_STATUS,
   getElapsedActiveBlockMs,
   getBlockPlannedMs,
 } from './session-runner.js';
@@ -30,6 +31,7 @@ import {getAssistantContextDetails} from './session-assistant-engine.js';
 import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
 import {MaterialWavyProgress} from './MaterialWavyProgress.jsx';
 import {MaterialMorphShape} from './MaterialMorphShape.jsx';
+import {fieldValue} from './planner-field-value.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
@@ -43,7 +45,7 @@ export function PlannerAgendaView({
   isEditing = false,
   dockSlot = null,
   onAdvance,
-  onSkipBlock,
+  onSkipBlock: _onSkipBlock,
   isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
@@ -65,7 +67,7 @@ export function PlannerAgendaView({
 
   const liveActiveBlockId = sessionState?.liveActiveBlockId || state.liveActiveBlockId || null;
   const liveActivePointId = sessionState?.liveActivePointId || null;
-  const isPaused = sessionState?.isPaused || false;
+  const isPaused = sessionState?.isPaused || sessionState?.status === SESSION_STATUS.PAUSED;
   let cursorMinutes = clockToMinutes(startTime);
 
   const [, setClockTick] = useState(0);
@@ -129,14 +131,14 @@ export function PlannerAgendaView({
                 Conduce el bloque
               </Header>
               <Dropdown.Item id="Todo el equipo" textValue="Todo el equipo" className="px-3 py-1.5 rounded-xl text-xs">
-                <Avatar name="Todo el equipo" size="xs" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
+                <Avatar name="Todo el equipo" size="sm" className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs" />
                 <Label className="text-xs font-medium text-foreground">Todo el equipo</Label>
               </Dropdown.Item>
               {members.map((member) => (
                 <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
                   <Avatar
                     name={member.globalName}
-                    size="xs"
+                    size="sm"
                     className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
                     style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
                   />
@@ -159,7 +161,7 @@ export function PlannerAgendaView({
 
     const participantsList = rawParticipants
       ? rawParticipants.split(/(?:,|\s+y\s+|\s+and\s+|\s*\+\s*|\s+)/i).map((s) => s.trim().replace(/^@/, '')).filter(Boolean)
-      : ['Diseño & SD', 'Carol', 'Karola', 'Nico'];
+      : [];
 
     const selectedKeys = new Set(
       participantsList.map((tag) => {
@@ -367,8 +369,8 @@ export function PlannerAgendaView({
                 className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs ${
                   isLive && !isEditing
                     ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
-                    : isCompleted && !isEditing
-                      ? 'opacity-85 bg-surface border-border/60'
+                      : isCompleted && !isEditing
+                      ? 'bg-success/5 border-success/25'
                       : isSkipped && !isEditing
                         ? 'opacity-60 bg-surface-secondary/30 border-border/40'
                         : 'bg-surface border-border/80'
@@ -380,7 +382,7 @@ export function PlannerAgendaView({
                           <input
                             type="text"
                             value={block.title}
-                            onChange={(e) => onUpdateBlock?.(block.id, {title: e.target.value})}
+                            onChange={(value) => onUpdateBlock?.(block.id, {title: fieldValue(value)})}
                             placeholder="Título del bloque"
                             className="text-base font-bold tracking-tight text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0"
                           />
@@ -439,9 +441,9 @@ export function PlannerAgendaView({
                                     <ChevronDown />
                                     <Label>Mover abajo</Label>
                                   </Dropdown.Item>
-                                  <Dropdown.Item id="delete" variant="danger" textValue="Eliminar bloque">
+                                  <Dropdown.Item id="delete" textValue="Eliminar bloque" className="text-danger">
                                     <TrashBin />
-                                    <Label>Eliminar bloque</Label>
+                                    <Label className="text-danger">Eliminar bloque</Label>
                                   </Dropdown.Item>
                                 </Dropdown.Menu>
                               </Dropdown.Popover>
@@ -454,7 +456,7 @@ export function PlannerAgendaView({
                         <textarea
                           rows={1}
                           value={block.introDesc || ''}
-                          onChange={(e) => onUpdateBlock?.(block.id, {introDesc: e.target.value})}
+                              onChange={(value) => onUpdateBlock?.(block.id, {introDesc: fieldValue(value)})}
                           placeholder="Contexto o descripción del bloque..."
                           className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0"
                         />
@@ -518,7 +520,7 @@ export function PlannerAgendaView({
                                     <input
                                       type="text"
                                       value={point.title}
-                                      onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {title: e.target.value})}
+                                      onChange={(value) => onUpdateSubpoint?.(block.id, point.id, {title: fieldValue(value)})}
                                       placeholder="Título del punto..."
                                       className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-accent/40 rounded px-1 -mx-1 transition-all leading-normal"
                                     />
@@ -591,7 +593,7 @@ export function PlannerAgendaView({
                                 <input
                                   type="text"
                                   value={point.description || ''}
-                                  onChange={(e) => onUpdateSubpoint?.(block.id, point.id, {description: e.target.value})}
+                                      onChange={(value) => onUpdateSubpoint?.(block.id, point.id, {description: fieldValue(value)})}
                                   placeholder="Añadir descripción o detalle..."
                                   className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-1 focus:ring-accent/40 rounded px-1 -mx-1 transition-all"
                                 />
@@ -629,7 +631,7 @@ export function PlannerAgendaView({
                                                         <Avatar
                                                           key={pIdx}
                                                           name={matched?.globalName || pName}
-                                                          size="xs"
+                                                          size="sm"
                                                           className="w-4.5 h-4.5 border border-background text-[8px] font-bold shadow-2xs shrink-0"
                                                           style={{backgroundColor: `${color}35`, color}}
                                                         />
@@ -683,7 +685,7 @@ export function PlannerAgendaView({
                                                 <Avatar
                                                   key={pIdx}
                                                   name={matched?.globalName || pName}
-                                                  size="xs"
+                                                  size="sm"
                                                   className="w-5 h-5 border border-background text-[9px] font-bold shadow-2xs shrink-0"
                                                   style={{backgroundColor: `${color}35`, color}}
                                                 />
@@ -797,11 +799,6 @@ export function PlannerAgendaView({
                             <Plus width={12} height={12} />
                             <span>Acuerdo</span>
                           </Button>
-                          {block.phases && (
-                            <span className="text-[11px] text-muted/60 hidden sm:inline">
-                              {block.phases.context}m ctx · {block.phases.review}m rev · {block.phases.closing}m cierre
-                            </span>
-                          )}
                         </div>
 
                         {isLive && !isLast && (
@@ -810,11 +807,7 @@ export function PlannerAgendaView({
                               variant="ghost"
                               size="sm"
                               onPress={() => {
-                                if (onSkipBlock) {
-                                  onSkipBlock();
-                                } else if (onAdvance) {
-                                  onAdvance();
-                                }
+                                onAdvance?.();
                               }}
                               className="h-7 text-xs text-muted hover:text-foreground px-2.5 font-medium gap-1 cursor-pointer"
                             >
@@ -853,14 +846,14 @@ export function PlannerAgendaView({
 
                   <div className="flex-1 flex flex-col items-center my-1 relative w-full">
                     <div className="relative my-1 z-10 flex items-center justify-center">
-                      {isLive ? (
+                      {isLive || isCompleted ? (
                         <MaterialMorphShape
                           size={18}
                           color={blockColor}
-                          isPaused={isPaused}
+                          isPaused={isLive ? isPaused : false}
+                          isActive={isLive}
+                          isCompleted={isCompleted}
                         />
-                      ) : isCompleted ? (
-                        <span className="h-2 w-2 rounded-full bg-success ring-2 ring-surface block" />
                       ) : (
                         <span className="h-1.5 w-1.5 rounded-full bg-border/80 ring-2 ring-surface block" />
                       )}

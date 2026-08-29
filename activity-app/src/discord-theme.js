@@ -1,11 +1,36 @@
-import {useEffect, useState} from 'react';
+export const THEME_PREFERENCE_KEY = 'heroui-theme';
+const LEGACY_THEME_PREFERENCE_KEY = 'bardo.theme.preference.v1';
+
+function normalizeTheme(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/^['"]|['"]$/g, '');
+  return normalized === 'dark' || normalized === 'light' ? normalized : null;
+}
+
+function normalizePreference(value) {
+  return normalizeTheme(value) || (String(value || '').trim().toLowerCase() === 'system' ? 'system' : null);
+}
+
+export function getThemePreference() {
+  try {
+    const preference = normalizePreference(localStorage.getItem(THEME_PREFERENCE_KEY));
+    if (preference) return preference;
+    const legacyPreference = normalizePreference(localStorage.getItem(LEGACY_THEME_PREFERENCE_KEY));
+    if (legacyPreference) {
+      localStorage.setItem(THEME_PREFERENCE_KEY, legacyPreference);
+      return legacyPreference;
+    }
+    return 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+function resolveSystemTheme() {
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
 export function resolveDiscordTheme({allowSystem = true} = {}) {
   if (typeof window === 'undefined') return 'dark';
-  const normalizeTheme = value => {
-    const normalized = String(value || '').trim().toLowerCase().replace(/^['"]|['"]$/g, '');
-    return normalized === 'dark' || normalized === 'light' ? normalized : null;
-  };
 
   try {
     const queryTheme = normalizeTheme(new URLSearchParams(window.location.search).get('theme'));
@@ -13,11 +38,16 @@ export function resolveDiscordTheme({allowSystem = true} = {}) {
   } catch {}
 
   try {
-    for (const element of [document.body, document.documentElement].filter(Boolean)) {
+    const elements = [document.body, document.documentElement].filter(Boolean);
+    for (const element of elements) {
+      const isAppRoot = element === document.documentElement && element.dataset?.bardoTheme;
+      if (isAppRoot) continue;
+
       const datasetTheme = normalizeTheme(element.dataset?.theme || element.dataset?.colorScheme);
       if (datasetTheme) return datasetTheme;
       if (element.classList?.contains('theme-dark')) return 'dark';
       if (element.classList?.contains('theme-light')) return 'light';
+
       const styles = getComputedStyle(element);
       for (const property of ['--discord-theme', '--discord-color-scheme', '--color-scheme']) {
         const customTheme = normalizeTheme(styles.getPropertyValue(property));
@@ -26,8 +56,28 @@ export function resolveDiscordTheme({allowSystem = true} = {}) {
     }
   } catch {}
 
-  if (!allowSystem) return null;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return allowSystem ? resolveSystemTheme() : null;
+}
+
+function applyTheme(targetTheme) {
+  const resolved = targetTheme === 'dark' ? 'dark' : 'light';
+  const root = document.documentElement;
+  root.classList.remove('light', 'dark');
+  root.classList.add(resolved);
+  root.setAttribute('data-theme', resolved);
+  root.dataset.bardoTheme = resolved;
+  root.style.colorScheme = resolved;
+  return resolved;
+}
+
+export function applyDiscordTheme({preference, allowSystem = true} = {}) {
+  const selected = normalizePreference(preference) || getThemePreference();
+  const resolved = selected === 'system'
+    ? (resolveDiscordTheme({allowSystem: true}) || (allowSystem ? 'light' : 'light'))
+    : selected;
+  const applied = applyTheme(resolved);
+  collectDiscordThemeDiagnostics();
+  return applied;
 }
 
 export function collectDiscordThemeDiagnostics() {
@@ -46,6 +96,7 @@ export function collectDiscordThemeDiagnostics() {
   const params = new URLSearchParams(window.location.search);
   const diagnostics = {
     capturedAt: new Date().toISOString(),
+    preference: getThemePreference(),
     resolvedTheme: document.documentElement.dataset.theme || null,
     query: Object.fromEntries(['theme', 'frame_id', 'instance_id', 'platform'].map(key => [key, params.get(key)])),
     media: {
@@ -59,39 +110,6 @@ export function collectDiscordThemeDiagnostics() {
   window.__BARDO_THEME_DIAGNOSTICS__ = diagnostics;
   if (params.get('bardo_theme_debug') === '1') console.info('[Bardo theme diagnostics]', diagnostics);
   return diagnostics;
-}
-
-function applyTheme(targetTheme) {
-  const resolved = targetTheme === 'dark' ? 'dark' : 'light';
-  const root = document.documentElement;
-  root.classList.remove('light', 'dark');
-  root.classList.add(resolved);
-  root.setAttribute('data-theme', resolved);
-  root.style.colorScheme = resolved;
-  return resolved;
-}
-
-export function applyDiscordTheme(options = {}) {
-  const resolved = resolveDiscordTheme(options);
-  const applied = resolved ? applyTheme(resolved) : (document.documentElement.dataset.theme || 'light');
-  collectDiscordThemeDiagnostics();
-  return applied;
-}
-
-export function useThemeMode() {
-  const [resolvedTheme, setResolvedTheme] = useState(() => applyDiscordTheme());
-  useEffect(() => {
-    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
-    const syncTheme = () => setResolvedTheme(applyDiscordTheme());
-    media?.addEventListener?.('change', syncTheme);
-    window.addEventListener('discord-theme-change', syncTheme);
-    syncTheme();
-    return () => {
-      media?.removeEventListener?.('change', syncTheme);
-      window.removeEventListener('discord-theme-change', syncTheme);
-    };
-  }, []);
-  return {theme: resolvedTheme, resolvedTheme};
 }
 
 if (typeof document !== 'undefined') applyDiscordTheme({allowSystem: false});
