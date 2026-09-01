@@ -1,11 +1,8 @@
 import {useState, useEffect} from 'react';
-import {
-  Button,
-  Modal,
-  TextField,
-  TextArea,
-} from '@heroui/react';
-import {CircleCheck} from '@gravity-ui/icons';
+import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+
 
 export function PlannerCaptureModal({
   isOpen,
@@ -45,44 +42,34 @@ export function PlannerCaptureModal({
   return (
     <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-md w-full p-5 rounded-2xl bg-surface border border-border shadow-2xl">
-            <Modal.CloseTrigger />
-            <Modal.Header className="pb-1">
-              <Modal.Heading className="text-base font-semibold text-foreground flex items-center gap-2">
-                <CircleCheck width={16} height={16} className="text-accent" />
-                ¿Qué quieres guardar?
-              </Modal.Heading>
-              {targetBlock?.title && (
-                <p className="text-xs text-muted mt-1 font-normal">
-                  Se agregará al bloque <span className="font-semibold text-foreground">“{targetBlock.title}”</span>
-                </p>
-              )}
-            </Modal.Header>
-
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
-              <Modal.Body className="flex flex-col gap-3.5 p-0">
-                <TextField isRequired className="w-full">
-                  <TextArea
-                    value={content}
-                    onChange={(event) => setContent(event.target.value)}
-                    placeholder="Escribe el acuerdo o decisión importante…"
-                    autoFocus
-                    rows={4}
-                    className="w-full rounded-xl border border-border/80 bg-surface-secondary/50 text-foreground placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent focus:bg-surface text-sm p-3 transition-colors outline-none resize-none"
-                  />
-                </TextField>
-              </Modal.Body>
-
-              <Modal.Footer className="flex items-center justify-end gap-2 pt-1">
-                <Button type="button" variant="ghost" size="sm" onPress={onClose} isDisabled={isSubmitting} className="h-8 px-3 text-xs">
-                  Cancelar
-                </Button>
-                <Button type="submit" variant="primary" size="sm" isDisabled={!content.trim() || isSubmitting} className="h-8 px-4 text-xs font-medium">
-                  {isSubmitting ? 'Guardando…' : 'Guardar'}
-                </Button>
-              </Modal.Footer>
-            </form>
+        <Modal.Container size="sm">
+          <Modal.Dialog>
+            <div className="flex flex-col gap-4">
+              <h3 className="text-lg font-semibold">Agregar decisión</h3>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                {targetBlock?.title && (
+                  <p className="text-xs text-muted-foreground font-normal">
+                    Bloque: <span className="font-medium text-foreground">«{targetBlock.title}»</span>
+                  </p>
+                )}
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Escribe la decisión o acuerdo alcanzado en este bloque..."
+                  autoFocus
+                  rows={4}
+                  required
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={isSubmitting}>
+                    Cancelar
+                  </Button>
+                  <Button variant="default" size="sm" type="submit" disabled={!content.trim() || isSubmitting}>
+                    {isSubmitting ? 'Guardando...' : 'Guardar decisión'}
+                  </Button>
+                </div>
+              </form>
+            </div>
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>

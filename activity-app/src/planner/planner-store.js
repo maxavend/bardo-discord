@@ -344,14 +344,18 @@ export function generateDiscordAnnouncement(plannerState) {
 
 export function generateMinutesMarkdown(plannerState, sessionState = null) {
   const computed = computePlannerTimes(plannerState);
-  let markdown = `# Acta: ${computed.title}\n\n`;
-  markdown += `**Fecha:** ${computed.date || 'Sin fecha'} | **Moderador:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min\n\n`;
-
-  markdown += '## 1. Decisiones y acuerdos tomados\n';
+  
+  // Recopilar todas las decisiones
   const allDecisions = [];
   for (const block of computed.blocks || []) {
     for (const decision of block.decisions || []) {
-      allDecisions.push({content: decision.content, origin: block.title, pointId: decision.pointId || null});
+      allDecisions.push({
+        id: decision.id,
+        content: decision.content,
+        blockId: block.id,
+        blockTitle: block.title,
+        origin: block.title,
+      });
     }
   }
   for (const decision of sessionState?.decisions || []) {
@@ -359,35 +363,62 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
     const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
     if (!allDecisions.some((existing) => existing.content === decision.content)) {
       allDecisions.push({
+        id: decision.id,
         content: decision.content,
-        origin: point ? `${block.title} → ${point.title}` : (block?.title || 'Sesión'),
+        blockId: block?.id || null,
+        blockTitle: block?.title || 'Reunión',
+        origin: point ? `${block?.title} → ${point.title}` : (block?.title || 'Reunión'),
       });
     }
   }
 
+  let markdown = `# Acta: ${computed.title}\n\n`;
+  markdown += `> **Fecha:** ${computed.date || 'Sin fecha'} | **Organiza:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${allDecisions.length}\n\n`;
+  markdown += `---\n\n`;
+
+  markdown += '## 📋 Resumen de Acuerdos Principales\n\n';
   if (allDecisions.length > 0) {
     for (const decision of allDecisions) {
-      markdown += `- **${decision.content}** *(Contexto: ${decision.origin})*\n`;
+      markdown += `- ✅ **${decision.content}**\n  *📌 Origen: ${decision.origin}*\n\n`;
     }
   } else {
-    markdown += '*No se registraron decisiones formales en esta sesión.*\n';
+    markdown += '*No se registraron decisiones en esta reunión.*\n\n';
   }
 
-  markdown += '\n## 2. Resumen de temas tratados\n';
+  markdown += `---\n\n`;
+  markdown += '## ⏱️ Desglose de Agenda por Bloques\n\n';
+
   if ((computed.blocks || []).length === 0) {
-    markdown += '*Sin bloques registrados en la sesión.*\n';
+    markdown += '*Sin bloques registrados en la reunión.*\n';
   } else {
-    for (const block of computed.blocks) {
-      markdown += `### ${block.title} (${block.durationMinutes} min)\n`;
-      if (block.leader) markdown += `*Lidera:* ${block.leader}\n`;
-      for (const point of block.subpoints || []) {
-        const status = sessionState ? getPointStatus(sessionState, point.id) : point.status;
-        const marker = status === POINT_STATUS.DONE ? '[x]' : status === POINT_STATUS.SKIPPED ? '[-]' : '[ ]';
-        const presenter = point.presenter ? ` · ${point.presenter}` : '';
-        const suffix = status === POINT_STATUS.SKIPPED ? ' *(saltado)*' : '';
-        markdown += `- ${marker} ${point.title}${presenter}${suffix}\n`;
-      }
+    for (const [idx, block] of computed.blocks.entries()) {
+      markdown += `### ${idx + 1}. ${block.title} (${block.durationMinutes} min)\n`;
+      if (block.leader) markdown += `* **Conduce:** ${block.leader}\n`;
+      if (block.introDesc) markdown += `* **Objetivo:** ${block.introDesc}\n`;
       markdown += '\n';
+
+      const blockDecisions = allDecisions.filter((d) => d.blockId === block.id || d.origin.startsWith(block.title));
+      if (blockDecisions.length > 0) {
+        markdown += `**Acuerdos de este bloque:**\n`;
+        for (const decision of blockDecisions) {
+          markdown += `- ✅ ${decision.content}\n`;
+        }
+        markdown += '\n';
+      }
+
+      if ((block.subpoints || []).length > 0) {
+        markdown += `**Temas de la agenda:**\n`;
+        for (const point of block.subpoints) {
+          const status = sessionState ? getPointStatus(sessionState, point.id) : point.status;
+          const marker = status === POINT_STATUS.DONE ? '[x]' : status === POINT_STATUS.SKIPPED ? '[-]' : '[ ]';
+          const presenter = point.presenter ? ` · *${point.presenter}*` : '';
+          const statusText = status === POINT_STATUS.DONE ? ' *(Tratado)*' : status === POINT_STATUS.SKIPPED ? ' *(Saltado)*' : '';
+          markdown += `- ${marker} ${point.title}${presenter}${statusText}\n`;
+        }
+        markdown += '\n';
+      }
+
+      markdown += `---\n\n`;
     }
   }
 

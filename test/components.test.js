@@ -58,7 +58,7 @@ test('buildDocumentPayload produce preview Components V2 con botón nativo de Ac
   const actionRow = payload.components[0].components.at(-1);
   const button = actionRow.components[0];
   assert.equal(button.style, 1); // ButtonStyle.Primary
-  assert.equal(button.label, '📖 Mostrar más');
+  assert.equal(button.label, 'Abrir documento');
   assert.equal(button.custom_id, 'bardo:open:doc-abc');
   assert.equal(button.url, undefined);
 });

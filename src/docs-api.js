@@ -69,8 +69,8 @@ function normalizeEditorPayload(payload, existing = null) {
   const description = String(payload?.description ?? existing?.description ?? '').trim().slice(0, 1000);
   const markdown = String(payload?.markdown ?? existing?.originalMarkdown ?? '').trim();
 
-  if (!markdown) return { error: 'Document content is required' };
-  if (encoder.encode(markdown).byteLength > MAX_DOCUMENT_BYTES) return { error: 'Document is too large', status: 413 };
+  if (!markdown) return { error: 'El contenido del documento es obligatorio' };
+  if (encoder.encode(markdown).byteLength > MAX_DOCUMENT_BYTES) return { error: 'El documento supera el tamaño máximo permitido', status: 413 };
 
   const extracted = extractDocumentTitle(markdown, title);
   const pages = paginateMarkdown(extracted.body || markdown).slice(0, 1);

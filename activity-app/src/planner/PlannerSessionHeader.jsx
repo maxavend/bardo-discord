@@ -1,11 +1,8 @@
-import {
-  Avatar,
-  Button,
-  Dropdown,
-  Label,
-  Description,
-  Header,
-} from '@heroui/react';
+import { Avatar } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Dropdown } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label, Description, Header } from '@/components/ui/label';
 import {
   FileText,
   Pencil,
@@ -29,7 +26,6 @@ import {
 } from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
-const COMMON_START_TIMES = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '17:45', '18:00', '19:00', '20:00'];
 
 function parseMentions(mentionsStr = '') {
   if (!mentionsStr) return [];
@@ -50,7 +46,7 @@ export function PlannerSessionHeader({
   onUpdateHeaderField,
   onCopyAnnouncement,
   onNewCleanSession,
-  onLoadDemo,
+  _onLoadDemo,
   onStartSession,
   onResumeSession,
   onInterruptSession,
@@ -71,7 +67,7 @@ export function PlannerSessionHeader({
     (accumulator, b) => accumulator + (b.durationMinutes || 0),
     0
   ) || totalCalculatedDuration || 0;
-  const estimatedEndTime = recalculateEstimatedEndTime(
+  const _estimatedEndTime = recalculateEstimatedEndTime(
     startTime,
     totalPlannedMinutes
   );
@@ -81,17 +77,17 @@ export function PlannerSessionHeader({
   const isCompleted = sessionState?.status === SESSION_STATUS.COMPLETED;
   const isInterrupted = sessionState?.status === SESSION_STATUS.INTERRUPTED;
 
-  let formattedDate = date;
+  let _formattedDate = date;
   try {
     const [year, month, day] = (date || '').split('-').map(Number);
     if (year && month && day) {
       const d = new Date(year, month - 1, day);
       const weekday = new Intl.DateTimeFormat('es-ES', {weekday: 'short'}).format(d);
       const monthName = new Intl.DateTimeFormat('es-ES', {month: 'short'}).format(d);
-      formattedDate = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${monthName}`;
+      _formattedDate = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${monthName}`;
     }
   } catch {
-    formattedDate = date;
+    _formattedDate = date;
   }
 
   const hours = Math.floor(totalPlannedMinutes / 60);
@@ -104,106 +100,44 @@ export function PlannerSessionHeader({
   const renderDateSelector = () => {
     if (!isEditing) {
       return (
-        <span className="inline-flex items-center gap-1.5">
-          <Calendar width={13} height={13} className="text-muted/70 shrink-0" />
-          <span>{formattedDate || 'Seleccionar fecha'}</span>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-full border border-border/50">
+          <Calendar width={13} height={13} className="shrink-0 text-primary" />
+          <span>{_formattedDate || 'Sin fecha'}</span>
         </span>
       );
     }
-
     return (
-      <Dropdown>
-        <Dropdown.Trigger>
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
-          >
-            <Calendar width={13} height={13} className="text-muted/70 group-hover:text-foreground shrink-0 transition-colors" />
-            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-              {formattedDate || 'Seleccionar fecha'}
-            </span>
-          </button>
-        </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[260px] p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
-          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('date', String(key))} className="p-0">
-            <Dropdown.Section>
-              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
-                Fecha de la sesión
-              </Header>
-              <Dropdown.Item id="2026-08-19" textValue="Mié 19 ago (Hoy)" className="px-3 py-1.5 rounded-xl text-xs">
-                <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col min-w-0">
-                  <Label className="text-xs font-medium text-foreground leading-tight">Hoy</Label>
-                  <Description className="text-[10.5px] text-muted leading-tight">Mié 19 ago 2026</Description>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item id="2026-08-20" textValue="Jue 20 ago (Mañana)" className="px-3 py-1.5 rounded-xl text-xs">
-                <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col min-w-0">
-                  <Label className="text-xs font-medium text-foreground leading-tight">Mañana</Label>
-                  <Description className="text-[10.5px] text-muted leading-tight">Jue 20 ago 2026</Description>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item id="2026-08-24" textValue="Próximo Lunes" className="px-3 py-1.5 rounded-xl text-xs">
-                <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col min-w-0">
-                  <Label className="text-xs font-medium text-foreground leading-tight">Próximo Lunes</Label>
-                  <Description className="text-[10.5px] text-muted leading-tight">Lun 24 ago 2026</Description>
-                </div>
-              </Dropdown.Item>
-              <Dropdown.Item id="2026-08-26" textValue="Próximo Miércoles" className="px-3 py-1.5 rounded-xl text-xs">
-                <Calendar className="size-4 shrink-0 text-muted" />
-                <div className="flex flex-col min-w-0">
-                  <Label className="text-xs font-medium text-foreground leading-tight">Próximo Miércoles</Label>
-                  <Description className="text-[10.5px] text-muted leading-tight">Mié 26 ago 2026</Description>
-                </div>
-              </Dropdown.Item>
-            </Dropdown.Section>
-          </Dropdown.Menu>
-        </Dropdown.Popover>
-      </Dropdown>
+      <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <Calendar width={13} height={13} className="shrink-0" />
+        <Input
+          type="date"
+          value={date || ''}
+          onChange={(e) => onUpdateHeaderField?.('date', e.target.value)}
+          className="h-7 w-32 px-2 text-xs rounded-lg"
+        />
+      </div>
     );
   };
 
   const renderTimeSelector = () => {
     if (!isEditing) {
       return (
-        <span className="inline-flex items-center gap-1.5">
-          <Clock width={13} height={13} className="text-muted/70 shrink-0" />
-          <span>{startTime}–{estimatedEndTime}</span>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-full border border-border/50">
+          <Clock width={13} height={13} className="shrink-0 text-primary" />
+          <span>{startTime || '10:00'}</span>
         </span>
       );
     }
-
     return (
-      <Dropdown>
-        <Dropdown.Trigger>
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
-          >
-            <Clock width={13} height={13} className="text-muted/70 group-hover:text-foreground shrink-0 transition-colors" />
-            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-              {startTime}–{estimatedEndTime}
-            </span>
-          </button>
-        </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[200px] max-h-64 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
-          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('startTime', String(key))} className="p-0">
-            <Dropdown.Section>
-              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
-                Hora de inicio
-              </Header>
-              {COMMON_START_TIMES.map((timeOption) => (
-                <Dropdown.Item key={timeOption} id={timeOption} textValue={timeOption} className="px-3 py-1.5 rounded-xl text-xs">
-                  <Clock className="size-4 shrink-0 text-muted" />
-                  <Label className="text-xs font-medium text-foreground">{timeOption}</Label>
-                </Dropdown.Item>
-              ))}
-            </Dropdown.Section>
-          </Dropdown.Menu>
-        </Dropdown.Popover>
-      </Dropdown>
+      <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <Clock width={13} height={13} className="shrink-0" />
+        <Input
+          type="time"
+          value={startTime || '10:00'}
+          onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
+          className="h-7 w-24 px-2 text-xs rounded-lg"
+        />
+      </div>
     );
   };
 
@@ -418,12 +352,12 @@ export function PlannerSessionHeader({
                   rows={1}
                   value={title}
                   onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
-                  placeholder="Título de la sesión"
+                  placeholder="Nombre de la reunión"
                   className="doc-title doc-title-input"
-                  aria-label="Título de la sesión"
+                  aria-label="Nombre de la reunión"
                 />
               ) : (
-                <h1 className="doc-title">{title || 'Sesión sin título'}</h1>
+                <h1 className="doc-title">{title || 'Reunión sin título'}</h1>
               )}
             </div>
 
@@ -444,11 +378,7 @@ export function PlannerSessionHeader({
                 </Button>
               ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
                 <Button variant="primary" size="sm" onPress={onStartSession} className="font-medium h-8 px-3.5">
-                  <Play width={13} height={13} /> <span>Iniciar</span>
-                </Button>
-              ) : (isRunning || isPaused) ? (
-                <Button variant="secondary" size="sm" onPress={() => onTabChange('minutes')} className="font-medium h-8 px-3">
-                  <FileText width={13} height={13} /> <span>Acta</span>
+                  <Play width={13} height={13} /> <span>Iniciar reunión</span>
                 </Button>
               ) : isCompleted ? (
                 <Button variant="primary" size="sm" onPress={() => onTabChange('recap')} className="font-medium h-8 px-3.5">
@@ -460,46 +390,39 @@ export function PlannerSessionHeader({
               <div className="hidden sm:inline-flex">
                 <Dropdown>
                   <Dropdown.Trigger>
-                    <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones de la sesión" className="h-8 w-8 text-muted hover:text-foreground">
+                    <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones de la reunión" className="h-8 w-8 text-muted hover:text-foreground">
                       <EllipsisVertical width={14} height={14} />
                     </Button>
                   </Dropdown.Trigger>
                   <Dropdown.Popover placement="bottom end">
                     <Dropdown.Menu
                       onAction={(key) => {
-                        if (key === 'view-minutes') onTabChange('minutes');
                         if (key === 'view-recap') onTabChange('recap');
                         if (key === 'edit') onToggleEditMode();
                         if (key === 'copy-announcement') onCopyAnnouncement();
                         if (key === 'new-clean') onNewCleanSession();
-                        if (key === 'load-demo') onLoadDemo();
                         if (key === 'interrupt' && onInterruptSession) onInterruptSession();
                       }}
                     >
-                      <Dropdown.Item id="view-minutes" textValue="Ver acta y acuerdos">
-                        <FileText />
-                        <Label>Ver acta y acuerdos</Label>
-                        <Description>Decisiones y temas tratados</Description>
-                      </Dropdown.Item>
                       {(isCompleted || isInterrupted) && (
-                        <Dropdown.Item id="view-recap" textValue="Ver resumen (Session Recap)">
+                        <Dropdown.Item id="view-recap" textValue="Ver resumen de la reunión">
                           <ArrowRotateRight />
-                          <Label>Ver resumen (Recap)</Label>
-                          <Description>Métricas y grabaciones de la sesión</Description>
+                          <Label>Ver resumen</Label>
+                          <Description>Métricas y grabaciones de la reunión</Description>
                         </Dropdown.Item>
                       )}
                       {(isRunning || isPaused) && (
-                        <Dropdown.Item id="interrupt" textValue="Interrumpir sesión" className="text-danger">
+                        <Dropdown.Item id="interrupt" textValue="Pausar reunión" className="text-danger">
                           <ArrowRotateLeft />
-                          <Label className="text-danger">Interrumpir sesión</Label>
-                          <Description>Pausar y conservar grabaciones</Description>
+                          <Label className="text-danger">Pausar reunión</Label>
+                          <Description>Pausar y conservar avance</Description>
                         </Dropdown.Item>
                       )}
                       {!isEditing && (
-                        <Dropdown.Item id="edit" textValue="Editar sesión integrada">
+                        <Dropdown.Item id="edit" textValue="Editar reunión">
                           <Pencil />
-                          <Label>Editar sesión</Label>
-                          <Description>Modificar títulos, bloques y participantes</Description>
+                          <Label>Editar reunión</Label>
+                          <Description>Modificar nombre, agenda y participantes</Description>
                         </Dropdown.Item>
                       )}
                       <Dropdown.Item id="copy-announcement" textValue="Copiar anuncio">
@@ -507,15 +430,10 @@ export function PlannerSessionHeader({
                         <Label>Copiar anuncio</Label>
                         <Description>Para compartir en canales de Discord</Description>
                       </Dropdown.Item>
-                      <Dropdown.Item id="new-clean" textValue="Nueva sesión limpia">
+                      <Dropdown.Item id="new-clean" textValue="Nueva reunión">
                         <Plus />
-                        <Label>Nueva sesión limpia</Label>
+                        <Label>Nueva reunión</Label>
                         <Description>Empezar una agenda desde cero</Description>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="load-demo" textValue="Cargar demo semanal">
-                        <ArrowRotateLeft />
-                        <Label>Cargar demo semanal</Label>
-                        <Description>Ejemplo de diseño & producto</Description>
                       </Dropdown.Item>
                     </Dropdown.Menu>
                   </Dropdown.Popover>
@@ -530,9 +448,9 @@ export function PlannerSessionHeader({
               rows={1}
               value={description}
               onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
-              placeholder="Agrega una descripción..."
+              placeholder="Agrega un objetivo o descripción..."
               className="doc-description doc-description-input"
-              aria-label="Descripción de la sesión"
+              aria-label="Objetivo o descripción de la reunión"
             />
           ) : description ? (
             <p className="doc-description">{description}</p>

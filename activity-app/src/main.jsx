@@ -103,7 +103,7 @@ function ActivityErrorShell({message, onRetry}) {
 function DocumentOnlyUnavailable({message, onRetry}) {
   return (
     <main className="app-root min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
-      <div className="flex flex-col items-center gap-4 max-w-md text-center p-6 rounded-2xl bg-surface border border-border">
+      <div className="container-surface flex flex-col items-center gap-4 max-w-md text-center p-6 rounded-2xl bg-surface border border-border">
         <div className="w-12 h-12 rounded-2xl bg-warning/10 border border-warning/20 flex items-center justify-center text-warning text-xl">
           📄
         </div>

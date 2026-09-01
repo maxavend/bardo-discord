@@ -1,10 +1,7 @@
 import {useState, useEffect} from 'react';
-import {
-  Modal,
-  Button,
-  Input,
-  Label,
-} from '@heroui/react';
+import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
   Microphone,
   Clock,
@@ -45,7 +42,7 @@ export function RecordingSaveModal({
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Modal.Container size="sm">
-        <Modal.Dialog className="bg-surface border border-border rounded-2xl shadow-2xl p-5 flex flex-col gap-4 max-w-md w-full">
+        <Modal.Dialog className="container-surface bg-surface border border-border rounded-2xl shadow-2xl p-5 flex flex-col gap-4 max-w-md w-full">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-accent">
@@ -55,22 +52,19 @@ export function RecordingSaveModal({
                 Grabación finalizada
               </h2>
             </div>
-            <p className="text-xs text-muted">
-              Revisa el nombre de la grabación antes de guardarla en la sesión.
+            <p className="text-xs text-muted-foreground">
+              Revisa el nombre de la grabación antes de guardarla.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 py-1">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-foreground">
-                Nombre de la grabación
-              </Label>
+            <div className="flex flex-col gap-1.5 w-full">
+              <label className="text-xs font-medium text-foreground">Nombre de la grabación</label>
               <Input
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
-                placeholder="Ej. Catálogo de equipos"
+                placeholder="Nombre de la grabación"
                 autoFocus
-                className="w-full"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleConfirmSave();
                 }}
@@ -78,10 +72,10 @@ export function RecordingSaveModal({
             </div>
 
             {/* Context & Duration Pills */}
-            <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-surface-secondary/40 border border-border/40 text-xs">
+            <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-secondary/40 border border-border/40 text-xs">
               <div className="flex flex-col min-w-0">
                 {parentContext && (
-                  <span className="text-[11px] text-muted truncate">
+                  <span className="text-[11px] text-muted-foreground truncate">
                     {parentContext}
                   </span>
                 )}
@@ -90,7 +84,7 @@ export function RecordingSaveModal({
                 </span>
               </div>
 
-              <div className="flex items-center gap-1 text-accent font-semibold shrink-0">
+              <div className="flex items-center gap-1 text-primary font-semibold shrink-0">
                 <Clock width={12} height={12} />
                 <span>{durationClock}</span>
               </div>
@@ -99,19 +93,19 @@ export function RecordingSaveModal({
 
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40">
             <Button
-              variant="ghost"
+              variant="destructive"
               size="sm"
-              onPress={onDiscard}
-              className="text-danger hover:bg-danger/10 text-xs"
+              onClick={onDiscard}
+              className="text-xs"
             >
               Descartar
             </Button>
 
             <div className="flex items-center gap-2">
               <Button
-                variant="primary"
+                variant="default"
                 size="sm"
-                onPress={handleConfirmSave}
+                onClick={handleConfirmSave}
                 className="font-medium text-xs px-4"
               >
                 Guardar grabación

@@ -1,5 +1,6 @@
 import {useState, useEffect, useRef, useCallback} from 'react';
-import {toast, Button} from '@heroui/react';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/lib/toast';
 import {
   Play,
   Check,
@@ -8,7 +9,6 @@ import {
 import {PlannerSessionHeader} from './PlannerSessionHeader.jsx';
 import {PlannerAgendaView} from './PlannerAgendaView.jsx';
 import {PlannerEditorView} from './PlannerEditorView.jsx';
-import {PlannerMinutesView} from './PlannerMinutesView.jsx';
 import {PlannerHomeView} from './PlannerHomeView.jsx';
 import {PlannerCaptureModal} from './PlannerCaptureModal.jsx';
 import {SessionDock} from './SessionDock.jsx';
@@ -63,7 +63,7 @@ import {
   hydrateRecordingBinary,
 } from './recording-storage.js';
 
-export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary}) {
+export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLibrary}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [plannerEvents] = useState(loadPlannerEvents);
@@ -509,7 +509,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     }
   }, []);
 
-  const handleCopyMinutes = useCallback(async () => {
+  const _handleCopyMinutes = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(generateMinutesMarkdown(plannerStateRef.current, sessionStateRef.current));
       toast('Markdown de la minuta copiado al portapapeles');
@@ -880,22 +880,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         />
       )}
 
-      {activeTab === 'minutes' && (
-        <PlannerMinutesView
-          state={plannerState}
-          sessionState={sessionState}
-          onBack={() => handleTabChange('home')}
-          onCopyMarkdown={handleCopyMinutes}
-          onSaveDocToLibrary={onSaveDocToLibrary}
-        />
-      )}
-
       {activeTab === 'recap' && (
         <SessionRecapView
           plannerState={plannerState}
           sessionState={sessionState}
           onResumeSession={handleResumeSession}
-          onViewMinutes={() => handleTabChange('minutes')}
           onNewSession={handleCleanSession}
           onRenameRecording={handleRenameRecording}
           onDeleteRecording={handleDeleteRecording}

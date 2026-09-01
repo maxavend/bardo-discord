@@ -1,10 +1,12 @@
-import {Button, Card, Chip, toast} from '@heroui/react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Chip } from '@/components/ui/badge';
+import { toast } from '@/lib/toast';
 import {
   CircleCheck,
   Clock,
   Microphone,
   Copy,
-  FileText,
   ArrowRotateRight,
   Play,
 } from '@gravity-ui/icons';
@@ -15,7 +17,7 @@ export function SessionRecapView({
   plannerState,
   sessionState,
   onResumeSession,
-  onViewMinutes,
+  _onViewMinutes,
   onNewSession,
   onRenameRecording,
   onDeleteRecording,
@@ -29,20 +31,20 @@ export function SessionRecapView({
     text += `📚 **Bloques:** ${recap.completedCount} / ${recap.totalBlocksCount} completados`;
     if (recap.skippedCount > 0) text += ` · ${recap.skippedCount} saltados`;
     text += '\n';
-    text += `✅ **Puntos tratados:** ${recap.completedPointsCount} / ${recap.totalPointsCount}`;
+    text += `✅ **Temas tratados:** ${recap.completedPointsCount} / ${recap.totalPointsCount}`;
     if (recap.skippedPointsCount > 0) text += ` · ${recap.skippedPointsCount} saltados`;
     text += '\n';
     text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${recap.totalRecordedMinutes} min de audio)\n`;
     text += `📝 **Decisiones:** ${recap.decisions.length}\n`;
     if (recap.decisions.length > 0) {
-      text += '\n**Decisiones y acuerdos:**\n';
+      text += '\n**Decisiones:**\n';
       recap.decisions.forEach((decision) => {
         text += `- ${decision.content}\n`;
       });
     }
     try {
       await navigator.clipboard.writeText(text);
-      toast('Resumen copiado al portapapeles');
+      toast('Resumen copiado');
     } catch {
       toast('No se pudo copiar el resumen');
     }
@@ -57,7 +59,7 @@ export function SessionRecapView({
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <Chip size="sm" variant="soft" color={recap.statusBadgeColor}>{recap.statusLabel}</Chip>
-                <span className="text-xs text-muted">Session Recap</span>
+                <span className="text-xs text-muted">Resumen de la reunión</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{recap.recapTitle}</h1>
               <p className="text-xs text-muted mt-1">{recap.recapDescription}</p>
@@ -66,17 +68,14 @@ export function SessionRecapView({
             <div className="flex items-center gap-2 flex-wrap">
               {isInterrupted && onResumeSession && (
                 <Button variant="primary" size="sm" onPress={onResumeSession} className="font-semibold h-8 px-3">
-                  <Play width={13} height={13} /> Reanudar sesión
+                  <Play width={13} height={13} /> Reanudar reunión
                 </Button>
               )}
               <Button variant="secondary" size="sm" onPress={handleCopyRecap} className="h-8 px-3">
                 <Copy width={13} height={13} /> Copiar resumen
               </Button>
-              <Button variant="ghost" size="sm" onPress={onViewMinutes} className="h-8 px-2.5 text-muted hover:text-foreground">
-                <FileText width={13} height={13} /> Ver acta
-              </Button>
               <Button variant="ghost" size="sm" onPress={onNewSession} className="h-8 px-2.5 text-muted hover:text-foreground">
-                <ArrowRotateRight width={13} height={13} /> Nueva sesión
+                <ArrowRotateRight width={13} height={13} /> Nueva reunión
               </Button>
             </div>
           </div>
@@ -94,7 +93,7 @@ export function SessionRecapView({
                 {recap.skippedCount > 0 && <span className="text-[11px] text-muted">{recap.skippedCount} saltados</span>}
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted">Puntos tratados</span>
+                <span className="text-[11px] text-muted">Temas tratados</span>
                 <strong className="text-base text-foreground">{recap.completedPointsCount} / {recap.totalPointsCount}</strong>
                 {recap.skippedPointsCount > 0 && <span className="text-[11px] text-muted">{recap.skippedPointsCount} saltados</span>}
               </div>

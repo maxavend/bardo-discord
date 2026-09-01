@@ -1,12 +1,9 @@
 import {useState, useRef, useEffect} from 'react';
-import {
-  Button,
-  Dropdown,
-  Label,
-  Description,
-  Modal,
-  Input,
-} from '@heroui/react';
+import { Button } from '@/components/ui/button';
+import { Dropdown } from '@/components/ui/dropdown-menu';
+import { Modal } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label, Description } from '@/components/ui/label';
 import {
   Play,
   Pause,
@@ -66,7 +63,7 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
   };
 
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-xl bg-surface-secondary/35 border border-border/40 text-xs">
+    <div className="container-surface flex flex-col gap-2 p-3 rounded-xl bg-surface-secondary/35 border border-border/40 text-xs">
       {canPlay && (
         <audio
           ref={audioRef}
@@ -172,7 +169,7 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
 
       <Modal.Backdrop isOpen={showTechModal} onOpenChange={(open) => !open && setShowTechModal(false)}>
         <Modal.Container size="sm">
-          <Modal.Dialog className="bg-surface border border-border rounded-2xl shadow-xl p-5 flex flex-col gap-4 max-w-sm w-full">
+          <Modal.Dialog className="container-surface bg-surface border border-border rounded-2xl shadow-xl p-5 flex flex-col gap-4 max-w-sm w-full">
             <div className="flex items-center gap-2">
               <CircleInfo width={16} height={16} className="text-accent" />
               <h2 className="text-sm font-bold text-foreground">Detalles técnicos de la grabación</h2>
@@ -193,7 +190,7 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
 
       <Modal.Backdrop isOpen={showRenameModal} onOpenChange={(open) => !open && setShowRenameModal(false)}>
         <Modal.Container size="sm">
-          <Modal.Dialog className="bg-surface border border-border rounded-2xl shadow-xl p-5 flex flex-col gap-4 max-w-sm w-full">
+          <Modal.Dialog className="container-surface bg-surface border border-border rounded-2xl shadow-xl p-5 flex flex-col gap-4 max-w-sm w-full">
             <div className="flex flex-col gap-1">
               <h2 className="text-sm font-bold text-foreground">Renombrar grabación</h2>
               <p className="text-xs text-muted">Cambia sólo el nombre visible. El Point asociado no se modifica.</p>

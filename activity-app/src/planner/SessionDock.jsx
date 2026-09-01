@@ -1,6 +1,4 @@
-import {
-  Button,
-} from '@heroui/react';
+import { Button } from '@/components/ui/button';
 import {
   Microphone,
   Pause,
@@ -57,7 +55,7 @@ export function SessionDock({
   return (
     <aside
       role="region"
-      aria-label="Asistente de sesión en vivo"
+      aria-label="Asistente de reunión en vivo"
       className="session-toolbar-sticky w-full mb-3 animate-in fade-in slide-in-from-top-2 duration-250"
       style={{
         position: 'sticky',
@@ -76,13 +74,15 @@ export function SessionDock({
           />
 
           <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
-            {activePoint?.title || activeBlock?.title || 'Sesión en vivo'}
+            {activePoint?.title || activeBlock?.title || 'Reunión en vivo'}
           </span>
 
           <span className="text-muted/40">·</span>
 
           {/* Timer de bloque */}
-          <span className={`text-xs font-medium shrink-0 ${
+          <span
+            title={isExpired ? `${formatMsToClock(details.overtimeMs)} sobre el tiempo previsto` : undefined}
+            className={`text-xs font-medium shrink-0 ${
             isPaused ? 'text-warning' : isExpired ? 'text-danger font-semibold' : is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'
           }`}>
             {isPaused
@@ -104,6 +104,7 @@ export function SessionDock({
               onClick={onPauseRecording}
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-danger text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
               title="Pausar grabación"
+              aria-label="Pausar grabación"
             >
               <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
@@ -114,6 +115,7 @@ export function SessionDock({
               onClick={onResumeRecording}
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
               title="Reanudar grabación"
+              aria-label="Reanudar grabación"
             >
               <span className="h-2 w-2 rounded-full bg-white" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
@@ -125,21 +127,23 @@ export function SessionDock({
               isIconOnly
               onPress={onStartRecording}
               isDisabled={isBusy}
-              aria-label="Grabar"
+              aria-label="Iniciar grabación"
+              title="Iniciar grabación"
               className="h-8 w-8 rounded-full bg-danger text-white hover:bg-danger/90 shadow-xs"
             >
               <Microphone width={14} height={14} className="text-white" />
             </Button>
           )}
 
-          {/* 2. Pausar / Reanudar sesión */}
+          {/* 2. Pausar / Reanudar reunión */}
           <Button
             variant="ghost"
             size="sm"
             isIconOnly
             onPress={isPaused ? onResumeSession : onPauseSession}
             isDisabled={isBusy}
-            aria-label={isPaused ? 'Reanudar' : 'Pausar'}
+            aria-label={isPaused ? 'Reanudar reunión' : 'Pausar reunión'}
+            title={isPaused ? 'Reanudar reunión' : 'Pausar reunión'}
             className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
               isPaused
                 ? 'text-warning hover:text-warning-foreground hover:bg-warning/20'

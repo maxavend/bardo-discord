@@ -1,8 +1,10 @@
-import {Button, Card, Avatar, Chip} from '@heroui/react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Avatar } from '@/components/ui/avatar';
+import { Chip } from '@/components/ui/badge';
 import {
   FileText,
   Plus,
-  ArrowRotateLeft,
   Clock,
   Calendar,
   CircleCheck,
@@ -11,6 +13,7 @@ import {
 } from '@gravity-ui/icons';
 import {SESSION_STATUS, recalculateEstimatedEndTime} from './session-runner.js';
 import {getAllDiscordEntities} from './PlannerMemberPicker.jsx';
+import {pluralize, formatTopicsCountLabel, formatRecordingsCountLabel} from './copy-tokens.js';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
@@ -24,7 +27,7 @@ function parseMentions(mentionsStr = '') {
 function isDefaultEmptySession(plannerState) {
   if (!plannerState) return true;
   const {title, blocks = []} = plannerState;
-  const hasDefaultTitle = title === 'Nueva sesión de trabajo' || !title;
+  const hasDefaultTitle = title === 'Nueva sesión de trabajo' || title === 'Nueva reunión' || !title;
   const hasOnlyDefaultBlock = blocks.length === 1 && blocks[0]?.id === 'b-default-1';
   return hasDefaultTitle && hasOnlyDefaultBlock;
 }
@@ -33,14 +36,13 @@ export function PlannerHomeView({
   plannerState,
   sessionState,
   onViewAgenda,
-  onLoadDemo,
   onNewCleanSession,
   events = [],
   selectedEventId = null,
   onSelectEvent,
 }) {
   const {
-    title = 'Sesión sin título',
+    title = 'Reunión sin título',
     description = '',
     date = '',
     startTime = '10:00',
@@ -94,14 +96,14 @@ export function PlannerHomeView({
     if (isRunning) return <Chip size="sm" color="success" variant="soft" className="text-[10.5px] font-semibold">En curso</Chip>;
     if (isPaused) return <Chip size="sm" color="warning" variant="soft" className="text-[10.5px] font-semibold">Pausada</Chip>;
     if (isInterrupted) return <Chip size="sm" color="danger" variant="soft" className="text-[10.5px] font-semibold">Interrumpida</Chip>;
-    if (isCompleted) return <Chip size="sm" color="success" variant="soft" className="text-[10.5px] font-semibold">Completada</Chip>;
+    if (isCompleted) return <Chip size="sm" color="success" variant="soft" className="text-[10.5px] font-semibold">Finalizada</Chip>;
     return <Chip size="sm" variant="tertiary" className="text-[10.5px] font-semibold text-muted">Pendiente</Chip>;
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 sm:px-0 pt-2 pb-28 flex flex-col gap-5 animate-in fade-in duration-200">
 
-      {/* ── Sesión actual / Empty state ─────────────────────────────────────── */}
+      {/* ── Reunión actual / Empty state ─────────────────────────────────────── */}
       <section className="flex flex-col gap-2">
         {isEmpty && isIdle ? (
           /* Empty state */
@@ -110,17 +112,13 @@ export function PlannerHomeView({
               <Calendar width={18} height={18} className="text-muted/60" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">No hay sesiones planificadas</p>
-              <p className="text-xs text-muted mt-0.5">Crea una sesión o carga el demo para empezar</p>
+              <p className="text-sm font-semibold text-foreground">Todavía no hay reuniones</p>
+              <p className="text-xs text-muted mt-0.5">Organiza agendas, conduce reuniones y registra acuerdos.</p>
             </div>
-            <div className="flex flex-col sm:flex-row items-stretch gap-2 w-full sm:w-auto">
+            <div className="flex items-center justify-center gap-2 w-full sm:w-auto">
               <Button variant="primary" size="sm" onPress={onNewCleanSession}
-                className="flex-1 sm:flex-none text-xs font-semibold h-8 px-4 flex items-center justify-center gap-1.5">
-                <Plus width={13} height={13} /> Nueva sesión
-              </Button>
-              <Button variant="secondary" size="sm" onPress={onLoadDemo}
-                className="flex-1 sm:flex-none text-xs font-medium h-8 px-4 flex items-center gap-1.5">
-                <ArrowRotateLeft width={13} height={13} /> Cargar demo
+                className="text-xs font-semibold h-8 px-4 flex items-center justify-center gap-1.5">
+                <Plus width={13} height={13} /> Nueva reunión
               </Button>
             </div>
           </Card>
@@ -136,7 +134,7 @@ export function PlannerHomeView({
                 onViewAgenda?.();
               }
             }}
-            className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs cursor-pointer hover:bg-surface-secondary/25 focus-visible:outline-2 focus-visible:outline-focus ${
+            className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all duration-200 shadow-2xs cursor-pointer hover:border-primary hover:shadow-xs focus-visible:outline-2 focus-visible:outline-focus ${
             isLive
               ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
               : isCompleted
@@ -195,7 +193,7 @@ export function PlannerHomeView({
                 {participantsList.length > 5 && (
                   <span className="text-xs text-muted font-medium">+{participantsList.length - 5}</span>
                 )}
-                {host && <span className="text-xs text-muted">{host}</span>}
+                {host && <span className="text-xs text-muted">Organiza {host}</span>}
               </div>
             )}
 
@@ -205,19 +203,19 @@ export function PlannerHomeView({
                 {totalPoints > 0 && (
                   <span className="flex items-center gap-1 text-xs text-muted">
                     <CircleCheck width={12} height={12} className="text-success shrink-0" />
-                    <strong className="text-foreground">{completedPoints}</strong>/{totalPoints} puntos
+                    <strong className="text-foreground">{completedPoints}</strong> de {formatTopicsCountLabel(totalPoints)}
                   </span>
                 )}
                 {decisions.length > 0 && (
                   <span className="flex items-center gap-1 text-xs text-muted">
                     <FileText width={12} height={12} className="text-accent shrink-0" />
-                    <strong className="text-foreground">{decisions.length}</strong> acuerdos
+                    <strong className="text-foreground">{pluralize(decisions.length, 'decisión', 'decisiones')}</strong>
                   </span>
                 )}
                 {recordings.length > 0 && (
                   <span className="flex items-center gap-1 text-xs text-muted">
                     <Microphone width={12} height={12} className="text-accent shrink-0" />
-                    <strong className="text-foreground">{recordings.length}</strong> {recordings.length === 1 ? 'grabación' : 'grabaciones'}
+                    <strong className="text-foreground">{formatRecordingsCountLabel(recordings.length)}</strong>
                   </span>
                 )}
               </div>

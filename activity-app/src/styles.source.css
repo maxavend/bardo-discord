@@ -1,5 +1,9 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
   --bardo-topbar: 52px;
@@ -44,7 +48,40 @@
   --blur-small: 2px;
   --blur-medium: 3px;
   --blur-large: 8px;
+  --bardo-container-radius: 24px;
   --bardo-card-shadow: 0 1px 12px color-mix(in oklab, var(--foreground) 4%, transparent);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.496 0.265 301.924);
+  --primary-foreground: oklch(0.977 0.014 308.299);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.705 0.015 286.067);
+  --chart-1: oklch(0.827 0.119 306.383);
+  --chart-2: oklch(0.627 0.265 303.9);
+  --chart-3: oklch(0.558 0.288 302.321);
+  --chart-4: oklch(0.496 0.265 301.924);
+  --chart-5: oklch(0.438 0.218 303.724);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: oklch(0.558 0.288 302.321);
+  --sidebar-primary-foreground: oklch(0.977 0.014 308.299);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --sidebar-ring: oklch(0.705 0.015 286.067);
 }
 
 /* Dark mode uses surface contrast and borders instead of elevation. */
@@ -445,28 +482,33 @@ button { font-size: 14px; }
 .continue-section { margin-top: 0; }
 .section-title {
   margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--muted-foreground);
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .continue-row {
   width: 100%;
-  min-height: 68px;
-  border: 0;
-  background: transparent;
-  padding: 12px 0;
+  min-height: 64px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 14px 16px;
   display: grid;
   grid-template-columns: 4px minmax(0, 1fr) 20px;
   gap: 14px;
   align-items: center;
   text-align: left;
   cursor: pointer;
-  border-bottom: 1px solid var(--separator);
-  border-radius: var(--radius-sm);
-  transition: background-color 0.15s ease;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--bardo-card-shadow);
+  transition: all var(--duration-quick) var(--ease-smooth-out);
+}
+.continue-row:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--card), var(--primary) 3%);
 }
 .continue-row:focus-visible,
 .doc-row-main:focus-visible,
@@ -477,23 +519,31 @@ button { font-size: 14px; }
 .continue-accent { width: 4px; height: 38px; border-radius: 9999px; background: var(--accent); }
 .continue-copy { min-width: 0; }
 .continue-copy strong,
-.doc-row-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.35; font-weight: 650; }
+.doc-row-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.35; font-weight: 650; color: var(--foreground); }
 .continue-copy span,
-.doc-row-main span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-row-main span { display: block; margin-top: 3px; color: var(--muted-foreground); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .recent-section { margin-top: 36px; }
-.docs-list { border-top: 1px solid var(--separator); }
+.docs-list { display: flex; flex-direction: column; gap: 8px; }
 .doc-row {
-  min-height: 68px;
+  min-height: 64px;
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 36px;
   gap: 12px;
   align-items: center;
-  border-bottom: 1px solid var(--separator);
-  transition: background-color 0.15s ease;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  padding: 8px 14px;
+  box-shadow: var(--bardo-card-shadow);
+  transition: all var(--duration-quick) var(--ease-smooth-out);
 }
-.doc-symbol { display: grid; place-items: center; color: var(--muted); }
-.doc-row-main { min-width: 0; min-height: 68px; border: 0; background: transparent; text-align: left; padding: 12px 0; cursor: pointer; }
+.doc-row:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--card), var(--primary) 2%);
+}
+.doc-symbol { display: grid; place-items: center; color: var(--muted-foreground); }
+.doc-row-main { min-width: 0; min-height: 48px; border: 0; background: transparent; text-align: left; padding: 6px 0; cursor: pointer; }
 .event-row-selected { background: color-mix(in oklab, var(--accent) 5%, transparent); }
 
 /* Reader + editor share exactly the same navigation geometry. */
@@ -656,7 +706,7 @@ button { font-size: 14px; }
 .doc-description {
   max-width: 620px;
   margin: 12px 0 0;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 16px;
   line-height: 1.55;
   letter-spacing: -0.006em;
@@ -665,9 +715,8 @@ button { font-size: 14px; }
   white-space: pre-wrap;
   display: block;
 }
-.doc-meta { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.doc-meta { margin-top: 14px; color: var(--muted-foreground); font-size: 13px; line-height: 1.45; }
 .editor-shell .doc-meta { margin-top: 0; margin-bottom: 12px; }
-
 
 /* Title/description are editorial controls. */
 .doc-title-input,
@@ -794,6 +843,17 @@ button { font-size: 14px; }
 [data-slot="card"],
 .bardo-card,
 .planner-card,
+.card-soft-shadow,
+.container-surface,
+[data-slot="dialog"],
+[data-slot="popover"],
+[role="dialog"] {
+  border-radius: var(--bardo-container-radius) !important;
+}
+.heroui-card,
+[data-slot="card"],
+.bardo-card,
+.planner-card,
 .card-soft-shadow {
   box-shadow: var(--bardo-card-shadow) !important;
 }
@@ -801,7 +861,7 @@ button { font-size: 14px; }
   display: flex;
   align-items: center;
   padding: 4px;
-  border-radius: 9999px;
+  border-radius: var(--field-radius, 12px);
   background: var(--field-background);
   border: 1px solid var(--field-border);
   box-shadow: none;
@@ -963,7 +1023,6 @@ button { font-size: 14px; }
   }
 }
 
-
 .missing-state { min-height: 70vh; display: grid; place-content: center; justify-items: center; gap: 16px; padding: 24px; color: var(--muted); text-align: center; }
 
 @media (min-width: 760px) {
@@ -1058,155 +1117,102 @@ button { font-size: 14px; }
   to { opacity: 1; }
 }
 
-/* Eliminación total de sombras en inputs, textareas, datepickers y campos de formulario */
-input,
-textarea,
-select,
-.input,
-.textarea,
-.textfield [data-slot="input"],
-.textfield [data-slot="textarea"],
-.input-group,
-.search-field [data-slot="search-field-group"] {
-  box-shadow: none !important;
+/* Form fields use standard default HeroUI styles via @heroui/styles */
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Inter Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ─── Design system: HeroUI form fields ──────────────────────────────────────
-   Se aplica a TODOS los campos del sistema (Input, TextArea, DatePicker,
-   TimeField, DateField) sin necesidad de hardcoding por componente.
-   ────────────────────────────────────────────────────────────────────────── */
-
-/* Label — scoped a contextos de campo de formulario */
-.textfield > [data-slot="label"],
-.search-field > [data-slot="label"] {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--muted);
-  margin-bottom: 4px;
-  line-height: 1.4;
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.438 0.218 303.724);
+  --primary-foreground: oklch(0.977 0.014 308.299);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.552 0.016 285.938);
+  --chart-1: oklch(0.827 0.119 306.383);
+  --chart-2: oklch(0.627 0.265 303.9);
+  --chart-3: oklch(0.558 0.288 302.321);
+  --chart-4: oklch(0.496 0.265 301.924);
+  --chart-5: oklch(0.438 0.218 303.724);
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.627 0.265 303.9);
+  --sidebar-primary-foreground: oklch(0.977 0.014 308.299);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
-/* Wrapper del campo: el contenedor visual principal */
-.input,
-.textarea,
-.input-group,
-.search-field [data-slot="search-field-group"] {
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--field-radius, 10px) !important;
-  height: auto !important;
-  min-height: 38px !important;
-  padding-inline: 10px !important;
-  padding-block: 6px !important;
-  transition: border-color 150ms ease, box-shadow 150ms ease !important;
-  box-shadow: none !important;
-  color: var(--foreground) !important;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled), [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
 }
 
-.input:focus,
-.textarea:focus,
-.input-group:focus-within,
-.search-field [data-slot="search-field-group"]:focus-within {
-  border-color: var(--focus, var(--accent)) !important;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--focus, var(--accent)) 18%, transparent) !important;
-  outline: none !important;
-}
-
-/* El input nativo interno */
-.textfield [data-slot="input"],
-.textfield [data-slot="textarea"],
-.input,
-.textarea,
-.input-group [data-slot="input-group-input"],
-.input-group [data-slot="input-group-textarea"],
-.search-field [data-slot="search-field-input"] {
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  font-size: 13.5px !important;
-  color: var(--foreground) !important;
-  height: auto !important;
-  min-height: unset !important;
-  padding: 0 !important;
-  font-family: inherit !important;
-  width: 100% !important;
-}
-
-/* TextArea wrapper y elemento */
-.textfield:has([data-slot="textarea"]) {
-  height: auto !important;
-  min-height: 80px !important;
-  align-items: flex-start !important;
-  padding-block: 8px !important;
-}
-
-.textfield [data-slot="textarea"],
-.input-group [data-slot="input-group-textarea"] {
-  resize: vertical !important;
-  min-height: 72px !important;
-}
-
-/* Placeholder */
-.textfield [data-slot="input"]::placeholder,
-.textfield [data-slot="textarea"]::placeholder,
-.input::placeholder,
-.textarea::placeholder,
-.input-group [data-slot="input-group-input"]::placeholder,
-.input-group [data-slot="input-group-textarea"]::placeholder,
-.search-field [data-slot="search-field-input"]::placeholder {
-  color: var(--field-placeholder, var(--muted)) !important;
-  opacity: 0.6 !important;
-}
-
-/* Segmentos de DateField y TimeField */
-[data-slot="segment"],
-[data-type="literal"] {
-  font-size: 13.5px !important;
-  color: var(--foreground) !important;
-  font-family: inherit !important;
-  background: transparent !important;
-  border-radius: 4px !important;
-  padding-inline: 1px !important;
-}
-
-[data-slot="segment"]:focus,
-[data-slot="segment"][data-focused] {
-  background: color-mix(in oklab, var(--accent) 16%, transparent) !important;
-  color: var(--foreground) !important;
-  outline: none !important;
-}
-
-[data-slot="segment"][data-placeholder] {
-  color: var(--field-placeholder, var(--muted)) !important;
-  opacity: 0.55 !important;
-}
-
-/* Sufijo (icono del DatePicker) */
-.input-group [data-slot="input-group-suffix"] [data-slot="button"],
-.search-field [data-slot="search-field-clear-button"] {
-  color: var(--muted) !important;
-  background: transparent !important;
-  border: none !important;
-  padding: 2px !important;
-  border-radius: var(--radius-sm) !important;
-}
-
-.input-group [data-slot="input-group-suffix"] [data-slot="button"]:hover,
-.search-field [data-slot="search-field-clear-button"]:hover {
-  color: var(--foreground) !important;
-  background: color-mix(in oklab, var(--foreground) 8%, transparent) !important;
-}
-
-/* Description / Error */
-[data-slot="description"] {
-  font-size: 11.5px !important;
-  color: var(--muted) !important;
-  margin-top: 3px !important;
-}
-
-[data-slot="error-message"] {
-  font-size: 11.5px !important;
-  color: var(--danger, #ef4444) !important;
-  margin-top: 3px !important;
+@layer utilities {
+  .text-muted {
+    color: var(--muted-foreground) !important;
+  }
 }

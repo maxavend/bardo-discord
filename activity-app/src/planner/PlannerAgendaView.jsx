@@ -1,13 +1,9 @@
 import {useState, useEffect} from 'react';
-import {
-  Avatar,
-  Button,
-  Card,
-  Dropdown,
-  Label,
-  Description,
-  Header,
-} from '@heroui/react';
+import { Avatar } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Dropdown } from '@/components/ui/dropdown-menu';
+import { Label, Description, Header } from '@/components/ui/label';
 import {
   Plus,
   EllipsisVertical,
@@ -279,14 +275,14 @@ export function PlannerAgendaView({
       {blocks.length === 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
           <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-          <div className="p-8 border border-dashed border-border rounded-xl text-center bg-surface-secondary/20 flex flex-col items-center gap-2 min-w-0 w-full">
+          <div className="container-surface p-8 border border-dashed border-border rounded-xl text-center bg-surface-secondary/20 flex flex-col items-center gap-2 min-w-0 w-full">
             <p className="text-sm font-semibold text-foreground">Agenda sin bloques</p>
             <p className="text-xs text-muted max-w-sm">
-              Aún no has agregado bloques a esta sesión. Añade tu primer bloque para estructurar los temas.
+              Aún no has agregado bloques a esta reunión. Agrega tu primer bloque para estructurar la agenda.
             </p>
             {onAddBlock && (
               <Button variant="primary" size="sm" onPress={() => onAddBlock()} className="mt-2">
-                <Plus width={13} height={13} /> Añadir primer bloque
+                <Plus width={13} height={13} /> Agregar primer bloque
               </Button>
             )}
           </div>
@@ -334,15 +330,15 @@ export function PlannerAgendaView({
                     <span>{blockStart}</span>
                     <span className="text-[10px] sm:text-[11px] text-muted/60">{blockEnd}</span>
                   </div>
-                  <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border text-xs text-muted transition-all ${
+                  <Card className={`flex flex-row items-center justify-between gap-3 p-4 rounded-2xl transition-all shadow-2xs text-xs text-muted ${
                     isLive
-                      ? 'bg-accent/10 border-accent/40 shadow-xs'
-                      : 'bg-surface-secondary/40 border-border/40'
+                      ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
+                      : 'bg-surface border-border/80'
                   }`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <Cup width={14} height={14} className={isLive ? 'text-accent shrink-0' : 'text-muted/80 shrink-0'} />
                       <span className={`font-semibold truncate ${isLive ? 'text-accent font-bold' : 'text-foreground'}`}>{block.title}</span>
-                      {block.introDesc && <span className="truncate hidden sm:inline">· {block.introDesc}</span>}
+                      {block.introDesc && <span className="truncate hidden sm:inline text-muted">· {block.introDesc}</span>}
                     </div>
                     <div className="flex items-center gap-2.5 shrink-0">
                       <span>{blockDuration} min</span>
@@ -359,7 +355,7 @@ export function PlannerAgendaView({
                         </Button>
                       )}
                     </div>
-                  </div>
+                  </Card>
                 </div>
               );
             }
@@ -369,11 +365,9 @@ export function PlannerAgendaView({
                 className={`p-4 sm:p-4.5 flex flex-col gap-2.5 rounded-2xl transition-all shadow-2xs ${
                   isLive && !isEditing
                     ? 'border-accent/60 ring-1 ring-accent/20 bg-surface'
-                      : isCompleted && !isEditing
-                      ? 'bg-success/5 border-success/25'
-                      : isSkipped && !isEditing
-                        ? 'opacity-60 bg-surface-secondary/30 border-border/40'
-                        : 'bg-surface border-border/80'
+                    : isSkipped && !isEditing
+                      ? 'opacity-60 bg-surface-secondary/30 border-border/40'
+                      : 'bg-surface border-border/80'
                 }`}
               >
                 <div className="flex flex-col gap-2">
@@ -594,7 +588,7 @@ export function PlannerAgendaView({
                                   type="text"
                                   value={point.description || ''}
                                       onChange={(value) => onUpdateSubpoint?.(block.id, point.id, {description: fieldValue(value)})}
-                                  placeholder="Añadir descripción o detalle..."
+                                  placeholder="Agregar descripción o detalle..."
                                   className="text-xs text-muted bg-transparent border-0 outline-none p-0 w-full focus:ring-1 focus:ring-accent/40 rounded px-1 -mx-1 transition-all"
                                 />
                               ) : point.description ? (
@@ -735,7 +729,7 @@ export function PlannerAgendaView({
                             onClick={() => onAddSubpoint?.(block.id)}
                             className="text-xs text-muted/70 hover:text-foreground flex items-center gap-1.5 py-1 px-1 transition-colors self-start mt-0.5 cursor-pointer font-medium"
                           >
-                            <Plus width={12} height={12} className="text-accent" /> <span>Añadir punto</span>
+                            <Plus width={12} height={12} className="text-accent" /> <span>Agregar tema</span>
                           </button>
                         )}
                       </div>
@@ -904,16 +898,16 @@ export function PlannerAgendaView({
                   className="flex-1 py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-accent/60 bg-surface-secondary/20 hover:bg-surface-secondary/40 text-xs font-semibold text-muted hover:text-foreground transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
                 >
                   <Plus width={14} height={14} className="text-accent" />
-                  <span>Añadir bloque a la agenda</span>
+                  <span>Agregar bloque</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => (onAddBreak ? onAddBreak() : onAddBlock?.({title: 'Break', type: 'break', durationMinutes: 10, isBreak: true, subpoints: []}))}
+                  onClick={() => (onAddBreak ? onAddBreak() : onAddBlock?.({title: 'Descanso', type: 'break', durationMinutes: 10, isBreak: true, subpoints: []}))}
                   className="py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-accent/60 bg-surface-secondary/20 hover:bg-surface-secondary/40 text-xs font-semibold text-muted hover:text-foreground transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none sm:w-auto"
                 >
                   <Cup width={13} height={13} className="text-muted/70" />
-                  <span>Añadir break</span>
+                  <span>Agregar descanso</span>
                 </button>
               </div>
             </div>

@@ -78,7 +78,7 @@ export function buildDocumentPayload(document, { documentId }) {
   // context for the embedded Activity without relying on an external deep-link.
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('📖 Mostrar más')
+      .setLabel('Abrir documento')
       .setStyle(ButtonStyle.Primary)
       .setCustomId(`${BARDO_OPEN_PREFIX}${cleanId}`),
   );
@@ -99,7 +99,7 @@ export function buildDocumentPayload(document, { documentId }) {
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent('*Vista previa · El documento completo se abre dentro de Discord.*'),
+      new TextDisplayBuilder().setContent('*Vista previa · Abre Bardo para ver el documento completo.*'),
     )
     .addActionRowComponents(openRow);
 
@@ -112,7 +112,7 @@ export function buildDocumentPayload(document, { documentId }) {
 
 export function buildErrorPayload(message) {
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## No pude publicar el documento\n\n${message}`),
+    new TextDisplayBuilder().setContent(`## No se pudo publicar el documento\n\n${message}`),
   );
 
   return {

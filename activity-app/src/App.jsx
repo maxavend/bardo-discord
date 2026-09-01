@@ -1,25 +1,16 @@
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
-import {
-  AlertDialog,
-  Button,
-  ButtonGroup,
-  Chip,
-  Dropdown,
-  Header,
-  Input,
-  Kbd,
-  Label,
-  Modal,
-  SearchField,
-  Separator,
-  TextField,
-  ToastProvider,
-  ToggleButton,
-  ToggleButtonGroup,
-  Toolbar,
-  toast,
-  useTheme,
-} from '@heroui/react';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup, ToggleButton, ToggleButtonGroup } from '@/components/ui/button-group';
+import { Chip } from '@/components/ui/badge';
+import { Dropdown } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Kbd, Separator } from '@/components/ui/separator';
+import { Modal, AlertDialog } from '@/components/ui/dialog';
+import { SearchField } from '@/components/ui/search-field';
+import { Label, Header, TextField, Toolbar } from '@/components/ui/label';
+import { toast } from '@/lib/toast';
+import { Toaster } from '@/components/ui/toaster';
+import { useTheme } from '@/lib/theme';
 import {
   ArrowRotateLeft,
   ArrowUturnCcwLeft,
@@ -404,30 +395,30 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
             <FileText width={15} height={15} className="text-muted" />
             <Label>Copiar texto</Label>
           </Dropdown.Item>
-          <Dropdown.Item id="publish" textValue="Enviar como mensaje">
+          <Dropdown.Item id="publish" textValue="Compartir en el canal">
             <ArrowUturnCwRight width={15} height={15} className="text-muted" />
-            <Label>Enviar como mensaje</Label>
+            <Label>Compartir en el canal</Label>
           </Dropdown.Item>
-      <Dropdown.Section>
-        <Header>Exportar</Header>
+          <Dropdown.Section>
+            <Header>Descargar</Header>
             <Dropdown.Item id="markdown-preview" textValue="Ver Markdown">
               <Eye width={15} height={15} className="text-muted" />
               <Label>Ver Markdown</Label>
             </Dropdown.Item>
-            <Dropdown.Item id="markdown" textValue="Descargar Markdown (.md)">
+            <Dropdown.Item id="markdown" textValue="Descargar Markdown">
               <FileText width={15} height={15} className="text-muted" />
               <Label>Descargar Markdown</Label>
             </Dropdown.Item>
-            <Dropdown.Item id="html" textValue="HTML (.html)">
-              <Label>HTML (.html)</Label>
+            <Dropdown.Item id="html" textValue="Descargar HTML">
+              <Label>Descargar HTML</Label>
             </Dropdown.Item>
             {window.__BARDO_PRODUCTION__ && (
               <>
-                <Dropdown.Item id="pdf" textValue="PDF (.pdf)">
-                  <Label>PDF (.pdf)</Label>
+                <Dropdown.Item id="pdf" textValue="Descargar PDF">
+                  <Label>Descargar PDF</Label>
                 </Dropdown.Item>
-                <Dropdown.Item id="docx" textValue="Word (.docx)">
-                  <Label>Word (.docx)</Label>
+                <Dropdown.Item id="docx" textValue="Descargar Word">
+                  <Label>Descargar Word</Label>
                 </Dropdown.Item>
               </>
             )}
@@ -475,12 +466,12 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
         <Magnifier width={22} height={22} />
       </div>
       <h3 className="text-base font-semibold text-foreground mb-1">
-        {query ? 'Sin resultados' : 'Biblioteca vacía'}
+        {query ? 'Sin resultados' : 'Todavía no hay documentos'}
       </h3>
       <p className="text-sm text-muted max-w-xs mb-5">
         {query
           ? `No encontramos documentos con “${query}”.`
-          : 'Aún no tienes documentos creados en este servidor.'}
+          : 'Crea un documento o sube un archivo para empezar.'}
       </p>
       {query ? (
         <Button variant="secondary" size="sm" onPress={onClearSearch}>
@@ -492,7 +483,7 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
             <Plus width={16} height={16} /> Crear documento
           </Button>
           <Button variant="secondary" size="sm" onPress={onUpload}>
-            <File width={16} height={16} /> Subir documento
+            <File width={16} height={16} /> Subir archivo
           </Button>
         </div>
       )}
@@ -513,9 +504,9 @@ function DocsHeader({children, actions, className = ''}) {
 }
 
 const THEME_MODE_LABELS = {
-  light: 'Claro',
-  dark: 'Oscuro',
-  system: 'Sistema',
+  light: 'Modo claro',
+  dark: 'Modo oscuro',
+  system: 'Modo del sistema',
 };
 
 const THEME_MODE_ICONS = {
@@ -544,14 +535,14 @@ function ThemeModeMenu() {
         size="sm"
         variant="ghost"
         className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted hover:text-foreground"
-        aria-label={`Tema: ${currentLabel}`}
-        title={`Tema: ${currentLabel}`}
+        aria-label="Cambiar tema de apariencia"
+        title={`Tema actual: ${currentLabel}`}
       >
         <CurrentIcon width={16} height={16} />
       </Button>
       <Dropdown.Popover placement="bottom end">
         <Dropdown.Menu
-          aria-label="Seleccionar tema"
+          aria-label="Seleccionar modo de apariencia"
           onAction={key => {
             const nextTheme = String(key);
             setTheme(nextTheme);
@@ -574,7 +565,7 @@ function ThemeModeMenu() {
   );
 }
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, onPlannerDemo}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
@@ -585,24 +576,14 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       actions={isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {route.tab === 'home' && (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onPress={onPlannerNew}
-                className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-              >
-                <Plus width={14} height={14} /> Nueva sesión
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={onPlannerDemo}
-                className="h-8 px-2.5 font-medium text-xs flex items-center gap-1.5 text-muted hover:text-foreground"
-              >
-                <ArrowRotateLeft width={14} height={14} /> Demo
-              </Button>
-            </>
+            <Button
+              variant="secondary"
+              size="sm"
+              onPress={onPlannerNew}
+              className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+            >
+              <Plus width={14} height={14} /> Nueva reunión
+            </Button>
           )}
           <Button
             variant="secondary"
@@ -610,7 +591,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             onPress={() => onNavigateModule?.('docs')}
             className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <FileText width={14} height={14} /> Docs
+            <FileText width={14} height={14} /> Documentos
           </Button>
         </div>
       ) : isLibrary ? (
@@ -621,7 +602,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             onPress={() => onNavigateModule?.('planner')}
             className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <Calendar width={14} height={14} /> Planner
+            <Calendar width={14} height={14} /> Reuniones
           </Button>
           <input
             ref={fileInputRef}
@@ -636,9 +617,9 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             }}
           />
           <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
-            <FileArrowUp width={14} height={14} /> Subir
+            <FileArrowUp width={14} height={14} /> Subir archivo
           </Button>
-          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Nuevo documento" className="icon-button-circle h-8 w-8">
+          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Crear documento" className="icon-button-circle h-8 w-8">
             <Plus width={16} height={16} />
           </Button>
         </div>
@@ -657,19 +638,19 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           variant="ghost"
           size="sm"
           onPress={() => onNavigateModule?.('docs')}
-          aria-label="Volver al home de Bardo Docs"
+          aria-label="Volver a Documentos"
           className="topbar-title header-slot-enter h-8 px-1.5 -ml-1 font-bold text-sm tracking-tight text-foreground hover:bg-surface-secondary/50"
         >
           <ChevronLeft width={15} height={15} />
-          <span>Bardo Planner</span>
+          <span>Bardo</span>
         </Button>
       ) : isLibrary ? (
         <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
-          <span>Bardo Docs</span>
+          <span>Bardo</span>
         </span>
       ) : (
         <Button key="document-title" variant="ghost" size="sm" onPress={onBack} className="back-button h-8 px-2.5 text-xs text-muted hover:text-foreground font-medium flex items-center gap-1">
-          <ChevronLeft width={15} height={15} /> Docs
+          <ChevronLeft width={15} height={15} /> Documentos
         </Button>
       )}
     </DocsHeader>
@@ -714,7 +695,7 @@ function Library({
         >
           <SearchField.Group>
             <SearchField.SearchIcon />
-            <SearchField.Input placeholder="Buscar documentos..." />
+            <SearchField.Input placeholder="Buscar documentos" />
             <SearchField.ClearButton />
           </SearchField.Group>
         </SearchField>
@@ -2405,7 +2386,7 @@ function App() {
         }}
       />
 
-      <ToastProvider placement="bottom" />
+      <Toaster />
     </main>
   );
 }
