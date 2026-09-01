@@ -482,28 +482,33 @@ button { font-size: 14px; }
 .continue-section { margin-top: 0; }
 .section-title {
   margin: 0 0 10px;
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--muted-foreground);
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .continue-row {
   width: 100%;
-  min-height: 68px;
-  border: 0;
-  background: transparent;
-  padding: 12px 0;
+  min-height: 64px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 14px 16px;
   display: grid;
   grid-template-columns: 4px minmax(0, 1fr) 20px;
   gap: 14px;
   align-items: center;
   text-align: left;
   cursor: pointer;
-  border-bottom: 1px solid var(--separator);
-  border-radius: var(--radius-sm);
-  transition: background-color 0.15s ease;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--bardo-card-shadow);
+  transition: all var(--duration-quick) var(--ease-smooth-out);
+}
+.continue-row:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--card), var(--primary) 3%);
 }
 .continue-row:focus-visible,
 .doc-row-main:focus-visible,
@@ -514,23 +519,31 @@ button { font-size: 14px; }
 .continue-accent { width: 4px; height: 38px; border-radius: 9999px; background: var(--accent); }
 .continue-copy { min-width: 0; }
 .continue-copy strong,
-.doc-row-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.35; font-weight: 650; }
+.doc-row-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.35; font-weight: 650; color: var(--foreground); }
 .continue-copy span,
-.doc-row-main span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-row-main span { display: block; margin-top: 3px; color: var(--muted-foreground); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .recent-section { margin-top: 36px; }
-.docs-list { border-top: 1px solid var(--separator); }
+.docs-list { display: flex; flex-direction: column; gap: 8px; }
 .doc-row {
-  min-height: 68px;
+  min-height: 64px;
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 36px;
   gap: 12px;
   align-items: center;
-  border-bottom: 1px solid var(--separator);
-  transition: background-color 0.15s ease;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  padding: 8px 14px;
+  box-shadow: var(--bardo-card-shadow);
+  transition: all var(--duration-quick) var(--ease-smooth-out);
 }
-.doc-symbol { display: grid; place-items: center; color: var(--muted); }
-.doc-row-main { min-width: 0; min-height: 68px; border: 0; background: transparent; text-align: left; padding: 12px 0; cursor: pointer; }
+.doc-row:hover {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--card), var(--primary) 2%);
+}
+.doc-symbol { display: grid; place-items: center; color: var(--muted-foreground); }
+.doc-row-main { min-width: 0; min-height: 48px; border: 0; background: transparent; text-align: left; padding: 6px 0; cursor: pointer; }
 .event-row-selected { background: color-mix(in oklab, var(--accent) 5%, transparent); }
 
 /* Reader + editor share exactly the same navigation geometry. */
@@ -693,7 +706,7 @@ button { font-size: 14px; }
 .doc-description {
   max-width: 620px;
   margin: 12px 0 0;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 16px;
   line-height: 1.55;
   letter-spacing: -0.006em;
@@ -702,7 +715,7 @@ button { font-size: 14px; }
   white-space: pre-wrap;
   display: block;
 }
-.doc-meta { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.doc-meta { margin-top: 14px; color: var(--muted-foreground); font-size: 13px; line-height: 1.45; }
 .editor-shell .doc-meta { margin-top: 0; margin-bottom: 12px; }
 
 /* Title/description are editorial controls. */
@@ -1195,5 +1208,11 @@ button { font-size: 14px; }
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  .text-muted {
+    color: var(--muted-foreground) !important;
   }
 }
