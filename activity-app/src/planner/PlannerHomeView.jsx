@@ -18,7 +18,7 @@ import { pluralize, formatTopicsCountLabel, formatRecordingsCountLabel } from '.
 function isDefaultEmptySession(plannerState) {
   if (!plannerState) return true;
   const { title, blocks = [] } = plannerState;
-  const hasDefaultTitle = title === 'Nueva sesión de trabajo' || title === 'Nueva reunión' || !title;
+  const hasDefaultTitle = title === 'Nueva reunión' || title === 'Nueva reunión' || !title;
   const hasOnlyDefaultBlock = blocks.length === 1 && blocks[0]?.id === 'b-default-1';
   return hasDefaultTitle && hasOnlyDefaultBlock;
 }
@@ -249,15 +249,18 @@ export function PlannerHomeView({
                   <span className="doc-symbol">
                     {event.eventStatus === 'completed' ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
                   </span>
-                  <button
-                    className="doc-row-main"
+                  <Button
+                    variant="ghost"
+                    className="doc-row-main h-auto min-h-10 justify-start rounded-lg px-0 text-left"
                     type="button"
                     onClick={() => onSelectEvent?.(event)}
                     aria-label={`Abrir reunión ${event.title}`}
                   >
-                    <strong>{event.title}</strong>
-                    <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
-                  </button>
+                    <span className="flex min-w-0 flex-col items-start">
+                      <strong className="truncate">{event.title}</strong>
+                      <span className="truncate">{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
+                    </span>
+                  </Button>
                   <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
                 </article>
               );
