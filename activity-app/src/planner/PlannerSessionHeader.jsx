@@ -1,5 +1,7 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -132,7 +134,7 @@ export function PlannerSessionHeader({
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             {isEditing ? (
               <>
-                <textarea
+                <Textarea
                   rows={1}
                   value={title}
                   onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
@@ -140,7 +142,7 @@ export function PlannerSessionHeader({
                   className="doc-title doc-title-input"
                   aria-label="Nombre de la reunión"
                 />
-                <textarea
+                <Textarea
                   rows={1}
                   value={description}
                   onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
@@ -266,19 +268,21 @@ export function PlannerSessionHeader({
         {isEditing ? (
           <div className="flex flex-col gap-3 mt-4">
             {/* Fila 1: Fecha, Hora de inicio, Término, Duración */}
-            <div className="grid grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
+            <div className="grid grid-cols-2 sm:grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Fecha</label>
                 <Popover>
                   <PopoverTrigger
                     render={
-                      <button
+                      <Button
                         type="button"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between text-xs font-medium text-foreground transition-colors cursor-pointer"
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 justify-between text-xs font-medium text-foreground min-w-0"
                       >
                         <span>{formatDisplayDate(date)}</span>
                         <Calendar className="size-4 text-foreground/80 shrink-0" />
-                      </button>
+                      </Button>
                     }
                   />
                   <PopoverContent align="start" className="w-auto p-0 border-0 bg-transparent shadow-none">
@@ -292,7 +296,7 @@ export function PlannerSessionHeader({
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
-                <input
+                <Input
                   type="time"
                   value={startTime || '10:00'}
                   onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
@@ -302,7 +306,7 @@ export function PlannerSessionHeader({
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
-                <input
+                <Input
                   type="time"
                   value={estimatedEndTime || '11:00'}
                   onChange={(e) => {
@@ -331,15 +335,17 @@ export function PlannerSessionHeader({
             </div>
 
             {/* Fila 2: Facilita (1fr), Participan (3fr) */}
-            <div className="grid grid-cols-[1fr_3fr] gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_3fr] gap-3 items-end">
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <button
+                      <Button
                         type="button"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0"
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 justify-between text-xs font-medium text-foreground min-w-0"
                       >
                         {host ? (
                           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -370,7 +376,7 @@ export function PlannerSessionHeader({
                           <span className="truncate text-muted-foreground">Buscar persona</span>
                         )}
                         <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
-                      </button>
+                      </Button>
                     }
                   />
                   <DropdownMenuContent align="start" className="p-0">
@@ -396,9 +402,11 @@ export function PlannerSessionHeader({
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <button
+                      <Button
                         type="button"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-3 text-xs text-foreground transition-colors cursor-pointer min-w-0"
+                        variant="outline"
+                        size="sm"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 justify-between text-xs font-medium text-foreground min-w-0"
                       >
                         {selectedKeys.size > 0 ? (
                           <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
@@ -436,7 +444,7 @@ export function PlannerSessionHeader({
                           <span className="truncate text-muted-foreground">Buscar personas o roles</span>
                         )}
                         <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
-                      </button>
+                      </Button>
                     }
                   />
                   <DropdownMenuContent align="start" className="p-0">
