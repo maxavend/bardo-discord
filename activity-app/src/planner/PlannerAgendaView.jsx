@@ -543,20 +543,26 @@ export function PlannerAgendaView({
                                   className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all leading-normal"
                                 />
                               ) : (
-                                <span
-                                  onClick={() => !isPointActive && onToggleSubpointStatus?.(block.id, point.id, !isDone)}
-                                  className={`text-sm leading-normal truncate ${
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={isPointActive}
+                                  aria-pressed={isDone}
+                                  aria-label={`${isDone ? 'Marcar como pendiente' : 'Marcar como revisado'}: ${point.title || 'Punto sin título'}`}
+                                  onClick={() => onToggleSubpointStatus?.(block.id, point.id, !isDone)}
+                                  className={`h-auto min-h-8 min-w-0 justify-start p-0 text-sm leading-normal hover:bg-transparent disabled:opacity-100 ${
                                     isDone
-                                      ? 'line-through text-foreground/60 font-normal cursor-pointer'
+                                      ? 'line-through text-foreground/60 font-normal'
                                       : isPointSkipped
-                                        ? 'text-muted-foreground font-normal cursor-pointer'
+                                        ? 'text-muted-foreground font-normal'
                                         : isPointActive
                                           ? 'font-bold text-primary'
-                                          : 'font-semibold text-foreground cursor-pointer hover:text-primary'
+                                          : 'font-semibold text-foreground hover:text-primary'
                                   }`}
                                 >
-                                  {point.title || '(Punto sin título)'}
-                                </span>
+                                  <span className="truncate">{point.title || '(Punto sin título)'}</span>
+                                </Button>
                               )}
                             </div>
 
@@ -576,32 +582,38 @@ export function PlannerAgendaView({
 
                             {isEditing && (
                               <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
-                                <button
+                                <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
                                   onClick={() => onMoveSubpoint?.(block.id, point.id, -1)}
                                   disabled={pointIndex === 0}
                                   aria-label="Mover punto arriba"
-                                  className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
+                                  className="text-muted-foreground hover:text-foreground"
                                 >
                                   <ChevronUp className="size-3.5" />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
                                   onClick={() => onMoveSubpoint?.(block.id, point.id, 1)}
                                   disabled={pointIndex === (block.subpoints || []).length - 1}
                                   aria-label="Mover punto abajo"
-                                  className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
+                                  className="text-muted-foreground hover:text-foreground"
                                 >
                                   <ChevronDown className="size-3.5" />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                   type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
                                   onClick={() => onDeleteSubpoint?.(block.id, point.id)}
                                   aria-label="Eliminar punto"
-                                  className="p-1 text-muted-foreground hover:text-destructive cursor-pointer ml-0.5"
+                                  className="text-muted-foreground hover:text-destructive"
                                 >
                                   <Trash2 className="size-3.5" />
-                                </button>
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -889,23 +901,27 @@ export function PlannerAgendaView({
 
           {isEditing && (
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full min-w-0 mt-3">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => onAddBlock?.()}
-                className="flex-1 py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
+                className="flex-1 h-10 rounded-xl border-dashed text-xs font-semibold text-muted-foreground hover:text-foreground"
               >
                 <Plus className="size-3.5 text-primary" />
                 <span>Agregar bloque</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => (onAddBreak ? onAddBreak() : onAddBlock?.({ title: 'Descanso', type: 'break', durationMinutes: 10, isBreak: true, subpoints: [] }))}
-                className="py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none sm:w-auto"
+                className="h-10 rounded-xl border-dashed text-xs font-semibold text-muted-foreground hover:text-foreground sm:w-auto"
               >
                 <Coffee className="size-3.5 text-muted-foreground/70" />
                 <span>Agregar descanso</span>
-              </button>
+              </Button>
             </div>
           )}
         </div>
