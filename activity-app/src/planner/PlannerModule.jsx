@@ -24,6 +24,9 @@ import {
   resetToCleanSession,
   generateDiscordAnnouncement,
   generateMinutesMarkdown,
+  savePlannerRecoverySnapshot,
+  hasPlannerRecoverySnapshot,
+  restorePlannerRecoverySnapshot,
 } from './planner-store.js';
 import {computePlannerTimes} from './time-engine.js';
 import {
@@ -72,6 +75,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [dismissedUpcomingBanner, setDismissedUpcomingBanner] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [hasRecovery, setHasRecovery] = useState(hasPlannerRecoverySnapshot);
 
   const [captureModal, setCaptureModal] = useState({isOpen: false, blockId: null});
   const [interruptModal, setInterruptModal] = useState({isOpen: false});
@@ -521,18 +525,43 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     }
   }, []);
 
+  const meetingReplacementIsBlocked = useCallback(() => {
+    const status = sessionStateRef.current?.status || SESSION_STATUS.IDLE;
+    return status === SESSION_STATUS.RUNNING
+      || status === SESSION_STATUS.PAUSED
+      || Boolean(recordingControllerRef.current?.isActive());
+  }, []);
+
+  const preserveMeetingForRecovery = useCallback(() => {
+    const saved = savePlannerRecoverySnapshot(plannerStateRef.current, sessionStateRef.current);
+    setHasRecovery(saved || hasPlannerRecoverySnapshot());
+  }, []);
+
   const handleLoadDemo = useCallback(() => {
+    if (meetingReplacementIsBlocked()) {
+      toast('Finaliza o interrumpe la reunión en vivo antes de cambiar de reunión.');
+      handleTabChange('agenda');
+      return;
+    }
+    preserveMeetingForRecovery();
     const demo = resetToDemoFixture();
     setSelectedEventId('event-weekly-design');
     plannerStateRef.current = demo;
     setPlannerState(demo);
     const live = loadLiveSessionState(demo);
     commitSessionState(live);
+    handleTabChange('agenda');
     toast('Datos de demostración cargados');
-  }, [commitSessionState]);
+  }, [commitSessionState, handleTabChange, meetingReplacementIsBlocked, preserveMeetingForRecovery]);
 
   const handleSelectEvent = useCallback((event) => {
     if (!event?.eventId) return;
+    if (meetingReplacementIsBlocked()) {
+      toast('Finaliza o interrumpe la reunión en vivo antes de abrir otra.');
+      handleTabChange('agenda');
+      return;
+    }
+    preserveMeetingForRecovery();
     const next = computePlannerTimes({...event});
     resetToCleanSession();
     savePlannerState(next);
@@ -540,20 +569,48 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setPlannerState(next);
     setSelectedEventId(event.eventId);
     commitSessionState(loadLiveSessionState(next));
-    setActiveTab('agenda');
+    handleTabChange('agenda');
     toast(`Reunión abierta: ${event.title}`);
-  }, [commitSessionState]);
+  }, [commitSessionState, handleTabChange, meetingReplacementIsBlocked, preserveMeetingForRecovery]);
 
   const handleCleanSession = useCallback(() => {
+    if (meetingReplacementIsBlocked()) {
+      toast('Finaliza o interrumpe la reunión en vivo antes de crear otra.');
+      handleTabChange('agenda');
+      return;
+    }
+    preserveMeetingForRecovery();
     const clean = resetToCleanSession();
     plannerStateRef.current = clean;
     setPlannerState(clean);
     const live = loadLiveSessionState(clean);
     commitSessionState(live);
-    setActiveTab('agenda');
+    setSelectedEventId(null);
     setIsEditing(true);
-    toast('Nueva reunión creada — edita los campos directamente');
-  }, [commitSessionState]);
+    handleTabChange('agenda');
+    toast('Nueva reunión creada');
+  }, [commitSessionState, handleTabChange, meetingReplacementIsBlocked, preserveMeetingForRecovery]);
+
+  const handleRestorePreviousMeeting = useCallback(() => {
+    if (meetingReplacementIsBlocked()) {
+      toast('Finaliza o interrumpe la reunión en vivo antes de restaurar otra.');
+      return;
+    }
+    const restored = restorePlannerRecoverySnapshot();
+    if (!restored) {
+      setHasRecovery(false);
+      toast('No hay una reunión anterior para restaurar.');
+      return;
+    }
+    plannerStateRef.current = restored.plannerState;
+    setPlannerState(restored.plannerState);
+    commitSessionState(restored.liveSessionState);
+    setSelectedEventId(restored.plannerState.eventId || null);
+    setHasRecovery(false);
+    setIsEditing(false);
+    handleTabChange('agenda');
+    toast('Reunión anterior restaurada');
+  }, [commitSessionState, handleTabChange, meetingReplacementIsBlocked]);
 
   useEffect(() => {
     if (initialTab === 'new') {
@@ -815,6 +872,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           onUpdateHeaderField={handleUpdateHeaderField}
           onCopyAnnouncement={handleCopyAnnouncement}
           onNewCleanSession={handleCleanSession}
+          hasPreviousMeeting={hasRecovery}
+          onRestorePreviousMeeting={handleRestorePreviousMeeting}
           onLoadDemo={handleLoadDemo}
           onStartSession={handleStartSession}
           onResumeSession={handleResumeSession}
