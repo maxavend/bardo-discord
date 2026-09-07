@@ -303,6 +303,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
     }
     if (next.status === SESSION_STATUS.COMPLETED) {
+      syncMeetingStatus('completed');
       setActiveTab('recap');
       toast('Reunión finalizada. Mostrando resumen.');
       return;
@@ -319,7 +320,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     // `activePoint` is intentionally captured before finalization: recording stays
     // associated with the outgoing Point even after the runner advances.
     void activePoint;
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition, syncMeetingStatus]);
 
   const handleSkipPoint = useCallback(() => runAtomicTransition(async () => {
     const outgoing = sessionStateRef.current;
@@ -327,9 +328,12 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
     const next = skipActivePoint(plannerStateRef.current, withRecording);
     commitSessionState(next);
-    if (next.status === SESSION_STATUS.COMPLETED) setActiveTab('recap');
+    if (next.status === SESSION_STATUS.COMPLETED) {
+      syncMeetingStatus('completed');
+      setActiveTab('recap');
+    }
     toast('Punto saltado');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition, syncMeetingStatus]);
 
   const handleSkipBlock = useCallback(() => runAtomicTransition(async () => {
     const outgoing = sessionStateRef.current;
@@ -337,9 +341,12 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
     const next = skipActiveBlock(plannerStateRef.current, withRecording);
     commitSessionState(next);
-    if (next.status === SESSION_STATUS.COMPLETED) setActiveTab('recap');
+    if (next.status === SESSION_STATUS.COMPLETED) {
+      syncMeetingStatus('completed');
+      setActiveTab('recap');
+    }
     toast('Bloque saltado');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition, syncMeetingStatus]);
 
   const handleExtendBlock = useCallback((blockId, minutes = 5) => {
     const next = extendActiveBlock(sessionStateRef.current, blockId, minutes);
@@ -359,9 +366,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
     const next = completeLiveSession(withRecording);
     commitSessionState(next);
+    syncMeetingStatus('completed');
     setActiveTab('recap');
     toast('Reunión finalizada. Mostrando resumen.');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition, syncMeetingStatus]);
 
   const handleOpenInterrupt = useCallback(() => setInterruptModal({isOpen: true}), []);
 
@@ -372,9 +380,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
     const next = interruptLiveSession(withRecording);
     commitSessionState(next);
+    syncMeetingStatus('interrupted');
     setActiveTab('recap');
     toast(recording ? `${recording.name} guardada; reunión conservada` : 'Reunión interrumpida. Todo el trabajo fue conservado.');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition, syncMeetingStatus]);
 
   // Recording context is always resolved from the runner. The user never has to
   // pick a Point that Bardo already knows is active.
