@@ -421,7 +421,7 @@ export function PlannerSessionHeader({
                                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                                 );
                                 const isRole = tag.startsWith('#') || (!matched && tag.startsWith('@'));
-                                const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
+                                const color = matched?.avatarColor || discordColorFor(tag, idx + 1);
 
                                 return (
                                   <Avatar
@@ -502,8 +502,7 @@ export function PlannerSessionHeader({
                             `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                         );
                         const color =
-                          matched?.avatarColor ||
-                          DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                          matched?.avatarColor || discordColorFor(tag, i);
                         const name = matched?.globalName || tag.replace(/^@/, '');
                         return (
                           <Avatar
