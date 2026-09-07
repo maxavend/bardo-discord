@@ -1059,8 +1059,3 @@ button { font-size: 14px; }
   }
 }
 
-@layer utilities {
-  .text-muted {
-    color: var(--muted-foreground) !important;
-  }
-}
