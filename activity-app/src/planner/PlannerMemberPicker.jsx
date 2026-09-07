@@ -72,6 +72,34 @@ export function getAllDiscordEntities() {
   return { members: allMembers, roles: allRoles };
 }
 
+export function resolveDiscordEntity(value) {
+  const token = String(value || '').trim().toLowerCase();
+  if (!token) return null;
+  const clean = token.replace(/^@/, '');
+  const {members, roles} = getAllDiscordEntities();
+  return [...members, ...roles].find((entity) => {
+    const label = String(entity.globalName || entity.name || '').toLowerCase();
+    return entity.id === value
+      || String(entity.tag || '').toLowerCase() === token
+      || label === clean
+      || String(entity.username || '').toLowerCase() === clean;
+  }) || null;
+}
+
+export function entityIdsFromSelection(keys = []) {
+  return Array.from(keys)
+    .map((key) => resolveDiscordEntity(key)?.id)
+    .filter(Boolean);
+}
+
+export function discordColorFor(value, fallbackIndex = 0) {
+  const entity = resolveDiscordEntity(value);
+  if (entity?.avatarColor || entity?.color) return entity.avatarColor || entity.color;
+  const source = String(value || fallbackIndex);
+  const hash = source.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return DISCORD_PALETTES[Math.abs(hash) % DISCORD_PALETTES.length];
+}
+
 export function parseMentionsToArray(mentionsStr = '') {
   if (!mentionsStr) return [];
   const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
