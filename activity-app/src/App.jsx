@@ -111,11 +111,14 @@ const BLOCK_TYPES = [
   {id: 'pre', label: 'Bloque de código', icon: Code, shortcut: '', hint: 'Escribe código con formato monoespaciado'},
 ];
 
+const PLANNER_ROUTE_TABS = new Set(['home', 'agenda', 'recap', 'new', 'demo']);
+
 function parseRoute() {
   const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
   if (raw === 'planner' || raw.startsWith('planner-')) {
-    const tab = raw.replace(/^planner-?/, '') || 'home';
-    return {type: 'planner', tab: tab === 'planner' ? 'home' : tab, key: raw};
+    const requestedTab = raw === 'planner' ? 'home' : raw.replace(/^planner-/, '');
+    const tab = PLANNER_ROUTE_TABS.has(requestedTab) ? requestedTab : 'home';
+    return {type: 'planner', tab, key: tab === 'home' ? 'planner' : `planner-${tab}`};
   }
   if (!raw || raw === 'docs') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
@@ -2355,7 +2358,7 @@ function App() {
         />
       )}
 
-      {(route.type === 'edit' || route.type === 'new') && (
+      {((route.type === 'edit' && currentDoc) || route.type === 'new') && (
         <Editor
           key={route.type === 'new' ? 'new' : currentDoc?.id}
           doc={route.type === 'new' ? null : currentDoc}
