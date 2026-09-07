@@ -12,17 +12,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { SESSION_STATUS, recalculateEstimatedEndTime } from './session-runner.js';
-import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
+import { getAllDiscordEntities, parseMentionsToArray, discordColorFor } from './PlannerMemberPicker.jsx';
 import { pluralize, formatTopicsCountLabel, formatRecordingsCountLabel } from './copy-tokens.js';
-
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
-
-function parseMentions(mentionsStr = '') {
-  if (!mentionsStr) return [];
-  const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
-  if (matches && matches.length > 0) return matches.map((m) => m.trim()).filter(Boolean);
-  return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
-}
 
 function isDefaultEmptySession(plannerState) {
   if (!plannerState) return true;
@@ -81,7 +72,7 @@ export function PlannerHomeView({
   const mins = totalMinutes % 60;
   const formattedDuration = hours > 0 ? (mins > 0 ? `${hours} h ${mins} min` : `${hours} h`) : `${mins} min`;
 
-  const participantsList = parseMentions(mentions);
+  const participantsList = parseMentionsToArray(mentions);
   const { members } = getAllDiscordEntities();
 
   const decisions = sessionState?.decisions || [];
@@ -93,11 +84,11 @@ export function PlannerHomeView({
 
   // ─── Status badge ─────────────────────────────────────────────────────────
   const StatusBadge = () => {
-    if (isRunning) return <Badge variant="default" className="text-[10.5px] font-semibold">En curso</Badge>;
-    if (isPaused) return <Badge variant="secondary" className="text-[10.5px] font-semibold">Pausada</Badge>;
-    if (isInterrupted) return <Badge variant="destructive" className="text-[10.5px] font-semibold">Interrumpida</Badge>;
-    if (isCompleted) return <Badge variant="secondary" className="text-[10.5px] font-semibold">Finalizada</Badge>;
-    return <Badge variant="outline" className="text-[10.5px] font-semibold text-muted-foreground">Pendiente</Badge>;
+    if (isRunning) return <Badge variant="default" className="text-xs font-semibold">En curso</Badge>;
+    if (isPaused) return <Badge variant="secondary" className="text-xs font-semibold">Pausada</Badge>;
+    if (isInterrupted) return <Badge variant="destructive" className="text-xs font-semibold">Interrumpida</Badge>;
+    if (isCompleted) return <Badge variant="secondary" className="text-xs font-semibold">Finalizada</Badge>;
+    return <Badge variant="outline" className="text-xs font-semibold text-muted-foreground">Pendiente</Badge>;
   };
 
   return (
@@ -181,13 +172,13 @@ export function PlannerHomeView({
                         m.tag.toLowerCase() === tag.toLowerCase() ||
                         `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                     );
-                    const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                    const color = matched?.avatarColor || discordColorFor(tag, i);
                     const name = matched?.globalName || tag.replace(/^@/, '');
                     return (
                       <Avatar
                         key={i}
                         size="sm"
-                        className="size-5 text-[8.5px] font-bold border-2 border-card shadow-2xs shrink-0"
+                        className="size-5 text-xs font-bold border-2 border-card shadow-2xs shrink-0"
                         style={{ backgroundColor: `${color}30`, color }}
                       >
                         <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
@@ -237,7 +228,7 @@ export function PlannerHomeView({
         <section className="library-section recent-section">
           <div className="flex items-center justify-between gap-3">
             <h3 className="section-title mb-0">Reuniones ({events.length})</h3>
-            <span className="text-[11px] text-muted-foreground self-center">Próximas y recientes</span>
+            <span className="text-xs text-muted-foreground self-center">Próximas y recientes</span>
           </div>
           <div className="docs-list">
             {events.map((event) => {
@@ -246,10 +237,12 @@ export function PlannerHomeView({
                 ? new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${event.date}T12:00:00`))
                 : 'Fecha por confirmar';
               const eventStatus = event.eventStatus === 'completed'
-                ? 'Completado'
+                ? 'Finalizada'
                 : event.eventStatus === 'in_progress'
                   ? 'En curso'
-                  : 'Programado';
+                  : event.eventStatus === 'interrupted'
+                    ? 'Interrumpida'
+                    : 'Programada';
               const isSelected = selectedEventId === event.eventId;
               return (
                 <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
