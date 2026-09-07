@@ -130,7 +130,7 @@ export function PlannerHomeView({
                 onViewAgenda?.();
               }
             }}
-            className={`p-4 sm:p-5 flex flex-col gap-3 rounded-2xl cursor-pointer shadow-2xs focus-visible:outline-2 focus-visible:outline-ring bg-card border transition-all duration-[var(--duration-quick,150ms)] ease-[var(--ease-smooth-out,cubic-bezier(0.22,1,0.36,1))] hover:border-primary hover:bg-[color-mix(in_oklch,var(--card),var(--primary)_2%)] ${
+            className={`flex cursor-pointer flex-col gap-3 border bg-card p-4 transition-colors hover:border-primary/60 hover:bg-muted/20 focus-visible:outline-2 focus-visible:outline-ring sm:p-5 ${
               isLive
                 ? 'border-primary/60 ring-1 ring-primary/20'
                 : 'border-border'
