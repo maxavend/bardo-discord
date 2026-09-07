@@ -507,61 +507,7 @@ button { font-size: 14px; }
   text-transform: uppercase;
 }
 
-.continue-row {
-  width: 100%;
-  min-height: 64px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 14px 16px;
-  display: grid;
-  grid-template-columns: 4px minmax(0, 1fr) 20px;
-  gap: 14px;
-  align-items: center;
-  text-align: left;
-  cursor: pointer;
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--bardo-card-shadow);
-  transition: all var(--duration-quick) var(--ease-smooth-out);
-}
-.continue-row:hover {
-  border-color: var(--primary);
-  background: color-mix(in oklch, var(--card), var(--primary) 3%);
-}
-.continue-row:focus-visible,
-.doc-row-main:focus-visible,
-.check-control:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.continue-accent { width: 4px; height: 38px; border-radius: 9999px; background: var(--accent); }
-.continue-copy { min-width: 0; }
-.continue-copy strong,
-.doc-row-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.35; font-weight: 650; color: var(--foreground); }
-.continue-copy span,
-.doc-row-main span { display: block; margin-top: 3px; color: var(--muted-foreground); font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.recent-section { margin-top: 36px; }
 .docs-list { display: flex; flex-direction: column; gap: 8px; }
-.doc-row {
-  min-height: 64px;
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 36px;
-  gap: 12px;
-  align-items: center;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-2xl);
-  padding: 8px 14px;
-  box-shadow: var(--bardo-card-shadow);
-  transition: all var(--duration-quick) var(--ease-smooth-out);
-}
-.doc-row:hover {
-  border-color: var(--primary);
-  background: color-mix(in oklch, var(--card), var(--primary) 2%);
-}
-.doc-symbol { display: grid; place-items: center; color: var(--muted-foreground); }
-.doc-row-main { min-width: 0; min-height: 48px; border: 0; background: transparent; text-align: left; padding: 6px 0; cursor: pointer; }
-.event-row-selected { background: color-mix(in oklab, var(--accent) 5%, transparent); }
 
 /* Reader + editor share exactly the same navigation geometry. */
 .doc-route {
@@ -610,7 +556,6 @@ button { font-size: 14px; }
 }
 .back-button:active { transform: scale(var(--scale-small)); }
 .editing-route .topbar-left { gap: 8px; }
-.save-state[data-dirty="true"] { color: var(--warning); }
 .save-state {
   display: inline-flex;
   flex: 0 0 auto;
@@ -963,17 +908,6 @@ button { font-size: 14px; }
   .optional-bullets { display: none; }
   .editor-toolbar { gap: 2px; }
   .doc-title { font-size: 28px; }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .continue-row:hover {
-    background: color-mix(in oklab, var(--foreground) 3%, transparent);
-  }
-  .doc-row:hover {
-    background: color-mix(in oklab, var(--foreground) 2.5%, transparent);
-  }
-  .doc-row-main:hover strong,
-  .continue-row:hover strong { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 }
 
 /* ── Material Design 3 Expressive Wavy Progress & Morph Shapes ──────────── */
