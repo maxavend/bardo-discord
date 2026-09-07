@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Field, FieldLabel } from '@/components/ui/field';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -132,153 +133,10 @@ export function PlannerSessionHeader({
         <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             {isEditing ? (
-              <>
-                <Textarea
-                  rows={1}
-                  value={title}
-                  onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
-                  placeholder="Nombre de la reunión"
-                  className="doc-title doc-title-input"
-                  aria-label="Nombre de la reunión"
-                />
-                <Textarea
-                  rows={1}
-                  value={description}
-                  onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
-                  placeholder="Agregar objetivo o contexto de la reunión..."
-                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60"
-                  aria-label="Objetivo de la reunión"
-                />
-              </>
-            ) : (
-              <>
-                <h1 className="doc-title">{title || 'Reunión sin título'}</h1>
-                {description && <p className="doc-description">{description}</p>}
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            {!isEditing && !isRunning && !isPaused && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onCopyAnnouncement}
-                className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
-              >
-                <Copy className="size-3.5" /> <span>Copiar anuncio</span>
-              </Button>
-            )}
-
-            {isEditing ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={onToggleEditMode}
-                className="font-medium h-8 px-3.5"
-              >
-                <Check className="size-3.5" /> <span>Listo</span>
-              </Button>
-            ) : isInterrupted && onResumeSession ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={onResumeSession}
-                className="font-medium h-8 px-3.5"
-              >
-                <Play className="size-3.5" /> <span>Reanudar</span>
-              </Button>
-            ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={onStartSession}
-                className="font-medium h-8 px-3.5"
-              >
-                <Play className="size-3.5" /> <span>Iniciar reunión</span>
-              </Button>
-            ) : isCompleted ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => onTabChange('recap')}
-                className="font-medium h-8 px-3.5"
-              >
-                <FileText className="size-3.5" /> <span>Ver resumen</span>
-              </Button>
-            ) : null}
-
-            {/* Menú ⋮ alineado exactamente en la misma línea del título */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Más opciones de la reunión"
-                    className="text-muted-foreground hover:text-foreground rounded-full"
-                  >
-                    <MoreVertical className="size-4" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Reunión</DropdownMenuLabel>
-                  {(isCompleted || isInterrupted) && (
-                    <DropdownMenuItem onClick={() => onTabChange('recap')}>
-                      <RotateCw className="size-4 text-muted-foreground" />
-                      <span>Ver resumen</span>
-                    </DropdownMenuItem>
-                  )}
-                  {(isRunning || isPaused) && (
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => onInterruptSession?.()}
-                    >
-                      <RotateCcw className="size-4 text-destructive" />
-                      <span>Interrumpir reunión</span>
-                    </DropdownMenuItem>
-                  )}
-                  {!isEditing && (
-                    <DropdownMenuItem onClick={onToggleEditMode}>
-                      <Pencil className="size-4 text-muted-foreground" />
-                      <span>Editar reunión</span>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={onCopyAnnouncement}>
-                    <Copy className="size-4 text-muted-foreground" />
-                    <span>Copiar anuncio</span>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={onNewCleanSession}
-                    disabled={isRunning || isPaused}
-                  >
-                    <Plus className="size-4 text-muted-foreground" />
-                    <span>Nueva reunión</span>
-                  </DropdownMenuItem>
-                  {hasPreviousMeeting && !isRunning && !isPaused && (
-                    <DropdownMenuItem onClick={onRestorePreviousMeeting}>
-                      <RotateCcw className="size-4 text-muted-foreground" />
-                      <span>Restaurar reunión anterior</span>
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {/* Modo edición vs modo lectura */}
-        {isEditing ? (
-          <div className="flex flex-col gap-3 mt-4">
-            {/* Fila 1: Fecha, Hora de inicio, Término, Duración */}
-            <div className="grid grid-cols-2 sm:grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Fecha</label>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Field>
+                <FieldLabel>Fecha</FieldLabel>
                 <Popover>
                   <PopoverTrigger
                     render={
@@ -286,54 +144,59 @@ export function PlannerSessionHeader({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 justify-between text-xs font-medium text-foreground min-w-0"
+                        className="w-full min-w-0 justify-between text-xs font-medium"
                       >
-                        <span>{formatDisplayDate(date)}</span>
-                        <Calendar className="size-4 text-foreground/80 shrink-0" />
+                        <span className="truncate">{formatDisplayDate(date)}</span>
+                        <Calendar className="size-4 shrink-0 text-muted-foreground" />
                       </Button>
                     }
                   />
-                  <PopoverContent align="start" className="w-auto p-0 border-0 bg-transparent shadow-none">
+                  <PopoverContent align="start" className="w-auto p-0">
                     <CalendarComponent
                       selected={date}
                       onSelect={(newDate) => onUpdateHeaderField?.('date', newDate)}
                     />
                   </PopoverContent>
                 </Popover>
-              </div>
+              </Field>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
+              <Field>
+                <FieldLabel htmlFor="meeting-start-time">Hora de inicio</FieldLabel>
                 <Input
+                  id="meeting-start-time"
                   type="time"
                   value={startTime || '10:00'}
                   onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
-                  className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 text-xs font-medium text-foreground transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-primary text-center"
+                  className="text-center text-xs font-medium"
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
-                <div
-                  className="w-full h-9 rounded-full bg-muted/40 border border-border/50 px-3.5 flex items-center justify-center text-xs font-medium text-foreground"
-                  aria-label="Hora de término calculada"
-                >
-                  {estimatedEndTime || '—'}
-                </div>
-              </div>
+              <Field>
+                <FieldLabel htmlFor="meeting-end-time">Término</FieldLabel>
+                <Input
+                  id="meeting-end-time"
+                  value={estimatedEndTime || '—'}
+                  readOnly
+                  aria-readonly="true"
+                  className="text-center text-xs font-medium text-muted-foreground"
+                />
+              </Field>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Duración</label>
-                <div className="w-full h-9 rounded-full bg-muted/40 border border-border/50 px-3.5 flex items-center justify-center text-xs font-medium text-foreground">
-                  {totalPlannedMinutes >= 60 ? `${Math.floor(totalPlannedMinutes / 60)}h${totalPlannedMinutes % 60 ? ` ${totalPlannedMinutes % 60}m` : ''}` : `${totalPlannedMinutes}m`}
-                </div>
-              </div>
+              <Field>
+                <FieldLabel htmlFor="meeting-duration">Duración</FieldLabel>
+                <Input
+                  id="meeting-duration"
+                  value={totalPlannedMinutes >= 60 ? `${Math.floor(totalPlannedMinutes / 60)}h${totalPlannedMinutes % 60 ? ` ${totalPlannedMinutes % 60}m` : ''}` : `${totalPlannedMinutes}m`}
+                  readOnly
+                  aria-readonly="true"
+                  className="text-center text-xs font-medium text-muted-foreground"
+                />
+              </Field>
             </div>
 
-            {/* Fila 2: Facilita (1fr), Participan (3fr) */}
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_3fr] gap-3 items-end">
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+              <Field>
+                <FieldLabel>Facilita</FieldLabel>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -341,10 +204,10 @@ export function PlannerSessionHeader({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 justify-between text-xs font-medium text-foreground min-w-0"
+                        className="w-full min-w-0 justify-between text-xs font-medium"
                       >
                         {host ? (
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
                             {(() => {
                               const matched = members.find(
                                 (m) =>
@@ -356,14 +219,14 @@ export function PlannerSessionHeader({
                                 <>
                                   <Avatar
                                     size="xs"
-                                    className="size-5 text-xs font-bold shrink-0 shadow-2xs"
+                                    className="size-5 shrink-0 text-xs font-bold shadow-2xs"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
                                     <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
                                       {host.slice(0, 2).toUpperCase()}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="font-medium text-foreground truncate">{host}</span>
+                                  <span className="truncate">{host}</span>
                                 </>
                               );
                             })()}
@@ -371,7 +234,7 @@ export function PlannerSessionHeader({
                         ) : (
                           <span className="truncate text-muted-foreground">Buscar persona</span>
                         )}
-                        <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
+                        <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
                       </Button>
                     }
                   />
@@ -396,10 +259,10 @@ export function PlannerSessionHeader({
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              </Field>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Participan</label>
+              <Field className="sm:col-span-3">
+                <FieldLabel>Participan</FieldLabel>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -407,11 +270,11 @@ export function PlannerSessionHeader({
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 justify-between text-xs font-medium text-foreground min-w-0"
+                        className="w-full min-w-0 justify-between text-xs font-medium"
                       >
                         {selectedKeys.size > 0 ? (
-                          <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                            <div className="flex items-center -space-x-1.5 shrink-0">
+                          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                            <div className="flex shrink-0 items-center -space-x-1.5">
                               {Array.from(selectedKeys).slice(0, 4).map((tag, idx) => {
                                 const cleanName = tag.replace(/^[@#]/, '');
                                 const matched = members.find(
@@ -427,7 +290,7 @@ export function PlannerSessionHeader({
                                   <Avatar
                                     key={tag}
                                     size="xs"
-                                    className="size-5 text-xs font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
+                                    className="size-5 shrink-0 border border-card text-xs font-bold shadow-2xs ring-1 ring-background"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
                                     <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
@@ -437,14 +300,14 @@ export function PlannerSessionHeader({
                                 );
                               })}
                             </div>
-                            <span className="font-medium text-foreground truncate min-w-0">
+                            <span className="min-w-0 truncate">
                               {Array.from(selectedKeys).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
                             </span>
                           </div>
                         ) : (
                           <span className="truncate text-muted-foreground">Buscar personas o roles</span>
                         )}
-                        <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
+                        <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
                       </Button>
                     }
                   />
@@ -458,7 +321,7 @@ export function PlannerSessionHeader({
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
+              </Field>
             </div>
           </div>
         ) : (
