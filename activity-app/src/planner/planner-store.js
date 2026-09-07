@@ -8,9 +8,10 @@ import {
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
+export const PLANNER_RECOVERY_KEY = 'bardo-planner-recovery-v1';
 
 export const DEFAULT_EMPTY_SESSION = {
-  title: 'Nueva sesión de trabajo',
+  title: 'Nueva reunión',
   host: '',
   date: new Date().toISOString().split('T')[0],
   startTime: '10:00',
@@ -299,6 +300,46 @@ export function clearLiveSessionState() {
     localStorage.removeItem(LIVE_SESSION_STORE_KEY);
   } catch {
     // Local storage persistence fallback.
+  }
+}
+
+export function savePlannerRecoverySnapshot(plannerState, liveSessionState) {
+  try {
+    localStorage.setItem(PLANNER_RECOVERY_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      plannerState,
+      liveSessionState: serializeLiveSessionState(liveSessionState || DEFAULT_LIVE_SESSION),
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function hasPlannerRecoverySnapshot() {
+  try {
+    return Boolean(localStorage.getItem(PLANNER_RECOVERY_KEY));
+  } catch {
+    return false;
+  }
+}
+
+export function restorePlannerRecoverySnapshot() {
+  try {
+    const raw = localStorage.getItem(PLANNER_RECOVERY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const plannerState = computePlannerTimes(parsed?.plannerState || DEFAULT_EMPTY_SESSION);
+    savePlannerState(plannerState);
+    saveLiveSessionState(parsed?.liveSessionState || DEFAULT_LIVE_SESSION);
+    localStorage.removeItem(PLANNER_RECOVERY_KEY);
+    return {
+      plannerState,
+      liveSessionState: loadLiveSessionState(plannerState),
+      savedAt: parsed?.savedAt || null,
+    };
+  } catch {
+    return null;
   }
 }
 
