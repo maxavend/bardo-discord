@@ -13,9 +13,6 @@ export function SessionInterruptModal({
   isOpen,
   hasActiveRecording,
   activeRecordingName,
-  elapsedMinutes,
-  recordingsCount,
-  decisionsCount,
   onClose,
   onConfirmInterrupt,
 }) {
