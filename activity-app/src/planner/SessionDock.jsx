@@ -57,12 +57,7 @@ export function SessionDock({
     <aside
       role="region"
       aria-label="Asistente de reunión en vivo"
-      className="session-toolbar-sticky w-full mb-3 animate-in fade-in slide-in-from-top-2 duration-250"
-      style={{
-        position: 'sticky',
-        top: 'calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap))',
-        zIndex: 45,
-      }}
+      className="session-toolbar-sticky mb-3 w-full animate-in fade-in slide-in-from-top-2 duration-250"
     >
 <div className="flex flex-col gap-2">
       <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-150 shadow-sm animate-in fade-in zoom-in-95">
