@@ -9,6 +9,7 @@ import {
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 export const PLANNER_RECOVERY_KEY = 'bardo-planner-recovery-v1';
+export const PLANNER_EVENTS_STORE_KEY = 'bardo-planner-events-v1';
 
 export const DEFAULT_EMPTY_SESSION = {
   title: 'Nueva reunión',
@@ -226,26 +227,84 @@ export const DEMO_PLANNER_EVENTS = [
   }),
 ];
 
+function createMeetingId() {
+  if (globalThis.crypto?.randomUUID) return `meeting-${globalThis.crypto.randomUUID()}`;
+  return `meeting-${Date.now().toString(36)}-${Math.floor(performance.now()).toString(36)}`;
+}
+
+function ensureMeetingIdentity(state) {
+  const source = state && typeof state === 'object' ? state : DEFAULT_EMPTY_SESSION;
+  return {
+    ...source,
+    eventId: source.eventId || createMeetingId(),
+    eventStatus: source.eventStatus || 'scheduled',
+  };
+}
+
+function readStoredPlannerEvents() {
+  try {
+    const raw = localStorage.getItem(PLANNER_EVENTS_STORE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function upsertPlannerEvent(state) {
+  const event = ensureMeetingIdentity(state);
+  const now = new Date().toISOString();
+  const nextEvent = {...clonePlannerState(event), updatedAt: now};
+  const events = readStoredPlannerEvents();
+  const next = [
+    nextEvent,
+    ...events.filter((candidate) => candidate?.eventId !== nextEvent.eventId),
+  ].slice(0, 100);
+  try {
+    localStorage.setItem(PLANNER_EVENTS_STORE_KEY, JSON.stringify(next));
+  } catch {
+    // Local storage persistence fallback.
+  }
+}
+
 export function loadPlannerEvents() {
-  return DEMO_PLANNER_EVENTS.map(clonePlannerState);
+  return readStoredPlannerEvents()
+    .map((event) => computePlannerTimes(ensureMeetingIdentity(event)))
+    .sort((a, b) => {
+      const byUpdated = new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+      if (byUpdated) return byUpdated;
+      return String(b.date || '').localeCompare(String(a.date || ''));
+    });
 }
 
 export function loadPlannerState() {
   try {
     const raw = localStorage.getItem(PLANNER_STORE_KEY);
-    if (!raw) return computePlannerTimes(DEFAULT_EMPTY_SESSION);
-    return computePlannerTimes(JSON.parse(raw));
+    if (!raw) {
+      const initial = computePlannerTimes(ensureMeetingIdentity(DEFAULT_EMPTY_SESSION));
+      savePlannerState(initial);
+      return initial;
+    }
+    const parsed = JSON.parse(raw);
+    const normalized = computePlannerTimes(ensureMeetingIdentity(parsed));
+    if (!parsed?.eventId) savePlannerState(normalized);
+    return normalized;
   } catch {
-    return computePlannerTimes(DEFAULT_EMPTY_SESSION);
+    const fallback = computePlannerTimes(ensureMeetingIdentity(DEFAULT_EMPTY_SESSION));
+    savePlannerState(fallback);
+    return fallback;
   }
 }
 
 export function savePlannerState(state) {
+  const normalized = ensureMeetingIdentity(state);
   try {
-    localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(state));
+    localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(normalized));
+    upsertPlannerEvent(normalized);
   } catch {
     // Local storage persistence fallback.
   }
+  return normalized;
 }
 
 function normalizeReloadedRecording(recording) {
@@ -344,14 +403,22 @@ export function restorePlannerRecoverySnapshot() {
 }
 
 export function resetToDemoFixture() {
-  const computed = computePlannerTimes(DEMO_PLANNER_FIXTURE);
+  const computed = computePlannerTimes({
+    ...clonePlannerState(DEMO_PLANNER_FIXTURE),
+    eventId: 'event-weekly-design',
+    eventStatus: 'scheduled',
+  });
   savePlannerState(computed);
   clearLiveSessionState();
   return computed;
 }
 
 export function resetToCleanSession() {
-  const computed = computePlannerTimes(DEFAULT_EMPTY_SESSION);
+  const computed = computePlannerTimes({
+    ...clonePlannerState(DEFAULT_EMPTY_SESSION),
+    eventId: createMeetingId(),
+    eventStatus: 'scheduled',
+  });
   savePlannerState(computed);
   clearLiveSessionState();
   return computed;
