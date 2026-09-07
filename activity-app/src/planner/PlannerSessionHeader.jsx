@@ -33,18 +33,11 @@ import {
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
+  parseMentionsToArray,
+  resolveDiscordEntity,
+  entityIdsFromSelection,
+  discordColorFor,
 } from './PlannerMemberPicker.jsx';
-
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
-
-function parseMentions(mentionsStr = '') {
-  if (!mentionsStr) return [];
-  const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
-  if (matches && matches.length > 0) {
-    return matches.map((m) => m.trim()).filter(Boolean);
-  }
-  return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
-}
 
 function formatDisplayDate(dateStr) {
   if (!dateStr) return 'Seleccionar fecha';
@@ -92,7 +85,9 @@ export function PlannerSessionHeader({
     blocks = [],
     totalCalculatedDuration = 0,
     host = '',
+    hostId = null,
     mentions = '',
+    participantIds = [],
   } = state || {};
 
   const totalPlannedMinutes = (blocks || []).reduce(
@@ -111,7 +106,9 @@ export function PlannerSessionHeader({
   const isCompleted = status === SESSION_STATUS.COMPLETED;
 
   const { members } = getAllDiscordEntities();
-  const selectedKeys = new Set(parseMentions(mentions));
+  void hostId;
+  void participantIds;
+  const selectedKeys = new Set(parseMentionsToArray(mentions));
 
   const formatHeaderDate = (isoDate) => {
     if (!isoDate) return 'Fecha por definir';
@@ -354,7 +351,7 @@ export function PlannerSessionHeader({
                                   m.globalName.toLowerCase() === host.toLowerCase() ||
                                   m.tag.toLowerCase() === `@${host.toLowerCase()}`
                               );
-                              const color = matched?.avatarColor || DISCORD_PALETTES[Math.abs(host.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
+                              const color = matched?.avatarColor || discordColorFor(host);
                               return (
                                 <>
                                   <Avatar
@@ -384,12 +381,17 @@ export function PlannerSessionHeader({
                       hideRoles
                       selectedKeys={host ? new Set([host]) : new Set()}
                       onSelectionChange={(keys) => {
-                        const selectedHost = keys[0] ? keys[0].replace(/^@/, '') : '';
+                        const selectedTag = keys[0] || '';
+                        const selectedEntity = resolveDiscordEntity(selectedTag);
+                        const selectedHost = selectedEntity?.globalName || selectedTag.replace(/^@/, '');
                         onUpdateHeaderField?.('host', selectedHost);
+                        onUpdateHeaderField?.('hostId', selectedEntity?.id || null);
                       }}
                       onAddCustomParticipant={(tag) => {
                         const clean = tag.replace(/^@/, '');
+                        const entity = resolveDiscordEntity(tag);
                         onUpdateHeaderField?.('host', clean);
+                        onUpdateHeaderField?.('hostId', entity?.id || null);
                       }}
                     />
                   </DropdownMenuContent>
