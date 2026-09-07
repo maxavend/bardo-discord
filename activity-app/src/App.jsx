@@ -841,6 +841,15 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
           </div>
           <h1 className="doc-title">{doc.title || 'Sin título'}</h1>
           {doc.description && <p className="doc-description">{doc.description}</p>}
+          {doc.importWarnings?.length > 0 && (
+            <div
+              role="status"
+              className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+            >
+              <strong className="text-foreground">Importación parcial.</strong>{' '}
+              {doc.importWarnings.join(' ')}
+            </div>
+          )}
         </header>
         <RichBody html={doc.body} onChecklistChange={onChecklistChange} />
       </article>
@@ -2159,6 +2168,7 @@ function App() {
         body: markdownToHtml(imported.markdown, imported.title),
         origin: 'Subido a Bardo',
         sourceName: imported.sourceName,
+        importWarnings: imported.warnings || [],
         createdAt: now,
         updatedAt: now,
         createdByName: currentEditorName(),
@@ -2167,7 +2177,7 @@ function App() {
         stress: false,
       };
       setStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
-      showToast('Documento listo');
+      showToast(imported.warnings?.length ? 'Documento importado con cambios' : 'Documento listo');
       go(`#doc-${doc.id}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo subir el documento', error);
