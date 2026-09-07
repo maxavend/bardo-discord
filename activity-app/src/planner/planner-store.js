@@ -8,6 +8,7 @@ import {
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
+export const LIVE_SESSIONS_STORE_KEY = 'bardo-planner-live-sessions-v1';
 export const PLANNER_RECOVERY_KEY = 'bardo-planner-recovery-v1';
 export const PLANNER_EVENTS_STORE_KEY = 'bardo-planner-events-v1';
 
@@ -321,18 +322,70 @@ function normalizeReloadedRecording(recording) {
   };
 }
 
+function readLiveSessionsMap() {
+  try {
+    const raw = localStorage.getItem(LIVE_SESSIONS_STORE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLiveSessionsMap(sessions) {
+  try {
+    localStorage.setItem(LIVE_SESSIONS_STORE_KEY, JSON.stringify(sessions || {}));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function activePlannerEventId() {
+  try {
+    const raw = localStorage.getItem(PLANNER_STORE_KEY);
+    return raw ? JSON.parse(raw)?.eventId || null : null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadLiveSessionState(plannerState = null) {
   try {
-    const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
-    if (!raw) return {...DEFAULT_LIVE_SESSION};
-    const parsed = JSON.parse(raw);
+    const eventId = plannerState?.eventId || null;
+    const sessions = readLiveSessionsMap();
+    let parsed = eventId ? sessions[eventId] : null;
+
+    if (!parsed) {
+      const rawLegacy = localStorage.getItem(LIVE_SESSION_STORE_KEY);
+      const legacy = rawLegacy ? JSON.parse(rawLegacy) : null;
+      const legacyBelongsToMeeting = legacy && (
+        legacy.eventId === eventId ||
+        (!legacy.eventId && eventId && activePlannerEventId() === eventId) ||
+        (!eventId && !legacy.eventId)
+      );
+      if (legacyBelongsToMeeting) {
+        parsed = legacy;
+      }
+    }
+
+    if (!parsed) return {...DEFAULT_LIVE_SESSION, eventId};
     const migrated = migrateLiveSessionState(plannerState, parsed);
-    return {
+    const normalized = {
       ...migrated,
+      eventId: eventId || parsed.eventId || null,
       recordings: (migrated.recordings || []).map(normalizeReloadedRecording),
     };
+
+    if (normalized.eventId && !sessions[normalized.eventId]) {
+      writeLiveSessionsMap({
+        ...sessions,
+        [normalized.eventId]: serializeLiveSessionState(normalized),
+      });
+    }
+    return normalized;
   } catch {
-    return {...DEFAULT_LIVE_SESSION};
+    return {...DEFAULT_LIVE_SESSION, eventId: plannerState?.eventId || null};
   }
 }
 
@@ -346,17 +399,37 @@ export function serializeLiveSessionState(sessionState) {
   };
 }
 
-export function saveLiveSessionState(sessionState) {
+export function saveLiveSessionState(sessionState, eventId = null) {
+  const resolvedEventId = eventId || sessionState?.eventId || null;
+  const normalized = {
+    ...(sessionState || DEFAULT_LIVE_SESSION),
+    eventId: resolvedEventId,
+  };
+  const serialized = serializeLiveSessionState(normalized);
+  let saved = true;
   try {
-    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(serializeLiveSessionState(sessionState)));
+    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(serialized));
+    if (resolvedEventId) {
+      const sessions = readLiveSessionsMap();
+      saved = writeLiveSessionsMap({
+        ...sessions,
+        [resolvedEventId]: serialized,
+      }) && saved;
+    }
   } catch {
-    // Local storage persistence fallback.
+    saved = false;
   }
+  return saved;
 }
 
-export function clearLiveSessionState() {
+export function clearLiveSessionState(eventId = null) {
   try {
     localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+    if (eventId) {
+      const sessions = readLiveSessionsMap();
+      delete sessions[eventId];
+      writeLiveSessionsMap(sessions);
+    }
   } catch {
     // Local storage persistence fallback.
   }
@@ -390,7 +463,7 @@ export function restorePlannerRecoverySnapshot() {
     const parsed = JSON.parse(raw);
     const plannerState = computePlannerTimes(parsed?.plannerState || DEFAULT_EMPTY_SESSION);
     savePlannerState(plannerState);
-    saveLiveSessionState(parsed?.liveSessionState || DEFAULT_LIVE_SESSION);
+    saveLiveSessionState(parsed?.liveSessionState || DEFAULT_LIVE_SESSION, plannerState.eventId);
     localStorage.removeItem(PLANNER_RECOVERY_KEY);
     return {
       plannerState,
