@@ -57,7 +57,7 @@ export const DEMO_PLANNER_FIXTURE = {
       subpoints: [
         {id: 'p-1', title: 'Novedades del equipo y de proyectos', presenter: 'Todos', status: 'done'},
         {id: 'p-2', title: 'Coordinación sobre Minuta Weekly', presenter: 'Pau', status: 'done'},
-        {id: 'p-3', title: 'Agenda de la sesión', presenter: 'Pau', status: 'done'},
+        {id: 'p-3', title: 'Agenda de la reunión', presenter: 'Pau', status: 'done'},
       ],
       decisions: [{id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.'}],
     },
@@ -160,7 +160,7 @@ export const DEMO_PLANNER_FIXTURE = {
       manualDuration: 10,
       leader: 'Todo el equipo',
       participants: 'Diseño & SD',
-      introDesc: 'Recapitular acuerdos y confirmar la próxima sesión.',
+      introDesc: 'Recapitular acuerdos y confirmar los próximos pasos.',
       phases: {context: 2, review: 5, closing: 3},
       subpoints: [
         {id: 'p-17', title: 'Confirmar acuerdos que pasan a la minuta', presenter: 'Pau', status: 'pending'},
@@ -210,7 +210,7 @@ export const DEMO_PLANNER_EVENTS = [
     date: '2026-08-21',
     startTime: '15:30',
     host: 'Daniela',
-    description: 'Sesión de crítica para catálogo, landing y factibilidad comercial.',
+    description: 'Revisión de catálogo, landing y factibilidad comercial.',
     blocks: DEMO_PLANNER_FIXTURE.blocks.slice(3, 5).map((block) => clonePlannerState(block)),
   }),
   createDemoEvent('event-retro-release', {
