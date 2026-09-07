@@ -612,10 +612,38 @@ function ThemeModeMenu() {
   );
 }
 
+function ModuleNav({active, onNavigate}) {
+  return (
+    <ButtonGroup className="module-nav header-slot-enter" aria-label="Secciones de Bardo">
+      <Button
+        variant={active === 'docs' ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-current={active === 'docs' ? 'page' : undefined}
+        onClick={() => onNavigate?.('docs')}
+        className="h-8 px-2.5 text-xs font-medium"
+      >
+        <FileText width={14} height={14} />
+        <span>Documentos</span>
+      </Button>
+      <Button
+        variant={active === 'planner' ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-current={active === 'planner' ? 'page' : undefined}
+        onClick={() => onNavigate?.('planner')}
+        className="h-8 px-2.5 text-xs font-medium"
+      >
+        <Calendar width={14} height={14} />
+        <span>Reuniones</span>
+      </Button>
+    </ButtonGroup>
+  );
+}
+
 function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
+  const activeModule = isPlanner ? 'planner' : 'docs';
 
   return (
     <DocsHeader
@@ -624,33 +652,18 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {route.tab === 'home' && (
             <Button
-              variant="secondary"
+              variant="default"
               size="sm"
               onClick={onPlannerNew}
-              className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+              className="h-8 px-2.5 font-medium text-xs"
             >
-              <Plus width={14} height={14} /> Nueva reunión
+              <Plus width={14} height={14} />
+              <span className="hidden sm:inline">Nueva reunión</span>
             </Button>
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigateModule?.('docs')}
-            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-          >
-            <FileText width={14} height={14} /> Documentos
-          </Button>
         </div>
       ) : isLibrary ? (
-        <div key="library-actions" className="header-slot-enter flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigateModule?.('planner')}
-            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-          >
-            <Calendar width={14} height={14} /> Reuniones
-          </Button>
+        <div key="library-actions" className="header-slot-enter flex items-center gap-1.5">
           <input
             ref={fileInputRef}
             className="library-file-input"
@@ -663,10 +676,24 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               if (file) onUpload(file);
             }}
           />
-          <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
-            <FileArrowUp width={14} height={14} /> Subir archivo
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Subir archivo"
+            className="h-8 px-2.5 font-medium text-xs"
+          >
+            <FileArrowUp width={14} height={14} />
+            <span className="hidden sm:inline">Subir archivo</span>
           </Button>
-          <Button variant="default" size="icon-sm" onClick={onNew} aria-label="Crear documento" className="icon-button-circle h-8 w-8">
+          <Button
+            variant="default"
+            size="icon-sm"
+            onClick={onNew}
+            aria-label="Crear documento"
+            title="Crear documento"
+            className="icon-button-circle h-8 w-8"
+          >
             <Plus width={16} height={16} />
           </Button>
         </div>
@@ -679,22 +706,11 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : null}
     >
-      {isPlanner ? (
-        <Button
-          key="planner-brand"
-          variant="ghost"
-          size="sm"
-          onClick={() => onNavigateModule?.('docs')}
-          aria-label="Volver a Documentos"
-          className="topbar-title header-slot-enter h-8 px-1.5 -ml-1 font-bold text-sm tracking-tight text-foreground hover:bg-muted"
-        >
-          <ChevronLeft width={15} height={15} />
-          <span>Bardo</span>
-        </Button>
-      ) : isLibrary ? (
-        <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
-          <span>Bardo</span>
-        </span>
+      {isLibrary || isPlanner ? (
+        <div key="primary-nav" className="topbar-primary-nav header-slot-enter flex items-center gap-2">
+          <span className="topbar-title font-bold text-sm tracking-tight text-foreground">Bardo</span>
+          <ModuleNav active={activeModule} onNavigate={onNavigateModule} />
+        </div>
       ) : (
         <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
           <ChevronLeft width={15} height={15} /> Documentos
