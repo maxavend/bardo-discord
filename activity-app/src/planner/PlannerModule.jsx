@@ -769,7 +769,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const decisionsCount = (sessionState.decisions || []).length;
 
   return (
-    <div className="planner-module-root w-full px-3 sm:px-4 pt-[calc(var(--bardo-topbar,52px)+12px)] relative min-h-screen">
+    <div className="planner-module-root w-full px-3 sm:px-4 pt-[calc(var(--bardo-topbar,52px)+var(--bardo-toolbar-gap))] relative min-h-screen">
       {showUpcomingBanner && (
         <PlannerUpcomingBanner
           plannerState={plannerState}
