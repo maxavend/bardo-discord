@@ -236,8 +236,8 @@ export function PlannerHomeView({
       {events.length > 0 && (
         <section className="library-section recent-section">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="section-title mb-0">Eventos ({events.length})</h3>
-            <span className="text-[11px] text-muted-foreground self-center">Explora tus agendas</span>
+            <h3 className="section-title mb-0">Reuniones ({events.length})</h3>
+            <span className="text-[11px] text-muted-foreground self-center">Próximas y recientes</span>
           </div>
           <div className="docs-list">
             {events.map((event) => {
@@ -260,7 +260,7 @@ export function PlannerHomeView({
                     className="doc-row-main"
                     type="button"
                     onClick={() => onSelectEvent?.(event)}
-                    aria-label={`Abrir evento ${event.title}`}
+                    aria-label={`Abrir reunión ${event.title}`}
                   >
                     <strong>{event.title}</strong>
                     <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
