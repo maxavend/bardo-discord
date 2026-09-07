@@ -27,16 +27,16 @@ export function SessionInterruptModal({
             <div className="size-8 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center">
               <AlertCircle className="size-4" />
             </div>
-            <DialogTitle>¿Pausar esta reunión?</DialogTitle>
+            <DialogTitle>¿Interrumpir la reunión?</DialogTitle>
           </div>
           <DialogDescription className="text-left text-xs leading-relaxed pt-2">
             {hasActiveRecording ? (
               <>
-                Se guardará automáticamente la grabación en curso de <strong className="text-foreground font-semibold">“{activeRecordingName || 'este tema'}”</strong> y se conservarán los <strong className="text-foreground font-semibold">{elapsedMinutes} min de actividad</strong>, <strong className="text-foreground font-semibold">{recordingsCount} grabaciones previas</strong> y <strong className="text-foreground font-semibold">{decisionsCount} decisiones</strong> registradas hasta ahora.
+                Bardo guardará la grabación de <strong className="text-foreground font-semibold">“{activeRecordingName || 'este punto'}”</strong> y conservará el progreso de la reunión. Podrás reanudarla después.
               </>
             ) : (
               <>
-                Se conservarán los <strong className="text-foreground font-semibold">{elapsedMinutes} min de actividad</strong>, <strong className="text-foreground font-semibold">{recordingsCount} grabaciones</strong> y <strong className="text-foreground font-semibold">{decisionsCount} decisiones</strong> registradas hasta ahora. Podrás reanudar la reunión cuando quieras.
+                El progreso, los acuerdos y las grabaciones quedarán guardados. Podrás reanudar la reunión después.
               </>
             )}
           </DialogDescription>
@@ -53,12 +53,12 @@ export function SessionInterruptModal({
           </Button>
 
           <Button
-            variant="default"
+            variant="destructive"
             size="sm"
             onClick={onConfirmInterrupt}
             className="font-medium text-xs px-3.5"
           >
-            Pausar reunión
+            Interrumpir reunión
           </Button>
         </DialogFooter>
       </DialogContent>
