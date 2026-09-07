@@ -7,7 +7,7 @@
 
 :root {
   --bardo-topbar: 52px;
-  --bardo-toolbar-gap: 16px;
+  --bardo-toolbar-gap: 12px;
   --bardo-content: 690px;
   --font-inter: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --bardo-visual-viewport-top: 0px;
@@ -810,7 +810,7 @@ button { font-size: 14px; }
 .editor-shell .doc-body { margin-top: 36px; }
 .editor-toolbar-sticky {
   position: sticky;
-  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
+  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap));
   z-index: 30;
   margin-top: 16px;
   margin-bottom: 16px;
@@ -820,16 +820,16 @@ button { font-size: 14px; }
   display: flex;
   justify-content: flex-start;
 }
-.editor-toolbar-sticky { scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px); }
+.editor-toolbar-sticky { scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap)); }
 .editor-toolbar-sticky > * {
   pointer-events: auto;
 }
 .session-toolbar-sticky {
   position: sticky;
-  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
+  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap));
   z-index: 35;
   width: 100%;
-  scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
+  scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap));
 }
 .session-dock-glass {
   background: color-mix(in oklab, var(--card) 90%, transparent);
