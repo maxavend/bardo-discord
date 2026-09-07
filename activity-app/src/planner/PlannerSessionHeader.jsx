@@ -451,8 +451,9 @@ export function PlannerSessionHeader({
                   <DropdownMenuContent align="start" className="p-0">
                     <SearchableParticipantMenu
                       selectedKeys={selectedKeys}
-                      onSelectionChange={(nextKeys) =>
-                        onUpdateHeaderField?.('mentions', nextKeys.join(' '))
+                      onSelectionChange={(nextKeys) => {
+                        onUpdateHeaderField?.('mentions', nextKeys.join(' '));
+                        onUpdateHeaderField?.('participantIds', entityIdsFromSelection(nextKeys));
                       }
                     />
                   </DropdownMenuContent>
