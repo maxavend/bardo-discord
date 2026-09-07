@@ -431,7 +431,7 @@ test('Assistant: CTA predicts point, block and session transitions', () => {
 
   session = advanceLiveSession(PLANNER, session, START + 7 * MINUTE);
   details = getAssistantContextDetails(PLANNER, session, START + 8 * MINUTE);
-  assert.equal(details.primaryAction.label, 'Finalizar sesión');
+  assert.equal(details.primaryAction.label, 'Finalizar reunión');
 });
 
 test('Assistant: expired Block keeps current Point and presents overtime context', () => {
