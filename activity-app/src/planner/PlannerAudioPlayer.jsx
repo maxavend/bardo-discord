@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -73,8 +74,8 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
     else audioRef.current.play().catch(() => setIsPlaying(false));
   };
 
-  const handleSeek = (event) => {
-    const percent = Number(event.target.value);
+  const handleSeek = (value) => {
+    const percent = Number(Array.isArray(value) ? value[0] : value);
     const nextTimeMs = (percent / 100) * durationMs;
     setCurrentTimeMs(nextTimeMs);
     if (audioRef.current) audioRef.current.currentTime = nextTimeMs / 1000;
@@ -153,16 +154,15 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
           </Button>
 
           <div className="flex items-center gap-2 flex-1 sm:w-48">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="0.5"
+            <Slider
+              min={0}
+              max={100}
+              step={0.5}
               value={progressPercent}
-              onChange={handleSeek}
+              onValueChange={handleSeek}
               disabled={!canPlay}
-              aria-label="Progreso de reproducción de audio"
-              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed bg-border accent-primary"
+              ariaLabel="Progreso de reproducción de audio"
+              className="flex-1"
             />
             <span className="text-xs font-mono text-muted-foreground tabular-nums shrink-0">{currentFormatted}</span>
           </div>
