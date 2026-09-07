@@ -39,9 +39,10 @@ import { fieldValue } from './planner-field-value.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
+  resolveDiscordEntity,
+  entityIdsFromSelection,
+  discordColorFor,
 } from './PlannerMemberPicker.jsx';
-
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
 export function PlannerAgendaView({
   state,
@@ -91,7 +92,7 @@ export function PlannerAgendaView({
         m.globalName.toLowerCase() === leaderName.toLowerCase() ||
         m.tag.toLowerCase() === `@${leaderName.toLowerCase()}`
     );
-    const color = matched?.avatarColor || DISCORD_PALETTES[Math.abs(leaderName.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
+    const color = matched?.avatarColor || discordColorFor(leaderName);
 
     if (isEditing) {
       return (
@@ -134,12 +135,15 @@ export function PlannerAgendaView({
               hideRoles
               selectedKeys={leaderName ? new Set([leaderName]) : new Set()}
               onSelectionChange={(keys) => {
-                const selectedLeader = keys[0] ? keys[0].replace(/^@/, '') : '';
-                onUpdateBlock?.(block.id, { leader: selectedLeader });
+                const selectedTag = keys[0] || '';
+                const entity = resolveDiscordEntity(selectedTag);
+                const selectedLeader = entity?.globalName || selectedTag.replace(/^@/, '');
+                onUpdateBlock?.(block.id, { leader: selectedLeader, leaderId: entity?.id || null });
               }}
               onAddCustomParticipant={(tag) => {
                 const clean = tag.replace(/^@/, '');
-                onUpdateBlock?.(block.id, { leader: clean });
+                const entity = resolveDiscordEntity(tag);
+                onUpdateBlock?.(block.id, { leader: clean, leaderId: entity?.id || null });
               }}
             />
           </DropdownMenuContent>
@@ -206,7 +210,7 @@ export function PlannerAgendaView({
                             m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                             m.tag.toLowerCase().includes(pName.toLowerCase())
                         );
-                        const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                        const color = matched?.avatarColor || discordColorFor(pName, pIdx);
                         return (
                           <Avatar
                             key={pIdx}
@@ -243,7 +247,7 @@ export function PlannerAgendaView({
                   );
                   return found ? (found.globalName || found.name) : k.replace(/^@/, '');
                 });
-                onUpdateBlock?.(block.id, { participants: names.join(', ') });
+                onUpdateBlock?.(block.id, { participants: names.join(', '), participantIds: entityIdsFromSelection(keys) });
               }}
               onAddCustomParticipant={(tag) => {
                 const cleanName = tag.replace(/^@/, '');
@@ -268,7 +272,7 @@ export function PlannerAgendaView({
                 m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                 m.tag.toLowerCase().includes(pName.toLowerCase())
             );
-            const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+            const color = matched?.avatarColor || discordColorFor(pName, pIdx);
             return (
               <Avatar
                 key={pIdx}
@@ -663,7 +667,7 @@ export function PlannerAgendaView({
                                                     m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                                     m.tag.toLowerCase().includes(pName.toLowerCase())
                                                 );
-                                                const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                                const color = matched?.avatarColor || discordColorFor(pName, pIdx);
                                                 return (
                                                   <Avatar
                                                     key={pIdx}
@@ -700,7 +704,7 @@ export function PlannerAgendaView({
                                           );
                                           return found ? (found.globalName || found.name) : k.replace(/^@/, '');
                                         });
-                                        onUpdateSubpoint?.(block.id, point.id, { presenter: names.join(', ') });
+                                        onUpdateSubpoint?.(block.id, point.id, { presenter: names.join(', '), presenterIds: entityIdsFromSelection(keys) });
                                       }}
                                       onAddCustomParticipant={(tag) => {
                                         const cleanName = tag.replace(/^@/, '');
@@ -721,7 +725,7 @@ export function PlannerAgendaView({
                                           member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                           member.tag.toLowerCase().includes(pName.toLowerCase())
                                       );
-                                      const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                      const color = matched?.avatarColor || discordColorFor(pName, pIdx);
                                       return (
                                         <Avatar
                                           key={pIdx}
