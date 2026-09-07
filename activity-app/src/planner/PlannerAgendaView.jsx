@@ -110,7 +110,7 @@ export function PlannerAgendaView({
                     <span className="text-muted-foreground">Facilita</span>
                     <Avatar
                       size="xs"
-                      className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                      className="size-4.5 border border-card text-xs font-bold shadow-2xs shrink-0"
                       style={{ backgroundColor: `${color}35`, color }}
                     >
                       <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
@@ -157,7 +157,7 @@ export function PlannerAgendaView({
         <span className="text-muted-foreground">Facilita</span>
         <Avatar
           size="xs"
-          className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+          className="size-4.5 border border-card text-xs font-bold shadow-2xs shrink-0"
           style={{ backgroundColor: `${color}35`, color }}
         >
           <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
@@ -215,7 +215,7 @@ export function PlannerAgendaView({
                           <Avatar
                             key={pIdx}
                             size="xs"
-                            className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                            className="size-4.5 border border-card text-xs font-bold shadow-2xs shrink-0"
                             style={{ backgroundColor: `${color}35`, color }}
                           >
                             <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
@@ -277,7 +277,7 @@ export function PlannerAgendaView({
               <Avatar
                 key={pIdx}
                 size="xs"
-                className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                className="size-4.5 border border-card text-xs font-bold shadow-2xs shrink-0"
                 style={{ backgroundColor: `${color}35`, color }}
               >
                 <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
@@ -350,9 +350,9 @@ export function PlannerAgendaView({
             if (block.isBreak || block.type === 'break') {
               return (
                 <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-center">
-                  <div className="flex flex-col items-center text-[11px] sm:text-xs text-muted-foreground font-medium select-none">
+                  <div className="flex flex-col items-center text-xs sm:text-xs text-muted-foreground font-medium select-none">
                     <span>{blockStart}</span>
-                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/60">{blockEnd}</span>
+                    <span className="text-xs sm:text-xs text-muted-foreground/60">{blockEnd}</span>
                   </div>
                   <Card className={`flex flex-row items-center justify-between gap-3 p-4 rounded-2xl transition-all shadow-2xs text-xs text-muted-foreground ${
                     isLive
@@ -672,7 +672,7 @@ export function PlannerAgendaView({
                                                   <Avatar
                                                     key={pIdx}
                                                     size="xs"
-                                                    className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                                    className="size-4.5 border border-card text-xs font-bold shadow-2xs shrink-0"
                                                     style={{ backgroundColor: `${color}35`, color }}
                                                   >
                                                     <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
@@ -730,7 +730,7 @@ export function PlannerAgendaView({
                                         <Avatar
                                           key={pIdx}
                                           size="xs"
-                                          className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                          className="size-4.5 border border-card text-xs font-bold shadow-2xs shrink-0"
                                           style={{ backgroundColor: `${color}35`, color }}
                                         >
                                           <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
@@ -798,7 +798,7 @@ export function PlannerAgendaView({
 
                 {blockRecordings.length > 0 && (
                   <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
-                    <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                       <Mic className="size-3 text-primary" />
                       Grabaciones ({blockRecordings.length})
                     </span>
@@ -850,13 +850,13 @@ export function PlannerAgendaView({
             return (
               <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-stretch">
                 {/* Timeline lateral izquierdo */}
-                <div className="flex flex-col items-center justify-between text-[11px] sm:text-xs text-muted-foreground font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
+                <div className="flex flex-col items-center justify-between text-xs sm:text-xs text-muted-foreground font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
                   <div className="flex flex-col items-center gap-0.5">
                     <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}>
                       {blockStart}
                     </span>
-                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/60">{blockEnd}</span>
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground/50 mt-0.5">{blockDuration}m</span>
+                    <span className="text-xs sm:text-xs text-muted-foreground/60">{blockEnd}</span>
+                    <span className="text-xs sm:text-xs text-muted-foreground/50 mt-0.5">{blockDuration}m</span>
                   </div>
 
                   <div className="flex-1 flex flex-col items-center my-1 relative w-full">
