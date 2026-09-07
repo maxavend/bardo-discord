@@ -127,10 +127,10 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
               {recording?.name || recording?.pointTitle || recording?.blockTitle || 'Grabación'}
             </span>
             {recording?.pointTitle && recording?.name !== recording.pointTitle && (
-              <span className="text-[11px] text-muted-foreground truncate">· {recording.pointTitle}</span>
+              <span className="text-xs text-muted-foreground truncate">· {recording.pointTitle}</span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
             <span>{totalFormatted}</span>
             <span>·</span>
             <span>{recording?.sourcesLabel || 'Micrófono'}</span>
@@ -164,7 +164,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
               aria-label="Progreso de reproducción de audio"
               className="w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed bg-border accent-primary"
             />
-            <span className="text-[10px] font-mono text-muted-foreground tabular-nums shrink-0">{currentFormatted}</span>
+            <span className="text-xs font-mono text-muted-foreground tabular-nums shrink-0">{currentFormatted}</span>
           </div>
 
           {(onRename || onDelete) && (
@@ -185,7 +185,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                 )}
                 <DropdownMenuItem onClick={() => setShowTechModal(true)}>
                   <Info className="size-4 text-muted-foreground" />
-                  <span>Detalles técnicos</span>
+                  <span>Información de la grabación</span>
                 </DropdownMenuItem>
                 {onDelete && (
                   <>
@@ -225,15 +225,19 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
           <DialogHeader>
             <div className="flex items-center gap-2">
               <Info className="size-4 text-primary" />
-              <DialogTitle>Detalles técnicos de la grabación</DialogTitle>
+              <DialogTitle>Información de la grabación de la grabación</DialogTitle>
             </div>
           </DialogHeader>
           <div className="flex flex-col gap-2 divide-y divide-border/30 text-xs">
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Formato</span><span className="font-mono text-foreground text-right">{recording?.mimeType || 'audio/webm'}</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Tamaño</span><span className="font-semibold text-foreground">{fileSizeKb} KB</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Segmentos</span><span className="font-semibold text-foreground">{segmentsCount}</span></div>
-            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Persistencia</span><span className="font-semibold text-foreground">{recording?.binaryStorage === 'indexeddb' ? 'IndexedDB' : 'No persistida'}</span></div>
-            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Estado</span><span className="font-semibold text-foreground">{recording?.status || 'desconocido'}</span></div>
+            <div className="flex justify-between gap-3 py-1.5">
+              <span className="text-muted-foreground">Guardado</span>
+              <span className="font-semibold text-foreground">
+                {recording?.status === 'saved' ? 'En este dispositivo' : recording?.status === 'pending' ? 'Recuperando…' : 'Requiere atención'}
+              </span>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="secondary" size="sm" onClick={() => setShowTechModal(false)}>Cerrar</Button>
