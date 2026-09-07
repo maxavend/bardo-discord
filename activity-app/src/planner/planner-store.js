@@ -437,7 +437,7 @@ export function generateDiscordAnnouncement(plannerState) {
   if (computed.host) text += `👤 **Modera:** ${computed.host}\n`;
   if (computed.description) text += `\n> ${computed.description}\n`;
 
-  text += `\n**📋 Agenda de la sesión:**\n`;
+  text += `\n**📋 Agenda de la reunión:**\n`;
   (computed.blocks || []).forEach((block, index) => {
     text += `${index + 1}. **${block.title}** (${block.durationMinutes}m)`;
     if (block.leader) text += ` — *Lidera: ${block.leader}*`;
@@ -481,20 +481,20 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
   }
 
   let markdown = `# Acta: ${computed.title}\n\n`;
-  markdown += `> **Fecha:** ${computed.date || 'Sin fecha'} | **Organiza:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${allDecisions.length}\n\n`;
+  markdown += `> **Fecha:** ${computed.date || 'Sin fecha'} | **Organiza:** ${computed.host || 'Sin asignar'} | **Duración:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${allDecisions.length}\n\n`;
   markdown += `---\n\n`;
 
-  markdown += '## 📋 Resumen de Acuerdos Principales\n\n';
+  markdown += '## Acuerdos\n\n';
   if (allDecisions.length > 0) {
     for (const decision of allDecisions) {
-      markdown += `- ✅ **${decision.content}**\n  *📌 Origen: ${decision.origin}*\n\n`;
+      markdown += `- **${decision.content}**\n  *Origen: ${decision.origin}*\n\n`;
     }
   } else {
     markdown += '*No se registraron decisiones en esta reunión.*\n\n';
   }
 
   markdown += `---\n\n`;
-  markdown += '## ⏱️ Desglose de Agenda por Bloques\n\n';
+  markdown += '## Agenda por bloques\n\n';
 
   if ((computed.blocks || []).length === 0) {
     markdown += '*Sin bloques registrados en la reunión.*\n';
@@ -509,7 +509,7 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       if (blockDecisions.length > 0) {
         markdown += `**Acuerdos de este bloque:**\n`;
         for (const decision of blockDecisions) {
-          markdown += `- ✅ ${decision.content}\n`;
+          markdown += `- ${decision.content}\n`;
         }
         markdown += '\n';
       }
