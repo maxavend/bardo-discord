@@ -63,6 +63,10 @@ import {
   recordingStorage,
   persistRecordingBinary,
   hydrateRecordingBinary,
+  saveRecordingDraftMetadata,
+  loadRecordingDraftMetadata,
+  clearRecordingDraftMetadata,
+  recoverRecordingDraft,
 } from './recording-storage.js';
 
 export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLibrary}) {
@@ -101,6 +105,17 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   useEffect(() => {
     const controller = new RecordingController({
       onStatusChange: setRecordingStatus,
+      onDraftStart: (metadata) => saveRecordingDraftMetadata({
+        ...metadata,
+        eventId: plannerStateRef.current?.eventId || null,
+      }),
+      onChunk: async ({recordingId, sequence, blob}) => {
+        try {
+          await recordingStorage.appendDraftChunk(recordingId, sequence, blob);
+        } catch {
+          setRecordingError('No se pudo crear el respaldo temporal de la grabación. Mantén esta ventana abierta hasta finalizarla.');
+        }
+      },
       onError: (error) => {
         const name = error?.name || '';
         const message = name === 'NotAllowedError' || name === 'SecurityError'
@@ -113,7 +128,23 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       },
     });
     recordingControllerRef.current = controller;
-    return () => controller.cleanup({clearContext: true});
+    return () => {
+      if (!controller.isActive()) {
+        controller.cleanup({clearContext: true});
+        return;
+      }
+      void controller.finalizeRecording().then(async (entity) => {
+        if (!entity) return;
+        const persisted = await persistRecordingBinary(entity);
+        if (persisted?.status === 'saved') {
+          await recordingStorage.clearDraft(entity.id).catch(() => {});
+          clearRecordingDraftMetadata(entity.id);
+        }
+        const next = saveFinalizedRecording(sessionStateRef.current, persisted || entity);
+        sessionStateRef.current = next;
+        saveLiveSessionState(next);
+      });
+    };
   }, []);
 
   useEffect(() => {
@@ -173,6 +204,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       void controller.finalizeRecording().then(async (entity) => {
         if (!entity) return;
         const persisted = await persistRecordingBinary(entity);
+        if (persisted?.status === 'saved') {
+          await recordingStorage.clearDraft(entity.id).catch(() => {});
+          clearRecordingDraftMetadata(entity.id);
+        }
         const next = saveFinalizedRecording(sessionStateRef.current, persisted);
         sessionStateRef.current = next;
         saveLiveSessionState(next);
@@ -235,10 +270,50 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const persistCapturedRecording = useCallback(async (entity) => {
     if (!entity) return null;
     const persisted = await persistRecordingBinary(entity);
-    if (persisted.status === 'error') {
-      toast('No se pudo persistir el audio. Sigue disponible en esta pestaña, pero no recargues hasta resolverlo.');
+    if (persisted.status === 'saved') {
+      await recordingStorage.clearDraft(entity.id).catch(() => {});
+      clearRecordingDraftMetadata(entity.id);
+      return persisted;
     }
+    toast('No se pudo guardar el audio de forma permanente. Bardo mantendrá el respaldo temporal para intentar recuperarlo.');
     return persisted;
+  }, []);
+
+  useEffect(() => {
+    const draft = loadRecordingDraftMetadata();
+    if (!draft?.recordingId) return;
+    if (draft.eventId && plannerStateRef.current?.eventId && draft.eventId !== plannerStateRef.current.eventId) return;
+
+    let cancelled = false;
+    void recoverRecordingDraft(draft).then(async (recovered) => {
+      if (cancelled || !recovered) return;
+      const current = sessionStateRef.current;
+      if (draft.sessionId && current?.sessionId && draft.sessionId !== current.sessionId) return;
+      const persisted = await persistRecordingBinary(recovered);
+      if (cancelled || !persisted) return;
+
+      if (persisted.status === 'saved') {
+        if (!(current.recordings || []).some((recording) => recording.id === persisted.id)) {
+          const next = saveFinalizedRecording(current, persisted);
+          sessionStateRef.current = next;
+          setSessionState(next);
+          saveLiveSessionState(next);
+        }
+        await recordingStorage.clearDraft(persisted.id).catch(() => {});
+        clearRecordingDraftMetadata(persisted.id);
+        toast('Recuperamos una grabación que había quedado abierta.');
+      } else {
+        setRecordingError('Hay una grabación recuperable que todavía no pudo guardarse. Evita borrar los datos del sitio y vuelve a intentarlo.');
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setRecordingError('Bardo encontró un respaldo de audio, pero no pudo recuperarlo automáticamente.');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const finalizeActiveRecording = useCallback(async () => {
