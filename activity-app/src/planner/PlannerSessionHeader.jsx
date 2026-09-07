@@ -76,6 +76,8 @@ export function PlannerSessionHeader({
   onUpdateHeaderField,
   onCopyAnnouncement,
   onNewCleanSession,
+  hasPreviousMeeting = false,
+  onRestorePreviousMeeting,
   _onLoadDemo,
   onStartSession,
   onResumeSession,
@@ -254,10 +256,19 @@ export function PlannerSessionHeader({
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={onNewCleanSession}>
+                  <DropdownMenuItem
+                    onClick={onNewCleanSession}
+                    disabled={isRunning || isPaused}
+                  >
                     <Plus className="size-4 text-muted-foreground" />
                     <span>Nueva reunión</span>
                   </DropdownMenuItem>
+                  {hasPreviousMeeting && !isRunning && !isPaused && (
+                    <DropdownMenuItem onClick={onRestorePreviousMeeting}>
+                      <RotateCcw className="size-4 text-muted-foreground" />
+                      <span>Restaurar reunión anterior</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
