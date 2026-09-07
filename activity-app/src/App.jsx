@@ -1078,7 +1078,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const initialDraft = useMemo(() => {
     if (!isNew) return null;
     try {
-      return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+      return JSON.parse(readMigratedStorage(DRAFT_KEY, LEGACY_DRAFT_KEY) || 'null');
     } catch {
       return null;
     }
@@ -1260,18 +1260,21 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const flushSave = useCallback(() => {
     clearTimeout(saveTimer.current);
     const snap = snapshot();
-    onAutosave(snap);
-    dirtyRef.current = false;
-    setIsDirty(false);
-    setSaveState(isNew ? 'Borrador guardado' : 'Guardado');
+    const result = onAutosave(snap);
+    const saved = result !== false;
+    dirtyRef.current = !saved;
+    setIsDirty(!saved);
+    setSaveState(saved ? (isNew ? 'Borrador guardado' : 'Guardado') : 'Error al guardar');
     return snap;
   }, [isNew, onAutosave, snapshot]);
 
   const persistPendingChanges = useCallback(() => {
     if (!dirtyRef.current) return;
     clearTimeout(saveTimer.current);
-    onAutosave(snapshot());
-    dirtyRef.current = false;
+    const saved = onAutosave(snapshot()) !== false;
+    dirtyRef.current = !saved;
+    setIsDirty(!saved);
+    if (!saved) setSaveState('Error al guardar');
   }, [onAutosave, snapshot]);
 
   const markDirty = useCallback(() => {
@@ -1505,24 +1508,16 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
       else if (format === 'insertPre') insertTopLevelBlock(body, '<pre><code><br></code></pre>', lastRange);
       else if (format === 'blockquote' || format === 'pre') applyBlockFormat(body, lastRange, format);
       else if (format === 'insertUnorderedList' || format === 'insertOrderedList') {
-        const applied = manualList(body, lastRange, format === 'insertOrderedList');
-        if (!applied) execCommand(format);
+        manualList(body, lastRange, format === 'insertOrderedList');
       } else {
         const savedRange = lastRange.current?.cloneRange?.();
-        if (savedRange && !savedRange.collapsed && body.contains(savedRange.commonAncestorContainer)) {
-          const selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(savedRange);
+        if (savedRange && body.contains(savedRange.commonAncestorContainer)) {
+          const currentSelection = window.getSelection();
+          currentSelection.removeAllRanges();
+          currentSelection.addRange(savedRange);
           lastRange.current = savedRange.cloneRange();
-          manualInlineFormat(body, lastRange, format);
-        } else {
-          const before = body.innerHTML;
-          const applied = execCommand(format);
-          const range = lastRange.current;
-          if (range && !range.collapsed && (!applied || body.innerHTML === before)) {
-            manualInlineFormat(body, lastRange, format);
-          }
         }
+        manualInlineFormat(body, lastRange, format);
       }
     }, {kind: format === 'hr' || format === 'spoiler' || format === 'checklist' || format === 'callout' || format === 'insertPre' ? 'insert' : 'format'});
   }, [commitMutation, onOpenLink, restoreSelection]);
@@ -1546,18 +1541,14 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     restoreSelection();
     if (action === 'copyAll') {
       const text = bodyRef.current?.innerText || '';
-      navigator.clipboard?.writeText(text).then(() => {
+      copyText(text).then(() => {
         toast('Texto copiado al portapapeles');
       }).catch(() => {
         toast('No se pudo copiar el texto');
       });
     } else if (action === 'removeFormat') {
       commitMutation(() => {
-        const before = bodyRef.current?.innerHTML;
-        const applied = execCommand('removeFormat');
-        if (!applied || before === bodyRef.current?.innerHTML) {
-          manualRemoveInlineFormatting(bodyRef.current, lastRange);
-        }
+        manualRemoveInlineFormatting(bodyRef.current, lastRange);
       }, {kind: 'format'});
       toast('Formato limpiado');
     } else if (action === 'redo') {
@@ -2059,10 +2050,11 @@ function App() {
   const [modal, setModal] = useState(null);
   const [linkValue, setLinkValue] = useState('');
   const [uploadState, setUploadState] = useState({status: 'idle', fileName: '', error: ''});
+  const [storageError, setStorageError] = useState('');
   const uploadLockRef = useRef(false);
   const [lastOpened, setLastOpened] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem(LAST_OPENED_KEY) || 'null');
+      return JSON.parse(readMigratedStorage(LAST_OPENED_KEY, LEGACY_LAST_OPENED_KEY) || 'null');
     } catch {
       return null;
     }
@@ -2078,7 +2070,10 @@ function App() {
   const docsById = useMemo(() => new Map(docs.map(doc => [doc.id, doc])), [docs]);
   const currentDoc = route.id ? docsById.get(route.id) : null;
 
-  useEffect(() => saveStore(store), [store]);
+  useEffect(() => {
+    const saved = saveStore(store);
+    setStorageError(saved ? '' : 'Bardo no pudo guardar cambios en este dispositivo. El contenido sigue abierto, pero podría perderse al cerrar la Activity.');
+  }, [store]);
 
   const showToast = useCallback(message => {
     toast(message);
@@ -2350,6 +2345,26 @@ function App() {
           onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
         />
       )}
+      {storageError && (
+        <div role="alert" className="mx-auto mt-2 flex w-[min(100%-2rem,56rem)] flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+          <span className="leading-relaxed text-foreground">{storageError}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              if (saveStore(store)) {
+                setStorageError('');
+                showToast('Cambios guardados');
+              } else {
+                showToast('Todavía no hay espacio disponible para guardar');
+              }
+            }}
+          >
+            Reintentar
+          </Button>
+        </div>
+      )}
       {route.type === 'planner' && (
         <PlannerModule
           initialTab={route.tab || 'home'}
@@ -2441,8 +2456,14 @@ function App() {
             if (route.type === 'new') {
               try {
                 localStorage.setItem(DRAFT_KEY, JSON.stringify(snapshot));
-              } catch {}
-            } else updateDoc(currentDoc.id, snapshot);
+                return true;
+              } catch {
+                showToast('No se pudo guardar el borrador en este dispositivo.');
+                return false;
+              }
+            }
+            updateDoc(currentDoc.id, snapshot);
+            return true;
           }}
           onOpenLink={(api) => {
             setLinkValue('');
