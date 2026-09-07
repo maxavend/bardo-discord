@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -245,24 +246,32 @@ export function PlannerHomeView({
                     : 'Programada';
               const isSelected = selectedEventId === event.eventId;
               return (
-                <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
-                  <span className="doc-symbol">
-                    {event.eventStatus === 'completed' ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    className="doc-row-main h-auto min-h-10 justify-start rounded-lg px-0 text-left"
-                    type="button"
-                    onClick={() => onSelectEvent?.(event)}
-                    aria-label={`Abrir reunión ${event.title}`}
-                  >
-                    <span className="flex min-w-0 flex-col items-start">
-                      <strong className="truncate">{event.title}</strong>
-                      <span className="truncate">{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
-                    </span>
-                  </Button>
-                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
-                </article>
+                <Item
+                  key={event.eventId}
+                  variant="outline"
+                  size="sm"
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => onSelectEvent?.(event)}
+                      aria-label={`Abrir reunión ${event.title}`}
+                    />
+                  }
+                  className={`flex-nowrap text-left ${isSelected ? 'border-primary/50 bg-primary/5' : ''}`}
+                >
+                  <ItemMedia variant="icon">
+                    {event.eventStatus === 'completed'
+                      ? <CheckCircle2 className="size-4 text-primary" />
+                      : <Calendar className="size-4 text-muted-foreground" />}
+                  </ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle>{event.title}</ItemTitle>
+                    <ItemDescription className="line-clamp-1">
+                      {eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                </Item>
               );
             })}
           </div>
