@@ -942,7 +942,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const decisionsCount = (sessionState.decisions || []).length;
 
   return (
-    <div className="planner-module-root w-full px-3 sm:px-4 pt-[calc(var(--bardo-topbar,52px)+var(--bardo-toolbar-gap))] relative min-h-screen">
+    <div className="planner-module-root relative min-h-screen w-full px-3 pt-2 sm:px-4 sm:pt-3">
       {showUpcomingBanner && (
         <PlannerUpcomingBanner
           plannerState={plannerState}
@@ -1100,7 +1100,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
 
         return (
           <div
-            className="fixed right-4 z-50 sm:hidden animate-in fade-in slide-in-from-bottom-2 duration-150"
+            className="fixed right-4 z-20 animate-in fade-in slide-in-from-bottom-2 duration-150 sm:hidden"
             style={{
               bottom: 'calc(var(--bardo-visual-viewport-bottom, 0px) + var(--bardo-safe-bottom, 0px) + 16px)',
             }}
@@ -1109,7 +1109,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
               variant="default"
               size="default"
               onClick={fabAction}
-              className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 active:scale-95 transition-all shadow-lg border border-white/10"
+              className="h-11 gap-2 rounded-full border border-primary-foreground/10 px-5 text-xs font-semibold shadow-lg active:scale-95"
             >
               {fabIcon}
               <span>{fabLabel}</span>
