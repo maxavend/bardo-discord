@@ -642,7 +642,7 @@ function ModuleNav({active, onNavigate}) {
   );
 }
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, uploadState, onNavigateModule, onPlannerNew}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
@@ -673,6 +673,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             type="file"
             accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             aria-label="Seleccionar documento para subir"
+            disabled={uploadState?.status === 'processing'}
             onChange={event => {
               const file = event.target.files?.[0];
               event.target.value = '';
@@ -683,11 +684,13 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             variant="secondary"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
-            aria-label="Subir archivo"
+            disabled={uploadState?.status === 'processing'}
+            aria-busy={uploadState?.status === 'processing'}
+            aria-label={uploadState?.status === 'processing' ? 'Importando archivo' : 'Subir archivo'}
             className="h-8 px-2.5 font-medium text-xs"
           >
             <FileArrowUp width={14} height={14} />
-            <span className="hidden sm:inline">Subir archivo</span>
+            <span className="hidden sm:inline">{uploadState?.status === 'processing' ? 'Importando…' : 'Subir archivo'}</span>
           </Button>
           <Button
             variant="default"
@@ -733,6 +736,7 @@ function Library({
   onOpen,
   onNew,
   onUpload,
+  uploadState,
   onDocAction,
 }) {
   const fileInputRef = useRef(null);
@@ -745,6 +749,7 @@ function Library({
           type="file"
           accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           aria-label="Seleccionar documento para subir"
+          disabled={uploadState?.status === 'processing'}
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = '';
@@ -774,6 +779,25 @@ function Library({
             </InputGroupAddon>
           )}
         </InputGroup>
+
+        {uploadState?.status === 'processing' && (
+          <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+            <strong className="text-foreground">Importando {uploadState.fileName || 'archivo'}…</strong>{' '}
+            Puedes seguir en esta pantalla mientras Bardo lo prepara.
+          </div>
+        )}
+
+        {uploadState?.status === 'error' && (
+          <div role="alert" className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+            <div className="min-w-0 text-xs">
+              <strong className="text-destructive">No pudimos importar {uploadState.fileName || 'el archivo'}.</strong>{' '}
+              <span className="text-muted-foreground">{uploadState.error}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="shrink-0">
+              Probar otro archivo
+            </Button>
+          </div>
+        )}
 
         {continueDoc && !query && (
           <section className="library-section continue-section">
@@ -2021,6 +2045,8 @@ function App() {
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
   const [linkValue, setLinkValue] = useState('');
+  const [uploadState, setUploadState] = useState({status: 'idle', fileName: '', error: ''});
+  const uploadLockRef = useRef(false);
   const [lastOpened, setLastOpened] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(LAST_OPENED_KEY) || 'null');
@@ -2160,8 +2186,10 @@ function App() {
   }, [docsById, go, showToast]);
 
   const uploadDocument = useCallback(async file => {
+    if (!file || uploadLockRef.current) return;
+    uploadLockRef.current = true;
+    setUploadState({status: 'processing', fileName: file.name || 'archivo', error: ''});
     try {
-      showToast('Preparando documento…');
       const imported = await convertDocumentFile(file);
       const now = new Date().toISOString();
       const doc = {
@@ -2180,11 +2208,16 @@ function App() {
         stress: false,
       };
       setStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
+      setUploadState({status: 'idle', fileName: '', error: ''});
       showToast(imported.warnings?.length ? 'Documento importado con cambios' : 'Documento listo');
       go(`#doc-${doc.id}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo subir el documento', error);
-      showToast(error instanceof Error ? error.message : 'No se pudo subir el documento');
+      const message = error instanceof Error ? error.message : 'No se pudo importar el documento.';
+      setUploadState({status: 'error', fileName: file.name || 'archivo', error: message});
+      showToast(message);
+    } finally {
+      uploadLockRef.current = false;
     }
   }, [go, showToast]);
 
@@ -2298,6 +2331,7 @@ function App() {
           onAction={docAction}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
+          uploadState={uploadState}
           onPlannerNew={() => go('#planner-new')}
           onPlannerDemo={() => go('#planner-demo')}
           onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
@@ -2343,6 +2377,7 @@ function App() {
           onOpen={openDoc}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
+          uploadState={uploadState}
           onDocAction={docAction}
         />
       )}
