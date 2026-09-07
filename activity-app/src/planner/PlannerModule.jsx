@@ -20,6 +20,7 @@ import {
   loadLiveSessionState,
   loadPlannerEvents,
   saveLiveSessionState,
+  clearLiveSessionState,
   resetToDemoFixture,
   resetToCleanSession,
   generateDiscordAnnouncement,
@@ -67,7 +68,7 @@ import {
 export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLibrary}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
-  const [plannerEvents] = useState(loadPlannerEvents);
+  const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
   const [selectedEventId, setSelectedEventId] = useState(() => plannerState.eventId || null);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
@@ -76,6 +77,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const [dismissedUpcomingBanner, setDismissedUpcomingBanner] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [hasRecovery, setHasRecovery] = useState(hasPlannerRecoverySnapshot);
+  const [recordingError, setRecordingError] = useState('');
 
   const [captureModal, setCaptureModal] = useState({isOpen: false, blockId: null});
   const [interruptModal, setInterruptModal] = useState({isOpen: false});
@@ -93,12 +95,22 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
 
   useEffect(() => {
     plannerStateRef.current = plannerState;
+    setPlannerEvents(loadPlannerEvents());
   }, [plannerState]);
 
   useEffect(() => {
     const controller = new RecordingController({
       onStatusChange: setRecordingStatus,
-      onError: (error) => toast(`Error en el micrófono: ${error.message || 'Permiso no otorgado'}`),
+      onError: (error) => {
+        const name = error?.name || '';
+        const message = name === 'NotAllowedError' || name === 'SecurityError'
+          ? 'Bardo necesita acceso al micrófono para grabar. Habilítalo en el navegador y vuelve a intentarlo.'
+          : name === 'NotFoundError' || name === 'DevicesNotFoundError'
+            ? 'No se encontró un micrófono disponible. Conecta uno o revisa la entrada de audio.'
+            : error?.message || 'No se pudo iniciar la grabación.';
+        setRecordingError(message);
+        toast(message);
+      },
     });
     recordingControllerRef.current = controller;
     return () => controller.cleanup({clearContext: true});
@@ -199,6 +211,15 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     saveLiveSessionState(next);
   }, []);
 
+  const syncMeetingStatus = useCallback((eventStatus) => {
+    setPlannerState((previous) => {
+      const next = {...previous, eventStatus};
+      plannerStateRef.current = next;
+      savePlannerState(next);
+      return next;
+    });
+  }, []);
+
   const runAtomicTransition = useCallback(async (operation) => {
     if (transitionLockRef.current) return;
     transitionLockRef.current = true;
@@ -236,11 +257,18 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   }, []);
 
   const handleStartSession = useCallback(() => {
+    if ((plannerStateRef.current?.blocks || []).length === 0) {
+      toast('Agrega al menos un bloque antes de iniciar la reunión.');
+      setIsEditing(true);
+      return;
+    }
     const next = createLiveSession(plannerStateRef.current);
     commitSessionState(next);
+    syncMeetingStatus('in_progress');
+    setRecordingError('');
     setActiveTab('agenda');
     toast('Reunión en vivo iniciada');
-  }, [commitSessionState]);
+  }, [commitSessionState, syncMeetingStatus]);
 
   const handlePauseSession = useCallback(() => {
     const next = pauseLiveSession(sessionStateRef.current);
@@ -257,9 +285,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       ? resumeInterruptedSession(current)
       : resumeLiveSession(current);
     commitSessionState(next);
+    syncMeetingStatus('in_progress');
     setActiveTab('agenda');
     toast('Reunión reanudada');
-  }, [commitSessionState]);
+  }, [commitSessionState, syncMeetingStatus]);
 
   const handleAdvance = useCallback(() => runAtomicTransition(async () => {
     const outgoing = sessionStateRef.current;
@@ -358,6 +387,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     if (!block) return;
 
     try {
+      setRecordingError('');
       await recordingControllerRef.current.startRecording(
         currentSession.sessionId || `session-${Date.now()}`,
         block.id,
@@ -563,7 +593,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     }
     preserveMeetingForRecovery();
     const next = computePlannerTimes({...event});
-    resetToCleanSession();
+    clearLiveSessionState();
     savePlannerState(next);
     plannerStateRef.current = next;
     setPlannerState(next);
@@ -585,7 +615,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setPlannerState(clean);
     const live = loadLiveSessionState(clean);
     commitSessionState(live);
-    setSelectedEventId(null);
+    setSelectedEventId(clean.eventId);
     setIsEditing(true);
     handleTabChange('agenda');
     toast('Nueva reunión creada');
@@ -840,7 +870,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
         <PlannerHomeView
           plannerState={plannerState}
           sessionState={sessionState}
-          events={plannerEvents}
+          events={plannerEvents.filter((event) => event.eventId !== plannerState.eventId)}
           selectedEventId={selectedEventId}
           onSelectEvent={handleSelectEvent}
           onStartSession={() => {
@@ -906,6 +936,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
               sessionState={sessionState}
               recordingStatus={recordingStatus}
               recordingElapsedMs={recordingElapsedMs}
+            recordingError={recordingError}
               recordingContext={recordingContext}
               isTransitioning={isTransitioning}
               onPauseSession={handlePauseSession}
