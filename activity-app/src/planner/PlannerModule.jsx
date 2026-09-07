@@ -13,7 +13,6 @@ import {PlannerCaptureModal} from './PlannerCaptureModal.jsx';
 import {SessionDock} from './SessionDock.jsx';
 import {SessionRecapView} from './SessionRecapView.jsx';
 import {PlannerUpcomingBanner} from './PlannerUpcomingBanner.jsx';
-import {RecordingSaveModal} from './RecordingSaveModal.jsx';
 import {SessionInterruptModal} from './SessionInterruptModal.jsx';
 import {
   loadPlannerState,
@@ -75,7 +74,6 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const [captureModal, setCaptureModal] = useState({isOpen: false, blockId: null});
-  const [saveRecordingModal, setSaveRecordingModal] = useState({isOpen: false, recordingEntity: null});
   const [interruptModal, setInterruptModal] = useState({isOpen: false});
 
   const recordingControllerRef = useRef(null);
@@ -143,9 +141,16 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     };
   }, [sessionState.sessionId]);
 
-  // MediaRecorder cannot survive reload. This is a best-effort pagehide flush only;
-  // the browser is not guaranteed to wait for asynchronous IndexedDB completion.
+  // MediaRecorder cannot survive reload. We warn before an accidental unload
+  // and keep the pagehide flush as a last-resort best effort.
   useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      const controller = recordingControllerRef.current;
+      if (!controller?.isActive()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
     const handlePageHide = () => {
       const controller = recordingControllerRef.current;
       if (!controller?.isActive()) return;
@@ -157,8 +162,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
         saveLiveSessionState(next);
       });
     };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', handlePageHide);
-    return () => window.removeEventListener('pagehide', handlePageHide);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
   }, []);
 
   const assistantEvaluation = evaluateSessionAssistant(plannerState, sessionState, nowTimestamp);
@@ -361,25 +371,19 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const handleFinalizeRecording = useCallback(async () => {
     if (!recordingControllerRef.current) return;
     const entity = await recordingControllerRef.current.finalizeRecording();
-    if (entity) setSaveRecordingModal({isOpen: true, recordingEntity: entity});
-  }, []);
+    if (!entity) return;
 
-  const handleSaveRecordingConfirmed = useCallback(async (finalizedEntity) => {
-    const persisted = await persistCapturedRecording(finalizedEntity);
-    setSaveRecordingModal({isOpen: false, recordingEntity: null});
+    const persisted = await persistCapturedRecording(entity);
     if (!persisted) return;
+
     const next = saveFinalizedRecording(sessionStateRef.current, persisted);
     commitSessionState(next);
-    toast(persisted.status === 'saved' ? 'Grabación guardada en la sesión' : 'Grabación finalizada con error de persistencia');
+    toast(
+      persisted.status === 'saved'
+        ? 'Grabación guardada'
+        : 'La grabación sigue disponible aquí, pero no se pudo guardar de forma persistente.'
+    );
   }, [commitSessionState, persistCapturedRecording]);
-
-  const handleDiscardRecording = useCallback(() => {
-    const entity = saveRecordingModal.recordingEntity;
-    if (entity?.blobUrl && typeof URL !== 'undefined') URL.revokeObjectURL(entity.blobUrl);
-    setSaveRecordingModal({isOpen: false, recordingEntity: null});
-    recordingControllerRef.current?.discardRecording();
-    toast('Grabación descartada');
-  }, [saveRecordingModal.recordingEntity]);
 
   const handlePauseRecording = useCallback(() => recordingControllerRef.current?.pauseRecording(), []);
   const handleResumeRecording = useCallback(() => recordingControllerRef.current?.resumeRecording(), []);
@@ -886,14 +890,6 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
         onSubmit={handleCaptureSubmit}
         initialBlockId={captureModal.blockId}
         blocks={plannerState.blocks}
-      />
-
-      <RecordingSaveModal
-        isOpen={saveRecordingModal.isOpen}
-        recordingEntity={saveRecordingModal.recordingEntity}
-        onClose={handleDiscardRecording}
-        onSave={handleSaveRecordingConfirmed}
-        onDiscard={handleDiscardRecording}
       />
 
       <SessionInterruptModal
