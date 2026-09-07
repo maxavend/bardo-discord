@@ -7,7 +7,7 @@
 
 :root {
   --bardo-topbar: 52px;
-  --bardo-toolbar-gap: 16px;
+  --bardo-toolbar-gap: 12px;
   --bardo-content: 690px;
   --font-inter: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   --bardo-visual-viewport-top: 0px;
@@ -131,6 +131,18 @@ body {
 }
 button, input, select { font: inherit; }
 button { font-size: 14px; }
+
+@media (pointer: coarse) {
+  [data-slot="button"] {
+    min-height: 44px;
+  }
+  [data-slot="button"][aria-label] {
+    min-width: 44px;
+  }
+  input[type="range"] {
+    min-height: 44px;
+  }
+}
 .app-root, .route-active {
   min-height: 100dvh;
   background-color: var(--background);
@@ -144,7 +156,7 @@ button { font-size: 14px; }
   padding-inline-end: var(--bardo-safe-right);
 }
 
-/* Activity boot states use the same HeroUI tokens as the document surface. */
+/* Activity boot states share Bardo's semantic surface tokens. */
 .boot-screen {
   min-height: 100dvh;
   display: grid;
@@ -357,11 +369,14 @@ button { font-size: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .boot-screen,
-  .boot-screen--leaving {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
     animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
-  .app-root { animation-duration: 1ms !important; }
   .t-shimmer::before { animation: none !important; }
 }
 
@@ -806,11 +821,11 @@ button { font-size: 14px; }
 .checklist li.done > .check-control { color: var(--accent-foreground); }
 .checklist li.done > .check-control::before { background: var(--accent); border-color: var(--accent); }
 
-/* HeroUI Toolbar owns surface, border, radius and keyboard navigation */
+/* The shared toolbar primitive owns surface, border, radius and keyboard navigation. */
 .editor-shell .doc-body { margin-top: 36px; }
 .editor-toolbar-sticky {
   position: sticky;
-  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
+  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap));
   z-index: 30;
   margin-top: 16px;
   margin-bottom: 16px;
@@ -820,16 +835,16 @@ button { font-size: 14px; }
   display: flex;
   justify-content: flex-start;
 }
-.editor-toolbar-sticky { scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px); }
+.editor-toolbar-sticky { scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap)); }
 .editor-toolbar-sticky > * {
   pointer-events: auto;
 }
 .session-toolbar-sticky {
   position: sticky;
-  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
+  top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap));
   z-index: 35;
   width: 100%;
-  scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
+  scroll-margin-top: calc(var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + var(--bardo-toolbar-gap));
 }
 .session-dock-glass {
   background: color-mix(in oklab, var(--card) 90%, transparent);
@@ -1105,7 +1120,7 @@ button { font-size: 14px; }
   to { opacity: 1; }
 }
 
-/* Form fields use standard default HeroUI styles via @heroui/styles */
+/* Form fields inherit the shared shadcn/Base UI token system. */
 
 @theme inline {
   --font-heading: var(--font-sans);
