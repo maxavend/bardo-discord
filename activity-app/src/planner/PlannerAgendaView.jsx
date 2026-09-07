@@ -98,9 +98,11 @@ export function PlannerAgendaView({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button
+              <Button
                 type="button"
-                className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
+                variant="ghost"
+                size="sm"
+                className="h-auto min-h-8 p-0 inline-flex items-center gap-1.5 hover:bg-transparent hover:text-foreground text-foreground text-xs select-none group"
               >
                 {leaderName ? (
                   <div className="inline-flex items-center gap-1.5">
@@ -123,7 +125,7 @@ export function PlannerAgendaView({
                     Asignar facilitador
                   </span>
                 )}
-              </button>
+              </Button>
             }
           />
           <DropdownMenuContent align="start" className="p-0">
@@ -188,9 +190,11 @@ export function PlannerAgendaView({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button
+              <Button
                 type="button"
-                className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
+                variant="ghost"
+                size="sm"
+                className="h-auto min-h-8 p-0 inline-flex items-center gap-1.5 hover:bg-transparent hover:text-foreground text-foreground text-xs select-none group"
               >
                 {mentions.length > 0 ? (
                   <div className="inline-flex items-center gap-1.5">
@@ -226,7 +230,7 @@ export function PlannerAgendaView({
                     Asignar participantes
                   </span>
                 )}
-              </button>
+              </Button>
             }
           />
           <DropdownMenuContent align="start" className="p-0">
@@ -405,12 +409,14 @@ export function PlannerAgendaView({
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={
-                              <button
+                              <Button
                                 type="button"
-                                className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                                variant="secondary"
+                                size="sm"
+                                className="h-8 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
                               >
                                 {block.durationMinutes || 30} min
-                              </button>
+                              </Button>
                             }
                           />
                           <DropdownMenuContent align="end" className="w-36 p-1">
@@ -642,10 +648,12 @@ export function PlannerAgendaView({
                                 <DropdownMenu>
                                   <DropdownMenuTrigger
                                     render={
-                                      <button
-                                        type="button"
-                                        className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
-                                      >
+                                      <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto min-h-8 p-0 inline-flex items-center gap-1.5 hover:bg-transparent hover:text-foreground text-foreground text-xs select-none group"
+              >
                                         {pointPresenterList.length > 0 ? (
                                           <div className="inline-flex items-center gap-1.5">
                                             <div className="flex items-center -space-x-1.5">
@@ -679,7 +687,7 @@ export function PlannerAgendaView({
                                             Asignar responsable
                                           </span>
                                         )}
-                                      </button>
+                                      </Button>
                                     }
                                   />
                                   <DropdownMenuContent align="start" className="p-0">
@@ -740,13 +748,15 @@ export function PlannerAgendaView({
                     })}
 
                     {isEditing && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         onClick={() => onAddSubpoint?.(block.id)}
-                        className="text-xs text-muted-foreground/70 hover:text-foreground flex items-center gap-1.5 py-1 px-1 transition-colors self-start mt-0.5 cursor-pointer font-medium"
+                        className="h-8 px-1 text-xs text-muted-foreground hover:text-foreground self-start mt-0.5 font-medium"
                       >
-                        <Plus className="size-3 text-primary" /> <span>Agregar tema</span>
-                      </button>
+                        <Plus className="size-3 text-primary" /> <span>Agregar punto</span>
+                      </Button>
                     )}
                   </div>
                 )}
