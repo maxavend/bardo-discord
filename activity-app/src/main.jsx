@@ -1,5 +1,8 @@
 import React, {lazy, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
+import { FileWarning } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
@@ -25,7 +28,7 @@ function resolveBootTheme() {
   return resolveDiscordTheme() || 'light';
 }
 
-// ── Boot loading screen — HeroUI themed and reassuring ───────────────────────
+// ── Boot loading screen — Bardo themed and reassuring ───────────────────────
 function ActivityBootShell({leaving = false}) {
   const theme = resolveBootTheme();
   const [messageIndex, setMessageIndex] = useState(0);
@@ -90,9 +93,9 @@ function ActivityErrorShell({message, onRetry}) {
         <p className="boot-eyebrow">No pudimos abrir tu espacio</p>
         <h1>Algo se interrumpió</h1>
         <p className="boot-error-message">{message}</p>
-        <button className="boot-retry-button" type="button" onClick={onRetry}>
+        <Button variant="outline" size="sm" type="button" onClick={onRetry}>
           Intentar de nuevo
-        </button>
+        </Button>
       </section>
     </main>
   );
@@ -101,17 +104,17 @@ function ActivityErrorShell({message, onRetry}) {
 function DocumentOnlyUnavailable({message, onRetry}) {
   return (
     <main className="app-root min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
-      <div className="container-surface flex flex-col items-center gap-4 max-w-md text-center p-6 rounded-2xl bg-surface border border-border">
-        <div className="w-12 h-12 rounded-2xl bg-warning/10 border border-warning/20 flex items-center justify-center text-warning text-xl">
-          📄
+      <Card className="w-full max-w-md items-center gap-4 p-6 text-center">
+        <div className="flex size-12 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground">
+          <FileWarning className="size-5" aria-hidden="true" />
         </div>
         <p className="text-sm text-muted-foreground">{message}</p>
         {onRetry && (
-          <button className="boot-retry-button" type="button" onClick={onRetry}>
+          <Button variant="outline" size="sm" type="button" onClick={onRetry}>
             Reintentar
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
     </main>
   );
 }
