@@ -1,6 +1,8 @@
 const DB_NAME = 'bardo-planner-recordings-v1';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'audio';
+const DRAFT_STORE_NAME = 'draft-chunks';
+const DRAFT_METADATA_KEY = 'bardo-planner-recording-draft-v1';
 
 export class RecordingStorageError extends Error {
   constructor(message, cause = null) {
@@ -29,18 +31,21 @@ function openDatabase(indexedDBImpl) {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, {keyPath: 'id'});
       }
+      if (!db.objectStoreNames.contains(DRAFT_STORE_NAME)) {
+        db.createObjectStore(DRAFT_STORE_NAME, {keyPath: 'id'});
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(new RecordingStorageError('No se pudo abrir el almacenamiento de audio.', request.error));
   });
 }
 
-function runTransaction(indexedDBImpl, mode, operation) {
+function runTransaction(indexedDBImpl, mode, operation, storeName = STORE_NAME) {
   return openDatabase(indexedDBImpl).then((db) => new Promise((resolve, reject) => {
     let transaction;
     try {
       transaction = db.transaction(STORE_NAME, mode);
-      const store = transaction.objectStore(STORE_NAME);
+      const store = transaction.objectStore(storeName);
       operation(store, resolve, reject);
     } catch (error) {
       db.close();
@@ -88,10 +93,133 @@ export function createRecordingStorage(indexedDBImpl = globalThis.indexedDB) {
         request.onerror = () => reject(new RecordingStorageError('No se pudo eliminar el audio.', request.error));
       });
     },
+
+    async appendDraftChunk(recordingId, sequence, blob) {
+      if (!recordingId || !blob) return;
+      const id = `${recordingId}:${String(sequence).padStart(8, '0')}`;
+      return runTransaction(indexedDBImpl, 'readwrite', (store, resolve, reject) => {
+        const request = store.put({
+          id,
+          recordingId,
+          sequence,
+          blob,
+          savedAt: Date.now(),
+        });
+        request.onsuccess = () => resolve(id);
+        request.onerror = () => reject(new RecordingStorageError('No se pudo respaldar un segmento de audio.', request.error));
+      }, DRAFT_STORE_NAME);
+    },
+
+    async getDraftChunks(recordingId) {
+      if (!recordingId) return [];
+      return runTransaction(indexedDBImpl, 'readonly', (store, resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const chunks = (request.result || [])
+            .filter((entry) => entry.recordingId === recordingId)
+            .sort((a, b) => a.sequence - b.sequence);
+          resolve(chunks);
+        };
+        request.onerror = () => reject(new RecordingStorageError('No se pudo recuperar el respaldo temporal del audio.', request.error));
+      }, DRAFT_STORE_NAME);
+    },
+
+    async clearDraft(recordingId) {
+      if (!recordingId) return;
+      return runTransaction(indexedDBImpl, 'readwrite', (store, resolve, reject) => {
+        const request = store.getAllKeys();
+        request.onsuccess = () => {
+          const keys = (request.result || []).filter((key) => String(key).startsWith(`${recordingId}:`));
+          if (keys.length === 0) {
+            resolve();
+            return;
+          }
+          let pending = keys.length;
+          for (const key of keys) {
+            const deletion = store.delete(key);
+            deletion.onsuccess = () => {
+              pending -= 1;
+              if (pending === 0) resolve();
+            };
+            deletion.onerror = () => reject(new RecordingStorageError('No se pudo limpiar el respaldo temporal del audio.', deletion.error));
+          }
+        };
+        request.onerror = () => reject(new RecordingStorageError('No se pudo leer el respaldo temporal del audio.', request.error));
+      }, DRAFT_STORE_NAME);
+    },
   };
 }
 
 export const recordingStorage = createRecordingStorage();
+
+export function saveRecordingDraftMetadata(metadata) {
+  try {
+    if (!metadata?.recordingId) return false;
+    localStorage.setItem(DRAFT_METADATA_KEY, JSON.stringify(metadata));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadRecordingDraftMetadata() {
+  try {
+    const raw = localStorage.getItem(DRAFT_METADATA_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearRecordingDraftMetadata(recordingId = null) {
+  try {
+    if (recordingId) {
+      const current = loadRecordingDraftMetadata();
+      if (current?.recordingId && current.recordingId !== recordingId) return;
+    }
+    localStorage.removeItem(DRAFT_METADATA_KEY);
+  } catch {
+    // Best-effort cleanup.
+  }
+}
+
+export async function recoverRecordingDraft(metadata, storage = recordingStorage) {
+  if (!metadata?.recordingId) return null;
+  const entries = await storage.getDraftChunks(metadata.recordingId);
+  if (entries.length === 0) return null;
+  const mimeType = metadata.mimeType || entries[0]?.blob?.type || 'audio/webm';
+  const blob = new Blob(entries.map((entry) => entry.blob), {type: mimeType});
+  if (blob.size === 0) return null;
+  const endedAt = entries.at(-1)?.savedAt || Date.now();
+  const startedAt = metadata.startedAt || endedAt;
+  return {
+    id: metadata.recordingId,
+    sessionId: metadata.sessionId || null,
+    blockId: metadata.blockId || null,
+    blockTitle: metadata.blockTitle || null,
+    pointId: metadata.pointId || null,
+    pointTitle: metadata.pointTitle || null,
+    name: metadata.pointTitle || metadata.blockTitle || 'Grabación recuperada',
+    createdAt: endedAt,
+    startedAt,
+    endedAt,
+    durationMs: Math.max(0, endedAt - startedAt),
+    sources: metadata.sources || ['microphone'],
+    sourcesLabel: metadata.sourcesLabel || 'Micrófono',
+    segmentsCount: 1,
+    segments: [],
+    mimeType,
+    fileSize: blob.size,
+    storageKey: `sessions/${metadata.sessionId || 'recovered'}/blocks/${metadata.blockId || 'unknown'}/recordings/${metadata.recordingId}`,
+    status: 'pending',
+    binaryStorage: null,
+    blobUrl: typeof URL !== 'undefined' ? URL.createObjectURL(blob) : '',
+    blob,
+    recoveredFromDraft: true,
+  };
+}
+
+
 
 /**
  * Persists a transient Recording entity returned by RecordingController and
