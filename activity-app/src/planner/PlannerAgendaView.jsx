@@ -293,7 +293,7 @@ export function PlannerAgendaView({
 
       {blocks.length === 0 ? (
         <Card className="p-8 text-center flex flex-col items-center gap-3 rounded-2xl bg-card border-border">
-          <p className="text-sm text-muted-foreground">No hay bloques en la agenda.</p>
+          <p className="text-sm text-muted-foreground">No hay bloques en esta reunión.</p>
           {isEditing && (
             <Button variant="default" size="sm" onClick={() => onAddBlock?.()} className="mt-2">
               <Plus className="size-3.5" /> Agregar primer bloque
@@ -804,7 +804,7 @@ export function PlannerAgendaView({
                         disabled={isTransitioning}
                         className="h-8 px-3.5 text-xs font-semibold rounded-full gap-1.5 cursor-pointer shadow-xs ml-auto"
                       >
-                        <span>{isLast ? 'Finalizar sesión' : 'Siguiente bloque'}</span>
+                        <span>{isLast ? 'Finalizar reunión' : 'Siguiente bloque'}</span>
                         <ChevronRight className="size-3.5" />
                       </Button>
                     )}
