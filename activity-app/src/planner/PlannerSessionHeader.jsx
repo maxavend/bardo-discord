@@ -133,6 +133,148 @@ export function PlannerSessionHeader({
         <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             {isEditing ? (
+              <>
+                <Textarea
+                  rows={1}
+                  value={title}
+                  onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
+                  placeholder="Nombre de la reunión"
+                  className="doc-title doc-title-input"
+                  aria-label="Nombre de la reunión"
+                />
+                <Textarea
+                  rows={1}
+                  value={description}
+                  onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
+                  placeholder="Agregar objetivo o contexto de la reunión..."
+                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60"
+                  aria-label="Objetivo de la reunión"
+                />
+              </>
+            ) : (
+              <>
+                <h1 className="doc-title">{title || 'Reunión sin título'}</h1>
+                {description && <p className="doc-description">{description}</p>}
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!isEditing && !isRunning && !isPaused && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCopyAnnouncement}
+                className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
+              >
+                <Copy className="size-3.5" /> <span>Copiar anuncio</span>
+              </Button>
+            )}
+
+            {isEditing ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onToggleEditMode}
+                className="font-medium h-8 px-3.5"
+              >
+                <Check className="size-3.5" /> <span>Listo</span>
+              </Button>
+            ) : isInterrupted && onResumeSession ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onResumeSession}
+                className="font-medium h-8 px-3.5"
+              >
+                <Play className="size-3.5" /> <span>Reanudar</span>
+              </Button>
+            ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onStartSession}
+                className="font-medium h-8 px-3.5"
+              >
+                <Play className="size-3.5" /> <span>Iniciar reunión</span>
+              </Button>
+            ) : isCompleted ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onTabChange('recap')}
+                className="font-medium h-8 px-3.5"
+              >
+                <FileText className="size-3.5" /> <span>Ver resumen</span>
+              </Button>
+            ) : null}
+
+            {/* Menú ⋮ alineado exactamente en la misma línea del título */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Más opciones de la reunión"
+                    className="text-muted-foreground hover:text-foreground rounded-full"
+                  >
+                    <MoreVertical className="size-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Reunión</DropdownMenuLabel>
+                  {(isCompleted || isInterrupted) && (
+                    <DropdownMenuItem onClick={() => onTabChange('recap')}>
+                      <RotateCw className="size-4 text-muted-foreground" />
+                      <span>Ver resumen</span>
+                    </DropdownMenuItem>
+                  )}
+                  {(isRunning || isPaused) && (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => onInterruptSession?.()}
+                    >
+                      <RotateCcw className="size-4 text-destructive" />
+                      <span>Interrumpir reunión</span>
+                    </DropdownMenuItem>
+                  )}
+                  {!isEditing && (
+                    <DropdownMenuItem onClick={onToggleEditMode}>
+                      <Pencil className="size-4 text-muted-foreground" />
+                      <span>Editar reunión</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={onCopyAnnouncement}>
+                    <Copy className="size-4 text-muted-foreground" />
+                    <span>Copiar anuncio</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    onClick={onNewCleanSession}
+                    disabled={isRunning || isPaused}
+                  >
+                    <Plus className="size-4 text-muted-foreground" />
+                    <span>Nueva reunión</span>
+                  </DropdownMenuItem>
+                  {hasPreviousMeeting && !isRunning && !isPaused && (
+                    <DropdownMenuItem onClick={onRestorePreviousMeeting}>
+                      <RotateCcw className="size-4 text-muted-foreground" />
+                      <span>Restaurar reunión anterior</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Modo edición vs modo lectura */}
+        {isEditing ? (
           <div className="mt-4 flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Field>
@@ -285,7 +427,6 @@ export function PlannerSessionHeader({
                                 );
                                 const isRole = tag.startsWith('#') || (!matched && tag.startsWith('@'));
                                 const color = matched?.avatarColor || discordColorFor(tag, idx + 1);
-
                                 return (
                                   <Avatar
                                     key={tag}
