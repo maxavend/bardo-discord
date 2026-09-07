@@ -1,22 +1,38 @@
-// Lightweight accessible toast manager for shadcn/ui integration
-let toastListeners = [];
+import { Toast } from '@base-ui/react/toast';
 
-export function toast(message, options = {}) {
-  const text = typeof message === 'string' ? message : message?.description || String(message);
-  toastListeners.forEach(listener => listener(text, options));
-  
-  // Console fallback if no visual toaster mounted
-  if (toastListeners.length === 0) {
-    console.log(`[Toast Notification]: ${text}`);
+export const toastManager = Toast.createToastManager();
+
+function normalizeToast(message, options = {}) {
+  if (typeof message === 'string') {
+    return {
+      title: message,
+      type: options.type,
+      timeout: options.timeout,
+    };
   }
-}
 
-toast.success = (msg) => toast(msg, { type: 'success' });
-toast.error = (msg) => toast(msg, { type: 'error' });
+  if (message && typeof message === 'object') {
+    return {
+      ...message,
+      type: options.type || message.type,
+      timeout: options.timeout ?? message.timeout,
+    };
+  }
 
-export function subscribeToast(listener) {
-  toastListeners.push(listener);
-  return () => {
-    toastListeners = toastListeners.filter(l => l !== listener);
+  return {
+    title: String(message ?? ''),
+    type: options.type,
+    timeout: options.timeout,
   };
 }
+
+export function toast(message, options = {}) {
+  return toastManager.add(normalizeToast(message, options));
+}
+
+toast.success = (message, options = {}) => toast(message, {...options, type: 'success'});
+toast.error = (message, options = {}) => toast(message, {...options, type: 'error'});
+toast.info = (message, options = {}) => toast(message, {...options, type: 'info'});
+toast.warning = (message, options = {}) => toast(message, {...options, type: 'warning'});
+toast.close = (id) => toastManager.close(id);
+toast.promise = (...args) => toastManager.promise(...args);
