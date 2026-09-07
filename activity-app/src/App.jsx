@@ -1987,7 +1987,7 @@ function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="flex flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Vista previa de Markdown</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
@@ -2011,7 +2011,7 @@ function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
 function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="flex flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Vista previa HTML</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
@@ -2039,7 +2039,7 @@ function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
 function PdfPreviewModal({isOpen, file, onCancel}) {
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent className="flex flex-col overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Vista previa de PDF</DialogTitle>
           <DialogDescription className="truncate">{file?.filename || 'documento.pdf'}</DialogDescription>
@@ -2366,7 +2366,7 @@ function App() {
         />
       )}
       {storageError && (
-        <div role="alert" className="mx-auto mt-2 flex w-[min(100%-2rem,56rem)] flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+        <div role="alert" className="mx-4 mt-2 flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs sm:mx-auto sm:w-full sm:max-w-4xl sm:flex-row sm:items-center sm:justify-between">
           <span className="leading-relaxed text-foreground">{storageError}</span>
           <Button
             variant="outline"
