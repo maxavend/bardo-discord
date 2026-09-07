@@ -241,9 +241,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   }, [onSwitchTab]);
 
   const commitSessionState = useCallback((next) => {
-    sessionStateRef.current = next;
-    setSessionState(next);
-    saveLiveSessionState(next);
+    const meetingEventId = plannerStateRef.current?.eventId || next?.eventId || null;
+    const normalized = {...next, eventId: meetingEventId};
+    sessionStateRef.current = normalized;
+    setSessionState(normalized);
+    saveLiveSessionState(normalized, meetingEventId);
   }, []);
 
   const syncMeetingStatus = useCallback((eventStatus) => {
