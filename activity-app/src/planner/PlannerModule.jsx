@@ -340,7 +340,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const next = interruptLiveSession(withRecording);
     commitSessionState(next);
     setActiveTab('recap');
-    toast(recording ? `${recording.name} y reunión conservadas` : 'Reunión interrumpida. Todo el trabajo fue conservado.');
+    toast(recording ? `${recording.name} guardada; reunión conservada` : 'Reunión interrumpida. Todo el trabajo fue conservado.');
   }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
 
   // Recording context is always resolved from the runner. The user never has to
@@ -634,7 +634,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const newId = `b-${Date.now()}`;
     const breakBlock = {
       id: newId,
-      title: 'Break',
+      title: 'Descanso',
       type: 'break',
       durationMinutes: 10,
       isBreak: true,
@@ -795,7 +795,6 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
             handleTabChange('agenda');
           }}
           onViewAgenda={() => handleTabChange('agenda')}
-          onViewMinutes={() => handleTabChange('minutes')}
           onViewRecap={() => handleTabChange('recap')}
           onLoadDemo={() => {
             handleLoadDemo();
