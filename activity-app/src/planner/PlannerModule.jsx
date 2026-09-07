@@ -5,7 +5,7 @@ import {
   Play,
   Check,
   FileText,
-} from '@gravity-ui/icons';
+} from 'lucide-react';
 import {PlannerSessionHeader} from './PlannerSessionHeader.jsx';
 import {PlannerAgendaView} from './PlannerAgendaView.jsx';
 import {PlannerHomeView} from './PlannerHomeView.jsx';
