@@ -1047,6 +1047,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const lastRange = useRef(null);
   const activeEditable = useRef(null);
   const saveTimer = useRef(null);
+  const dirtyRef = useRef(false);
   const exitTimer = useRef(null);
   const titleRef = useRef(title);
   const descriptionRef = useRef(description);
@@ -1195,17 +1196,26 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     clearTimeout(saveTimer.current);
     const snap = snapshot();
     onAutosave(snap);
+    dirtyRef.current = false;
     setIsDirty(false);
     setSaveState(isNew ? 'Borrador guardado' : 'Guardado');
     return snap;
   }, [isNew, onAutosave, snapshot]);
 
-  const markDirty = useCallback(() => {
-    setIsDirty(true);
-    setSaveState('Cambios sin guardar');
+  const persistPendingChanges = useCallback(() => {
+    if (!dirtyRef.current) return;
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSave, 30000);
-  }, [flushSave, isNew]);
+    onAutosave(snapshot());
+    dirtyRef.current = false;
+  }, [onAutosave, snapshot]);
+
+  const markDirty = useCallback(() => {
+    dirtyRef.current = true;
+    setIsDirty(true);
+    setSaveState('Guardando…');
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushSave, 1500);
+  }, [flushSave]);
 
   useLayoutEffect(() => {
     const key = isNew ? 'new' : doc?.id;
@@ -1224,10 +1234,23 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     });
   }, [title, description]);
 
-  useEffect(() => () => {
-    clearTimeout(saveTimer.current);
-    clearTimeout(exitTimer.current);
-  }, []);
+  useEffect(() => {
+    const handlePageHide = () => persistPendingChanges();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') persistPendingChanges();
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      persistPendingChanges();
+      clearTimeout(saveTimer.current);
+      clearTimeout(exitTimer.current);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [persistPendingChanges]);
 
   const leaveEditor = useCallback((callback) => {
     if (exitTimer.current) return;
