@@ -42,6 +42,8 @@ export class RecordingController {
   constructor(options = {}) {
     this.onStatusChange = options.onStatusChange || (() => {});
     this.onError = options.onError || (() => {});
+    this.onDraftStart = options.onDraftStart || (() => {});
+    this.onChunk = options.onChunk || (() => {});
     this.mediaRecorder = null;
     this.stream = null;
     this.audioChunks = [];
@@ -59,6 +61,7 @@ export class RecordingController {
     this.segments = [];
     this.activeSegmentStartedAt = null;
     this.mimeType = '';
+    this.chunkSequence = 0;
   }
 
   getStatus() {
@@ -92,6 +95,14 @@ export class RecordingController {
       sources: this.currentSources,
       sourcesLabel: this.currentSources.includes('system') ? 'Micrófono + sistema' : 'Micrófono',
       recordingName: this.currentPointTitle || this.currentBlockTitle || 'Grabación',
+    };
+  }
+
+  getDraftMetadata() {
+    return {
+      ...this.getCurrentContext(),
+      startedAt: this.startTime,
+      mimeType: this.mimeType || 'audio/webm',
     };
   }
 
@@ -130,6 +141,7 @@ export class RecordingController {
     this.audioChunks = [];
     this.accumulatedPausedMs = 0;
     this.segments = [];
+    this.chunkSequence = 0;
 
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
@@ -144,13 +156,25 @@ export class RecordingController {
       this.mimeType = mimeType;
       this.mediaRecorder = new MediaRecorder(this.stream, mimeType ? {mimeType} : {});
       this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) this.audioChunks.push(event.data);
+        if (!event.data || event.data.size === 0) return;
+        this.audioChunks.push(event.data);
+        this.chunkSequence += 1;
+        try {
+          void this.onChunk({
+            ...this.getDraftMetadata(),
+            sequence: this.chunkSequence,
+            blob: event.data,
+          });
+        } catch (error) {
+          console.warn('[RecordingController] No se pudo respaldar un segmento:', error);
+        }
       };
 
       this.mediaRecorder.start(1000);
       const now = Date.now();
       this.startTime = now;
       this.activeSegmentStartedAt = now;
+      this.onDraftStart(this.getDraftMetadata());
       this.setStatus(RECORDING_STATUS.RECORDING);
       return this.currentRecordingId;
     } catch (error) {
@@ -312,6 +336,7 @@ export class RecordingController {
     this.audioChunks = [];
     this.segments = [];
     this.mimeType = '';
+    this.chunkSequence = 0;
 
     if (clearContext) {
       this.currentRecordingId = null;
