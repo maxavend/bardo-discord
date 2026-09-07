@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupButton } from '@/components/ui/input-group';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -235,14 +236,16 @@ export function PlannerMemberPicker({
                       style={{ backgroundColor: color }}
                     />
                     <span>{label}</span>
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={(e) => handleRemoveTag(tag, e)}
-                      className="text-muted-foreground hover:text-foreground p-0.5 rounded-sm cursor-pointer ml-0.5"
+                      className="size-5 text-muted-foreground hover:text-foreground p-0 rounded-sm cursor-pointer ml-0.5"
                       aria-label={`Eliminar ${label}`}
                     >
                       <X className="size-3" />
-                    </button>
+                    </Button>
                   </Badge>
                 );
               })}
@@ -278,7 +281,9 @@ export function PlannerMemberPicker({
       <PopoverContent align="start" className="w-[300px] p-1.5 flex flex-col gap-1">
         {searchQuery.trim() && !hasExactMatch && (
           <div className="p-1 border-b border-border/40">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               type="button"
               onClick={() => handleAddGuest(searchQuery)}
               className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
@@ -299,14 +304,16 @@ export function PlannerMemberPicker({
           <div className="flex flex-col gap-1 pr-1">
             {filteredRoles.length > 0 && (
               <DropdownMenuGroup>
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
                   Roles del servidor
                 </DropdownMenuLabel>
                 <div className="flex flex-col gap-0.5">
                   {filteredRoles.map((role) => {
                     const isSelected = selectedSet.has(role.tag);
                     return (
-                      <button
+                      <Button
+              variant="ghost"
+              size="sm"
                         key={role.tag}
                         type="button"
                         onClick={() => handleToggleTag(role.tag)}
@@ -314,13 +321,13 @@ export function PlannerMemberPicker({
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span
-                            className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                            className="size-4 rounded-md text-xs font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
                             style={{ backgroundColor: role.color }}
                           >
                             #
                           </span>
                           <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
-                          <span className="text-[10.5px] text-muted-foreground ml-auto truncate">{role.tag}</span>
+                          <span className="text-xs text-muted-foreground ml-auto truncate">{role.tag}</span>
                         </div>
                         {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
                       </button>
@@ -333,14 +340,16 @@ export function PlannerMemberPicker({
             {filteredMembers.length > 0 && (
               <DropdownMenuGroup>
                 {filteredRoles.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
                   Miembros del servidor y canal
                 </DropdownMenuLabel>
                 <div className="flex flex-col gap-0.5">
                   {filteredMembers.map((member) => {
                     const isSelected = selectedSet.has(member.tag);
                     return (
-                      <button
+                      <Button
+              variant="ghost"
+              size="sm"
                         key={member.tag}
                         type="button"
                         onClick={() => handleToggleTag(member.tag)}
@@ -349,7 +358,7 @@ export function PlannerMemberPicker({
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <Avatar
                             size="xs"
-                            className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                            className="size-5 text-xs font-bold shrink-0 shadow-2xs"
                             style={{
                               backgroundColor: `${member.avatarColor}30`,
                               color: member.avatarColor,
@@ -360,7 +369,7 @@ export function PlannerMemberPicker({
                             </AvatarFallback>
                           </Avatar>
                           <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
-                          <span className="text-[10.5px] text-muted-foreground ml-auto truncate">{member.tag}</span>
+                          <span className="text-xs text-muted-foreground ml-auto truncate">{member.tag}</span>
                         </div>
                         {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
                       </button>
@@ -509,7 +518,9 @@ export function SearchableParticipantMenu({
       {/* Guest addition option */}
       {searchQuery.trim() && !hasExactMatch && (
         <div className="px-1 py-0.5">
-          <button
+          <Button
+              variant="ghost"
+              size="sm"
             type="button"
             onClick={() => handleAddGuest(searchQuery)}
             className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
@@ -532,7 +543,7 @@ export function SearchableParticipantMenu({
           {/* 2. ROLES DEL SERVIDOR */}
           {filteredRoles.length > 0 && (
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/80">
+              <DropdownMenuLabel className="px-2 py-1 text-xs uppercase tracking-wider text-muted-foreground/80">
                 Roles del servidor
               </DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
@@ -548,7 +559,9 @@ export function SearchableParticipantMenu({
                     );
 
                   return (
-                    <button
+                    <Button
+              variant="ghost"
+              size="sm"
                       key={role.tag}
                       type="button"
                       onClick={() => handleToggle(role.tag)}
@@ -556,7 +569,7 @@ export function SearchableParticipantMenu({
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span
-                          className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                          className="size-4 rounded-md text-xs font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
                           style={{ backgroundColor: role.color }}
                         >
                           #
@@ -564,7 +577,7 @@ export function SearchableParticipantMenu({
                         <span className="text-xs font-medium text-foreground truncate">
                           {role.name}
                         </span>
-                        <span className="text-[10.5px] text-muted-foreground ml-auto truncate">
+                        <span className="text-xs text-muted-foreground ml-auto truncate">
                           {role.tag}
                         </span>
                       </div>
@@ -582,7 +595,7 @@ export function SearchableParticipantMenu({
           {filteredMembers.length > 0 && (
             <DropdownMenuGroup>
               {filteredRoles.length > 0 && <DropdownMenuSeparator className="my-1.5" />}
-              <DropdownMenuLabel className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/80">
+              <DropdownMenuLabel className="px-2 py-1 text-xs uppercase tracking-wider text-muted-foreground/80">
                 Miembros del servidor y canal
               </DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
@@ -599,7 +612,9 @@ export function SearchableParticipantMenu({
                     );
 
                   return (
-                    <button
+                    <Button
+              variant="ghost"
+              size="sm"
                       key={member.tag}
                       type="button"
                       onClick={() => handleToggle(singleSelect ? member.globalName : member.tag)}
@@ -608,7 +623,7 @@ export function SearchableParticipantMenu({
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Avatar
                           size="xs"
-                          className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                          className="size-5 text-xs font-bold shrink-0 shadow-2xs"
                           style={{
                             backgroundColor: `${member.avatarColor}30`,
                             color: member.avatarColor,
@@ -621,7 +636,7 @@ export function SearchableParticipantMenu({
                         <span className="text-xs font-medium text-foreground truncate">
                           {member.globalName}
                         </span>
-                        <span className="text-[10.5px] text-muted-foreground ml-auto truncate">
+                        <span className="text-xs text-muted-foreground ml-auto truncate">
                           {member.tag}
                         </span>
                       </div>
