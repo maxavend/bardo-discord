@@ -47,7 +47,7 @@ function parseMentions(mentionsStr = '') {
 }
 
 function formatDisplayDate(dateStr) {
-  if (!dateStr) return '01/09/2026';
+  if (!dateStr) return 'Seleccionar fecha';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -238,7 +238,7 @@ export function PlannerSessionHeader({
                       onClick={() => onInterruptSession?.()}
                     >
                       <RotateCcw className="size-4 text-destructive" />
-                      <span>Pausar reunión</span>
+                      <span>Interrumpir reunión</span>
                     </DropdownMenuItem>
                   )}
                   {!isEditing && (
@@ -306,24 +306,12 @@ export function PlannerSessionHeader({
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
-                <Input
-                  type="time"
-                  value={estimatedEndTime || '11:00'}
-                  onChange={(e) => {
-                    const newEnd = e.target.value;
-                    onUpdateHeaderField?.('endTime', newEnd);
-                    try {
-                      const [sh, sm] = (startTime || '10:00').split(':').map(Number);
-                      const [eh, em] = newEnd.split(':').map(Number);
-                      let diff = (eh * 60 + em) - (sh * 60 + sm);
-                      if (diff < 0) diff += 1440;
-                      if (diff > 0) onUpdateHeaderField?.('totalCalculatedDuration', diff);
-                    } catch {
-                      // ignore parse errors
-                    }
-                  }}
-                  className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 text-xs font-medium text-foreground transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-primary text-center"
-                />
+                <div
+                  className="w-full h-9 rounded-full bg-muted/40 border border-border/50 px-3.5 flex items-center justify-center text-xs font-medium text-foreground"
+                  aria-label="Hora de término calculada"
+                >
+                  {estimatedEndTime || '—'}
+                </div>
               </div>
 
               <div>
