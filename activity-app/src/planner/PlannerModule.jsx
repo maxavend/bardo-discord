@@ -235,7 +235,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const next = createLiveSession(plannerStateRef.current);
     commitSessionState(next);
     setActiveTab('agenda');
-    toast('Sesión en vivo iniciada');
+    toast('Reunión en vivo iniciada');
   }, [commitSessionState]);
 
   const handlePauseSession = useCallback(() => {
@@ -244,7 +244,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     if (recordingControllerRef.current?.isRecording()) {
       recordingControllerRef.current.pauseRecording();
     }
-    toast('Sesión en pausa');
+    toast('Reunión en pausa');
   }, [commitSessionState]);
 
   const handleResumeSession = useCallback(() => {
@@ -254,7 +254,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       : resumeLiveSession(current);
     commitSessionState(next);
     setActiveTab('agenda');
-    toast('Sesión reanudada');
+    toast('Reunión reanudada');
   }, [commitSessionState]);
 
   const handleAdvance = useCallback(() => runAtomicTransition(async () => {
@@ -271,7 +271,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     }
     if (next.status === SESSION_STATUS.COMPLETED) {
       setActiveTab('recap');
-      toast('Sesión finalizada. Mostrando resumen.');
+      toast('Reunión finalizada. Mostrando resumen.');
       return;
     }
 
@@ -327,7 +327,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const next = completeLiveSession(withRecording);
     commitSessionState(next);
     setActiveTab('recap');
-    toast('Sesión finalizada. Mostrando resumen.');
+    toast('Reunión finalizada. Mostrando resumen.');
   }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
 
   const handleOpenInterrupt = useCallback(() => setInterruptModal({isOpen: true}), []);
@@ -340,7 +340,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     const next = interruptLiveSession(withRecording);
     commitSessionState(next);
     setActiveTab('recap');
-    toast(recording ? `${recording.name} y sesión conservadas` : 'Sesión interrumpida. Todo el trabajo fue conservado.');
+    toast(recording ? `${recording.name} y reunión conservadas` : 'Reunión interrumpida. Todo el trabajo fue conservado.');
   }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
 
   // Recording context is always resolved from the runner. The user never has to
@@ -404,7 +404,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     try {
       await recordingStorage.delete(recordingId);
     } catch {
-      toast('No se pudo borrar el binario local, pero se retirará de esta sesión.');
+      toast('No se pudo borrar el binario local, pero se retirará de esta reunión.');
     }
     if (recording?.blobUrl && typeof URL !== 'undefined') URL.revokeObjectURL(recording.blobUrl);
     const next = deleteRecordingFromSession(sessionStateRef.current, recordingId);
@@ -541,7 +541,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setSelectedEventId(event.eventId);
     commitSessionState(loadLiveSessionState(next));
     setActiveTab('agenda');
-    toast(`Evento abierto: ${event.title}`);
+    toast(`Reunión abierta: ${event.title}`);
   }, [commitSessionState]);
 
   const handleCleanSession = useCallback(() => {
@@ -570,7 +570,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setIsEditing((previous) => {
       const next = !previous;
       if (!next) {
-        toast('Cambios guardados en la agenda');
+        toast('Cambios guardados');
       }
       return next;
     });
@@ -627,7 +627,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       savePlannerState(next);
       return next;
     });
-    toast('Bloque añadido a la agenda');
+    toast('Bloque agregado');
   }, []);
 
   const handleAddBreak = useCallback((atIndex = null) => {
@@ -655,7 +655,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       savePlannerState(next);
       return next;
     });
-    toast('Break añadido a la agenda');
+    toast('Descanso agregado');
   }, []);
 
   const handleDeleteBlock = useCallback((blockId) => {
@@ -905,7 +905,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
 
       {/* FAB móvil persistente y sin glow al inicio/edición/reanudación */}
       {activeTab === 'agenda' && !isLive && (() => {
-        let fabLabel = 'Iniciar sesión';
+        let fabLabel = 'Empezar reunión';
         let fabIcon = <Play width={13} height={13} />;
         let fabAction = handleStartSession;
 
@@ -914,7 +914,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           fabIcon = <Check width={14} height={14} />;
           fabAction = handleToggleEditMode;
         } else if (sessionState.status === SESSION_STATUS.INTERRUPTED) {
-          fabLabel = 'Reanudar sesión';
+          fabLabel = 'Reanudar reunión';
           fabIcon = <Play width={13} height={13} />;
           fabAction = handleResumeSession;
         } else if (sessionState.status === SESSION_STATUS.COMPLETED) {
