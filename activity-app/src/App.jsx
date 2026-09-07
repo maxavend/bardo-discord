@@ -97,9 +97,12 @@ import {PlannerModule} from './planner/PlannerModule.jsx';
 import {applyDiscordTheme} from './discord-theme.js';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
-const STORE_KEY = 'bardo.docs.heroui.v1';
-const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
-const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
+const STORE_KEY = 'bardo.docs.v1';
+const DRAFT_KEY = 'bardo.docs.draft.v1';
+const LAST_OPENED_KEY = 'bardo.docs.last-opened.v1';
+const LEGACY_STORE_KEY = 'bardo.docs.heroui.v1';
+const LEGACY_DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
+const LEGACY_LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
 const STORE_VERSION = 1;
 
 const BLOCK_TYPES = [
@@ -371,24 +374,31 @@ function isMobileViewport() {
   return window.matchMedia?.('(max-width: 759px)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
 }
 
-async function copyText(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+function readMigratedStorage(key, legacyKey) {
+  try {
+    const current = localStorage.getItem(key);
+    if (current !== null) return current;
+    const legacy = legacyKey ? localStorage.getItem(legacyKey) : null;
+    if (legacy !== null) {
+      localStorage.setItem(key, legacy);
+      return legacy;
+    }
+  } catch {
+    return null;
   }
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  ta.remove();
+  return null;
+}
+
+async function copyText(text) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('El portapapeles no está disponible en este contexto.');
+  }
+  await navigator.clipboard.writeText(text);
 }
 
 function loadStore() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    const parsed = JSON.parse(readMigratedStorage(STORE_KEY, LEGACY_STORE_KEY) || 'null');
     if (!parsed || parsed.version !== STORE_VERSION || !Array.isArray(parsed.docs)) {
       return {version: STORE_VERSION, docs: [], deletedIds: []};
     }
@@ -405,7 +415,10 @@ function loadStore() {
 function saveStore(store) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
@@ -2543,14 +2556,6 @@ function elementForNode(node) {
   return node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
 }
 
-function execCommand(command, value = null) {
-  try {
-    return document.execCommand(command, false, value);
-  } catch {
-    return false;
-  }
-}
-
 function selectNodeContents(node, rangeRef) {
   const range = document.createRange();
   range.selectNodeContents(node);
@@ -2575,10 +2580,33 @@ function manualInlineFormat(body, rangeRef, command) {
   if (!sel?.rangeCount) return false;
   const range = sel.getRangeAt(0);
   const tag = INLINE_TAGS[command];
-  if (!tag || range.collapsed) return false;
+  if (!tag) return false;
   const startEl = elementForNode(range.startContainer);
   const endEl = elementForNode(range.endContainer);
   const existing = startEl?.closest?.(tag);
+
+  if (range.collapsed) {
+    if (existing && body.contains(existing)) {
+      const nextRange = document.createRange();
+      nextRange.setStartAfter(existing);
+      nextRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(nextRange);
+      rangeRef.current = nextRange.cloneRange();
+      return true;
+    }
+    const wrapper = document.createElement(tag);
+    const marker = document.createTextNode('\u200B');
+    wrapper.appendChild(marker);
+    range.insertNode(wrapper);
+    const nextRange = document.createRange();
+    nextRange.setStart(marker, marker.data.length);
+    nextRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(nextRange);
+    rangeRef.current = nextRange.cloneRange();
+    return true;
+  }
   if (existing && body.contains(existing) && existing.contains(endEl)) {
     unwrapElement(existing);
     return true;
@@ -2645,7 +2673,7 @@ function applyBlockFormat(body, rangeRef, tagName) {
     while (el && el.parentElement !== body) el = el.parentElement;
     if (el && /^(P|H1|H2|H3|H4|BLOCKQUOTE|PRE)$/i.test(el.tagName)) blocks = [el];
   }
-  if (!blocks.length) return execCommand('formatBlock', tagName);
+  if (!blocks.length) return false;
   const replacements = blocks.map(el => {
     const replacement = replaceTag(el, tagName);
     if (tagName.toLowerCase() === 'pre' && !replacement.querySelector(':scope > code')) {
@@ -2872,16 +2900,14 @@ function placeCaret(el, rangeRef, atStart = true) {
 }
 
 function updateToolbarState(body, setInline, setBlock) {
-  const next = {};
-  ['bold', 'italic', 'underline', 'strikeThrough'].forEach(cmd => {
-    try {
-      next[cmd] = document.queryCommandState(cmd);
-    } catch {
-      next[cmd] = false;
-    }
-  });
   const sel = window.getSelection();
   const el = sel?.rangeCount ? elementForNode(sel.getRangeAt(0).startContainer) : null;
+  const next = {
+    bold: Boolean(el?.closest?.('strong,b')),
+    italic: Boolean(el?.closest?.('em,i')),
+    underline: Boolean(el?.closest?.('u')),
+    strikeThrough: Boolean(el?.closest?.('s,del')),
+  };
   const list = el?.closest?.('ul,ol');
   const isChecklist = !!list && list.classList.contains('checklist');
   next.insertUnorderedList = !!list && body?.contains(list) && list.tagName === 'UL' && !isChecklist;
