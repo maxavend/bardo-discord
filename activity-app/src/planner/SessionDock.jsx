@@ -14,6 +14,7 @@ export function SessionDock({
   sessionState,
   recordingStatus,
   recordingElapsedMs,
+  recordingError = '',
   recordingContext: _recordingContext,
   isTransitioning = false,
   onPauseSession,
@@ -63,7 +64,8 @@ export function SessionDock({
         zIndex: 45,
       }}
     >
-      <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-150 shadow-sm animate-in fade-in zoom-in-95 duration-150">
+<div className="flex flex-col gap-2">
+      <div className="w-full session-dock-glass rounded-full p-1.5 sm:p-2 flex items-center justify-between gap-3 transition-all duration-150 shadow-sm animate-in fade-in zoom-in-95">
         {/* Resumen operacional: MorphDot + Tema · Tiempo */}
         <div className="flex items-center gap-2 min-w-0 flex-1 pl-1.5 sm:pl-2">
           <MaterialMorphShape
@@ -158,6 +160,15 @@ export function SessionDock({
             </span>
           </Button>
         </div>
+      </div>
+      {recordingError && (
+        <div role="alert" className="mx-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
+          <p className="text-xs text-foreground leading-relaxed">{recordingError}</p>
+          <Button variant="outline" size="sm" onClick={onStartRecording} disabled={isBusy} className="shrink-0">
+            Intentar de nuevo
+          </Button>
+        </div>
+      )}
       </div>
     </aside>
   );
