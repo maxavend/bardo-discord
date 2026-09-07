@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -397,12 +399,13 @@ export function PlannerAgendaView({
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     {isEditing ? (
-                      <input
+                      <Input
+                        variant="ghost"
                         type="text"
                         value={block.title}
                         onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
                         placeholder="Título del bloque"
-                        className="text-base font-bold tracking-tight text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0"
+                        className="flex-1 text-base font-bold tracking-tight"
                       />
                     ) : (
                       <h3 className="text-base font-bold tracking-tight text-foreground min-w-0">{block.title}</h3>
@@ -482,12 +485,13 @@ export function PlannerAgendaView({
                   </div>
 
                   {isEditing ? (
-                    <textarea
+                    <Textarea
+                      variant="ghost"
                       rows={1}
                       value={block.introDesc || ''}
                       onChange={(e) => onUpdateBlock?.(block.id, { introDesc: fieldValue(e.target.value) })}
                       placeholder="Contexto o descripción del bloque..."
-                      className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0"
+                      className="text-xs leading-relaxed text-muted-foreground"
                     />
                   ) : (
                     block.introDesc && (
@@ -545,12 +549,13 @@ export function PlannerAgendaView({
                               )}
 
                               {isEditing ? (
-                                <input
+                                <Input
+                                  variant="ghost"
                                   type="text"
                                   value={point.title}
                                   onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { title: fieldValue(e.target.value) })}
                                   placeholder="Título del punto..."
-                                  className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all leading-normal"
+                                  className="flex-1 text-sm font-semibold leading-normal"
                                 />
                               ) : (
                                 <Button
@@ -630,12 +635,13 @@ export function PlannerAgendaView({
 
                           {/* Fila 2: Descripción */}
                           {isEditing ? (
-                            <input
+                            <Input
+                              variant="ghost"
                               type="text"
                               value={point.description || ''}
                               onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { description: fieldValue(e.target.value) })}
                               placeholder="Agregar descripción o detalle..."
-                              className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all"
+                              className="text-xs text-muted-foreground"
                             />
                           ) : point.description ? (
                             <p className={`text-xs line-clamp-2 leading-relaxed ${
