@@ -292,7 +292,7 @@ export function PlannerMemberPicker({
               <span className="truncate">
                 Agregar invitado "<strong>{searchQuery.trim()}</strong>"
               </span>
-            </button>
+            </Button>
           </div>
         )}
 
@@ -330,7 +330,7 @@ export function PlannerMemberPicker({
                           <span className="text-xs text-muted-foreground ml-auto truncate">{role.tag}</span>
                         </div>
                         {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -372,7 +372,7 @@ export function PlannerMemberPicker({
                           <span className="text-xs text-muted-foreground ml-auto truncate">{member.tag}</span>
                         </div>
                         {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -529,7 +529,7 @@ export function SearchableParticipantMenu({
                           <span className="truncate">
               Agregar "<strong>{searchQuery.trim()}</strong>"
             </span>
-          </button>
+          </Button>
         </div>
       )}
 
@@ -584,7 +584,7 @@ export function SearchableParticipantMenu({
                       {isSelected && (
                         <Check className="size-3.5 text-primary shrink-0 ml-1.5" />
                       )}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -643,7 +643,7 @@ export function SearchableParticipantMenu({
                       {isSelected && (
                         <Check className="size-3.5 text-primary shrink-0 ml-1.5" />
                       )}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
