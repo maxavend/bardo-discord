@@ -46,14 +46,21 @@ import {
   EmptyContent,
   EmptyMedia,
 } from '@/components/ui/empty';
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@/components/ui/item';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { toast } from '@/lib/toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useTheme } from '@/lib/theme';
 import {
-  ArrowRotateLeft,
-  ArrowUturnCcwLeft,
-  ArrowUturnCwRight,
+  RotateCcw as ArrowRotateLeft,
+  Undo2 as ArrowUturnCcwLeft,
+  Redo2 as ArrowUturnCwRight,
   Bold,
   Calendar,
   Check,
@@ -66,31 +73,31 @@ import {
   EllipsisVertical,
   Eye,
   File,
-  FileArrowUp,
+  Upload as FileArrowUp,
   FileText,
-  Grip,
+  GripVertical as Grip,
   Heading1,
   Heading2,
   Heading3,
   Italic,
   Link,
-  ListOl,
-  ListUl,
-  Magnifier,
+  ListOrdered as ListOl,
+  List as ListUl,
+  Search as Magnifier,
   Minus,
   Moon,
   Pencil,
   Plus,
   Printer,
-  QuoteOpen,
+  Quote as QuoteOpen,
   SquareCheck,
   Strikethrough,
   Sun,
-  Text,
-  TrashBin,
+  Type as Text,
+  Trash2 as TrashBin,
   Underline,
-  Xmark,
-} from '@gravity-ui/icons';
+  X as Xmark,
+} from 'lucide-react';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
@@ -430,7 +437,7 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
             size="icon-sm"
             variant="ghost"
             aria-label={triggerLabel}
-            className="icon-button-circle text-muted-foreground hover:text-foreground shrink-0"
+            className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <EllipsisVertical width={16} height={16} />
           </Button>
@@ -597,7 +604,7 @@ function ThemeModeMenu() {
           <Button
             size="icon-sm"
             variant="ghost"
-            className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted-foreground hover:text-foreground"
+            className="theme-mode-trigger text-muted-foreground hover:text-foreground pointer-coarse:size-10"
             aria-label="Cambiar tema de apariencia"
             title={`Tema actual: ${currentLabel}`}
           >
@@ -636,7 +643,7 @@ function ModuleNav({active, onNavigate}) {
         size="sm"
         aria-current={active === 'docs' ? 'page' : undefined}
         onClick={() => onNavigate?.('docs')}
-        className="h-8 px-2.5 text-xs font-medium"
+        className="px-2.5 text-xs font-medium pointer-coarse:h-10"
       >
         <FileText width={14} height={14} />
         <span>Documentos</span>
@@ -646,7 +653,7 @@ function ModuleNav({active, onNavigate}) {
         size="sm"
         aria-current={active === 'planner' ? 'page' : undefined}
         onClick={() => onNavigate?.('planner')}
-        className="h-8 px-2.5 text-xs font-medium"
+        className="px-2.5 text-xs font-medium pointer-coarse:h-10"
       >
         <Calendar width={14} height={14} />
         <span>Reuniones</span>
@@ -671,7 +678,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               variant="default"
               size="sm"
               onClick={onPlannerNew}
-              className="h-8 px-2.5 font-medium text-xs"
+              className="px-2.5 font-medium text-xs pointer-coarse:h-10"
             >
               <Plus width={14} height={14} />
               <span className="hidden sm:inline">Nueva reunión</span>
@@ -700,7 +707,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             disabled={uploadState?.status === 'processing'}
             aria-busy={uploadState?.status === 'processing'}
             aria-label={uploadState?.status === 'processing' ? 'Importando archivo' : 'Subir archivo'}
-            className="h-8 px-2.5 font-medium text-xs"
+            className="px-2.5 font-medium text-xs pointer-coarse:h-10"
           >
             <FileArrowUp width={14} height={14} />
             <span className="hidden sm:inline">{uploadState?.status === 'processing' ? 'Importando…' : 'Subir archivo'}</span>
@@ -711,14 +718,14 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             onClick={onNew}
             aria-label="Crear documento"
             title="Crear documento"
-            className="icon-button-circle h-8 w-8"
+            className="pointer-coarse:size-10"
           >
             <Plus width={16} height={16} />
           </Button>
         </div>
       ) : doc ? (
         <div key="document-actions" className="header-slot-enter flex items-center gap-2">
-          <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
+          <Button variant="default" size="sm" onClick={onEdit} className="px-3.5 font-medium text-xs flex items-center gap-1.5 pointer-coarse:h-10">
             <Pencil width={14} height={14} /> Editar
           </Button>
           <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
@@ -727,11 +734,11 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
     >
       {isLibrary || isPlanner ? (
         <div key="primary-nav" className="topbar-primary-nav header-slot-enter flex items-center gap-2">
-          <span className="topbar-title font-bold text-sm tracking-tight text-foreground">Bardo</span>
+          <span className="topbar-title hidden sm:inline-flex font-bold text-sm tracking-tight text-foreground">Bardo</span>
           <ModuleNav active={activeModule} onNavigate={onNavigateModule} />
         </div>
       ) : (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1 pointer-coarse:h-10">
           <ChevronLeft width={15} height={15} /> Documentos
         </Button>
       )}
@@ -815,14 +822,22 @@ function Library({
         {continueDoc && !query && (
           <section className="library-section continue-section">
             <h2 className="section-title">Continuar lectura</h2>
-            <button className="continue-row" type="button" onClick={onContinue}>
-              <span className="continue-accent" aria-hidden="true" />
-              <span className="continue-copy">
-                <strong>{continueDoc.title || 'Sin título'}</strong>
-                <span>{continueDoc.origin || 'Creado en Bardo'} · {changeActorName(continueDoc)} · {formatChangeTime(continueDoc)}</span>
-              </span>
-              <ChevronRight width={16} height={16} className="text-muted-foreground" />
-            </button>
+            <Item
+              variant="outline"
+              render={<button type="button" onClick={onContinue} />}
+              className="flex-nowrap text-left"
+            >
+              <ItemMedia variant="icon">
+                <FileText className="size-4 text-muted-foreground" />
+              </ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle>{continueDoc.title || 'Sin título'}</ItemTitle>
+                <ItemDescription className="line-clamp-1">
+                  {continueDoc.origin || 'Creado en Bardo'} · {changeActorName(continueDoc)} · {formatChangeTime(continueDoc)}
+                </ItemDescription>
+              </ItemContent>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </Item>
           </section>
         )}
 
@@ -835,24 +850,29 @@ function Library({
           {docs.length > 0 ? (
             <div className="docs-list">
               {docs.map(doc => (
-                <article className="doc-row" key={doc.id}>
-                  <span className="doc-symbol">
-                    <File width={18} height={18} />
-                  </span>
-                  <button
-                    className="doc-row-main"
+                <Item variant="outline" size="sm" className="flex-nowrap" key={doc.id}>
+                  <ItemMedia variant="icon">
+                    <File className="size-4 text-muted-foreground" />
+                  </ItemMedia>
+                  <Button
+                    variant="ghost"
+                    className="h-auto min-w-0 flex-1 justify-start rounded-lg p-0 text-left hover:bg-transparent"
                     type="button"
                     onClick={() => onOpen(doc.id)}
                   >
-                    <strong>{doc.title || 'Sin título'}</strong>
-                    <span>{doc.origin || 'Creado en Bardo'} · {changeActorName(doc)} · {formatChangeTime(doc)}</span>
-                  </button>
+                    <span className="flex min-w-0 flex-1 flex-col items-start">
+                      <ItemTitle className="w-full">{doc.title || 'Sin título'}</ItemTitle>
+                      <ItemDescription className="w-full line-clamp-1">
+                        {doc.origin || 'Creado en Bardo'} · {changeActorName(doc)} · {formatChangeTime(doc)}
+                      </ItemDescription>
+                    </span>
+                  </Button>
                   <DocActionMenu
                     doc={doc}
                     triggerLabel={`Acciones de ${doc.title || 'documento'}`}
                     onAction={(action) => onDocAction(action, doc.id)}
                   />
-                </article>
+                </Item>
               ))}
             </div>
           ) : (
@@ -1653,7 +1673,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
           </Button>
           <Badge
             key={saveState}
-            variant="secondary"
+            variant={saveState === 'Error al guardar' ? 'destructive' : 'secondary'}
             className="save-state text-xs"
             data-dirty={isDirty ? 'true' : 'false'}
           >
@@ -1757,7 +1777,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                 <Button size="icon-sm" variant="ghost" aria-label="Deshacer" title="Deshacer (⌘/Ctrl+Z)" onClick={handleUndo} disabled={!historyState.canUndo} className="rounded-full">
                   <ArrowUturnCcwLeft width={15} height={15} />
                 </Button>
-                <Button size="icon-sm" variant="ghost" aria-label="Rehacer" title="Rehacer (⌘/Ctrl+Y)" onClick={handleRedo} disabled={!historyState.canRedo} className={`rounded-full ${isToolbarActionVisible('redo') ? '' : 'toolbar-control-overflowed'}`}>
+                <Button size="icon-sm" variant="ghost" aria-label="Rehacer" title="Rehacer (⌘/Ctrl+Y)" onClick={handleRedo} disabled={!historyState.canRedo} className={`rounded-full ${isToolbarActionVisible('redo') ? '' : 'hidden'}`}>
                   <ArrowUturnCwRight width={15} height={15} />
                 </Button>
               </ButtonGroup>
@@ -1771,16 +1791,16 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                 <ToggleGroupItem value="bold" aria-label="Negrita" title="Negrita (⌘/Ctrl+B)" onClick={() => runFormat('bold')} data-state={inlineState.bold ? 'on' : 'off'}>
                   <Bold width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="italic" aria-label="Cursiva" title="Cursiva (⌘/Ctrl+I)" onClick={() => runFormat('italic')} data-state={inlineState.italic ? 'on' : 'off'} className={`${isToolbarActionVisible('italic') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'italic' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="italic" aria-label="Cursiva" title="Cursiva (⌘/Ctrl+I)" onClick={() => runFormat('italic')} data-state={inlineState.italic ? 'on' : 'off'} className={`${isToolbarActionVisible('italic') ? '' : 'hidden'} ${lastVisibleStyleAction === 'italic' ? 'toolbar-last-visible' : ''}`}>
                   <Italic width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="underline" aria-label="Subrayado" title="Subrayado (⌘/Ctrl+U)" onClick={() => runFormat('underline')} data-state={inlineState.underline ? 'on' : 'off'} className={`${isToolbarActionVisible('underline') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'underline' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="underline" aria-label="Subrayado" title="Subrayado (⌘/Ctrl+U)" onClick={() => runFormat('underline')} data-state={inlineState.underline ? 'on' : 'off'} className={`${isToolbarActionVisible('underline') ? '' : 'hidden'} ${lastVisibleStyleAction === 'underline' ? 'toolbar-last-visible' : ''}`}>
                   <Underline width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="strikeThrough" aria-label="Tachado" title="Tachado" onClick={() => runFormat('strikeThrough')} data-state={inlineState.strikeThrough ? 'on' : 'off'} className={`${isToolbarActionVisible('strikeThrough') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'strikeThrough' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="strikeThrough" aria-label="Tachado" title="Tachado" onClick={() => runFormat('strikeThrough')} data-state={inlineState.strikeThrough ? 'on' : 'off'} className={`${isToolbarActionVisible('strikeThrough') ? '' : 'hidden'} ${lastVisibleStyleAction === 'strikeThrough' ? 'toolbar-last-visible' : ''}`}>
                   <Strikethrough width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="code" aria-label="Código en línea" title="Código en línea (⌘/Ctrl+E)" onClick={() => runFormat('code')} data-state={inlineState.code ? 'on' : 'off'} className={`${isToolbarActionVisible('code') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'code' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="code" aria-label="Código en línea" title="Código en línea (⌘/Ctrl+E)" onClick={() => runFormat('code')} data-state={inlineState.code ? 'on' : 'off'} className={`${isToolbarActionVisible('code') ? '' : 'hidden'} ${lastVisibleStyleAction === 'code' ? 'toolbar-last-visible' : ''}`}>
                   <Code width={15} height={15} />
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -1789,18 +1809,18 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                 type="single"
                 aria-label="Listas y bloques"
                 value={Array.from(selectedListKeys)[0] || ''}
-                className={`toolbar-list-group shrink-0 ${visibleListActions.length ? '' : 'toolbar-control-overflowed'} ${visibleListActions.length === 1 ? 'toolbar-group-standalone' : ''}`}
+                className={`toolbar-list-group shrink-0 ${visibleListActions.length ? '' : 'hidden'} ${visibleListActions.length === 1 ? 'toolbar-group-standalone' : ''}`}
               >
-                <ToggleGroupItem value="insertUnorderedList" aria-label="Lista con viñetas" title="Lista con viñetas" onClick={() => runFormat('insertUnorderedList')} data-state={inlineState.insertUnorderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="insertUnorderedList" aria-label="Lista con viñetas" title="Lista con viñetas" onClick={() => runFormat('insertUnorderedList')} data-state={inlineState.insertUnorderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'hidden'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}>
                   <ListUl width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="insertOrderedList" aria-label="Lista numerada" title="Lista numerada" onClick={() => runFormat('insertOrderedList')} data-state={inlineState.insertOrderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="insertOrderedList" aria-label="Lista numerada" title="Lista numerada" onClick={() => runFormat('insertOrderedList')} data-state={inlineState.insertOrderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'hidden'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}>
                   <ListOl width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="checklist" aria-label="Lista de tareas" title="Lista de tareas" onClick={() => runFormat('checklist')} data-state={inlineState.checklist ? 'on' : 'off'} className={`${isToolbarActionVisible('checklist') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="checklist" aria-label="Lista de tareas" title="Lista de tareas" onClick={() => runFormat('checklist')} data-state={inlineState.checklist ? 'on' : 'off'} className={`${isToolbarActionVisible('checklist') ? '' : 'hidden'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}>
                   <SquareCheck width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="blockquote" aria-label="Cita" title="Cita" onClick={() => runFormat('blockquote')} data-state={inlineState.blockquote ? 'on' : 'off'} className={`${isToolbarActionVisible('blockquote') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="blockquote" aria-label="Cita" title="Cita" onClick={() => runFormat('blockquote')} data-state={inlineState.blockquote ? 'on' : 'off'} className={`${isToolbarActionVisible('blockquote') ? '' : 'hidden'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}>
                   <QuoteOpen width={15} height={15} />
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -1813,7 +1833,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                   title="Enlace (⌘/Ctrl+K)"
                   aria-pressed={inlineState.link}
                   onClick={() => runFormat('createLink')}
-                  className={`rounded-full ${isToolbarActionVisible('createLink') ? '' : 'toolbar-control-overflowed'}`}
+                  className={`rounded-full ${isToolbarActionVisible('createLink') ? '' : 'hidden'}`}
                 >
                   <Link width={15} height={15} />
                 </Button>
