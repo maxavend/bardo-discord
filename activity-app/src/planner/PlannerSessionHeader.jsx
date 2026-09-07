@@ -81,7 +81,7 @@ export function PlannerSessionHeader({
   onGoHome: _onGoHome,
 }) {
   const {
-    title = 'Sesión sin título',
+    title = 'Reunión sin título',
     description = '',
     date = '',
     startTime = '17:45',
