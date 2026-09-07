@@ -1,24 +1,32 @@
-import {useState, useRef, useEffect} from 'react';
-import {Avatar} from '@/components/ui/avatar';
-import {Xmark, Plus, Check, Magnifier, ChevronDown} from '@gravity-ui/icons';
+import { useState, useRef } from 'react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupButton } from '@/components/ui/input-group';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import {
+  DropdownMenuSeparator,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import { X, Plus, Check, Search, ChevronDown } from 'lucide-react';
 
 export const DEFAULT_DISCORD_MEMBERS = [
-  {id: 'u-1', type: 'user', username: 'nico.g', globalName: 'Nico G', tag: '@Nico G', avatarColor: '#5865F2'},
-  {id: 'u-2', type: 'user', username: 'camila.carreno', globalName: 'Camila Carreño', tag: '@Camila Carreño', avatarColor: '#EB459E'},
-  {id: 'u-3', type: 'user', username: 'daniela', globalName: 'Daniela', tag: '@Daniela', avatarColor: '#57F287'},
-  {id: 'u-4', type: 'user', username: 'javi.acuna', globalName: 'Javi Acuña', tag: '@Javi Acuña', avatarColor: '#FEE75C'},
-  {id: 'u-5', type: 'user', username: 'max.avendano', globalName: 'Max Avendaño', tag: '@Max Avendaño', avatarColor: '#00A8FC'},
-  {id: 'u-6', type: 'user', username: 'carol.t', globalName: 'Carol T', tag: '@Carol T', avatarColor: '#ED4245'},
-  {id: 'u-7', type: 'user', username: 'karola', globalName: 'Karola', tag: '@Karola', avatarColor: '#9B59B6'},
-  {id: 'u-8', type: 'user', username: 'paula.molina', globalName: 'Paula Molina', tag: '@Paula Molina', avatarColor: '#E67E22'},
+  { id: 'u-1', type: 'user', username: 'nico.g', globalName: 'Nico G', tag: '@Nico G', avatarColor: '#5865F2' },
+  { id: 'u-2', type: 'user', username: 'camila.carreno', globalName: 'Camila Carreño', tag: '@Camila Carreño', avatarColor: '#EB459E' },
+  { id: 'u-3', type: 'user', username: 'daniela', globalName: 'Daniela', tag: '@Daniela', avatarColor: '#57F287' },
+  { id: 'u-4', type: 'user', username: 'javi.acuna', globalName: 'Javi Acuña', tag: '@Javi Acuña', avatarColor: '#FEE75C' },
+  { id: 'u-5', type: 'user', username: 'max.avendano', globalName: 'Max Avendaño', tag: '@Max Avendaño', avatarColor: '#00A8FC' },
+  { id: 'u-6', type: 'user', username: 'carol.t', globalName: 'Carol T', tag: '@Carol T', avatarColor: '#ED4245' },
+  { id: 'u-7', type: 'user', username: 'karola', globalName: 'Karola', tag: '@Karola', avatarColor: '#9B59B6' },
+  { id: 'u-8', type: 'user', username: 'paula.molina', globalName: 'Paula Molina', tag: '@Paula Molina', avatarColor: '#E67E22' },
 ];
 
 export const DEFAULT_DISCORD_ROLES = [
-  {id: 'r-1', type: 'role', name: 'Diseño & SD', tag: '@Diseño & SD', color: '#5865F2'},
-  {id: 'r-2', type: 'role', name: 'Equipo de Desarrollo', tag: '@Devs', color: '#57F287'},
-  {id: 'r-3', type: 'role', name: 'Líderes de Proyecto', tag: '@Líderes', color: '#FEE75C'},
-  {id: 'r-4', type: 'role', name: 'Frontend', tag: '@Frontend', color: '#00A8FC'},
-  {id: 'r-5', type: 'role', name: 'Todos en el canal', tag: '@todos', color: '#EB459E'},
+  { id: 'r-1', type: 'role', name: 'Diseño & SD', tag: '@Diseño & SD', color: '#5865F2' },
+  { id: 'r-2', type: 'role', name: 'Equipo de Desarrollo', tag: '@Devs', color: '#57F287' },
+  { id: 'r-3', type: 'role', name: 'Líderes de Proyecto', tag: '@Líderes', color: '#FEE75C' },
+  { id: 'r-4', type: 'role', name: 'Frontend', tag: '@Frontend', color: '#00A8FC' },
+  { id: 'r-5', type: 'role', name: 'Todos en el canal', tag: '@todos', color: '#EB459E' },
 ];
 
 export const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
@@ -61,7 +69,7 @@ export function getAllDiscordEntities() {
     }
   }
 
-  return {members: allMembers, roles: allRoles};
+  return { members: allMembers, roles: allRoles };
 }
 
 export function parseMentionsToArray(mentionsStr = '') {
@@ -73,17 +81,24 @@ export function parseMentionsToArray(mentionsStr = '') {
   return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
 }
 
-export function PlannerMemberPicker({value = '', onChange, _variant = 'secondary'}) {
+export function PlannerMemberPicker({
+  value = '',
+  onChange,
+  _variant = 'secondary',
+  singleSelect = false,
+  hideRoles = false,
+  placeholder = 'Buscar personas o roles...',
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const containerRef = useRef(null);
+  const inputRef = useRef(null);
 
   const selectedTags = parseMentionsToArray(value);
   const selectedSet = new Set(selectedTags.map((t) => (t.startsWith('@') ? t : `@${t}`)));
-  const {members, roles} = getAllDiscordEntities();
+  const { members, roles } = getAllDiscordEntities();
 
   const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
-  const filteredRoles = roles.filter(
+  const filteredRoles = hideRoles ? [] : roles.filter(
     (r) => !q || r.name.toLowerCase().includes(q) || r.tag.toLowerCase().includes(q)
   );
   const filteredMembers = members.filter(
@@ -97,19 +112,19 @@ export function PlannerMemberPicker({value = '', onChange, _variant = 'secondary
       (e.globalName || e.name || '').toLowerCase() === q
   );
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const handleToggleTag = (tag) => {
     let cleanTag = tag.trim();
     if (!cleanTag.startsWith('@')) cleanTag = `@${cleanTag}`;
+
+    if (singleSelect) {
+      if (selectedSet.has(cleanTag)) {
+        onChange('');
+      } else {
+        onChange(cleanTag);
+      }
+      setIsOpen(false);
+      return;
+    }
 
     const nextKeys = new Set(Array.from(selectedSet));
     if (nextKeys.has(cleanTag)) {
@@ -122,6 +137,10 @@ export function PlannerMemberPicker({value = '', onChange, _variant = 'secondary
 
   const handleRemoveTag = (tagToRemove, e) => {
     e?.stopPropagation();
+    if (singleSelect) {
+      onChange('');
+      return;
+    }
     const nextKeys = new Set(Array.from(selectedSet));
     nextKeys.delete(tagToRemove);
     onChange(Array.from(nextKeys).join(' '));
@@ -148,176 +167,190 @@ export function PlannerMemberPicker({value = '', onChange, _variant = 'secondary
         ],
     });
 
-    const nextKeys = new Set(Array.from(selectedSet));
-    nextKeys.add(cleanTag);
-    onChange(Array.from(nextKeys).join(' '));
+    if (singleSelect) {
+      onChange(cleanTag);
+      setIsOpen(false);
+    } else {
+      const nextKeys = new Set(Array.from(selectedSet));
+      nextKeys.add(cleanTag);
+      onChange(Array.from(nextKeys).join(' '));
+    }
     setSearchQuery('');
   };
 
   return (
-    <div ref={containerRef} className="relative w-full">
-      {/* Contenedor input donde se escribe directamente */}
-      <div
-        onClick={() => setIsOpen(true)}
-        className="min-h-10 w-full px-3 py-2 rounded-2xl bg-surface-secondary/50 border border-border/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all flex items-center justify-between gap-2 flex-wrap cursor-text"
-      >
-        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-          {Array.from(selectedSet).map((tag) => {
-            const matchedRole = roles.find((r) => r.tag.toLowerCase() === tag.toLowerCase());
-            const matchedMember = members.find((m) => m.tag.toLowerCase() === tag.toLowerCase());
-            const label = matchedRole?.name || matchedMember?.globalName || tag;
-            const color = matchedRole?.color || matchedMember?.avatarColor || '#5865F2';
-
-            return (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold bg-surface border border-border/50 shadow-2xs text-foreground shrink-0"
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{backgroundColor: color}}
-                />
-                <span>{label}</span>
-                <button
-                  type="button"
-                  onClick={(e) => handleRemoveTag(tag, e)}
-                  className="text-muted hover:text-foreground p-0.5 rounded-sm cursor-pointer"
-                  aria-label={`Eliminar ${label}`}
-                >
-                  <Xmark width={11} height={11} />
-                </button>
-              </span>
-            );
-          })}
-
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger
+        render={
+          <div
+            onClick={() => {
               setIsOpen(true);
+              inputRef.current?.focus();
             }}
-            onFocus={() => setIsOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && searchQuery.trim()) {
-                e.preventDefault();
-                handleAddGuest(searchQuery);
-              } else if (e.key === 'Backspace' && !searchQuery && selectedSet.size > 0) {
-                const lastTag = Array.from(selectedSet).pop();
-                if (lastTag) handleRemoveTag(lastTag);
-              }
-            }}
-            placeholder={selectedSet.size === 0 ? 'Buscar personas o roles...' : 'Agregar...'}
-            className="text-xs bg-transparent border-0 outline-none p-0 flex-1 min-w-[120px] text-foreground placeholder:text-muted focus:ring-0"
-          />
-        </div>
+            className="min-h-10 w-full px-3 py-1.5 rounded-3xl bg-input/50 border border-transparent hover:border-border/60 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 transition-all flex items-center justify-between gap-2 flex-wrap cursor-text"
+          >
+            <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+              {Array.from(selectedSet).map((tag) => {
+                const matchedRole = roles.find((r) => r.tag.toLowerCase() === tag.toLowerCase());
+                const matchedMember = members.find((m) => m.tag.toLowerCase() === tag.toLowerCase());
+                const label = matchedRole?.name || matchedMember?.globalName || tag;
+                const color = matchedRole?.color || matchedMember?.avatarColor || '#5865F2';
 
-        <ChevronDown width={14} height={14} className={`text-muted transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
-      </div>
-
-      {/* Popover que aparece HACIA ABAJO con ALTO MÁXIMO */}
-      {isOpen && (
-        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[280px] max-h-64 overflow-y-auto rounded-2xl border border-border/60 bg-surface/98 backdrop-blur-md shadow-xl z-50 p-2 flex flex-col gap-2 transition-all animate-in fade-in slide-in-from-top-1 duration-150">
-          {searchQuery.trim() && !hasExactMatch && (
-            <div className="pb-1.5 border-b border-border/40">
-              <button
-                type="button"
-                onClick={() => handleAddGuest(searchQuery)}
-                className="w-full text-left px-2.5 py-2 rounded-xl text-xs font-semibold text-primary hover:bg-primary/10 flex items-center gap-2 transition-colors cursor-pointer"
-              >
-                <Plus width={13} height={13} className="shrink-0" />
-                <span className="truncate">
-                  Agregar invitado "<strong>{searchQuery.trim()}</strong>"
-                </span>
-              </button>
-            </div>
-          )}
-
-          {filteredRoles.length > 0 && (
-            <div>
-              <div className="text-[10px] font-bold text-muted/70 px-2 py-1 uppercase tracking-wider">
-                Roles del servidor
-              </div>
-              <div className="flex flex-col gap-0.5">
-                {filteredRoles.map((role) => {
-                  const isSelected = selectedSet.has(role.tag);
-                  return (
+                return (
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="gap-1.5 py-1 px-2.5 rounded-xl border border-border/50 text-xs font-medium text-foreground shrink-0"
+                  >
+                    <span
+                      className="size-2 rounded-full shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span>{label}</span>
                     <button
-                      key={role.tag}
                       type="button"
-                      onClick={() => handleToggleTag(role.tag)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-primary/10 text-foreground font-semibold'
-                          : 'hover:bg-surface-secondary/70 text-foreground'
-                      }`}
+                      onClick={(e) => handleRemoveTag(tag, e)}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded-sm cursor-pointer ml-0.5"
+                      aria-label={`Eliminar ${label}`}
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span
-                          className="w-4.5 h-4.5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
-                          style={{backgroundColor: role.color}}
-                        >
-                          #
-                        </span>
-                        <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
-                        <span className="text-[10.5px] text-muted ml-auto truncate">{role.tag}</span>
-                      </div>
-                      {isSelected && <Check width={14} height={14} className="text-primary shrink-0 ml-1" />}
+                      <X className="size-3" />
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  </Badge>
+                );
+              })}
 
-          {filteredMembers.length > 0 && (
-            <div>
-              <div className="text-[10px] font-bold text-muted/70 px-2 py-1 uppercase tracking-wider">
-                Miembros del servidor y canal
-              </div>
-              <div className="flex flex-col gap-0.5">
-                {filteredMembers.map((member) => {
-                  const isSelected = selectedSet.has(member.tag);
-                  return (
-                    <button
-                      key={member.tag}
-                      type="button"
-                      onClick={() => handleToggleTag(member.tag)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-primary/10 text-foreground font-semibold'
-                          : 'hover:bg-surface-secondary/70 text-foreground'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Avatar
-                          name={member.globalName}
-                          size="sm"
-                          className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                          style={{
-                            backgroundColor: `${member.avatarColor}30`,
-                            color: member.avatarColor,
-                          }}
-                        />
-                        <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
-                        <span className="text-[10.5px] text-muted ml-auto truncate">{member.tag}</span>
-                      </div>
-                      {isSelected && <Check width={14} height={14} className="text-primary shrink-0 ml-1" />}
-                    </button>
-                  );
-                })}
-              </div>
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!isOpen) setIsOpen(true);
+                }}
+                onFocus={() => setIsOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    e.preventDefault();
+                    handleAddGuest(searchQuery);
+                  } else if (e.key === 'Backspace' && !searchQuery && selectedSet.size > 0) {
+                    const lastTag = Array.from(selectedSet).pop();
+                    if (lastTag) handleRemoveTag(lastTag);
+                  }
+                }}
+                placeholder={selectedSet.size === 0 ? placeholder : 'Agregar...'}
+                className="text-xs bg-transparent border-0 outline-none p-0 flex-1 min-w-[120px] text-foreground placeholder:text-muted-foreground focus:ring-0"
+              />
             </div>
-          )}
 
-          {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
-            <div className="px-3 py-3 text-center text-xs text-muted">
-              No hay miembros ni roles disponibles.
-            </div>
-          )}
+            <ChevronDown className={`size-4 text-muted-foreground transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+          </div>
+        }
+      />
+
+      <PopoverContent align="start" className="w-[300px] p-1.5 flex flex-col gap-1">
+        {searchQuery.trim() && !hasExactMatch && (
+          <div className="p-1 border-b border-border/40">
+            <button
+              type="button"
+              onClick={() => handleAddGuest(searchQuery)}
+              className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Plus className="size-3.5 shrink-0" />
+              <span className="truncate">
+                Agregar invitado "<strong>{searchQuery.trim()}</strong>"
+              </span>
+            </button>
+          </div>
+        )}
+
+        <div
+          className="max-h-72 w-full overflow-y-auto overscroll-contain pr-1"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
+          <div className="flex flex-col gap-1 pr-1">
+            {filteredRoles.length > 0 && (
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                  Roles del servidor
+                </DropdownMenuLabel>
+                <div className="flex flex-col gap-0.5">
+                  {filteredRoles.map((role) => {
+                    const isSelected = selectedSet.has(role.tag);
+                    return (
+                      <button
+                        key={role.tag}
+                        type="button"
+                        onClick={() => handleToggleTag(role.tag)}
+                        className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span
+                            className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                            style={{ backgroundColor: role.color }}
+                          >
+                            #
+                          </span>
+                          <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
+                          <span className="text-[10.5px] text-muted-foreground ml-auto truncate">{role.tag}</span>
+                        </div>
+                        {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </DropdownMenuGroup>
+            )}
+
+            {filteredMembers.length > 0 && (
+              <DropdownMenuGroup>
+                {filteredRoles.length > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                  Miembros del servidor y canal
+                </DropdownMenuLabel>
+                <div className="flex flex-col gap-0.5">
+                  {filteredMembers.map((member) => {
+                    const isSelected = selectedSet.has(member.tag);
+                    return (
+                      <button
+                        key={member.tag}
+                        type="button"
+                        onClick={() => handleToggleTag(member.tag)}
+                        className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Avatar
+                            size="xs"
+                            className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                            style={{
+                              backgroundColor: `${member.avatarColor}30`,
+                              color: member.avatarColor,
+                            }}
+                          >
+                            <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
+                              {member.globalName.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
+                          <span className="text-[10.5px] text-muted-foreground ml-auto truncate">{member.tag}</span>
+                        </div>
+                        {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </DropdownMenuGroup>
+            )}
+
+            {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
+              <div className="px-3 py-3 text-center text-xs text-muted-foreground">
+                No hay miembros ni roles disponibles.
+              </div>
+            )}
+          </div>
         </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -325,12 +358,14 @@ export function SearchableParticipantMenu({
   selectedKeys = new Set(),
   onSelectionChange,
   onAddCustomParticipant,
+  singleSelect = false,
+  hideRoles = false,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const {members, roles} = getAllDiscordEntities();
+  const { members, roles } = getAllDiscordEntities();
 
   const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
-  const filteredRoles = roles.filter(
+  const filteredRoles = hideRoles ? [] : roles.filter(
     (r) => !q || r.name.toLowerCase().includes(q) || r.tag.toLowerCase().includes(q)
   );
   const filteredMembers = members.filter(
@@ -345,6 +380,11 @@ export function SearchableParticipantMenu({
   );
 
   const handleToggle = (tag) => {
+    if (singleSelect) {
+      onSelectionChange([tag]);
+      return;
+    }
+
     let cleanTag = tag.trim();
     if (!cleanTag.startsWith('@')) cleanTag = `@${cleanTag}`;
 
@@ -407,68 +447,14 @@ export function SearchableParticipantMenu({
   };
 
   return (
-    <div className="flex flex-col min-w-[285px] max-w-xs text-xs">
-      {/* 1. ROLES DEL SERVIDOR (Superior) */}
-      <div className="p-2 pb-1.5 border-b border-border/40">
-        <div className="text-[10px] font-bold text-muted/70 px-1.5 pb-1.5 uppercase tracking-wider">
-          Roles del servidor
-        </div>
-        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
-          {filteredRoles.map((role) => {
-            const isSelected =
-              selectedKeys.has(role.tag) ||
-              selectedKeys.has(role.name) ||
-              selectedKeys.has(`@${role.name}`) ||
-              Array.from(selectedKeys).some(
-                (k) =>
-                  k.toLowerCase() === role.tag.toLowerCase() ||
-                  k.toLowerCase() === `@${role.name.toLowerCase()}`
-              );
-
-            return (
-              <button
-                key={role.tag}
-                type="button"
-                onClick={() => handleToggle(role.tag)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-accent/10 text-foreground font-semibold'
-                    : 'hover:bg-surface-secondary/70 text-foreground'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <span
-                    className="w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
-                    style={{backgroundColor: role.color}}
-                  >
-                    #
-                  </span>
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-xs font-medium text-foreground leading-tight truncate">
-                      {role.name}
-                    </span>
-                    <span className="text-[10.5px] text-muted leading-tight truncate">
-                      {role.tag}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
-                  {isSelected && (
-                    <Check width={14} height={14} className="text-accent" />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2. SEARCH INPUT (Medio) */}
-      <div className="p-2 border-b border-border/40 bg-surface-secondary/20">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-field-background border border-border/50 focus-within:border-accent/80 transition-colors shadow-2xs">
-          <Magnifier width={13} height={13} className="text-muted shrink-0" />
-          <input
-            type="text"
+    <div className="flex flex-col min-w-[280px] max-w-xs text-xs p-1">
+      {/* 1. SEARCH INPUT (Canonical shadcn Combobox placement at the TOP) */}
+      <div className="p-1 pb-1.5">
+        <InputGroup className="h-8">
+          <InputGroupAddon align="inline-start">
+            <Search className="size-3.5 text-muted-foreground" />
+          </InputGroupAddon>
+          <InputGroupInput
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -477,99 +463,156 @@ export function SearchableParticipantMenu({
                 handleAddGuest(searchQuery);
               }
             }}
-            placeholder="Buscar miembro o agregar invitado..."
-            className="text-xs bg-transparent border-0 outline-none p-0 w-full text-foreground placeholder:text-muted focus:ring-0"
+            placeholder="Buscar miembro o rol..."
+            className="text-xs"
           />
           {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="text-muted hover:text-foreground cursor-pointer"
-            >
-              <Xmark width={12} height={12} />
-            </button>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton size="icon-xs" variant="ghost" onClick={() => setSearchQuery('')}>
+                <X className="size-3" />
+              </InputGroupButton>
+            </InputGroupAddon>
           )}
-        </div>
+        </InputGroup>
       </div>
 
-      {/* 3. LISTA DE MIEMBROS Y CANAL (Inferior con gap entre elementos) */}
-      <div className="max-h-56 overflow-y-auto p-2 flex flex-col gap-1">
-        {/* Opción para agregar invitado cuando escribe un nombre */}
-        {searchQuery.trim() && !hasExactMatch && (
-          <div className="mb-1 pb-1 border-b border-border/40">
-            <button
-              type="button"
-              onClick={() => handleAddGuest(searchQuery)}
-              className="w-full text-left px-2.5 py-2 rounded-xl text-xs font-semibold text-accent hover:bg-accent/10 flex items-center gap-2 transition-colors cursor-pointer"
-            >
-              <Plus width={13} height={13} className="shrink-0" />
-              <span className="truncate">
-                Agregar invitado "<strong>{searchQuery.trim()}</strong>"
-              </span>
-            </button>
-          </div>
-        )}
+      <DropdownMenuSeparator className="my-1" />
 
-        <div className="text-[10px] font-bold text-muted/70 px-1.5 pt-0.5 pb-1 uppercase tracking-wider">
-          Miembros del servidor y canal
+      {/* Guest addition option */}
+      {searchQuery.trim() && !hasExactMatch && (
+        <div className="px-1 py-0.5">
+          <button
+            type="button"
+            onClick={() => handleAddGuest(searchQuery)}
+            className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <Plus className="size-3.5 shrink-0" />
+                          <span className="truncate">
+              Agregar "<strong>{searchQuery.trim()}</strong>"
+            </span>
+          </button>
         </div>
+      )}
 
-        {filteredMembers.length > 0 ? (
-          filteredMembers.map((member) => {
-            const isSelected =
-              selectedKeys.has(member.tag) ||
-              selectedKeys.has(member.globalName) ||
-              selectedKeys.has(`@${member.globalName}`) ||
-              Array.from(selectedKeys).some(
-                (k) =>
-                  k.toLowerCase() === member.tag.toLowerCase() ||
-                  k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
-                  k.toLowerCase() === member.globalName.toLowerCase()
-              );
+      {/* Native scrollable container to allow wheel and touch scrolling smoothly inside DropdownMenuContent */}
+      <div
+        className="max-h-64 w-full overflow-y-auto overscroll-contain px-1 py-0.5"
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col gap-1 pr-0.5">
+          {/* 2. ROLES DEL SERVIDOR */}
+          {filteredRoles.length > 0 && (
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/80">
+                Roles del servidor
+              </DropdownMenuLabel>
+              <div className="flex flex-col gap-0.5">
+                {filteredRoles.map((role) => {
+                  const isSelected =
+                    selectedKeys.has(role.tag) ||
+                    selectedKeys.has(role.name) ||
+                    selectedKeys.has(`@${role.name}`) ||
+                    Array.from(selectedKeys).some(
+                      (k) =>
+                        k.toLowerCase() === role.tag.toLowerCase() ||
+                        k.toLowerCase() === `@${role.name.toLowerCase()}`
+                    );
 
-            return (
-              <button
-                key={member.tag}
-                type="button"
-                onClick={() => handleToggle(member.tag)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-accent/10 text-foreground font-semibold'
-                    : 'hover:bg-surface-secondary/70 text-foreground'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <Avatar
-                    name={member.globalName}
-                    size="sm"
-                    className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                    style={{
-                      backgroundColor: `${member.avatarColor}30`,
-                      color: member.avatarColor,
-                    }}
-                  />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-xs font-medium text-foreground leading-tight truncate">
-                      {member.globalName}
-                    </span>
-                    <span className="text-[10.5px] text-muted leading-tight truncate">
-                      {member.tag}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-5 h-5 flex items-center justify-center shrink-0 ml-auto">
-                  {isSelected && (
-                    <Check width={14} height={14} className="text-accent" />
-                  )}
-                </div>
-              </button>
-            );
-          })
-        ) : (
-          <div className="px-3 py-3 text-center text-xs text-muted">
-            No se encontraron miembros con ese nombre.
-          </div>
-        )}
+                  return (
+                    <button
+                      key={role.tag}
+                      type="button"
+                      onClick={() => handleToggle(role.tag)}
+                      className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span
+                          className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                          style={{ backgroundColor: role.color }}
+                        >
+                          #
+                        </span>
+                        <span className="text-xs font-medium text-foreground truncate">
+                          {role.name}
+                        </span>
+                        <span className="text-[10.5px] text-muted-foreground ml-auto truncate">
+                          {role.tag}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <Check className="size-3.5 text-primary shrink-0 ml-1.5" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </DropdownMenuGroup>
+          )}
+
+          {/* 3. MIEMBROS DEL SERVIDOR Y CANAL */}
+          {filteredMembers.length > 0 && (
+            <DropdownMenuGroup>
+              {filteredRoles.length > 0 && <DropdownMenuSeparator className="my-1.5" />}
+              <DropdownMenuLabel className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/80">
+                Miembros del servidor y canal
+              </DropdownMenuLabel>
+              <div className="flex flex-col gap-0.5">
+                {filteredMembers.map((member) => {
+                  const isSelected =
+                    selectedKeys.has(member.tag) ||
+                    selectedKeys.has(member.globalName) ||
+                    selectedKeys.has(`@${member.globalName}`) ||
+                    Array.from(selectedKeys).some(
+                      (k) =>
+                        k.toLowerCase() === member.tag.toLowerCase() ||
+                        k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
+                        k.toLowerCase() === member.globalName.toLowerCase()
+                    );
+
+                  return (
+                    <button
+                      key={member.tag}
+                      type="button"
+                      onClick={() => handleToggle(singleSelect ? member.globalName : member.tag)}
+                      className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Avatar
+                          size="xs"
+                          className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                          style={{
+                            backgroundColor: `${member.avatarColor}30`,
+                            color: member.avatarColor,
+                          }}
+                        >
+                          <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
+                            {member.globalName.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-medium text-foreground truncate">
+                          {member.globalName}
+                        </span>
+                        <span className="text-[10.5px] text-muted-foreground ml-auto truncate">
+                          {member.tag}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <Check className="size-3.5 text-primary shrink-0 ml-1.5" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </DropdownMenuGroup>
+          )}
+
+          {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
+            <div className="px-3 py-3 text-center text-xs text-muted-foreground">
+              No hay miembros ni roles disponibles.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

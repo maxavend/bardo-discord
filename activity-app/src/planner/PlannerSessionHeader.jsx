@@ -1,21 +1,29 @@
-import { Avatar } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Dropdown } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label, Description, Header } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
 import {
   FileText,
   Pencil,
   Copy,
   Plus,
-  ArrowRotateLeft,
-  EllipsisVertical,
+  RotateCcw,
+  MoreVertical,
   Play,
   Check,
-  ArrowRotateRight,
+  RotateCw,
   Calendar,
-  Clock,
-} from '@gravity-ui/icons';
+  ChevronDown,
+} from 'lucide-react';
 import {
   SESSION_STATUS,
   recalculateEstimatedEndTime,
@@ -34,6 +42,26 @@ function parseMentions(mentionsStr = '') {
     return matches.map((m) => m.trim()).filter(Boolean);
   }
   return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
+}
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return '01/09/2026';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+function _format12Hour(timeStr) {
+  if (!timeStr) return '10:00 a.m.';
+  const [hStr, mStr] = timeStr.split(':');
+  let h = parseInt(hStr || '10', 10);
+  const m = mStr || '00';
+  const period = h >= 12 ? 'p.m.' : 'a.m.';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${String(h).padStart(2, '0')}:${m} ${period}`;
 }
 
 export function PlannerSessionHeader({
@@ -67,287 +95,43 @@ export function PlannerSessionHeader({
     (accumulator, b) => accumulator + (b.durationMinutes || 0),
     0
   ) || totalCalculatedDuration || 0;
-  const _estimatedEndTime = recalculateEstimatedEndTime(
+  const estimatedEndTime = recalculateEstimatedEndTime(
     startTime,
     totalPlannedMinutes
   );
 
-  const isRunning = sessionState?.status === SESSION_STATUS.RUNNING;
-  const isPaused = sessionState?.status === SESSION_STATUS.PAUSED;
-  const isCompleted = sessionState?.status === SESSION_STATUS.COMPLETED;
-  const isInterrupted = sessionState?.status === SESSION_STATUS.INTERRUPTED;
+  const status = sessionState?.status || SESSION_STATUS.IDLE;
+  const isRunning = status === SESSION_STATUS.RUNNING;
+  const isPaused = status === SESSION_STATUS.PAUSED;
+  const isInterrupted = status === SESSION_STATUS.INTERRUPTED;
+  const isCompleted = status === SESSION_STATUS.COMPLETED;
 
-  let _formattedDate = date;
-  try {
-    const [year, month, day] = (date || '').split('-').map(Number);
-    if (year && month && day) {
-      const d = new Date(year, month - 1, day);
-      const weekday = new Intl.DateTimeFormat('es-ES', {weekday: 'short'}).format(d);
-      const monthName = new Intl.DateTimeFormat('es-ES', {month: 'short'}).format(d);
-      _formattedDate = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${monthName}`;
+  const { members } = getAllDiscordEntities();
+  const selectedKeys = new Set(parseMentions(mentions));
+
+  const formatHeaderDate = (isoDate) => {
+    if (!isoDate) return 'Fecha por definir';
+    try {
+      const [y, m, d] = isoDate.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      return new Intl.DateTimeFormat('es-ES', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      }).format(dateObj);
+    } catch {
+      return isoDate;
     }
-  } catch {
-    _formattedDate = date;
-  }
-
-  const hours = Math.floor(totalPlannedMinutes / 60);
-  const mins = totalPlannedMinutes % 60;
-  const formattedDuration =
-    hours > 0 ? (mins > 0 ? `${hours} h ${mins} min` : `${hours} h`) : `${mins} min`;
-
-  const participantsList = parseMentions(mentions);
-
-  const renderDateSelector = () => {
-    if (!isEditing) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-full border border-border/50">
-          <Calendar width={13} height={13} className="shrink-0 text-primary" />
-          <span>{_formattedDate || 'Sin fecha'}</span>
-        </span>
-      );
-    }
-    return (
-      <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Calendar width={13} height={13} className="shrink-0" />
-        <Input
-          type="date"
-          value={date || ''}
-          onChange={(e) => onUpdateHeaderField?.('date', e.target.value)}
-          className="h-7 w-32 px-2 text-xs rounded-lg"
-        />
-      </div>
-    );
-  };
-
-  const renderTimeSelector = () => {
-    if (!isEditing) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-full border border-border/50">
-          <Clock width={13} height={13} className="shrink-0 text-primary" />
-          <span>{startTime || '10:00'}</span>
-        </span>
-      );
-    }
-    return (
-      <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Clock width={13} height={13} className="shrink-0" />
-        <Input
-          type="time"
-          value={startTime || '10:00'}
-          onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
-          className="h-7 w-24 px-2 text-xs rounded-lg"
-        />
-      </div>
-    );
-  };
-
-  const renderHostSelector = () => {
-    const {members} = getAllDiscordEntities();
-    const hostMember = members.find(
-      (m) =>
-        m.globalName.toLowerCase() === (host || '').toLowerCase() ||
-        m.tag.toLowerCase() === (host || '').toLowerCase() ||
-        `@${m.globalName.toLowerCase()}` === (host || '').toLowerCase()
-    );
-    const hostColor = hostMember?.avatarColor || DISCORD_PALETTES[0];
-
-    if (!isEditing) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <Avatar
-            name={hostMember?.globalName || host || 'Conductor'}
-            size="sm"
-            className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
-            style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-          />
-          <span className="font-medium text-foreground">{host || 'Conductor'}</span>
-        </div>
-      );
-    }
-
-    return (
-      <Dropdown>
-        <Dropdown.Trigger>
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
-          >
-            <Avatar
-              name={hostMember?.globalName || host || 'Conductor'}
-              size="sm"
-              className="w-5 h-5 text-[9.5px] font-bold shrink-0 border border-background shadow-2xs"
-              style={{backgroundColor: `${hostColor}30`, color: hostColor}}
-            />
-            <span className="font-medium text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-              {host || 'Asignar conductor'}
-            </span>
-          </button>
-        </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom start" className="min-w-[260px] max-h-72 overflow-y-auto p-1.5 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl">
-          <Dropdown.Menu onAction={(key) => onUpdateHeaderField?.('host', String(key))} className="p-0">
-            <Dropdown.Section>
-              <Header className="text-[10px] font-bold text-muted/70 px-3 pt-2 pb-1.5 uppercase tracking-wider">
-                Conduce la sesión
-              </Header>
-              {members.map((member) => (
-                <Dropdown.Item key={member.id || member.tag} id={member.globalName} textValue={member.globalName} className="px-3 py-1.5 rounded-xl text-xs">
-                  <Avatar
-                    name={member.globalName}
-                    size="sm"
-                    className="w-5 h-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                    style={{backgroundColor: `${member.avatarColor}30`, color: member.avatarColor}}
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <Label className="text-xs font-medium text-foreground leading-tight">{member.globalName}</Label>
-                    <Description className="text-[10.5px] text-muted leading-tight">{member.tag}</Description>
-                  </div>
-                </Dropdown.Item>
-              ))}
-            </Dropdown.Section>
-          </Dropdown.Menu>
-        </Dropdown.Popover>
-      </Dropdown>
-    );
-  };
-
-  const renderParticipantsPicker = () => {
-    const {members, roles} = getAllDiscordEntities();
-
-    const selectedKeys = new Set(
-      participantsList.map((tag) => {
-        const found = [...members, ...roles].find(
-          (m) =>
-            m.tag.toLowerCase() === tag.toLowerCase() ||
-            `@${(m.globalName || m.name || '').toLowerCase()}` === tag.toLowerCase() ||
-            (m.globalName || m.name || '').toLowerCase() === tag.toLowerCase()
-        );
-        return found ? found.tag : tag;
-      })
-    );
-
-    if (!isEditing) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center -space-x-2">
-            {participantsList.slice(0, 4).map((tag, i) => {
-              const matchedMember = members.find(
-                (m) =>
-                  m.tag.toLowerCase() === tag.toLowerCase() ||
-                  `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-              );
-              const matchedRole = roles.find(
-                (r) =>
-                  r.tag.toLowerCase() === tag.toLowerCase() ||
-                  `@${r.name.toLowerCase()}` === tag.toLowerCase()
-              );
-              const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-
-              if (matchedRole) {
-                return (
-                  <span
-                    key={i}
-                    className="w-5 h-5 rounded-md border-2 border-background text-[9px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
-                    style={{backgroundColor: color}}
-                  >
-                    #
-                  </span>
-                );
-              }
-
-              return (
-                <Avatar
-                  key={i}
-                  name={matchedMember?.globalName || tag}
-                  size="sm"
-                  className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
-                  style={{backgroundColor: `${color}35`, color}}
-                />
-              );
-            })}
-          </div>
-          {participantsList.length > 4 && (
-            <span className="text-xs font-semibold text-muted">
-              +{participantsList.length - 4}
-            </span>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <Dropdown>
-        <Dropdown.Trigger>
-          <button
-            type="button"
-            className="group inline-flex items-center gap-1.5 cursor-pointer text-xs font-normal text-muted hover:text-foreground transition-colors p-0 bg-transparent border-0 outline-none"
-            aria-label={`Editar ${participantsList.length} convocados`}
-          >
-            <div className="flex items-center -space-x-2">
-              {participantsList.slice(0, 4).map((tag, i) => {
-                const matchedMember = members.find(
-                  (m) =>
-                    m.tag.toLowerCase() === tag.toLowerCase() ||
-                    `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
-                );
-                const matchedRole = roles.find(
-                  (r) =>
-                    r.tag.toLowerCase() === tag.toLowerCase() ||
-                    `@${r.name.toLowerCase()}` === tag.toLowerCase()
-                );
-                const color = matchedMember?.avatarColor || matchedRole?.color || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
-
-                if (matchedRole) {
-                  return (
-                    <span
-                      key={i}
-                      className="w-5 h-5 rounded-md border-2 border-background text-[9px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
-                      style={{backgroundColor: color}}
-                    >
-                      #
-                    </span>
-                  );
-                }
-
-                return (
-                  <Avatar
-                    key={i}
-                    name={matchedMember?.globalName || tag}
-                    size="sm"
-                    className="w-5 h-5 border-2 border-background text-[9px] font-bold shadow-2xs shrink-0"
-                    style={{backgroundColor: `${color}35`, color}}
-                  />
-                );
-              })}
-            </div>
-            {participantsList.length > 4 && (
-              <span className="text-xs font-semibold text-muted">
-                +{participantsList.length - 4}
-              </span>
-            )}
-          </button>
-        </Dropdown.Trigger>
-        <Dropdown.Popover placement="bottom end" className="p-0 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl overflow-hidden">
-          <SearchableParticipantMenu
-            selectedKeys={selectedKeys}
-            onSelectionChange={(newKeys) => {
-              onUpdateHeaderField?.('mentions', newKeys.join(' '));
-            }}
-          />
-        </Dropdown.Popover>
-      </Dropdown>
-    );
   };
 
   return (
-    <header className="w-full max-w-4xl mx-auto px-4 py-5 sm:px-0 sm:py-3 animate-in fade-in duration-150">
-      <div className="grid grid-cols-1 sm:grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-start">
-        <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-
-        <div className="flex flex-col min-w-0 w-full pb-2">
-          {/* Fila 1: Título y Acción Principal */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              {isEditing ? (
+    <header className="w-full max-w-4xl mx-auto px-4 py-3 sm:px-0 sm:py-4 animate-in fade-in duration-150">
+      <div className="flex flex-col min-w-0 w-full">
+        {/* Fila 1: Título alineado con el botón ⋮ y acciones principales */}
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1 flex flex-col gap-1">
+            {isEditing ? (
+              <>
                 <textarea
                   rows={1}
                   value={title}
@@ -356,143 +140,386 @@ export function PlannerSessionHeader({
                   className="doc-title doc-title-input"
                   aria-label="Nombre de la reunión"
                 />
-              ) : (
+                <textarea
+                  rows={1}
+                  value={description}
+                  onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
+                  placeholder="Agregar objetivo o contexto de la reunión..."
+                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60"
+                  aria-label="Objetivo de la reunión"
+                />
+              </>
+            ) : (
+              <>
                 <h1 className="doc-title">{title || 'Reunión sin título'}</h1>
-              )}
+                {description && <p className="doc-description">{description}</p>}
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!isEditing && !isRunning && !isPaused && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCopyAnnouncement}
+                className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
+              >
+                <Copy className="size-3.5" /> <span>Copiar anuncio</span>
+              </Button>
+            )}
+
+            {isEditing ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onToggleEditMode}
+                className="font-medium h-8 px-3.5"
+              >
+                <Check className="size-3.5" /> <span>Listo</span>
+              </Button>
+            ) : isInterrupted && onResumeSession ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onResumeSession}
+                className="font-medium h-8 px-3.5"
+              >
+                <Play className="size-3.5" /> <span>Reanudar</span>
+              </Button>
+            ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onStartSession}
+                className="font-medium h-8 px-3.5"
+              >
+                <Play className="size-3.5" /> <span>Iniciar reunión</span>
+              </Button>
+            ) : isCompleted ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => onTabChange('recap')}
+                className="font-medium h-8 px-3.5"
+              >
+                <FileText className="size-3.5" /> <span>Ver resumen</span>
+              </Button>
+            ) : null}
+
+            {/* Menú ⋮ alineado exactamente en la misma línea del título */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Más opciones de la reunión"
+                    className="text-muted-foreground hover:text-foreground rounded-full"
+                  >
+                    <MoreVertical className="size-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Reunión</DropdownMenuLabel>
+                  {(isCompleted || isInterrupted) && (
+                    <DropdownMenuItem onClick={() => onTabChange('recap')}>
+                      <RotateCw className="size-4 text-muted-foreground" />
+                      <span>Ver resumen</span>
+                    </DropdownMenuItem>
+                  )}
+                  {(isRunning || isPaused) && (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => onInterruptSession?.()}
+                    >
+                      <RotateCcw className="size-4 text-destructive" />
+                      <span>Pausar reunión</span>
+                    </DropdownMenuItem>
+                  )}
+                  {!isEditing && (
+                    <DropdownMenuItem onClick={onToggleEditMode}>
+                      <Pencil className="size-4 text-muted-foreground" />
+                      <span>Editar reunión</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={onCopyAnnouncement}>
+                    <Copy className="size-4 text-muted-foreground" />
+                    <span>Copiar anuncio</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={onNewCleanSession}>
+                    <Plus className="size-4 text-muted-foreground" />
+                    <span>Nueva reunión</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Modo edición vs modo lectura */}
+        {isEditing ? (
+          <div className="flex flex-col gap-3 mt-4">
+            {/* Fila 1: Fecha, Hora de inicio, Término, Duración */}
+            <div className="grid grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Fecha</label>
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between text-xs font-medium text-foreground transition-colors cursor-pointer"
+                      >
+                        <span>{formatDisplayDate(date)}</span>
+                        <Calendar className="size-4 text-foreground/80 shrink-0" />
+                      </button>
+                    }
+                  />
+                  <PopoverContent align="start" className="w-auto p-0 border-0 bg-transparent shadow-none">
+                    <CalendarComponent
+                      selected={date}
+                      onSelect={(newDate) => onUpdateHeaderField?.('date', newDate)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
+                <input
+                  type="time"
+                  value={startTime || '10:00'}
+                  onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
+                  className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 text-xs font-medium text-foreground transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-primary text-center"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
+                <input
+                  type="time"
+                  value={estimatedEndTime || '11:00'}
+                  onChange={(e) => {
+                    const newEnd = e.target.value;
+                    onUpdateHeaderField?.('endTime', newEnd);
+                    try {
+                      const [sh, sm] = (startTime || '10:00').split(':').map(Number);
+                      const [eh, em] = newEnd.split(':').map(Number);
+                      let diff = (eh * 60 + em) - (sh * 60 + sm);
+                      if (diff < 0) diff += 1440;
+                      if (diff > 0) onUpdateHeaderField?.('totalCalculatedDuration', diff);
+                    } catch {
+                      // ignore parse errors
+                    }
+                  }}
+                  className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 text-xs font-medium text-foreground transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-primary text-center"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Duración</label>
+                <div className="w-full h-9 rounded-full bg-muted/40 border border-border/50 px-3.5 flex items-center justify-center text-xs font-medium text-foreground">
+                  {totalPlannedMinutes >= 60 ? `${Math.floor(totalPlannedMinutes / 60)}h${totalPlannedMinutes % 60 ? ` ${totalPlannedMinutes % 60}m` : ''}` : `${totalPlannedMinutes}m`}
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 pt-1">
-              {!isEditing && !isRunning && !isPaused && (
-                <Button variant="ghost" size="sm" onPress={onCopyAnnouncement} className="text-xs text-muted hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium">
-                  <Copy width={13} height={13} /> <span>Copiar anuncio</span>
-                </Button>
-              )}
-
-              {isEditing ? (
-                <Button variant="primary" size="sm" onPress={onToggleEditMode} className="font-medium h-8 px-3.5">
-                  <Check width={14} height={14} /> <span>Listo</span>
-                </Button>
-              ) : isInterrupted && onResumeSession ? (
-                <Button variant="primary" size="sm" onPress={onResumeSession} className="font-medium h-8 px-3.5">
-                  <Play width={13} height={13} /> <span>Reanudar</span>
-                </Button>
-              ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
-                <Button variant="primary" size="sm" onPress={onStartSession} className="font-medium h-8 px-3.5">
-                  <Play width={13} height={13} /> <span>Iniciar reunión</span>
-                </Button>
-              ) : isCompleted ? (
-                <Button variant="primary" size="sm" onPress={() => onTabChange('recap')} className="font-medium h-8 px-3.5">
-                  <FileText width={13} height={13} /> <span>Ver resumen</span>
-                </Button>
-              ) : null}
-
-              {/* Menú ⋮ (visible solo en desktop, en mobile se mantiene limpio) */}
-              <div className="hidden sm:inline-flex">
-                <Dropdown>
-                  <Dropdown.Trigger>
-                    <Button variant="ghost" size="sm" isIconOnly aria-label="Más opciones de la reunión" className="h-8 w-8 text-muted hover:text-foreground">
-                      <EllipsisVertical width={14} height={14} />
-                    </Button>
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover placement="bottom end">
-                    <Dropdown.Menu
-                      onAction={(key) => {
-                        if (key === 'view-recap') onTabChange('recap');
-                        if (key === 'edit') onToggleEditMode();
-                        if (key === 'copy-announcement') onCopyAnnouncement();
-                        if (key === 'new-clean') onNewCleanSession();
-                        if (key === 'interrupt' && onInterruptSession) onInterruptSession();
+            {/* Fila 2: Facilita (1fr), Participan (3fr) */}
+            <div className="grid grid-cols-[1fr_3fr] gap-3 items-end">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0"
+                      >
+                        {host ? (
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {(() => {
+                              const matched = members.find(
+                                (m) =>
+                                  m.globalName.toLowerCase() === host.toLowerCase() ||
+                                  m.tag.toLowerCase() === `@${host.toLowerCase()}`
+                              );
+                              const color = matched?.avatarColor || DISCORD_PALETTES[Math.abs(host.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
+                              return (
+                                <>
+                                  <Avatar
+                                    size="xs"
+                                    className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                                    style={{ backgroundColor: `${color}30`, color }}
+                                  >
+                                    <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
+                                      {host.slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium text-foreground truncate">{host}</span>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <span className="truncate text-muted-foreground">Buscar persona</span>
+                        )}
+                        <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
+                      </button>
+                    }
+                  />
+                  <DropdownMenuContent align="start" className="p-0">
+                    <SearchableParticipantMenu
+                      singleSelect
+                      hideRoles
+                      selectedKeys={host ? new Set([host]) : new Set()}
+                      onSelectionChange={(keys) => {
+                        const selectedHost = keys[0] ? keys[0].replace(/^@/, '') : '';
+                        onUpdateHeaderField?.('host', selectedHost);
                       }}
-                    >
-                      {(isCompleted || isInterrupted) && (
-                        <Dropdown.Item id="view-recap" textValue="Ver resumen de la reunión">
-                          <ArrowRotateRight />
-                          <Label>Ver resumen</Label>
-                          <Description>Métricas y grabaciones de la reunión</Description>
-                        </Dropdown.Item>
-                      )}
-                      {(isRunning || isPaused) && (
-                        <Dropdown.Item id="interrupt" textValue="Pausar reunión" className="text-danger">
-                          <ArrowRotateLeft />
-                          <Label className="text-danger">Pausar reunión</Label>
-                          <Description>Pausar y conservar avance</Description>
-                        </Dropdown.Item>
-                      )}
-                      {!isEditing && (
-                        <Dropdown.Item id="edit" textValue="Editar reunión">
-                          <Pencil />
-                          <Label>Editar reunión</Label>
-                          <Description>Modificar nombre, agenda y participantes</Description>
-                        </Dropdown.Item>
-                      )}
-                      <Dropdown.Item id="copy-announcement" textValue="Copiar anuncio">
-                        <Copy />
-                        <Label>Copiar anuncio</Label>
-                        <Description>Para compartir en canales de Discord</Description>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="new-clean" textValue="Nueva reunión">
-                        <Plus />
-                        <Label>Nueva reunión</Label>
-                        <Description>Empezar una agenda desde cero</Description>
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
+                      onAddCustomParticipant={(tag) => {
+                        const clean = tag.replace(/^@/, '');
+                        onUpdateHeaderField?.('host', clean);
+                      }}
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Participan</label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-3 text-xs text-foreground transition-colors cursor-pointer min-w-0"
+                      >
+                        {selectedKeys.size > 0 ? (
+                          <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                            <div className="flex items-center -space-x-1.5 shrink-0">
+                              {Array.from(selectedKeys).slice(0, 4).map((tag, idx) => {
+                                const cleanName = tag.replace(/^[@#]/, '');
+                                const matched = members.find(
+                                  (m) =>
+                                    m.globalName.toLowerCase() === cleanName.toLowerCase() ||
+                                    m.tag.toLowerCase() === tag.toLowerCase() ||
+                                    `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                                );
+                                const isRole = tag.startsWith('#') || (!matched && tag.startsWith('@'));
+                                const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
+
+                                return (
+                                  <Avatar
+                                    key={tag}
+                                    size="xs"
+                                    className="size-5 text-[8.5px] font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
+                                    style={{ backgroundColor: `${color}30`, color }}
+                                  >
+                                    <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
+                                      {isRole ? '#' : cleanName.slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                );
+                              })}
+                            </div>
+                            <span className="font-medium text-foreground truncate min-w-0">
+                              {Array.from(selectedKeys).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="truncate text-muted-foreground">Buscar personas o roles</span>
+                        )}
+                        <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
+                      </button>
+                    }
+                  />
+                  <DropdownMenuContent align="start" className="p-0">
+                    <SearchableParticipantMenu
+                      selectedKeys={selectedKeys}
+                      onSelectionChange={(nextKeys) =>
+                        onUpdateHeaderField?.('mentions', nextKeys.join(' '))
+                      }
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </div>
+        ) : (
+          /* Modo lectura: metadata limpia */
+          <div className="flex items-center gap-2.5 sm:gap-3 mt-3 sm:mt-3.5 flex-wrap text-sm text-foreground">
+              <div className="inline-flex items-center gap-1.5 font-medium text-foreground text-xs sm:text-sm">
+                <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                <span className="capitalize">{formatHeaderDate(date)}</span>
+              </div>
 
-          {/* Fila 2: Descripción con estilos idénticos a Docs */}
-          {isEditing ? (
-            <textarea
-              rows={1}
-              value={description}
-              onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
-              placeholder="Agrega un objetivo o descripción..."
-              className="doc-description doc-description-input"
-              aria-label="Objetivo o descripción de la reunión"
-            />
-          ) : description ? (
-            <p className="doc-description">{description}</p>
-          ) : null}
+              <div className="inline-flex items-center gap-1.5 font-medium text-foreground text-xs sm:text-sm">
+                <span>
+                  {startTime} – {estimatedEndTime}
+                </span>
+              </div>
 
-          {/* Versión MOBILE: Separación conceptual de 'Cuándo' y 'Quiénes' */}
-          <div className="flex flex-col gap-3 mt-4 sm:hidden">
-            {/* Fila 3 Mobile: Cuándo (Fecha · Hora · Duración) */}
-            <div className="flex items-center gap-2 text-xs text-muted font-normal flex-wrap">
-              {renderDateSelector()}
-              <span className="text-muted/40">·</span>
-              {renderTimeSelector()}
-              <span className="text-muted/40">·</span>
-              <span>{formattedDuration}</span>
+              <span className="text-xs text-muted-foreground select-none font-medium">
+                · {totalPlannedMinutes} min
+              </span>
+
+              {host && (
+                <div className="inline-flex items-center gap-1 text-xs sm:text-sm text-muted-foreground font-normal">
+                  <span>Organiza</span>
+                  <span className="font-semibold text-foreground">{host}</span>
+                </div>
+              )}
+
+              <div className="h-3.5 w-px bg-border/60 hidden sm:block select-none" />
+
+              {selectedKeys.size > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center -space-x-1.5">
+                    {Array.from(selectedKeys)
+                      .slice(0, 5)
+                      .map((tag, i) => {
+                        const matched = members.find(
+                          (m) =>
+                            m.globalName.toLowerCase() ===
+                              tag.toLowerCase().replace(/^@/, '') ||
+                            m.tag.toLowerCase() === tag.toLowerCase() ||
+                            `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
+                        );
+                        const color =
+                          matched?.avatarColor ||
+                          DISCORD_PALETTES[i % DISCORD_PALETTES.length];
+                        const name = matched?.globalName || tag.replace(/^@/, '');
+                        return (
+                          <Avatar
+                            key={i}
+                            size="sm"
+                            className="size-5 text-[8.5px] font-bold border-2 border-background shadow-2xs shrink-0"
+                            style={{ backgroundColor: `${color}30`, color }}
+                          >
+                            <AvatarFallback
+                              style={{ backgroundColor: `${color}30`, color }}
+                            >
+                              {name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        );
+                      })}
+                  </div>
+                  {selectedKeys.size > 5 && (
+                    <span className="text-xs text-muted-foreground font-medium">
+                      +{selectedKeys.size - 5}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-
-            {/* Fila 4 Mobile: Quiénes (Host a la izquierda, Participantes a la derecha) */}
-            <div className="flex items-center justify-between gap-2 text-xs text-muted font-normal pt-0.5">
-              {renderHostSelector()}
-              {renderParticipantsPicker()}
-            </div>
-          </div>
-
-          {/* Versión DESKTOP: Estructura compacta y alineada horizontalmente */}
-          <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-4 sm:mt-4 text-xs text-muted font-normal">
-            {/* Banda temporal izquierda */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {renderDateSelector()}
-              <span className="text-muted/40">·</span>
-              {renderTimeSelector()}
-              <span className="text-muted/40">·</span>
-              <span>{formattedDuration}</span>
-            </div>
-
-            {/* Banda de personas derecha: Entidad unificada [Paula Molina · ◉◉◉ +3] */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              {renderHostSelector()}
-              {participantsList.length > 0 && <span className="text-muted/40">·</span>}
-              {renderParticipantsPicker()}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </header>
   );

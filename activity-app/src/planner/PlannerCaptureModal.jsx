@@ -1,8 +1,13 @@
-import {useState, useEffect} from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Modal } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-
 
 export function PlannerCaptureModal({
   isOpen,
@@ -40,39 +45,41 @@ export function PlannerCaptureModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container size="sm">
-          <Modal.Dialog>
-            <div className="flex flex-col gap-4">
-              <h3 className="text-lg font-semibold">Agregar decisión</h3>
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                {targetBlock?.title && (
-                  <p className="text-xs text-muted-foreground font-normal">
-                    Bloque: <span className="font-medium text-foreground">«{targetBlock.title}»</span>
-                  </p>
-                )}
-                <Textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Escribe la decisión o acuerdo alcanzado en este bloque..."
-                  autoFocus
-                  rows={4}
-                  required
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={isSubmitting}>
-                    Cancelar
-                  </Button>
-                  <Button variant="default" size="sm" type="submit" disabled={!content.trim() || isSubmitting}>
-                    {isSubmitting ? 'Guardando...' : 'Guardar decisión'}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Agregar decisión</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Escribe la decisión o acuerdo alcanzado en este bloque..."
+            autoFocus
+            rows={4}
+            required
+            className="resize-none"
+          />
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="default"
+              type="submit"
+              disabled={!content.trim() || isSubmitting}
+            >
+              {isSubmitting ? 'Guardando...' : 'Aceptar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

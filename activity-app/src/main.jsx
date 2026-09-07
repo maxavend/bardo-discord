@@ -6,8 +6,6 @@ import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth
 import {installProductionImportNormalizer} from './production-import-normalizer.js';
 import '@fontsource-variable/inter';
 import './styles.css';
-import './theme.css';
-import './layout-audit.css';
 import './editor-focus.css';
 import './keyboard-sticky.css';
 import './production-document-only.css';
@@ -107,7 +105,7 @@ function DocumentOnlyUnavailable({message, onRetry}) {
         <div className="w-12 h-12 rounded-2xl bg-warning/10 border border-warning/20 flex items-center justify-center text-warning text-xl">
           📄
         </div>
-        <p className="text-sm text-muted">{message}</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
         {onRetry && (
           <button className="boot-retry-button" type="button" onClick={onRetry}>
             Reintentar

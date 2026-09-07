@@ -1,17 +1,17 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chip } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { toast } from '@/lib/toast';
 import {
-  CircleCheck,
+  CheckCircle2,
   Clock,
-  Microphone,
+  Mic,
   Copy,
-  ArrowRotateRight,
+  RotateCw,
   Play,
-} from '@gravity-ui/icons';
-import {computeSessionRecap} from './session-assistant-engine.js';
-import {PlannerAudioPlayer} from './PlannerAudioPlayer.jsx';
+} from 'lucide-react';
+import { computeSessionRecap } from './session-assistant-engine.js';
+import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
 
 export function SessionRecapView({
   plannerState,
@@ -50,80 +50,84 @@ export function SessionRecapView({
     }
   };
 
+  const badgeVariant = isInterrupted
+    ? 'destructive'
+    : recap.completedCount === recap.totalBlocksCount
+      ? 'default'
+      : 'secondary';
+
   return (
     <div className="w-full max-w-4xl mx-auto pb-16 pt-2 animate-in fade-in duration-150">
-      <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
-        <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-        <div className="flex flex-col gap-4 min-w-0 w-full">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-1">
+      <div className="flex flex-col gap-4 min-w-0 w-full">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-1">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Chip size="sm" variant="soft" color={recap.statusBadgeColor}>{recap.statusLabel}</Chip>
-                <span className="text-xs text-muted">Resumen de la reunión</span>
+                <Badge variant={badgeVariant}>{recap.statusLabel}</Badge>
+                <span className="text-xs text-muted-foreground">Resumen de la reunión</span>
               </div>
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{recap.recapTitle}</h1>
-              <p className="text-xs text-muted mt-1">{recap.recapDescription}</p>
+              <p className="text-xs text-muted-foreground mt-1">{recap.recapDescription}</p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
               {isInterrupted && onResumeSession && (
-                <Button variant="primary" size="sm" onPress={onResumeSession} className="font-semibold h-8 px-3">
-                  <Play width={13} height={13} /> Reanudar reunión
+                <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3">
+                  <Play className="size-3.5" /> Reanudar reunión
                 </Button>
               )}
-              <Button variant="secondary" size="sm" onPress={handleCopyRecap} className="h-8 px-3">
-                <Copy width={13} height={13} /> Copiar resumen
+              <Button variant="secondary" size="sm" onClick={handleCopyRecap} className="h-8 px-3">
+                <Copy className="size-3.5" /> Copiar resumen
               </Button>
-              <Button variant="ghost" size="sm" onPress={onNewSession} className="h-8 px-2.5 text-muted hover:text-foreground">
-                <ArrowRotateRight width={13} height={13} /> Nueva reunión
+              <Button variant="ghost" size="sm" onClick={onNewSession} className="h-8 px-2.5 text-muted-foreground hover:text-foreground">
+                <RotateCw className="size-3.5" /> Nueva reunión
               </Button>
             </div>
           </div>
 
-          <Card className="p-4 sm:p-5 rounded-xl">
+          <Card className="p-4 sm:p-5 rounded-2xl">
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted flex items-center gap-1"><Clock width={12} height={12} /> Tiempo efectivo</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Tiempo efectivo</span>
                 <strong className="text-base text-foreground">{recap.actualDurationMinutes} min</strong>
-                <span className="text-[11px] text-muted">de {recap.plannedDurationMinutes} min</span>
+                <span className="text-[11px] text-muted-foreground">de {recap.plannedDurationMinutes} min</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted">Bloques</span>
+                <span className="text-[11px] text-muted-foreground">Bloques</span>
                 <strong className="text-base text-foreground">{recap.completedCount} / {recap.totalBlocksCount}</strong>
-                {recap.skippedCount > 0 && <span className="text-[11px] text-muted">{recap.skippedCount} saltados</span>}
+                {recap.skippedCount > 0 && <span className="text-[11px] text-muted-foreground">{recap.skippedCount} saltados</span>}
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted">Temas tratados</span>
+                <span className="text-[11px] text-muted-foreground">Temas tratados</span>
                 <strong className="text-base text-foreground">{recap.completedPointsCount} / {recap.totalPointsCount}</strong>
-                {recap.skippedPointsCount > 0 && <span className="text-[11px] text-muted">{recap.skippedPointsCount} saltados</span>}
+                {recap.skippedPointsCount > 0 && <span className="text-[11px] text-muted-foreground">{recap.skippedPointsCount} saltados</span>}
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted flex items-center gap-1"><Microphone width={12} height={12} /> Grabaciones</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Mic className="size-3" /> Grabaciones</span>
                 <strong className="text-base text-foreground">{recap.totalRecordingsCount}</strong>
-                <span className="text-[11px] text-muted">{recap.totalRecordedMinutes} min de audio</span>
+                <span className="text-[11px] text-muted-foreground">{recap.totalRecordedMinutes} min de audio</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted flex items-center gap-1"><CircleCheck width={12} height={12} /> Decisiones</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Decisiones</span>
                 <strong className="text-base text-foreground">{recap.decisions.length}</strong>
-                <span className="text-[11px] text-muted">registradas</span>
+                <span className="text-[11px] text-muted-foreground">registradas</span>
               </div>
             </div>
           </Card>
 
           {recap.groupedRecordings.length > 0 && (
-            <Card className="p-4 sm:p-5 flex flex-col gap-4 rounded-xl">
+            <Card className="p-4 sm:p-5 flex flex-col gap-4 rounded-2xl">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Microphone width={14} height={14} className="text-accent" /> Grabaciones
+                  <Mic className="size-3.5 text-primary" /> Grabaciones
                 </h2>
-                <span className="text-xs text-muted">{recap.totalRecordedMinutes} min en total</span>
+                <span className="text-xs text-muted-foreground">{recap.totalRecordedMinutes} min en total</span>
               </div>
 
               <div className="flex flex-col gap-5">
-                {recap.groupedRecordings.map(({block, pointGroups, blockFallbackRecordings}) => (
+                {recap.groupedRecordings.map(({ block, pointGroups, blockFallbackRecordings }) => (
                   <section key={block.id} className="flex flex-col gap-2.5">
-                    <h3 className="text-xs font-semibold text-muted">{block.title}</h3>
-                    {pointGroups.map(({point, recordings}) => (
+                    <h3 className="text-xs font-semibold text-muted-foreground">{block.title}</h3>
+                    {pointGroups.map(({ point, recordings }) => (
                       <div key={point.id} className="flex flex-col gap-1.5">
                         <div className="text-sm font-semibold text-foreground">{point.title}</div>
                         {recordings.map((recording) => (
@@ -138,7 +142,7 @@ export function SessionRecapView({
                     ))}
                     {blockFallbackRecordings.length > 0 && (
                       <div className="flex flex-col gap-1.5">
-                        {pointGroups.length > 0 && <div className="text-xs font-medium text-muted">Grabaciones del bloque</div>}
+                        {pointGroups.length > 0 && <div className="text-xs font-medium text-muted-foreground">Grabaciones del bloque</div>}
                         {blockFallbackRecordings.map((recording) => (
                           <PlannerAudioPlayer
                             key={recording.id}
@@ -155,9 +159,9 @@ export function SessionRecapView({
             </Card>
           )}
 
-          <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-xl">
+          <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <CircleCheck width={14} height={14} className="text-success" />
+              <CheckCircle2 className="size-3.5 text-primary" />
               Decisiones y acuerdos ({recap.decisions.length})
             </h2>
             {recap.decisions.length > 0 ? (
@@ -169,7 +173,7 @@ export function SessionRecapView({
                     <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed">
                       <strong className="font-semibold">{decision.content}</strong>
                       {(point || block) && (
-                        <span className="block text-[11px] text-muted mt-0.5">
+                        <span className="block text-[11px] text-muted-foreground mt-0.5">
                           {point ? `${block?.title} → ${point.title}` : block?.title}
                         </span>
                       )}
@@ -178,11 +182,10 @@ export function SessionRecapView({
                 })}
               </div>
             ) : (
-              <p className="text-xs text-muted italic">No se anotaron acuerdos durante esta sesión.</p>
+              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta sesión.</p>
             )}
           </Card>
         </div>
-      </div>
     </div>
   );
 }

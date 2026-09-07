@@ -1,13 +1,52 @@
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup, ToggleButton, ToggleButtonGroup } from '@/components/ui/button-group';
-import { Chip } from '@/components/ui/badge';
-import { Dropdown } from '@/components/ui/dropdown-menu';
+import { ButtonGroup } from '@/components/ui/button-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Kbd, Separator } from '@/components/ui/separator';
-import { Modal, AlertDialog } from '@/components/ui/dialog';
-import { SearchField } from '@/components/ui/search-field';
-import { Label, Header, TextField, Toolbar } from '@/components/ui/label';
+import { Kbd } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupButton,
+} from '@/components/ui/input-group';
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+  EmptyMedia,
+} from '@/components/ui/empty';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { toast } from '@/lib/toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useTheme } from '@/lib/theme';
@@ -50,6 +89,7 @@ import {
   Text,
   TrashBin,
   Underline,
+  Xmark,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
@@ -367,73 +407,77 @@ function saveStore(store) {
 
 function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
   return (
-    <Dropdown>
-      <Button
-        isIconOnly
-        size="sm"
-        variant="ghost"
-        aria-label={triggerLabel}
-        className="icon-button-circle text-muted hover:text-foreground shrink-0"
-      >
-        <EllipsisVertical width={16} height={16} />
-      </Button>
-      <Dropdown.Popover placement="bottom end">
-        <Dropdown.Menu onAction={(key) => onAction(key, doc)}>
-          <Dropdown.Item id="open" textValue="Abrir">
-            <Eye width={15} height={15} className="text-muted" />
-            <Label>Abrir</Label>
-          </Dropdown.Item>
-          <Dropdown.Item id="edit" textValue="Editar">
-            <Pencil width={15} height={15} className="text-muted" />
-            <Label>Editar</Label>
-          </Dropdown.Item>
-          <Dropdown.Item id="duplicate" textValue="Duplicar">
-            <Copy width={15} height={15} className="text-muted" />
-            <Label>Duplicar</Label>
-          </Dropdown.Item>
-          <Dropdown.Item id="copy" textValue="Copiar texto">
-            <FileText width={15} height={15} className="text-muted" />
-            <Label>Copiar texto</Label>
-          </Dropdown.Item>
-          <Dropdown.Item id="publish" textValue="Compartir en el canal">
-            <ArrowUturnCwRight width={15} height={15} className="text-muted" />
-            <Label>Compartir en el canal</Label>
-          </Dropdown.Item>
-          <Dropdown.Section>
-            <Header>Descargar</Header>
-            <Dropdown.Item id="markdown-preview" textValue="Ver Markdown">
-              <Eye width={15} height={15} className="text-muted" />
-              <Label>Ver Markdown</Label>
-            </Dropdown.Item>
-            <Dropdown.Item id="markdown" textValue="Descargar Markdown">
-              <FileText width={15} height={15} className="text-muted" />
-              <Label>Descargar Markdown</Label>
-            </Dropdown.Item>
-            <Dropdown.Item id="html" textValue="Descargar HTML">
-              <Label>Descargar HTML</Label>
-            </Dropdown.Item>
-            {window.__BARDO_PRODUCTION__ && (
-              <>
-                <Dropdown.Item id="pdf" textValue="Descargar PDF">
-                  <Label>Descargar PDF</Label>
-                </Dropdown.Item>
-                <Dropdown.Item id="docx" textValue="Descargar Word">
-                  <Label>Descargar Word</Label>
-                </Dropdown.Item>
-              </>
-            )}
-            <Dropdown.Item id="print" textValue="Imprimir">
-              <Printer width={15} height={15} className="text-muted" />
-              <Label>Imprimir / PDF</Label>
-            </Dropdown.Item>
-          </Dropdown.Section>
-          <Dropdown.Item id="delete" textValue="Eliminar" className="text-danger">
-            <TrashBin width={15} height={15} className="text-danger" />
-            <Label className="text-danger">Eliminar</Label>
-          </Dropdown.Item>
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={triggerLabel}
+            className="icon-button-circle text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <EllipsisVertical width={16} height={16} />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem onClick={() => onAction('open', doc)}>
+          <Eye width={15} height={15} className="text-muted-foreground" />
+          <span>Abrir</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction('edit', doc)}>
+          <Pencil width={15} height={15} className="text-muted-foreground" />
+          <span>Editar</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction('duplicate', doc)}>
+          <Copy width={15} height={15} className="text-muted-foreground" />
+          <span>Duplicar</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction('copy', doc)}>
+          <FileText width={15} height={15} className="text-muted-foreground" />
+          <span>Copiar texto</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction('publish', doc)}>
+          <ArrowUturnCwRight width={15} height={15} className="text-muted-foreground" />
+          <span>Compartir en el canal</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Descargar</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => onAction('markdown-preview', doc)}>
+          <Eye width={15} height={15} className="text-muted-foreground" />
+          <span>Ver Markdown</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction('markdown', doc)}>
+          <FileText width={15} height={15} className="text-muted-foreground" />
+          <span>Descargar Markdown</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction('html', doc)}>
+          <FileText width={15} height={15} className="text-muted-foreground" />
+          <span>Descargar HTML</span>
+        </DropdownMenuItem>
+        {window.__BARDO_PRODUCTION__ && (
+          <>
+            <DropdownMenuItem onClick={() => onAction('pdf', doc)}>
+              <FileText width={15} height={15} className="text-muted-foreground" />
+              <span>Descargar PDF</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction('docx', doc)}>
+              <FileText width={15} height={15} className="text-muted-foreground" />
+              <span>Descargar Word</span>
+            </DropdownMenuItem>
+          </>
+        )}
+        <DropdownMenuItem onClick={() => onAction('print', doc)}>
+          <Printer width={15} height={15} className="text-muted-foreground" />
+          <span>Imprimir / PDF</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => onAction('delete', doc)}>
+          <TrashBin width={15} height={15} className="text-destructive" />
+          <span>Eliminar</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -461,33 +505,35 @@ function RichBody({html, onChecklistChange, className = ''}) {
 
 function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-12 h-12 rounded-2xl bg-default dark:bg-default/50 border border-border flex items-center justify-center text-muted mb-3.5">
-        <Magnifier width={22} height={22} />
-      </div>
-      <h3 className="text-base font-semibold text-foreground mb-1">
-        {query ? 'Sin resultados' : 'Todavía no hay documentos'}
-      </h3>
-      <p className="text-sm text-muted max-w-xs mb-5">
-        {query
-          ? `No encontramos documentos con “${query}”.`
-          : 'Crea un documento o sube un archivo para empezar.'}
-      </p>
-      {query ? (
-        <Button variant="secondary" size="sm" onPress={onClearSearch}>
-          Limpiar búsqueda
-        </Button>
-      ) : (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button variant="primary" size="sm" onPress={onNewDoc}>
-            <Plus width={16} height={16} /> Crear documento
+    <Empty className="my-8">
+      <EmptyMedia variant="icon">
+        <Magnifier width={20} height={20} className="text-muted-foreground" />
+      </EmptyMedia>
+      <EmptyHeader>
+        <EmptyTitle>{query ? 'Sin resultados' : 'Todavía no hay documentos'}</EmptyTitle>
+        <EmptyDescription>
+          {query
+            ? `No encontramos documentos con “${query}”.`
+            : 'Crea un documento o sube un archivo para empezar.'}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        {query ? (
+          <Button variant="secondary" size="sm" onClick={onClearSearch}>
+            Limpiar búsqueda
           </Button>
-          <Button variant="secondary" size="sm" onPress={onUpload}>
-            <File width={16} height={16} /> Subir archivo
-          </Button>
-        </div>
-      )}
-    </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="default" size="sm" onClick={onNewDoc}>
+              <Plus width={16} height={16} /> Crear documento
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onUpload}>
+              <File width={16} height={16} /> Subir archivo
+            </Button>
+          </div>
+        )}
+      </EmptyContent>
+    </Empty>
   );
 }
 
@@ -529,39 +575,40 @@ function ThemeModeMenu() {
   }, [preference]);
 
   return (
-    <Dropdown>
-      <Button
-        isIconOnly
-        size="sm"
-        variant="ghost"
-        className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted hover:text-foreground"
-        aria-label="Cambiar tema de apariencia"
-        title={`Tema actual: ${currentLabel}`}
-      >
-        <CurrentIcon width={16} height={16} />
-      </Button>
-      <Dropdown.Popover placement="bottom end">
-        <Dropdown.Menu
-          aria-label="Seleccionar modo de apariencia"
-          onAction={key => {
-            const nextTheme = String(key);
-            setTheme(nextTheme);
-            applyDiscordTheme();
-          }}
-        >
-          {Object.entries(THEME_MODE_LABELS).map(([id, label]) => {
-            const Icon = THEME_MODE_ICONS[id];
-            return (
-              <Dropdown.Item key={id} id={id} textValue={label}>
-                <Icon width={15} height={15} className="text-muted" />
-                <Label>{label}</Label>
-                {preference === id && <Check width={15} height={15} className="theme-mode-check text-accent" />}
-              </Dropdown.Item>
-            );
-          })}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label="Cambiar tema de apariencia"
+            title={`Tema actual: ${currentLabel}`}
+          >
+            <CurrentIcon width={16} height={16} />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel>Apariencia</DropdownMenuLabel>
+        {Object.entries(THEME_MODE_LABELS).map(([id, label]) => {
+          const Icon = THEME_MODE_ICONS[id];
+          return (
+            <DropdownMenuItem
+              key={id}
+              onClick={() => {
+                setTheme(id);
+                applyDiscordTheme();
+              }}
+            >
+              <Icon width={15} height={15} className="text-muted-foreground" />
+              <span>{label}</span>
+              {preference === id && <Check width={15} height={15} className="theme-mode-check text-primary ml-auto" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -579,7 +626,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             <Button
               variant="secondary"
               size="sm"
-              onPress={onPlannerNew}
+              onClick={onPlannerNew}
               className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
             >
               <Plus width={14} height={14} /> Nueva reunión
@@ -588,7 +635,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <Button
             variant="secondary"
             size="sm"
-            onPress={() => onNavigateModule?.('docs')}
+            onClick={() => onNavigateModule?.('docs')}
             className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
             <FileText width={14} height={14} /> Documentos
@@ -599,7 +646,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <Button
             variant="secondary"
             size="sm"
-            onPress={() => onNavigateModule?.('planner')}
+            onClick={() => onNavigateModule?.('planner')}
             className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
             <Calendar width={14} height={14} /> Reuniones
@@ -616,16 +663,16 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               if (file) onUpload(file);
             }}
           />
-          <Button variant="secondary" size="sm" onPress={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+          <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
             <FileArrowUp width={14} height={14} /> Subir archivo
           </Button>
-          <Button isIconOnly variant="primary" size="sm" onPress={onNew} aria-label="Crear documento" className="icon-button-circle h-8 w-8">
+          <Button variant="default" size="icon-sm" onClick={onNew} aria-label="Crear documento" className="icon-button-circle h-8 w-8">
             <Plus width={16} height={16} />
           </Button>
         </div>
       ) : doc ? (
         <div key="document-actions" className="header-slot-enter flex items-center gap-2">
-          <Button variant="primary" size="sm" onPress={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
+          <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
             <Pencil width={14} height={14} /> Editar
           </Button>
           <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
@@ -637,9 +684,9 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           key="planner-brand"
           variant="ghost"
           size="sm"
-          onPress={() => onNavigateModule?.('docs')}
+          onClick={() => onNavigateModule?.('docs')}
           aria-label="Volver a Documentos"
-          className="topbar-title header-slot-enter h-8 px-1.5 -ml-1 font-bold text-sm tracking-tight text-foreground hover:bg-surface-secondary/50"
+          className="topbar-title header-slot-enter h-8 px-1.5 -ml-1 font-bold text-sm tracking-tight text-foreground hover:bg-muted"
         >
           <ChevronLeft width={15} height={15} />
           <span>Bardo</span>
@@ -649,7 +696,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <span>Bardo</span>
         </span>
       ) : (
-        <Button key="document-title" variant="ghost" size="sm" onPress={onBack} className="back-button h-8 px-2.5 text-xs text-muted hover:text-foreground font-medium flex items-center gap-1">
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
           <ChevronLeft width={15} height={15} /> Documentos
         </Button>
       )}
@@ -685,20 +732,29 @@ function Library({
             if (file) onUpload(file);
           }}
         />
-        <SearchField
-          aria-label="Buscar documentos"
-          fullWidth
-          value={query}
-          onChange={setQuery}
-          onClear={() => setQuery('')}
-          className="docs-search"
-        >
-          <SearchField.Group>
-            <SearchField.SearchIcon />
-            <SearchField.Input placeholder="Buscar documentos" />
-            <SearchField.ClearButton />
-          </SearchField.Group>
-        </SearchField>
+        <InputGroup className="docs-search">
+          <InputGroupAddon align="inline-start">
+            <Magnifier width={15} height={15} className="text-muted-foreground" />
+          </InputGroupAddon>
+          <InputGroupInput
+            placeholder="Buscar documentos..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            aria-label="Buscar documentos"
+          />
+          {query && (
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                variant="ghost"
+                onClick={() => setQuery('')}
+                aria-label="Limpiar búsqueda"
+              >
+                <Xmark width={14} height={14} />
+              </InputGroupButton>
+            </InputGroupAddon>
+          )}
+        </InputGroup>
 
         {continueDoc && !query && (
           <section className="library-section continue-section">
@@ -709,7 +765,7 @@ function Library({
                 <strong>{continueDoc.title || 'Sin título'}</strong>
                 <span>{continueDoc.origin || 'Creado en Bardo'} · {changeActorName(continueDoc)} · {formatChangeTime(continueDoc)}</span>
               </span>
-              <ChevronRight width={16} height={16} className="text-muted" />
+              <ChevronRight width={16} height={16} className="text-muted-foreground" />
             </button>
           </section>
         )}
@@ -763,7 +819,7 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
       <article className="document-shell">
         <header className="doc-intro">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs text-muted">
+            <span className="text-xs text-muted-foreground">
               Último cambio realizado por {changeActorName(doc)} · {formatChangeTime(doc)}
             </span>
           </div>
@@ -780,53 +836,53 @@ function BlockTypeDropdown({value, onSelect}) {
   const current = BLOCK_TYPES.find(b => b.id === value) || BLOCK_TYPES[0];
 
   return (
-    <Dropdown>
-      <Button
-        aria-label="Tipo de texto"
-        variant="tertiary"
-        size="md"
-        className="mobile-toolbar-leading mobile-toolbar-leading-trigger gap-1.5 font-medium rounded-3xl px-3 inline-flex items-center"
-      >
-        <span className="mobile-toolbar-label truncate max-w-[78px] md:max-w-none block">{current.label}</span>
-        <ChevronDown width={14} height={14} className="opacity-70 shrink-0" />
-      </Button>
-      <Dropdown.Popover
-        placement="bottom start"
-        className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain"
-      >
-        <Dropdown.Menu onAction={onSelect}>
-          {BLOCK_TYPES.map(item => {
-            const ItemIcon = item.icon;
-            return (
-              <Dropdown.Item
-                key={item.id}
-                id={item.id}
-                textValue={item.label}
-              >
-                <ItemIcon width={16} height={16} />
-                <Label>{item.label}</Label>
-                {item.shortcut && (
-                  <Kbd variant="light">
-                    <Kbd.Content>{item.shortcut}</Kbd.Content>
-                  </Kbd>
-                )}
-              </Dropdown.Item>
-            );
-          })}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            aria-label="Tipo de texto"
+            variant="ghost"
+            size="sm"
+            className="mobile-toolbar-leading mobile-toolbar-leading-trigger gap-1.5 font-medium rounded-full px-2.5 inline-flex items-center justify-between shrink-0"
+          >
+            <span className="mobile-toolbar-label truncate text-xs">{current.label}</span>
+            <ChevronDown width={13} height={13} className="opacity-70 shrink-0" />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="start" className="toolbar-dropdown-popover w-52 p-1">
+        <div className="max-h-60 overflow-y-auto overscroll-contain pr-0.5">
+          <DropdownMenuGroup>
+            {BLOCK_TYPES.map(item => {
+              const ItemIcon = item.icon;
+              return (
+                <DropdownMenuItem
+                  key={item.id}
+                  onClick={() => onSelect(item.id)}
+                >
+                  <ItemIcon width={16} height={16} />
+                  <span>{item.label}</span>
+                  {item.shortcut && (
+                    <Kbd className="ml-auto">{item.shortcut}</Kbd>
+                  )}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuGroup>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 const TOOLBAR_OPTIONAL_ACTIONS = [
-  ['redo', 32, 40],
+  ['redo', 36, 40],
   ['italic', 36, 40],
   ['underline', 36, 40],
-  ['createLink', 32, 40],
+  ['createLink', 36, 40],
   ['strikeThrough', 36, 40],
   ['code', 36, 40],
-  ['insertUnorderedList', 48, 48],
+  ['insertUnorderedList', 36, 40],
   ['insertOrderedList', 36, 40],
   ['checklist', 36, 40],
   ['blockquote', 36, 40],
@@ -844,12 +900,12 @@ function useAdaptiveToolbar(containerRef) {
 
     const update = () => {
       const availableWidth = host.getBoundingClientRect().width;
-      const usableWidth = Math.floor(availableWidth) - 2;
+      const usableWidth = Math.floor(availableWidth) - 24;
       const usesTouchSizedControls = window.matchMedia('(max-width: 759px)').matches;
       const next = new Set();
 
-      // Text starts at its 120px minimum, then absorbs any remainder up to 200px.
-      let usedWidth = 272;
+      // Base width for Texto dropdown (~110px) + Undo button (~36px) + MoreActions button (~36px) + gaps/padding (~24px) = ~206px
+      let usedWidth = usesTouchSizedControls ? 220 : 196;
       TOOLBAR_OPTIONAL_ACTIONS.forEach(([action, regularWidth, touchWidth]) => {
         const incrementalWidth = usesTouchSizedControls ? touchWidth : regularWidth;
         if (usedWidth + incrementalWidth <= usableWidth) {
@@ -882,74 +938,74 @@ function MoreActionsMenu({onAction, visibleActions}) {
   const handleAction = key => onAction(key === 'pre' ? 'insertPre' : key);
   const isHidden = action => !visibleActions.has(action);
   const showInline = ['strikeThrough', 'code', 'italic', 'underline', 'createLink'].some(isHidden);
-  const showLists = ['insertUnorderedList', 'insertOrderedList', 'checklist'].some(isHidden);
+  const showLists = ['insertUnorderedList', 'insertOrderedList', 'checklist', 'blockquote'].some(isHidden);
   const showRedo = isHidden('redo');
-  const showLinkSeparator = visibleActions.has('createLink');
 
   return (
-    <Dropdown>
-      <Button
-        isIconOnly
-        aria-label="Ver más"
-        variant="tertiary"
-        size="md"
-        className="mobile-more-trigger rounded-none rounded-e-3xl relative"
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            size="icon-sm"
+            aria-label="Ver más"
+            variant="ghost"
+            className="mobile-more-trigger rounded-full relative shrink-0"
+          >
+            <EllipsisVertical width={15} height={15} />
+          </Button>
+        }
+      />
+      <DropdownMenuContent
+        align="end"
+        className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain w-56"
       >
-        <ButtonGroup.Separator className={showLinkSeparator ? 'mobile-more-separator' : 'hidden'} />
-        <EllipsisVertical width={15} height={15} />
-      </Button>
-      <Dropdown.Popover
-        placement="bottom end"
-        className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain"
-      >
-        <Dropdown.Menu onAction={handleAction}>
-          {showInline && (
-            <Dropdown.Section>
-              {isHidden('strikeThrough') && <Dropdown.Item id="strikeThrough" textValue="Tachado"><Strikethrough width={16} height={16} /><Label>Tachado</Label></Dropdown.Item>}
-              {isHidden('code') && <Dropdown.Item id="code" textValue="Código en línea"><Code width={16} height={16} /><Label>Código en línea</Label></Dropdown.Item>}
-              {isHidden('italic') && <Dropdown.Item id="italic" textValue="Cursiva"><Italic width={16} height={16} /><Label>Cursiva</Label></Dropdown.Item>}
-              {isHidden('underline') && <Dropdown.Item id="underline" textValue="Subrayado"><Underline width={16} height={16} /><Label>Subrayado</Label></Dropdown.Item>}
-              {isHidden('createLink') && <Dropdown.Item id="createLink" textValue="Enlace"><Link width={16} height={16} /><Label>Enlace</Label></Dropdown.Item>}
-            </Dropdown.Section>
-          )}
-          {showInline && showLists && <Separator className="toolbar-overflow-divider" />}
-          {showLists && (
-            <Dropdown.Section>
-              {isHidden('insertUnorderedList') && <Dropdown.Item id="insertUnorderedList" textValue="Lista con viñetas"><ListUl width={16} height={16} /><Label>Lista con viñetas</Label></Dropdown.Item>}
-              {isHidden('insertOrderedList') && <Dropdown.Item id="insertOrderedList" textValue="Lista numerada"><ListOl width={16} height={16} /><Label>Lista numerada</Label></Dropdown.Item>}
-              {isHidden('checklist') && <Dropdown.Item id="checklist" textValue="Lista de tareas"><SquareCheck width={16} height={16} /><Label>Lista de tareas</Label></Dropdown.Item>}
-            </Dropdown.Section>
-          )}
-          {(showInline || showLists) && <Separator className="toolbar-overflow-divider" />}
-          <Dropdown.Section>
-            <Dropdown.Item id="callout" textValue="Nota / Destacado">
-              <QuoteOpen width={16} height={16} />
-              <Label>Destacado</Label>
-            </Dropdown.Item>
-            <Dropdown.Item id="spoiler" textValue="Desplegable">
-              <ChevronRight width={16} height={16} />
-              <Label>Lista desplegable</Label>
-            </Dropdown.Item>
-            <Dropdown.Item id="hr" textValue="Línea separadora">
-              <Minus width={16} height={16} />
-              <Label>Separador</Label>
-            </Dropdown.Item>
-          </Dropdown.Section>
-          <Separator className="overflow-utility-divider" />
-          <Dropdown.Section>
-            {showRedo && <Dropdown.Item id="redo" textValue="Rehacer"><ArrowUturnCwRight width={16} height={16} /><Label>Rehacer</Label></Dropdown.Item>}
-            <Dropdown.Item id="copyAll" textValue="Copiar contenido">
-              <Copy width={16} height={16} />
-              <Label>Copiar texto</Label>
-            </Dropdown.Item>
-            <Dropdown.Item id="removeFormat" textValue="Limpiar formato">
-              <ArrowRotateLeft width={16} height={16} />
-              <Label>Limpiar formato</Label>
-            </Dropdown.Item>
-          </Dropdown.Section>
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
+        {showInline && (
+          <DropdownMenuGroup>
+            {isHidden('strikeThrough') && <DropdownMenuItem onClick={() => handleAction('strikeThrough')}><Strikethrough width={16} height={16} /><span>Tachado</span></DropdownMenuItem>}
+            {isHidden('code') && <DropdownMenuItem onClick={() => handleAction('code')}><Code width={16} height={16} /><span>Código en línea</span></DropdownMenuItem>}
+            {isHidden('italic') && <DropdownMenuItem onClick={() => handleAction('italic')}><Italic width={16} height={16} /><span>Cursiva</span></DropdownMenuItem>}
+            {isHidden('underline') && <DropdownMenuItem onClick={() => handleAction('underline')}><Underline width={16} height={16} /><span>Subrayado</span></DropdownMenuItem>}
+            {isHidden('createLink') && <DropdownMenuItem onClick={() => handleAction('createLink')}><Link width={16} height={16} /><span>Enlace</span></DropdownMenuItem>}
+          </DropdownMenuGroup>
+        )}
+        {showInline && showLists && <DropdownMenuSeparator />}
+        {showLists && (
+          <DropdownMenuGroup>
+            {isHidden('insertUnorderedList') && <DropdownMenuItem onClick={() => handleAction('insertUnorderedList')}><ListUl width={16} height={16} /><span>Lista con viñetas</span></DropdownMenuItem>}
+            {isHidden('insertOrderedList') && <DropdownMenuItem onClick={() => handleAction('insertOrderedList')}><ListOl width={16} height={16} /><span>Lista numerada</span></DropdownMenuItem>}
+            {isHidden('checklist') && <DropdownMenuItem onClick={() => handleAction('checklist')}><SquareCheck width={16} height={16} /><span>Lista de tareas</span></DropdownMenuItem>}
+            {isHidden('blockquote') && <DropdownMenuItem onClick={() => handleAction('blockquote')}><QuoteOpen width={16} height={16} /><span>Cita</span></DropdownMenuItem>}
+          </DropdownMenuGroup>
+        )}
+        {(showInline || showLists) && <DropdownMenuSeparator />}
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={() => handleAction('callout')}>
+            <QuoteOpen width={16} height={16} />
+            <span>Destacado</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleAction('spoiler')}>
+            <ChevronRight width={16} height={16} />
+            <span>Lista desplegable</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleAction('hr')}>
+            <Minus width={16} height={16} />
+            <span>Separador</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          {showRedo && <DropdownMenuItem onClick={() => handleAction('redo')}><ArrowUturnCwRight width={16} height={16} /><span>Rehacer</span></DropdownMenuItem>}
+          <DropdownMenuItem onClick={() => handleAction('copyAll')}>
+            <Copy width={16} height={16} />
+            <span>Copiar texto</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleAction('removeFormat')}>
+            <ArrowRotateLeft width={16} height={16} />
+            <span>Limpiar formato</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1507,7 +1563,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
           <Button
             variant="ghost"
             size="sm"
-            onPress={() => {
+            onClick={() => {
               if (isExiting) return;
               flushSave();
               leaveEditor(onBack);
@@ -1516,20 +1572,18 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
           >
             <ChevronLeft width={16} height={16} /> Docs
           </Button>
-          <Chip
+          <Badge
             key={saveState}
-            size="sm"
-            variant="soft"
-            color={isDirty ? 'warning' : 'success'}
+            variant="secondary"
             className="save-state text-xs"
             data-dirty={isDirty ? 'true' : 'false'}
           >
             <span key={saveState} className="save-state-label">{saveState}</span>
-          </Chip>
+          </Badge>
         </div>
         <div className="topbar-right flex items-center gap-2">
           <ThemeModeMenu />
-          <Button variant="primary" size="sm" onPress={finish} className="save-action-button">
+          <Button variant="default" size="sm" onClick={finish} className="save-action-button">
             <span key={isDirty ? 'dirty' : 'saved'} className="save-action-label">
               {isDirty ? 'Guardar' : 'Listo'}
             </span>
@@ -1564,11 +1618,11 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
 
         <header className="doc-intro">
           <div className="doc-meta flex items-center gap-2 flex-wrap">
-            <Chip size="sm" variant="soft" color="default" className="text-xs">
+            <Badge variant="secondary" className="text-xs">
               {isNew ? 'Borrador privado' : `Creado por ${createdActorName(doc)}`}
-            </Chip>
+            </Badge>
             {!isNew && (
-              <span className="text-xs text-muted">
+              <span className="text-xs text-muted-foreground">
                 Último cambio realizado por {changeActorName(doc)} · {formatChangeTime(doc)}
               </span>
             )}
@@ -1617,77 +1671,70 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
             ref={toolbarContainerRef}
             className={`editor-toolbar-container ${isFullToolbar ? 'editor-toolbar-container-full' : ''}`}
           >
-            <Toolbar aria-label="Editor toolbar" className="flex items-center justify-start gap-2 flex-nowrap">
+            <div role="toolbar" aria-label="Editor toolbar" className="toolbar flex items-center justify-between gap-1 sm:gap-1.5 flex-nowrap w-full min-w-0">
               <BlockTypeDropdown value={blockValue} onSelect={handleBlockSelect} />
 
-              <ButtonGroup variant="tertiary" aria-label="Historial de edición" className={`mobile-history-group ${isToolbarActionVisible('redo') ? '' : 'toolbar-group-standalone'}`}>
-                <Button isIconOnly variant="tertiary" aria-label="Deshacer" title="Deshacer (⌘/Ctrl+Z)" onPress={handleUndo} isDisabled={!historyState.canUndo}>
+              <ButtonGroup aria-label="Historial de edición" className={`mobile-history-group shrink-0 ${isToolbarActionVisible('redo') ? '' : 'toolbar-group-standalone'}`}>
+                <Button size="icon-sm" variant="ghost" aria-label="Deshacer" title="Deshacer (⌘/Ctrl+Z)" onClick={handleUndo} disabled={!historyState.canUndo} className="rounded-full">
                   <ArrowUturnCcwLeft width={15} height={15} />
                 </Button>
-                <Button isIconOnly variant="tertiary" aria-label="Rehacer" title="Rehacer (⌘/Ctrl+Y)" onPress={handleRedo} isDisabled={!historyState.canRedo} className={isToolbarActionVisible('redo') ? '' : 'toolbar-control-overflowed'}>
+                <Button size="icon-sm" variant="ghost" aria-label="Rehacer" title="Rehacer (⌘/Ctrl+Y)" onClick={handleRedo} disabled={!historyState.canRedo} className={`rounded-full ${isToolbarActionVisible('redo') ? '' : 'toolbar-control-overflowed'}`}>
                   <ArrowUturnCwRight width={15} height={15} />
                 </Button>
               </ButtonGroup>
 
-              <ToggleButtonGroup
+              <ToggleGroup
+                type="multiple"
                 aria-label="Estilos de texto"
-                selectionMode="multiple"
-                selectedKeys={selectedInlineKeys}
-                className={visibleStyleActions.length ? '' : 'toolbar-group-standalone'}
+                value={Array.from(selectedInlineKeys)}
+                className={`shrink-0 ${visibleStyleActions.length ? '' : 'toolbar-group-standalone'}`}
               >
-                <ToggleButton isIconOnly aria-label="Negrita" title="Negrita (⌘/Ctrl+B)" id="bold" onPress={() => runFormat('bold')}>
+                <ToggleGroupItem value="bold" aria-label="Negrita" title="Negrita (⌘/Ctrl+B)" onClick={() => runFormat('bold')} data-state={inlineState.bold ? 'on' : 'off'}>
                   <Bold width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Cursiva" title="Cursiva (⌘/Ctrl+I)" id="italic" onPress={() => runFormat('italic')} className={`${isToolbarActionVisible('italic') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'italic' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="italic" aria-label="Cursiva" title="Cursiva (⌘/Ctrl+I)" onClick={() => runFormat('italic')} data-state={inlineState.italic ? 'on' : 'off'} className={`${isToolbarActionVisible('italic') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'italic' ? 'toolbar-last-visible' : ''}`}>
                   <Italic width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Subrayado" title="Subrayado (⌘/Ctrl+U)" id="underline" onPress={() => runFormat('underline')} className={`${isToolbarActionVisible('underline') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'underline' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="underline" aria-label="Subrayado" title="Subrayado (⌘/Ctrl+U)" onClick={() => runFormat('underline')} data-state={inlineState.underline ? 'on' : 'off'} className={`${isToolbarActionVisible('underline') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'underline' ? 'toolbar-last-visible' : ''}`}>
                   <Underline width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Tachado" title="Tachado" id="strikeThrough" onPress={() => runFormat('strikeThrough')} className={`${isToolbarActionVisible('strikeThrough') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'strikeThrough' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="strikeThrough" aria-label="Tachado" title="Tachado" onClick={() => runFormat('strikeThrough')} data-state={inlineState.strikeThrough ? 'on' : 'off'} className={`${isToolbarActionVisible('strikeThrough') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'strikeThrough' ? 'toolbar-last-visible' : ''}`}>
                   <Strikethrough width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Código en línea" title="Código en línea (⌘/Ctrl+E)" id="code" onPress={() => runFormat('code')} className={`${isToolbarActionVisible('code') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'code' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="code" aria-label="Código en línea" title="Código en línea (⌘/Ctrl+E)" onClick={() => runFormat('code')} data-state={inlineState.code ? 'on' : 'off'} className={`${isToolbarActionVisible('code') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'code' ? 'toolbar-last-visible' : ''}`}>
                   <Code width={15} height={15} />
-                </ToggleButton>
-              </ToggleButtonGroup>
+                </ToggleGroupItem>
+              </ToggleGroup>
 
-              <ToggleButtonGroup
+              <ToggleGroup
+                type="single"
                 aria-label="Listas y bloques"
-                selectionMode="single"
-                selectedKeys={selectedListKeys}
-                className={`toolbar-list-group ${visibleListActions.length ? '' : 'toolbar-control-overflowed'} ${visibleListActions.length === 1 ? 'toolbar-group-standalone' : ''}`}
+                value={Array.from(selectedListKeys)[0] || ''}
+                className={`toolbar-list-group shrink-0 ${visibleListActions.length ? '' : 'toolbar-control-overflowed'} ${visibleListActions.length === 1 ? 'toolbar-group-standalone' : ''}`}
               >
-                <ToggleButton isIconOnly aria-label="Lista con viñetas" title="Lista con viñetas" id="insertUnorderedList" onPress={() => runFormat('insertUnorderedList')} className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="insertUnorderedList" aria-label="Lista con viñetas" title="Lista con viñetas" onClick={() => runFormat('insertUnorderedList')} data-state={inlineState.insertUnorderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}>
                   <ListUl width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Lista numerada" title="Lista numerada" id="insertOrderedList" onPress={() => runFormat('insertOrderedList')} className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="insertOrderedList" aria-label="Lista numerada" title="Lista numerada" onClick={() => runFormat('insertOrderedList')} data-state={inlineState.insertOrderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}>
                   <ListOl width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Lista de tareas" title="Lista de tareas" id="checklist" onPress={() => runFormat('checklist')} className={`${isToolbarActionVisible('checklist') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="checklist" aria-label="Lista de tareas" title="Lista de tareas" onClick={() => runFormat('checklist')} data-state={inlineState.checklist ? 'on' : 'off'} className={`${isToolbarActionVisible('checklist') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}>
                   <SquareCheck width={15} height={15} />
-                </ToggleButton>
-                <ToggleButton isIconOnly aria-label="Cita" title="Cita" id="blockquote" onPress={() => runFormat('blockquote')} className={`${isToolbarActionVisible('blockquote') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}>
-                  <ToggleButtonGroup.Separator />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="blockquote" aria-label="Cita" title="Cita" onClick={() => runFormat('blockquote')} data-state={inlineState.blockquote ? 'on' : 'off'} className={`${isToolbarActionVisible('blockquote') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}>
                   <QuoteOpen width={15} height={15} />
-                </ToggleButton>
-              </ToggleButtonGroup>
+                </ToggleGroupItem>
+              </ToggleGroup>
 
-              <ButtonGroup variant="tertiary" className={`mobile-actions-group ${isToolbarActionVisible('createLink') ? '' : 'toolbar-group-standalone'}`}>
+              <ButtonGroup className={`mobile-actions-group shrink-0 ${isToolbarActionVisible('createLink') ? '' : 'toolbar-group-standalone'}`}>
                 <Button
-                  isIconOnly
-                  variant="tertiary"
+                  size="icon-sm"
+                  variant="ghost"
                   aria-label="Enlace"
                   title="Enlace (⌘/Ctrl+K)"
                   aria-pressed={inlineState.link}
-                  onPress={() => runFormat('createLink')}
-                  className={`${isToolbarActionVisible('createLink') ? '' : 'toolbar-control-overflowed'} rounded-none rounded-s-3xl`}
+                  onClick={() => runFormat('createLink')}
+                  className={`rounded-full ${isToolbarActionVisible('createLink') ? '' : 'toolbar-control-overflowed'}`}
                 >
                   <Link width={15} height={15} />
                 </Button>
@@ -1696,7 +1743,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                   visibleActions={visibleToolbarActions}
                 />
               </ButtonGroup>
-            </Toolbar>
+            </div>
           </div>
         </div>
 
@@ -1780,68 +1827,59 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
 
 function DeleteAlertDialog({isOpen, doc, onConfirm, onCancel}) {
   return (
-    <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
-        <AlertDialog.Container placement="auto" size="sm">
-          <AlertDialog.Dialog aria-label="Eliminar documento">
-            <AlertDialog.Header>
-              <AlertDialog.Icon status="danger" />
-              <AlertDialog.Heading>Eliminar documento</AlertDialog.Heading>
-            </AlertDialog.Header>
-            <AlertDialog.Body>
-              <p className="text-sm text-muted">
-                “{doc?.title || 'Sin título'}” se eliminará de la biblioteca. Puedes restaurar los datos iniciales desde el menú de opciones.
-              </p>
-            </AlertDialog.Body>
-            <AlertDialog.Footer>
-              <Button variant="ghost" onPress={onCancel}>
-                Cancelar
-              </Button>
-              <Button variant="danger" onPress={() => onConfirm(doc?.id)}>
-                Eliminar
-              </Button>
-            </AlertDialog.Footer>
-          </AlertDialog.Dialog>
-        </AlertDialog.Container>
-    </AlertDialog.Backdrop>
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Eliminar documento</AlertDialogTitle>
+          <AlertDialogDescription>
+            “{doc?.title || 'Sin título'}” se eliminará de la biblioteca. Puedes restaurar los datos iniciales desde el menú de opciones.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={() => onConfirm(doc?.id)}>
+            Eliminar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
 function InsertLinkModal({isOpen, linkValue, setLinkValue, onApply, onCancel}) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
-        <Modal.Container placement="auto" size="sm">
-          <Modal.Dialog aria-label="Agregar enlace">
-            <Modal.Header>
-              <Modal.Heading>Agregar enlace</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <TextField className="w-full">
-                <Label>URL o Enlace</Label>
-                <Input
-                  autoFocus
-                  placeholder="https://ejemplo.com"
-                  value={linkValue}
-                  onChange={e => setLinkValue(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && linkValue.trim()) {
-                      e.preventDefault();
-                      onApply();
-                    }
-                  }}
-                />
-              </TextField>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={onCancel}>
-                Cancelar
-              </Button>
-              <Button variant="primary" isDisabled={!linkValue.trim()} onPress={onApply}>
-                Aplicar
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-    </Modal.Backdrop>
+    <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Agregar enlace</DialogTitle>
+        </DialogHeader>
+        <Field className="w-full">
+          <FieldLabel>URL o Enlace</FieldLabel>
+          <Input
+            autoFocus
+            placeholder="https://ejemplo.com"
+            value={linkValue}
+            onChange={e => setLinkValue(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && linkValue.trim()) {
+                e.preventDefault();
+                onApply();
+              }
+            }}
+          />
+        </Field>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button variant="default" size="sm" disabled={!linkValue.trim()} onClick={onApply}>
+            Aplicar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1849,86 +1887,80 @@ function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
   const markdown = doc ? documentMarkdown(doc) : '';
 
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
-      <Modal.Container placement="auto" size="lg">
-        <Modal.Dialog aria-label="Vista previa de Markdown">
-          <Modal.Header>
-            <Modal.Heading>Vista previa de Markdown</Modal.Heading>
-            <p className="text-sm text-muted truncate">{doc?.title || 'Sin título'}</p>
-          </Modal.Header>
-          <Modal.Body>
-            <pre className="markdown-preview-content" tabIndex="0">{markdown}</pre>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="ghost" onPress={onCancel}>
-              <ChevronLeft width={15} height={15} /> Atrás
-            </Button>
-            <Button variant="primary" onPress={() => onCopy(markdown)}>
-              <Copy width={15} height={15} /> Copiar Markdown
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+    <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Vista previa de Markdown</DialogTitle>
+          <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto min-h-0 py-2">
+          <pre className="markdown-preview-content" tabIndex="0">{markdown}</pre>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            <ChevronLeft width={15} height={15} /> Atrás
+          </Button>
+          <Button variant="default" size="sm" onClick={() => onCopy(markdown)}>
+            <Copy width={15} height={15} /> Copiar Markdown
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
-      <Modal.Container placement="auto" size="lg">
-        <Modal.Dialog aria-label="Vista previa HTML">
-          <Modal.Header>
-            <Modal.Heading>Vista previa HTML</Modal.Heading>
-            <p className="text-sm text-muted truncate">{doc?.title || 'Sin título'}</p>
-          </Modal.Header>
-          <Modal.Body>
-            <div className="export-html-preview">
-              <h1>{doc?.title || 'Sin título'}</h1>
-              {doc?.description && <p className="text-muted">{doc.description}</p>}
-              <RichBody html={doc?.body || ''} />
-            </div>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="ghost" onPress={onCancel}>
-              <ChevronLeft width={15} height={15} /> Atrás
-            </Button>
-            <Button variant="primary" onPress={() => onCopy(documentHtml(doc))}>
-              <Copy width={15} height={15} /> Copiar HTML
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+    <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Vista previa HTML</DialogTitle>
+          <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto min-h-0 py-2">
+          <div className="export-html-preview">
+            <h1>{doc?.title || 'Sin título'}</h1>
+            {doc?.description && <p className="text-muted-foreground">{doc.description}</p>}
+            <RichBody html={doc?.body || ''} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            <ChevronLeft width={15} height={15} /> Atrás
+          </Button>
+          <Button variant="default" size="sm" onClick={() => onCopy(documentHtml(doc))}>
+            <Copy width={15} height={15} /> Copiar HTML
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function PdfPreviewModal({isOpen, file, onCancel}) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={open => !open && onCancel()} variant="opaque" isDismissable>
-      <Modal.Container placement="auto" size="lg">
-        <Modal.Dialog aria-label="Vista previa de PDF">
-          <Modal.Header>
-            <Modal.Heading>Vista previa de PDF</Modal.Heading>
-            <p className="text-sm text-muted truncate">{file?.filename || 'documento.pdf'}</p>
-          </Modal.Header>
-          <Modal.Body>
-            {file?.url && (
-              <iframe
-                className="export-pdf-preview"
-                src={file.url}
-                title={file.filename || 'Vista previa de PDF'}
-              />
-            )}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="ghost" onPress={onCancel}>
-              <ChevronLeft width={15} height={15} /> Atrás
-            </Button>
-          </Modal.Footer>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+    <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Vista previa de PDF</DialogTitle>
+          <DialogDescription className="truncate">{file?.filename || 'documento.pdf'}</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto min-h-0 py-2">
+          {file?.url && (
+            <iframe
+              className="export-pdf-preview"
+              src={file.url}
+              title={file.filename || 'Vista previa de PDF'}
+            />
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            <ChevronLeft width={15} height={15} /> Atrás
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2321,8 +2353,8 @@ function App() {
 
       {route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
         <div className="missing-state flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-base text-muted mb-4">Este documento ya no existe.</p>
-          <Button variant="secondary" onPress={() => go('#docs')}>
+          <p className="text-base text-muted-foreground mb-4">Este documento ya no existe.</p>
+          <Button variant="secondary" onClick={() => go('#docs')}>
             Volver a Docs
           </Button>
         </div>

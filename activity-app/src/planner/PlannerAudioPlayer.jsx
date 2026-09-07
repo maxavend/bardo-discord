@@ -1,20 +1,32 @@
-import {useState, useRef, useEffect} from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dropdown } from '@/components/ui/dropdown-menu';
-import { Modal } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label, Description } from '@/components/ui/label';
 import {
   Play,
   Pause,
-  EllipsisVertical,
+  MoreVertical,
   Pencil,
-  TrashBin,
-  CircleInfo,
-} from '@gravity-ui/icons';
-import {formatMsToClock} from './session-assistant-engine.js';
+  Trash2,
+  Info,
+} from 'lucide-react';
+import { formatMsToClock } from './session-assistant-engine.js';
 
-export function PlannerAudioPlayer({recording, onRename, onDelete}) {
+export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [showTechModal, setShowTechModal] = useState(false);
@@ -63,7 +75,7 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
   };
 
   return (
-    <div className="container-surface flex flex-col gap-2 p-3 rounded-xl bg-surface-secondary/35 border border-border/40 text-xs">
+    <div className="flex flex-col gap-2 p-3 rounded-xl bg-muted/40 border border-border/60 text-xs">
       {canPlay && (
         <audio
           ref={audioRef}
@@ -85,30 +97,29 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
               {recording?.name || recording?.pointTitle || recording?.blockTitle || 'Grabación'}
             </span>
             {recording?.pointTitle && recording?.name !== recording.pointTitle && (
-              <span className="text-[11px] text-muted truncate">· {recording.pointTitle}</span>
+              <span className="text-[11px] text-muted-foreground truncate">· {recording.pointTitle}</span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted mt-0.5 flex-wrap">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
             <span>{totalFormatted}</span>
             <span>·</span>
             <span>{recording?.sourcesLabel || 'Micrófono'}</span>
             {segmentsCount > 1 && <><span>·</span><span>{segmentsCount} segmentos</span></>}
             {isPending && <><span>·</span><span>Recuperando audio…</span></>}
-            {hasPersistenceError && <><span>·</span><span className="text-danger">Audio no persistido</span></>}
+            {hasPersistenceError && <><span>·</span><span className="text-destructive">Audio no persistido</span></>}
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
           <Button
             variant="secondary"
-            size="sm"
-            isIconOnly
-            isDisabled={!canPlay}
+            size="icon-sm"
+            disabled={!canPlay}
             aria-label={isPlaying ? 'Pausar audio' : 'Reproducir audio'}
-            onPress={togglePlay}
-            className="h-8 w-8 rounded-full"
+            onClick={togglePlay}
+            className="rounded-full"
           >
-            {isPlaying ? <Pause width={13} height={13} /> : <Play width={13} height={13} className="ml-0.5" />}
+            {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5 ml-0.5" />}
           </Button>
 
           <div className="flex items-center gap-2 flex-1 sm:w-48">
@@ -121,95 +132,93 @@ export function PlannerAudioPlayer({recording, onRename, onDelete}) {
               onChange={handleSeek}
               disabled={!canPlay}
               aria-label="Progreso de reproducción de audio"
-              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed bg-border accent-accent"
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed bg-border accent-primary"
             />
-            <span className="text-[10px] font-mono text-muted tabular-nums shrink-0">{currentFormatted}</span>
+            <span className="text-[10px] font-mono text-muted-foreground tabular-nums shrink-0">{currentFormatted}</span>
           </div>
 
           {(onRename || onDelete) && (
-            <Dropdown>
-              <Dropdown.Trigger>
-                <Button variant="ghost" size="sm" isIconOnly aria-label="Opciones de la grabación" className="h-7 w-7 text-muted hover:text-foreground">
-                  <EllipsisVertical width={13} height={13} />
-                </Button>
-              </Dropdown.Trigger>
-              <Dropdown.Popover placement="bottom end">
-                <Dropdown.Menu onAction={(key) => {
-                  if (key === 'rename') setShowRenameModal(true);
-                  if (key === 'tech-details') setShowTechModal(true);
-                  if (key === 'delete' && onDelete) onDelete(recording.id);
-                }}>
-                  {onRename && (
-                    <Dropdown.Item id="rename" textValue="Renombrar grabación">
-                      <Pencil />
-                      <Label>Renombrar grabación</Label>
-                    </Dropdown.Item>
-                  )}
-                  <Dropdown.Item id="tech-details" textValue="Detalles técnicos">
-                    <CircleInfo />
-                    <Label>Detalles técnicos</Label>
-                    <Description>Formato, persistencia y segmentos</Description>
-                  </Dropdown.Item>
-                  {onDelete && (
-                  <Dropdown.Item id="delete" textValue="Eliminar grabación" className="text-danger">
-                      <TrashBin />
-                      <Label className="text-danger">Eliminar grabación</Label>
-                    </Dropdown.Item>
-                  )}
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" size="icon-xs" aria-label="Opciones de la grabación" className="text-muted-foreground hover:text-foreground">
+                    <MoreVertical className="size-3.5" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-48">
+                {onRename && (
+                  <DropdownMenuItem onClick={() => setShowRenameModal(true)}>
+                    <Pencil className="size-4 text-muted-foreground" />
+                    <span>Renombrar</span>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => setShowTechModal(true)}>
+                  <Info className="size-4 text-muted-foreground" />
+                  <span>Detalles técnicos</span>
+                </DropdownMenuItem>
+                {onDelete && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => onDelete(recording.id)}>
+                      <Trash2 className="size-4 text-destructive" />
+                      <span>Eliminar grabación</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
 
       {hasPersistenceError && recording?.persistenceError && (
-        <p className="text-[11px] text-danger leading-relaxed">{recording.persistenceError}</p>
+        <p className="text-[11px] text-destructive leading-relaxed">{recording.persistenceError}</p>
       )}
 
-      <Modal.Backdrop isOpen={showTechModal} onOpenChange={(open) => !open && setShowTechModal(false)}>
-        <Modal.Container size="sm">
-          <Modal.Dialog className="container-surface bg-surface border border-border rounded-2xl shadow-xl p-5 flex flex-col gap-4 max-w-sm w-full">
+      {/* Modal de detalles técnicos */}
+      <Dialog open={showTechModal} onOpenChange={setShowTechModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
             <div className="flex items-center gap-2">
-              <CircleInfo width={16} height={16} className="text-accent" />
-              <h2 className="text-sm font-bold text-foreground">Detalles técnicos de la grabación</h2>
+              <Info className="size-4 text-primary" />
+              <DialogTitle>Detalles técnicos de la grabación</DialogTitle>
             </div>
-            <div className="flex flex-col gap-2 divide-y divide-border/30 text-xs">
-              <div className="flex justify-between gap-3 py-1.5"><span className="text-muted">Formato</span><span className="font-mono text-foreground text-right">{recording?.mimeType || 'audio/webm'}</span></div>
-              <div className="flex justify-between gap-3 py-1.5"><span className="text-muted">Tamaño</span><span className="font-semibold text-foreground">{fileSizeKb} KB</span></div>
-              <div className="flex justify-between gap-3 py-1.5"><span className="text-muted">Segmentos</span><span className="font-semibold text-foreground">{segmentsCount}</span></div>
-              <div className="flex justify-between gap-3 py-1.5"><span className="text-muted">Persistencia</span><span className="font-semibold text-foreground">{recording?.binaryStorage === 'indexeddb' ? 'IndexedDB' : 'No persistida'}</span></div>
-              <div className="flex justify-between gap-3 py-1.5"><span className="text-muted">Estado</span><span className="font-semibold text-foreground">{recording?.status || 'desconocido'}</span></div>
-            </div>
-            <div className="flex justify-end pt-2 border-t border-border/40">
-              <Button variant="secondary" size="sm" onPress={() => setShowTechModal(false)}>Cerrar</Button>
-            </div>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 divide-y divide-border/30 text-xs">
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Formato</span><span className="font-mono text-foreground text-right">{recording?.mimeType || 'audio/webm'}</span></div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Tamaño</span><span className="font-semibold text-foreground">{fileSizeKb} KB</span></div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Segmentos</span><span className="font-semibold text-foreground">{segmentsCount}</span></div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Persistencia</span><span className="font-semibold text-foreground">{recording?.binaryStorage === 'indexeddb' ? 'IndexedDB' : 'No persistida'}</span></div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Estado</span><span className="font-semibold text-foreground">{recording?.status || 'desconocido'}</span></div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" size="sm" onClick={() => setShowTechModal(false)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <Modal.Backdrop isOpen={showRenameModal} onOpenChange={(open) => !open && setShowRenameModal(false)}>
-        <Modal.Container size="sm">
-          <Modal.Dialog className="container-surface bg-surface border border-border rounded-2xl shadow-xl p-5 flex flex-col gap-4 max-w-sm w-full">
-            <div className="flex flex-col gap-1">
-              <h2 className="text-sm font-bold text-foreground">Renombrar grabación</h2>
-              <p className="text-xs text-muted">Cambia sólo el nombre visible. El Point asociado no se modifica.</p>
-            </div>
-            <Input
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              placeholder="Nombre de la grabación"
-              autoFocus
-              className="w-full"
-              onKeyDown={(event) => event.key === 'Enter' && handleConfirmRename()}
-            />
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-              <Button variant="ghost" size="sm" onPress={() => setShowRenameModal(false)}>Cancelar</Button>
-              <Button variant="primary" size="sm" onPress={handleConfirmRename}>Guardar nombre</Button>
-            </div>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+      {/* Modal de renombrar grabación */}
+      <Dialog open={showRenameModal} onOpenChange={setShowRenameModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renombrar grabación</DialogTitle>
+            <DialogDescription>Cambia sólo el nombre visible. El punto asociado no se modifica.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            placeholder="Nombre de la grabación"
+            autoFocus
+            className="w-full"
+            onKeyDown={(event) => event.key === 'Enter' && handleConfirmRename()}
+          />
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowRenameModal(false)}>Cancelar</Button>
+            <Button variant="default" size="sm" onClick={handleConfirmRename}>Guardar nombre</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,26 +1,41 @@
-import {useState, useEffect} from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Dropdown } from '@/components/ui/dropdown-menu';
-import { Modal } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
+import { Field, FieldLabel, FieldDescription, FieldGroup } from '@/components/ui/field';
 import { toast } from '@/lib/toast';
 import {
   Plus,
-  TrashBin,
+  Trash2,
   Check,
   ChevronUp,
   ChevronDown,
-  EllipsisVertical,
-} from '@gravity-ui/icons';
+  MoreVertical,
+  X,
+} from 'lucide-react';
 import {
   computePlannerTimes,
   parseSmartDuration,
   formatShortDuration,
 } from './time-engine.js';
-import {PlannerMemberPicker} from './PlannerMemberPicker.jsx';
-
+import { PlannerMemberPicker } from './PlannerMemberPicker.jsx';
 
 export function PlannerEditorView({
   initialState,
@@ -43,7 +58,7 @@ export function PlannerEditorView({
           leader: '',
           participants: '',
           subpoints: [
-            {id: 'sp-1', title: 'Bienvenida y contexto', presenter: ''},
+            { id: 'sp-1', title: 'Bienvenida y contexto', presenter: '' },
           ],
         },
       ],
@@ -66,8 +81,8 @@ export function PlannerEditorView({
 
   const updateHeaderField = (field, value) => {
     setFormData((prev) => {
-      const next = {...prev, [field]: value};
-      return {...next, ...computePlannerTimes(next)};
+      const next = { ...prev, [field]: value };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -82,9 +97,9 @@ export function PlannerEditorView({
   const updateBlockField = (blockIndex, field, value) => {
     setFormData((prev) => {
       const blocks = [...prev.blocks];
-      blocks[blockIndex] = {...blocks[blockIndex], [field]: value};
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      blocks[blockIndex] = { ...blocks[blockIndex], [field]: value };
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -106,8 +121,8 @@ export function PlannerEditorView({
         subpoints: [],
       };
       const blocks = [...prev.blocks, newBlock];
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -124,8 +139,8 @@ export function PlannerEditorView({
   const executeDeleteBlock = (blockIndex) => {
     setFormData((prev) => {
       const blocks = prev.blocks.filter((_, idx) => idx !== blockIndex);
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
     setBlockToDelete(null);
     toast('Bloque eliminado');
@@ -144,8 +159,8 @@ export function PlannerEditorView({
         ...block,
         subpoints: [...(block.subpoints || []), newSubpoint],
       };
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -154,10 +169,10 @@ export function PlannerEditorView({
       const blocks = [...prev.blocks];
       const block = blocks[blockIndex];
       const subpoints = [...(block.subpoints || [])];
-      subpoints[subpointIndex] = {...subpoints[subpointIndex], [field]: value};
-      blocks[blockIndex] = {...block, subpoints};
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      subpoints[subpointIndex] = { ...subpoints[subpointIndex], [field]: value };
+      blocks[blockIndex] = { ...block, subpoints };
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -166,9 +181,9 @@ export function PlannerEditorView({
       const blocks = [...prev.blocks];
       const block = blocks[blockIndex];
       const subpoints = (block.subpoints || []).filter((_, idx) => idx !== subpointIndex);
-      blocks[blockIndex] = {...block, subpoints};
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      blocks[blockIndex] = { ...block, subpoints };
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -181,9 +196,9 @@ export function PlannerEditorView({
       if (targetIndex < 0 || targetIndex >= subpoints.length) return prev;
       const [moved] = subpoints.splice(subpointIndex, 1);
       subpoints.splice(targetIndex, 0, moved);
-      blocks[blockIndex] = {...block, subpoints};
-      const next = {...prev, blocks};
-      return {...next, ...computePlannerTimes(next)};
+      blocks[blockIndex] = { ...block, subpoints };
+      const next = { ...prev, blocks };
+      return { ...next, ...computePlannerTimes(next) };
     });
   };
 
@@ -200,106 +215,106 @@ export function PlannerEditorView({
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-16 pt-2 animate-in fade-in duration-150">
-      <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-2 sm:gap-4 items-start">
-        {/* Timeline Spacer */}
-        <div className="hidden sm:block sm:w-16 shrink-0" aria-hidden="true" />
-
-        {/* Content Column */}
-        <div className="flex flex-col gap-5 min-w-0 w-full">
-          {/* Header bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                {initialState?.id ? 'Editar reunión' : 'Nueva reunión'}
-              </h1>
-              <p className="text-xs text-muted-foreground">
-                Configura la agenda, facilidades y participantes.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={onCancel} className="h-8 px-3">
+      <div className="flex flex-col gap-5 min-w-0 w-full">
+        {/* Header bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+              {initialState?.id ? 'Editar reunión' : 'Nueva reunión'}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Configura la agenda, facilidades y participantes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onCancel} className="h-8 px-3">
                 Cancelar
               </Button>
               <Button variant="default" size="sm" onClick={handleSave} className="h-8 px-3.5">
-                <Check width={14} height={14} /> {initialState?.id ? 'Guardar cambios' : 'Crear reunión'}
+                <Check className="size-3.5" /> {initialState?.id ? 'Guardar cambios' : 'Crear reunión'}
               </Button>
             </div>
           </div>
 
           {/* 1. Detalles */}
-          <Card className="p-5 sm:p-6 flex flex-col gap-4 rounded-xl">
+          <Card className="p-5 sm:p-6 flex flex-col gap-4 rounded-2xl">
             <h2 className="text-sm font-semibold text-foreground">
               Detalles
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-xs font-medium text-foreground">Nombre</label>
-                <Input
-                  value={formData.title}
-                  onChange={(e) => updateHeaderField('title', e.target.value)}
-                  placeholder="Nombre de la reunión"
-                />
+            <FieldGroup className="gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>Nombre</FieldLabel>
+                  <Input
+                    value={formData.title}
+                    onChange={(e) => updateHeaderField('title', e.target.value)}
+                    placeholder="Nombre de la reunión"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel>Organiza</FieldLabel>
+                  <PlannerMemberPicker
+                    value={formData.host || ''}
+                    onChange={(val) => updateHeaderField('host', val)}
+                    singleSelect
+                    hideRoles
+                    placeholder="Buscar persona"
+                  />
+                </Field>
               </div>
 
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-xs font-medium text-foreground">Organiza</label>
-                <Input
-                  value={formData.host || ''}
-                  onChange={(e) => updateHeaderField('host', e.target.value)}
-                  placeholder="Buscar persona"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_120px] gap-4">
+                <Field>
+                  <FieldLabel>Fecha</FieldLabel>
+                  <Input
+                    type="date"
+                    value={formData.date || ''}
+                    onChange={(e) => updateHeaderField('date', e.target.value)}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel>Hora</FieldLabel>
+                  <Input
+                    type="time"
+                    value={formData.startTime || '10:00'}
+                    onChange={(e) => updateHeaderField('startTime', e.target.value)}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel>Duración</FieldLabel>
+                  <Input
+                    value={targetDurationInput}
+                    onChange={(e) => handleTargetDurationChange(e.target.value)}
+                    placeholder="60 min"
+                    className="text-center font-medium"
+                  />
+                </Field>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-xs font-medium text-foreground">Fecha</label>
-                <Input
-                  type="date"
-                  value={formData.date || ''}
-                  onChange={(e) => updateHeaderField('date', e.target.value)}
+              <Field>
+                <FieldLabel>Objetivo</FieldLabel>
+                <Textarea
+                  value={formData.description || ''}
+                  onChange={(e) => updateHeaderField('description', e.target.value)}
+                  rows={2}
                 />
-              </div>
+                <FieldDescription>
+                  Resume qué necesita resolver, revisar o decidir el equipo.
+                </FieldDescription>
+              </Field>
 
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-xs font-medium text-foreground">Hora</label>
-                <Input
-                  type="time"
-                  value={formData.startTime || '10:00'}
-                  onChange={(e) => updateHeaderField('startTime', e.target.value)}
+              <Field>
+                <FieldLabel>Participantes</FieldLabel>
+                <PlannerMemberPicker
+                  value={formData.mentions || ''}
+                  onChange={(val) => updateHeaderField('mentions', val)}
                 />
-              </div>
-
-              <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-xs font-medium text-foreground">Duración prevista</label>
-                <Input
-                  value={targetDurationInput}
-                  onChange={(e) => handleTargetDurationChange(e.target.value)}
-                  placeholder="60 min"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-xs font-medium text-foreground">Objetivo</label>
-              <Textarea
-                value={formData.description || ''}
-                onChange={(e) => updateHeaderField('description', e.target.value)}
-                rows={2}
-              />
-              <span className="text-xs text-muted-foreground">
-                Resume qué necesita resolver, revisar o decidir el equipo.
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-xs font-medium text-foreground">Participantes</label>
-              <PlannerMemberPicker
-                value={formData.mentions || ''}
-                onChange={(val) => updateHeaderField('mentions', val)}
-              />
-            </div>
+              </Field>
+            </FieldGroup>
           </Card>
 
           {/* 2. Agenda */}
@@ -325,7 +340,7 @@ export function PlannerEditorView({
                 </p>
               </div>
               <Button variant="secondary" size="sm" onClick={addBlock} className="h-8 px-3 shrink-0">
-                <Plus width={14} height={14} /> Agregar bloque
+                <Plus className="size-3.5" /> Agregar bloque
               </Button>
             </div>
 
@@ -333,7 +348,7 @@ export function PlannerEditorView({
               <Card className="p-8 border border-dashed border-border/70 rounded-2xl text-center flex flex-col items-center gap-2">
                 <p className="text-xs text-muted-foreground">No hay bloques en la agenda.</p>
                 <Button variant="default" size="sm" onClick={addBlock}>
-                  <Plus width={14} height={14} /> Crear primer bloque
+                  <Plus className="size-3.5" /> Crear primer bloque
                 </Button>
               </Card>
             ) : (
@@ -351,75 +366,74 @@ export function PlannerEditorView({
                         </span>
                       </div>
 
-                      <Dropdown>
-                        <Dropdown.Trigger>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={`Opciones del bloque ${block.title}`}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Opciones del bloque ${block.title}`}
+                            >
+                              <MoreVertical className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => confirmDeleteBlock(bIdx)}
                           >
-                            <EllipsisVertical width={14} height={14} />
-                          </Button>
-                        </Dropdown.Trigger>
-                        <Dropdown.Popover placement="bottom end">
-                          <Dropdown.Menu
-                            onAction={(key) => {
-                              if (key === 'delete') confirmDeleteBlock(bIdx);
-                            }}
-                          >
-                            <Dropdown.Item id="delete" textValue="Eliminar bloque" className="text-destructive">
-                              <div className="flex items-center gap-2">
-                                <TrashBin />
-                                <span className="text-destructive font-medium">Eliminar bloque</span>
-                              </div>
-                            </Dropdown.Item>
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
+                            <Trash2 className="size-4 text-destructive" />
+                            <span>Eliminar bloque</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
 
                     {/* Título y metadatos principales */}
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1.5 w-full">
-                        <label className="text-xs font-medium text-foreground">Nombre</label>
+                    <FieldGroup className="gap-3">
+                      <Field>
+                        <FieldLabel>Nombre</FieldLabel>
                         <Input
                           value={block.title}
                           onChange={(e) => updateBlockField(bIdx, 'title', e.target.value)}
                           placeholder="Nombre del bloque"
                           className="font-semibold text-foreground text-sm"
                         />
-                      </div>
+                      </Field>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="flex flex-col gap-1.5 w-full">
-                          <label className="text-xs font-medium text-foreground">Facilita</label>
-                          <Input
+                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr_100px] gap-4">
+                        <Field>
+                          <FieldLabel>Facilita</FieldLabel>
+                          <PlannerMemberPicker
                             value={block.leader || ''}
-                            onChange={(e) => updateBlockField(bIdx, 'leader', e.target.value)}
+                            onChange={(val) => updateBlockField(bIdx, 'leader', val)}
+                            singleSelect
+                            hideRoles
                             placeholder="Buscar persona"
                           />
-                        </div>
+                        </Field>
 
-                        <div className="flex flex-col gap-1.5 w-full">
-                          <label className="text-xs font-medium text-foreground">Participan</label>
-                          <Input
+                        <Field>
+                          <FieldLabel>Participan</FieldLabel>
+                          <PlannerMemberPicker
                             value={block.participants || ''}
-                            onChange={(e) => updateBlockField(bIdx, 'participants', e.target.value)}
+                            onChange={(val) => updateBlockField(bIdx, 'participants', val)}
                             placeholder="Buscar personas o roles"
                           />
-                        </div>
+                        </Field>
 
-                        <div className="flex flex-col gap-1.5 w-full">
-                          <label className="text-xs font-medium text-foreground">Duración</label>
+                        <Field>
+                          <FieldLabel>Duración</FieldLabel>
                           <Input
                             value={`${block.durationMinutes}m`}
                             onChange={(e) => updateBlockDuration(bIdx, e.target.value)}
                             placeholder="30 min"
                             className="text-center font-medium"
                           />
-                        </div>
+                        </Field>
                       </div>
-                    </div>
+                    </FieldGroup>
 
                     {/* Sección de Temas */}
                     <div className="flex flex-col gap-2 pt-2 border-t border-border">
@@ -438,78 +452,62 @@ export function PlannerEditorView({
                               <div className="flex items-center gap-0.5 shrink-0 self-end sm:self-center">
                                 <Button
                                   variant="ghost"
-                                  size="sm"
+                                  size="icon-xs"
                                   onClick={() => moveSubpoint(bIdx, pIdx, -1)}
                                   disabled={pIdx === 0}
                                   title="Mover arriba"
                                   aria-label={`Mover «${p.title || 'tema'}» arriba`}
                                 >
-                                  <ChevronUp width={14} height={14} />
+                                  <ChevronUp className="size-3.5" />
                                 </Button>
                                 <Button
                                   variant="ghost"
-                                  size="sm"
+                                  size="icon-xs"
                                   onClick={() => moveSubpoint(bIdx, pIdx, 1)}
-                                  disabled={pIdx === (block.subpoints.length - 1)}
+                                  disabled={pIdx === (block.subpoints || []).length - 1}
                                   title="Mover abajo"
                                   aria-label={`Mover «${p.title || 'tema'}» abajo`}
                                 >
-                                  <ChevronDown width={14} height={14} />
+                                  <ChevronDown className="size-3.5" />
                                 </Button>
                               </div>
 
-                              {/* Input del Título del tema */}
-                              <div className="flex-1 min-w-0">
-                                <Input
-                                  value={p.title}
-                                  onChange={(e) => updateSubpointField(bIdx, pIdx, 'title', e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      addSubpoint(bIdx);
-                                    }
-                                  }}
-                                  placeholder="Nombre del tema"
-                                  className="font-medium text-foreground text-sm w-full"
-                                  aria-label={`Nombre del tema ${pIdx + 1}`}
-                                />
-                              </div>
+                              <Input
+                                value={p.title}
+                                onChange={(e) => updateSubpointField(bIdx, pIdx, 'title', e.target.value)}
+                                placeholder="Tema a tratar…"
+                                className="text-xs font-medium flex-1"
+                              />
 
-                              {/* Input del Responsable */}
-                              <div className="w-full sm:w-48 shrink-0">
-                                <Input
-                                  value={p.presenter || ''}
-                                  onChange={(e) => updateSubpointField(bIdx, pIdx, 'presenter', e.target.value)}
-                                  placeholder="Buscar persona"
-                                  className="text-xs w-full"
-                                  aria-label="Responsable asignado"
-                                />
-                              </div>
+                              <Input
+                                value={p.presenter || ''}
+                                onChange={(e) => updateSubpointField(bIdx, pIdx, 'presenter', e.target.value)}
+                                placeholder="Presenta (opcional)"
+                                className="text-xs sm:w-44 shrink-0"
+                              />
 
-                              {/* Botón Eliminar */}
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon-xs"
                                 onClick={() => removeSubpoint(bIdx, pIdx)}
-                                title="Eliminar tema"
-                                aria-label={`Eliminar «${p.title || 'tema'}»`}
-                                className="text-destructive shrink-0 self-end sm:self-center"
+                                className="text-muted-foreground hover:text-destructive shrink-0 self-end sm:self-center"
+                                aria-label={`Eliminar tema «${p.title || 'sin título'}»`}
                               >
-                                <TrashBin width={14} height={14} />
+                                <X className="size-3.5" />
                               </Button>
                             </Card>
                           );
                         })}
-                      </div>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => addSubpoint(bIdx)}
-                        className="w-full justify-start text-xs text-muted-foreground hover:text-foreground mt-1"
-                      >
-                        <Plus width={13} height={13} /> Agregar tema
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addSubpoint(bIdx)}
+                          className="w-full text-xs text-primary hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 justify-center h-8"
+                        >
+                          <Plus className="size-3" /> Agregar tema
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 );
@@ -522,41 +520,35 @@ export function PlannerEditorView({
               onClick={addBlock}
               className="w-full py-3 font-semibold"
             >
-              <Plus width={15} height={15} /> Agregar nuevo bloque a la agenda
+              <Plus className="size-3.5" /> Agregar nuevo bloque a la agenda
             </Button>
           </div>
 
-          {/* Dialog de confirmación destructiva */}
-          {blockToDelete && (
-            <Modal isOpen={!!blockToDelete} onOpenChange={(open) => !open && setBlockToDelete(null)}>
-              <Modal.Backdrop>
-                <Modal.Container size="sm">
-                  <Modal.Dialog className="sm:max-w-[420px] p-6 flex flex-col gap-4">
-                    <h3 className="text-base font-bold text-foreground">
-                      ¿Eliminar «{blockToDelete.title}»?
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      También se eliminarán sus {blockToDelete.pointsCount} temas y las notas asociadas. Esta acción no se puede deshacer.
-                    </p>
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                      <Button variant="ghost" size="sm" onClick={() => setBlockToDelete(null)}>
-                        Cancelar
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => executeDeleteBlock(blockToDelete.index)}
-                      >
-                        Eliminar bloque
-                      </Button>
-                    </div>
-                  </Modal.Dialog>
-                </Modal.Container>
-              </Modal.Backdrop>
-            </Modal>
-          )}
+          {/* Dialog de confirmación destructiva oficial */}
+          <AlertDialog open={!!blockToDelete} onOpenChange={(open) => !open && setBlockToDelete(null)}>
+            <AlertDialogContent size="sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  ¿Eliminar «{blockToDelete?.title}»?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  También se eliminarán sus {blockToDelete?.pointsCount} temas y las notas asociadas. Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setBlockToDelete(null)}>
+                  Cancelar
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={() => executeDeleteBlock(blockToDelete?.index)}
+                >
+                  Eliminar bloque
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-      </div>
     </div>
   );
 }

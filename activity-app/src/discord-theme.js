@@ -1,5 +1,5 @@
-export const THEME_PREFERENCE_KEY = 'heroui-theme';
-const LEGACY_THEME_PREFERENCE_KEY = 'bardo.theme.preference.v1';
+export const THEME_PREFERENCE_KEY = 'bardo-theme-preference';
+const LEGACY_THEME_KEYS = ['heroui-theme', 'bardo.theme.preference.v1'];
 
 function normalizeTheme(value) {
   const normalized = String(value || '').trim().toLowerCase().replace(/^['"]|['"]$/g, '');
@@ -14,10 +14,12 @@ export function getThemePreference() {
   try {
     const preference = normalizePreference(localStorage.getItem(THEME_PREFERENCE_KEY));
     if (preference) return preference;
-    const legacyPreference = normalizePreference(localStorage.getItem(LEGACY_THEME_PREFERENCE_KEY));
-    if (legacyPreference) {
-      localStorage.setItem(THEME_PREFERENCE_KEY, legacyPreference);
-      return legacyPreference;
+    for (const legacyKey of LEGACY_THEME_KEYS) {
+      const legacyPreference = normalizePreference(localStorage.getItem(legacyKey));
+      if (legacyPreference) {
+        localStorage.setItem(THEME_PREFERENCE_KEY, legacyPreference);
+        return legacyPreference;
+      }
     }
     return 'system';
   } catch {

@@ -116,12 +116,12 @@ export function MaterialMorphShape({
 
   const colorClass =
     color === 'danger'
-      ? 'text-danger'
+      ? 'text-destructive'
       : color === 'warning'
-      ? 'text-warning'
+      ? 'text-amber-500'
       : color === 'success'
-      ? 'text-success'
-      : 'text-accent';
+      ? 'text-emerald-500'
+      : 'text-primary';
 
   // Frecuencia dinámica: aumenta velocidad cuando se acaba el tiempo (<5m o overtime).
   const morphDurationMs = color === 'danger' ? 1600 : color === 'warning' ? 3200 : 8000;

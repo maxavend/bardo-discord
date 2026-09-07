@@ -1,13 +1,13 @@
 import { Button } from '@/components/ui/button';
 import {
-  Microphone,
+  Mic,
   Pause,
   Play,
-} from '@gravity-ui/icons';
-import {SESSION_STATUS} from './session-runner.js';
-import {formatMsToClock, getAssistantContextDetails} from './session-assistant-engine.js';
-import {RECORDING_STATUS} from './recording-controller.js';
-import {MaterialMorphShape} from './MaterialMorphShape.jsx';
+} from 'lucide-react';
+import { SESSION_STATUS } from './session-runner.js';
+import { formatMsToClock, getAssistantContextDetails } from './session-assistant-engine.js';
+import { RECORDING_STATUS } from './recording-controller.js';
+import { MaterialMorphShape } from './MaterialMorphShape.jsx';
 
 export function SessionDock({
   plannerState,
@@ -77,14 +77,15 @@ export function SessionDock({
             {activePoint?.title || activeBlock?.title || 'Reunión en vivo'}
           </span>
 
-          <span className="text-muted/40">·</span>
+          <span className="text-muted-foreground/40">·</span>
 
           {/* Timer de bloque */}
           <span
             title={isExpired ? `${formatMsToClock(details.overtimeMs)} sobre el tiempo previsto` : undefined}
             className={`text-xs font-medium shrink-0 ${
-            isPaused ? 'text-warning' : isExpired ? 'text-danger font-semibold' : is5MinWarning ? 'text-warning font-semibold' : 'text-foreground'
-          }`}>
+              isPaused ? 'text-amber-500 font-semibold' : isExpired ? 'text-destructive font-semibold' : is5MinWarning ? 'text-amber-500 font-semibold' : 'text-foreground'
+            }`}
+          >
             {isPaused
               ? `${isExpired ? `+${formatMsToClock(details.overtimeMs)}` : formatMsToClock(Math.max(0, details.remainingBlockMs))}`
               : isExpired
@@ -97,61 +98,59 @@ export function SessionDock({
 
         {/* Microacciones rápidas + Siguiente */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* 1. Grabar / Estado de Grabación (Primero y Rojo) */}
+          {/* 1. Grabar / Estado de Grabación */}
           {isRecording ? (
             <button
               type="button"
               onClick={onPauseRecording}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-danger text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive text-destructive-foreground text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
               title="Pausar grabación"
               aria-label="Pausar grabación"
             >
-              <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+              <span className="size-2 rounded-full bg-destructive-foreground animate-pulse" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
             </button>
           ) : isRecPaused ? (
             <button
               type="button"
               onClick={onResumeRecording}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
               title="Reanudar grabación"
               aria-label="Reanudar grabación"
             >
-              <span className="h-2 w-2 rounded-full bg-white" />
+              <span className="size-2 rounded-full bg-white" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
             </button>
           ) : (
             <Button
-              variant="danger"
-              size="sm"
-              isIconOnly
-              onPress={onStartRecording}
-              isDisabled={isBusy}
+              variant="destructive"
+              size="icon-sm"
+              onClick={onStartRecording}
+              disabled={isBusy}
               aria-label="Iniciar grabación"
               title="Iniciar grabación"
-              className="h-8 w-8 rounded-full bg-danger text-white hover:bg-danger/90 shadow-xs"
+              className="rounded-full shadow-xs"
             >
-              <Microphone width={14} height={14} className="text-white" />
+              <Mic className="size-3.5" />
             </Button>
           )}
 
           {/* 2. Pausar / Reanudar reunión */}
           <Button
             variant="ghost"
-            size="sm"
-            isIconOnly
-            onPress={isPaused ? onResumeSession : onPauseSession}
-            isDisabled={isBusy}
+            size="icon-sm"
+            onClick={isPaused ? onResumeSession : onPauseSession}
+            disabled={isBusy}
             aria-label={isPaused ? 'Reanudar reunión' : 'Pausar reunión'}
             title={isPaused ? 'Reanudar reunión' : 'Pausar reunión'}
-            className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
+            className={`rounded-full flex items-center justify-center transition-colors ${
               isPaused
-                ? 'text-warning hover:text-warning-foreground hover:bg-warning/20'
-                : 'text-muted hover:text-foreground hover:bg-surface-secondary'
+                ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-500/20'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
             <span className="session-toggle-icon" aria-hidden="true">
-              {isPaused ? <Play width={14} height={14} fill="currentColor" /> : <Pause width={14} height={14} fill="currentColor" />}
+              {isPaused ? <Play className="size-3.5 fill-current" /> : <Pause className="size-3.5 fill-current" />}
             </span>
           </Button>
         </div>

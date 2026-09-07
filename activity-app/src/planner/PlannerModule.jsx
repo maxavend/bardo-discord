@@ -8,7 +8,6 @@ import {
 } from '@gravity-ui/icons';
 import {PlannerSessionHeader} from './PlannerSessionHeader.jsx';
 import {PlannerAgendaView} from './PlannerAgendaView.jsx';
-import {PlannerEditorView} from './PlannerEditorView.jsx';
 import {PlannerHomeView} from './PlannerHomeView.jsx';
 import {PlannerCaptureModal} from './PlannerCaptureModal.jsx';
 import {SessionDock} from './SessionDock.jsx';
@@ -215,7 +214,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     return persistCapturedRecording(entity);
   }, [persistCapturedRecording]);
 
-  const handlePlannerUpdate = useCallback((next) => {
+  const _handlePlannerUpdate = useCallback((next) => {
     const computed = computePlannerTimes(next);
     plannerStateRef.current = computed;
     setPlannerState(computed);
@@ -547,8 +546,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setPlannerState(clean);
     const live = loadLiveSessionState(clean);
     commitSessionState(live);
-    setActiveTab('editor');
-    toast('Nueva sesión creada — configura los detalles');
+    setActiveTab('agenda');
+    setIsEditing(true);
+    toast('Nueva reunión creada — edita los campos directamente');
   }, [commitSessionState]);
 
   useEffect(() => {
@@ -824,6 +824,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
         <PlannerAgendaView
           state={plannerState}
           sessionState={sessionState}
+          nowTimestamp={nowTimestamp}
           isEditing={isEditing}
           onAdvance={handleAdvance}
           onSkipBlock={handleSkipBlock}
@@ -865,18 +866,6 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           onToggleSubpointStatus={handleToggleSubpointStatus}
           onOpenCapture={(kind, blockId) => handleOpenDecisionCapture(blockId)}
           onDeleteDecision={handleDeleteDecision}
-        />
-      )}
-
-      {activeTab === 'editor' && (
-        <PlannerEditorView
-          initialState={plannerState}
-          onSave={(next) => {
-            handlePlannerUpdate(next);
-            handleTabChange('agenda');
-            toast('Agenda guardada con éxito');
-          }}
-          onCancel={() => handleTabChange('agenda')}
         />
       )}
 
@@ -946,9 +935,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
             }}
           >
             <Button
-              variant="primary"
-              size="md"
-              onPress={fabAction}
+              variant="default"
+              size="default"
+              onClick={fabAction}
               className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 active:scale-95 transition-all shadow-lg border border-white/10"
             >
               {fabIcon}

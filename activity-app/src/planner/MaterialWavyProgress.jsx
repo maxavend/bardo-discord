@@ -46,7 +46,7 @@ export function MaterialWavyProgress({
   }, []);
 
   const progressClamped = Math.min(100, Math.max(0, value));
-  const targetLength = Math.max(0, (progressClamped / 100) * containerHeight);
+  const targetLength = Math.max(16, (progressClamped / 100) * containerHeight);
   const currentLengthRef = useRef(targetLength);
   const [animatedLength, setAnimatedLength] = useState(targetLength);
 
@@ -154,12 +154,12 @@ export function MaterialWavyProgress({
 
   const colorClass =
     color === 'danger'
-      ? 'text-danger'
+      ? 'text-destructive'
       : color === 'warning'
-      ? 'text-warning'
+      ? 'text-amber-500'
       : color === 'success'
-      ? 'text-success'
-      : 'text-accent';
+      ? 'text-emerald-500'
+      : 'text-primary';
 
   return (
     <div
@@ -183,7 +183,7 @@ export function MaterialWavyProgress({
           y1={Math.min(containerHeight, Math.max(0, animatedLength))}
           x2="10"
           y2={containerHeight}
-          stroke="color-mix(in srgb, var(--border) 40%, transparent)"
+          stroke="color-mix(in oklab, var(--border) 50%, transparent)"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
@@ -194,7 +194,7 @@ export function MaterialWavyProgress({
             cx="10"
             cy={Math.max(0, containerHeight - 1)}
             r={strokeWidth / 2}
-            fill="color-mix(in srgb, var(--border) 60%, transparent)"
+            fill="color-mix(in oklab, var(--border) 70%, transparent)"
           />
         )}
 

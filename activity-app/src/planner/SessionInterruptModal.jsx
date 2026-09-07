@@ -1,8 +1,13 @@
 import { Button } from '@/components/ui/button';
-import { Modal } from '@/components/ui/dialog';
 import {
-  CircleExclamation,
-} from '@gravity-ui/icons';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { AlertCircle } from 'lucide-react';
 
 export function SessionInterruptModal({
   isOpen,
@@ -15,51 +20,48 @@ export function SessionInterruptModal({
   onConfirmInterrupt,
 }) {
   return (
-    <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Container size="sm">
-        <Modal.Dialog className="container-surface bg-surface border border-border rounded-2xl shadow-2xl p-5 flex flex-col gap-4 max-w-md w-full">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center">
-                <CircleExclamation width={16} height={16} />
-              </div>
-              <h2 className="text-base font-bold text-foreground">
-                ¿Pausar esta reunión?
-              </h2>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <div className="size-8 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center">
+              <AlertCircle className="size-4" />
             </div>
-
+            <DialogTitle>¿Pausar esta reunión?</DialogTitle>
+          </div>
+          <DialogDescription className="text-left text-xs leading-relaxed pt-2">
             {hasActiveRecording ? (
-              <p className="text-xs text-muted-foreground leading-relaxed">
+              <>
                 Se guardará automáticamente la grabación en curso de <strong className="text-foreground font-semibold">“{activeRecordingName || 'este tema'}”</strong> y se conservarán los <strong className="text-foreground font-semibold">{elapsedMinutes} min de actividad</strong>, <strong className="text-foreground font-semibold">{recordingsCount} grabaciones previas</strong> y <strong className="text-foreground font-semibold">{decisionsCount} decisiones</strong> registradas hasta ahora.
-              </p>
+              </>
             ) : (
-              <p className="text-xs text-muted-foreground leading-relaxed">
+              <>
                 Se conservarán los <strong className="text-foreground font-semibold">{elapsedMinutes} min de actividad</strong>, <strong className="text-foreground font-semibold">{recordingsCount} grabaciones</strong> y <strong className="text-foreground font-semibold">{decisionsCount} decisiones</strong> registradas hasta ahora. Podrás reanudar la reunión cuando quieras.
-              </p>
+              </>
             )}
-          </div>
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Continuar reunión
-            </Button>
+        <DialogFooter className="gap-2 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Continuar reunión
+          </Button>
 
-            <Button
-              variant="default"
-              size="sm"
-              onClick={onConfirmInterrupt}
-              className="font-medium text-xs px-3.5"
-            >
-              Pausar reunión
-            </Button>
-          </div>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onConfirmInterrupt}
+            className="font-medium text-xs px-3.5"
+          >
+            Pausar reunión
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
