@@ -182,7 +182,7 @@ export function SessionRecapView({
                 })}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta sesión.</p>
+              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta reunión.</p>
             )}
           </Card>
         </div>
