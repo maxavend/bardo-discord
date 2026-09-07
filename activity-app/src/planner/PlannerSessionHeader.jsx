@@ -356,7 +356,7 @@ export function PlannerSessionHeader({
                                 <>
                                   <Avatar
                                     size="xs"
-                                    className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                                    className="size-5 text-[10px] font-bold shrink-0 shadow-2xs"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
                                     <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
@@ -427,7 +427,7 @@ export function PlannerSessionHeader({
                                   <Avatar
                                     key={tag}
                                     size="xs"
-                                    className="size-5 text-[8.5px] font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
+                                    className="size-5 text-[10px] font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
                                     <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
@@ -454,7 +454,7 @@ export function PlannerSessionHeader({
                       onSelectionChange={(nextKeys) => {
                         onUpdateHeaderField?.('mentions', nextKeys.join(' '));
                         onUpdateHeaderField?.('participantIds', entityIdsFromSelection(nextKeys));
-                      }
+                      }}
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -509,7 +509,7 @@ export function PlannerSessionHeader({
                           <Avatar
                             key={i}
                             size="sm"
-                            className="size-5 text-[8.5px] font-bold border-2 border-background shadow-2xs shrink-0"
+                            className="size-5 text-[10px] font-bold border-2 border-background shadow-2xs shrink-0"
                             style={{ backgroundColor: `${color}30`, color }}
                           >
                             <AvatarFallback
