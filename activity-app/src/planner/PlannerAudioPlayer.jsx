@@ -17,11 +17,22 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
+import {
   Play,
   Pause,
   MoreVertical,
   Pencil,
   Trash2,
+  Download,
   Info,
 } from 'lucide-react';
 import { formatMsToClock } from './session-assistant-engine.js';
@@ -31,6 +42,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [showTechModal, setShowTechModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [renameValue, setRenameValue] = useState(recording?.name || '');
   const audioRef = useRef(null);
 
@@ -72,6 +84,24 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
     const trimmed = renameValue.trim();
     if (trimmed && onRename) onRename(recording.id, trimmed);
     setShowRenameModal(false);
+  };
+
+  const handleEmergencyDownload = () => {
+    if (!recording?.blobUrl) return;
+    const mimeType = recording?.mimeType || 'audio/webm';
+    const extension = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+    const stem = String(recording?.name || recording?.pointTitle || recording?.blockTitle || 'grabacion')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() || 'grabacion';
+    const anchor = document.createElement('a');
+    anchor.href = recording.blobUrl;
+    anchor.download = `${stem}.${extension}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   };
 
   return (
@@ -160,7 +190,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                 {onDelete && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onClick={() => onDelete(recording.id)}>
+                    <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
                       <Trash2 className="size-4 text-destructive" />
                       <span>Eliminar grabación</span>
                     </DropdownMenuItem>
@@ -172,8 +202,21 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
         </div>
       </div>
 
-      {hasPersistenceError && recording?.persistenceError && (
-        <p className="text-[11px] text-destructive leading-relaxed">{recording.persistenceError}</p>
+      {hasPersistenceError && (
+        <div role="alert" className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-destructive">Este audio todavía no está guardado de forma segura.</p>
+            {recording?.persistenceError && (
+              <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{recording.persistenceError}</p>
+            )}
+          </div>
+          {canPlay && (
+            <Button variant="outline" size="sm" onClick={handleEmergencyDownload} className="shrink-0">
+              <Download className="size-3.5" />
+              Descargar ahora
+            </Button>
+          )}
+        </div>
       )}
 
       {/* Modal de detalles técnicos */}
@@ -197,6 +240,29 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta grabación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              El audio se borrará del almacenamiento local y no se puede recuperar desde Bardo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                onDelete?.(recording.id);
+              }}
+            >
+              Eliminar grabación
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal de renombrar grabación */}
       <Dialog open={showRenameModal} onOpenChange={setShowRenameModal}>
