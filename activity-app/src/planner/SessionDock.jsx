@@ -100,27 +100,31 @@ export function SessionDock({
         <div className="flex items-center gap-1.5 shrink-0">
           {/* 1. Grabar / Estado de Grabación */}
           {isRecording ? (
-            <button
-              type="button"
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={onPauseRecording}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-destructive text-destructive-foreground text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
+              disabled={isBusy}
+              className="h-8 rounded-full px-3 text-xs font-medium shadow-xs"
               title="Pausar grabación"
               aria-label="Pausar grabación"
             >
               <span className="size-2 rounded-full bg-destructive-foreground animate-pulse" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-            </button>
+            </Button>
           ) : isRecPaused ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onResumeRecording}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-white text-[11.5px] font-medium cursor-pointer shadow-xs active:scale-95 transition-transform"
+              disabled={isBusy}
+              className="h-8 rounded-full px-3 text-xs font-medium text-amber-700 dark:text-amber-300"
               title="Reanudar grabación"
               aria-label="Reanudar grabación"
             >
-              <span className="size-2 rounded-full bg-white" />
+              <span className="size-2 rounded-full bg-amber-500" />
               <span className="tabular-nums font-mono">{formatMsToClock(recordingElapsedMs)}</span>
-            </button>
+            </Button>
           ) : (
             <Button
               variant="destructive"
