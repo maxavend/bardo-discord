@@ -253,19 +253,6 @@ button { font-size: 14px; }
   will-change: transform;
 }
 
-.boot-retry-button {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  background: var(--accent);
-  color: var(--accent-foreground);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
 .boot-copy {
   display: grid;
   justify-items: center;
