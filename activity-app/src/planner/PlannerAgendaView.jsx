@@ -623,103 +623,123 @@ export function PlannerAgendaView({
                             </p>
                           ) : null}
 
-                          {/* Fila inferior: Presentador */}
-                          {(isEditing || pointPresenterList.length > 0) && (
-                            <div className="flex items-center gap-2 pt-0.5 min-w-0">
-                              {isEditing ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger
-                                    render={
-                                      <button
-                                        type="button"
-                                        className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
-                                      >
-                                        {pointPresenterList.length > 0 ? (
-                                          <div className="inline-flex items-center gap-1.5">
-                                            <div className="flex items-center -space-x-1.5">
-                                              {pointPresenterList.slice(0, 3).map((pName, pIdx) => {
-                                                const matched = discordMembers.find(
-                                                  (m) =>
-                                                    m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
-                                                    m.tag.toLowerCase().includes(pName.toLowerCase())
-                                                );
-                                                const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
-                                                return (
-                                                  <Avatar
-                                                    key={pIdx}
-                                                    size="xs"
-                                                    className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                                    style={{ backgroundColor: `${color}35`, color }}
-                                                  >
-                                                    <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                                                      {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                                                    </AvatarFallback>
-                                                  </Avatar>
-                                                );
-                                              })}
-                                            </div>
-                                            <span className="text-muted-foreground group-hover:text-foreground font-medium underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                                              {pointPresenterList.join(', ')}
-                                            </span>
-                                          </div>
-                                        ) : (
-                                          <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                                            Asignar responsable
-                                          </span>
-                                        )}
-                                      </button>
-                                    }
-                                  />
-                                  <DropdownMenuContent align="start" className="p-0">
-                                    <SearchableParticipantMenu
-                                      selectedKeys={selectedPointKeys}
-                                      onSelectionChange={(keys) => {
-                                        const names = keys.map((k) => {
-                                          const found = [...discordMembers, ...discordRoles].find(
-                                            (m) => m.tag.toLowerCase() === k.toLowerCase() || (m.globalName || m.name || '').toLowerCase() === k.replace(/^@/, '').toLowerCase()
-                                          );
-                                          return found ? (found.globalName || found.name) : k.replace(/^@/, '');
-                                        });
-                                        onUpdateSubpoint?.(block.id, point.id, { presenter: names.join(', ') });
-                                      }}
-                                      onAddCustomParticipant={(tag) => {
-                                        const cleanName = tag.replace(/^@/, '');
-                                        const updated = pointPresenterList.includes(cleanName)
-                                          ? pointPresenterList
-                                          : [...pointPresenterList, cleanName];
-                                        onUpdateSubpoint?.(block.id, point.id, { presenter: updated.join(', ') });
-                                      }}
-                                    />
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              ) : (
-                                <div className="flex items-center gap-1.5">
-                                  <div className="flex items-center -space-x-1.5">
-                                    {pointPresenterList.map((pName, pIdx) => {
-                                      const matched = discordMembers.find(
-                                        (member) =>
-                                          member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
-                                          member.tag.toLowerCase().includes(pName.toLowerCase())
-                                      );
-                                      const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
-                                      return (
-                                        <Avatar
-                                          key={pIdx}
-                                          size="xs"
-                                          className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                          style={{ backgroundColor: `${color}35`, color }}
+                          {/* Fila inferior: Presentador y Acción Siguiente punto */}
+                          {(isEditing || pointPresenterList.length > 0 || (isPointActive && onAdvance)) && (
+                            <div className="flex items-center justify-between gap-2 pt-0.5 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isEditing ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                      render={
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
                                         >
-                                          <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                                            {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                      );
-                                    })}
+                                          {pointPresenterList.length > 0 ? (
+                                            <div className="inline-flex items-center gap-1.5">
+                                              <div className="flex items-center -space-x-1.5">
+                                                {pointPresenterList.slice(0, 3).map((pName, pIdx) => {
+                                                  const matched = discordMembers.find(
+                                                    (m) =>
+                                                      m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                                      m.tag.toLowerCase().includes(pName.toLowerCase())
+                                                  );
+                                                  const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                                  return (
+                                                    <Avatar
+                                                      key={pIdx}
+                                                      size="xs"
+                                                      className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                                      style={{ backgroundColor: `${color}35`, color }}
+                                                    >
+                                                      <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
+                                                        {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
+                                                      </AvatarFallback>
+                                                    </Avatar>
+                                                  );
+                                                })}
+                                              </div>
+                                              <span className="text-muted-foreground group-hover:text-foreground font-medium underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+                                                {pointPresenterList.join(', ')}
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+                                              Asignar responsable
+                                            </span>
+                                          )}
+                                        </button>
+                                      }
+                                    />
+                                    <DropdownMenuContent align="start" className="p-0">
+                                      <SearchableParticipantMenu
+                                        selectedKeys={selectedPointKeys}
+                                        onSelectionChange={(keys) => {
+                                          const names = keys.map((k) => {
+                                            const found = [...discordMembers, ...discordRoles].find(
+                                              (m) => m.tag.toLowerCase() === k.toLowerCase() || (m.globalName || m.name || '').toLowerCase() === k.replace(/^@/, '').toLowerCase()
+                                            );
+                                            return found ? (found.globalName || found.name) : k.replace(/^@/, '');
+                                          });
+                                          onUpdateSubpoint?.(block.id, point.id, { presenter: names.join(', ') });
+                                        }}
+                                        onAddCustomParticipant={(tag) => {
+                                          const cleanName = tag.replace(/^@/, '');
+                                          const updated = pointPresenterList.includes(cleanName)
+                                            ? pointPresenterList
+                                            : [...pointPresenterList, cleanName];
+                                          onUpdateSubpoint?.(block.id, point.id, { presenter: updated.join(', ') });
+                                        }}
+                                      />
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : pointPresenterList.length > 0 ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center -space-x-1.5">
+                                      {pointPresenterList.map((pName, pIdx) => {
+                                        const matched = discordMembers.find(
+                                          (member) =>
+                                            member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                            member.tag.toLowerCase().includes(pName.toLowerCase())
+                                        );
+                                        const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                        return (
+                                          <Avatar
+                                            key={pIdx}
+                                            size="xs"
+                                            className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                            style={{ backgroundColor: `${color}35`, color }}
+                                          >
+                                            <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
+                                              {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                        );
+                                      })}
+                                    </div>
+                                    <span className={`text-xs ${isPointActive ? 'text-primary font-medium' : 'text-muted-foreground font-normal'}`}>
+                                      {pointPresenterList.join(', ')}
+                                    </span>
                                   </div>
-                                  <span className={`text-xs ${isPointActive ? 'text-primary font-medium' : 'text-muted-foreground font-normal'}`}>
-                                    {pointPresenterList.join(', ')}
-                                  </span>
-                                </div>
+                                ) : null}
+                              </div>
+
+                              {/* Botón Siguiente punto alineado a la derecha en la fila inferior */}
+                              {!isEditing && isPointActive && onAdvance && (
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAdvance();
+                                  }}
+                                  disabled={isTransitioning}
+                                  className="h-6 text-[11px] px-2.5 gap-1 shadow-xs cursor-pointer ml-auto shrink-0"
+                                >
+                                  <span>Siguiente punto</span>
+                                  <ChevronRight className="size-3" />
+                                </Button>
                               )}
                             </div>
                           )}

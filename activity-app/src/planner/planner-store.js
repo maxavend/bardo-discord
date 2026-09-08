@@ -232,10 +232,10 @@ export function loadPlannerEvents() {
 export function loadPlannerState() {
   try {
     const raw = localStorage.getItem(PLANNER_STORE_KEY);
-    if (!raw) return computePlannerTimes(DEFAULT_EMPTY_SESSION);
+    if (!raw) return computePlannerTimes(DEMO_PLANNER_FIXTURE);
     return computePlannerTimes(JSON.parse(raw));
   } catch {
-    return computePlannerTimes(DEFAULT_EMPTY_SESSION);
+    return computePlannerTimes(DEMO_PLANNER_FIXTURE);
   }
 }
 

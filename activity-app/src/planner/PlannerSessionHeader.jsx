@@ -74,7 +74,7 @@ export function PlannerSessionHeader({
   onUpdateHeaderField,
   onCopyAnnouncement,
   onNewCleanSession,
-  _onLoadDemo,
+  onLoadDemo,
   onStartSession,
   onResumeSession,
   onInterruptSession,
@@ -256,6 +256,12 @@ export function PlannerSessionHeader({
                     <Plus className="size-4 text-muted-foreground" />
                     <span>Nueva reunión</span>
                   </DropdownMenuItem>
+                  {onLoadDemo && (
+                    <DropdownMenuItem onClick={onLoadDemo}>
+                      <RotateCw className="size-4 text-muted-foreground" />
+                      <span>Cargar demo (Reset)</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
