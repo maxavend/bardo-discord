@@ -12,29 +12,43 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip';
+import {
   Plus,
   MoreVertical,
   Trash2,
   Coffee,
   CheckCircle2,
-  CheckSquare,
+  Handshake,
   Check,
-  Mic,
+  Play,
+  Pause,
+  Download,
   ChevronUp,
   ChevronDown,
   ChevronRight,
-  ArrowRight,
 } from 'lucide-react';
 import { clockToMinutes, minutesToClock } from './time-engine.js';
 import {
   POINT_STATUS,
   SESSION_STATUS,
   getElapsedActiveBlockMs,
+  getElapsedActivePointMs,
   getBlockPlannedMs,
 } from './session-runner.js';
-import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
+import { formatMsToClock } from './session-assistant-engine.js';
+import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialWavyProgress } from './MaterialWavyProgress.jsx';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
+import {
+  downloadPointAudio,
+  exportBlockRecordingsCombined,
+  exportBlockRecordingsAsZip,
+  getRecordingBlob,
+} from './audio-exporter.js';
 import { fieldValue } from './planner-field-value.js';
 import {
   getAllDiscordEntities,
@@ -47,10 +61,13 @@ export function PlannerAgendaView({
   state,
   sessionState,
   nowTimestamp,
+  recordingStatus = RECORDING_STATUS.IDLE,
+  recordingElapsedMs = 0,
   isEditing = false,
   dockSlot = null,
   onAdvance,
-  onSkipBlock: _onSkipBlock,
+  onAdvanceBlock,
+  onSkipBlock,
   isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
@@ -71,10 +88,80 @@ export function PlannerAgendaView({
   const isPaused = sessionStatus === SESSION_STATUS.PAUSED;
   const isSessionActive = isRunning || isPaused;
 
+  const isRecording = recordingStatus === RECORDING_STATUS.RECORDING;
+  const isRecordingPaused = recordingStatus === RECORDING_STATUS.PAUSED;
+  const isRecordingActive = isRecording || isRecordingPaused;
+
   const activeBlockId = sessionState?.liveActiveBlockId || sessionState?.activeBlockId || (isSessionActive ? blocks[0]?.id : null);
   const activePointId = sessionState?.liveActivePointId || sessionState?.activePointId;
   const blockStatuses = sessionState?.blockStatuses || {};
   const { members: discordMembers, roles: discordRoles } = getAllDiscordEntities();
+
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const [audioProgress, setAudioProgress] = useState({});
+
+  const handleTogglePlay = async (point, firstPointRecording, durationMs) => {
+    const pointId = point.id;
+    const audioEl = document.getElementById(`audio-element-${pointId}`);
+    if (!audioEl) return;
+
+    if (playingAudioId === pointId) {
+      audioEl.pause();
+      setPlayingAudioId(null);
+      return;
+    }
+
+    document.querySelectorAll('audio.bardo-point-audio').forEach((a) => {
+      if (a !== audioEl) a.pause();
+    });
+
+    if (!audioEl.src || audioEl.src === window.location.href) {
+      const blob = await getRecordingBlob(firstPointRecording || { pointTitle: point.title, durationMs });
+      audioEl.src = URL.createObjectURL(blob);
+    }
+
+    try {
+      await audioEl.play();
+      setPlayingAudioId(pointId);
+    } catch {
+      setPlayingAudioId(null);
+    }
+  };
+
+  const handleTimeUpdate = (pointId, e) => {
+    const el = e.currentTarget;
+    const currentMs = (el.currentTime || 0) * 1000;
+    const totalMs = el.duration && !isNaN(el.duration) && el.duration > 0 ? el.duration * 1000 : 0;
+    const percent = totalMs > 0 ? Math.min(100, (currentMs / totalMs) * 100) : 0;
+    setAudioProgress((prev) => ({
+      ...prev,
+      [pointId]: { currentMs, percent },
+    }));
+  };
+
+  const handleEnded = (pointId) => {
+    setPlayingAudioId(null);
+    setAudioProgress((prev) => ({
+      ...prev,
+      [pointId]: { currentMs: 0, percent: 0 },
+    }));
+  };
+
+  const handleSeek = (pointId, e, totalDurationMs) => {
+    e.stopPropagation();
+    const track = e.currentTarget;
+    const rect = track.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const audioEl = document.getElementById(`audio-element-${pointId}`);
+    if (audioEl && audioEl.duration) {
+      audioEl.currentTime = ratio * audioEl.duration;
+    }
+    setAudioProgress((prev) => ({
+      ...prev,
+      [pointId]: { currentMs: ratio * totalDurationMs, percent: ratio * 100 },
+    }));
+  };
 
   const [, setTicker] = useState(0);
   useEffect(() => {
@@ -338,37 +425,89 @@ export function PlannerAgendaView({
               (r) => r.blockId === block.id
             );
 
+            const subpointRecordings = (block.subpoints || []).map((p, pIdx) => {
+              const existing = blockRecordings.find(
+                (r) => r.pointId === p.id || (r.pointTitle && r.pointTitle === p.title)
+              );
+              if (existing) return existing;
+              return {
+                id: `rec-${block.id}-${p.id || pIdx}`,
+                blockId: block.id,
+                blockTitle: block.title,
+                pointId: p.id,
+                pointTitle: p.title || `Punto ${pIdx + 1}`,
+                durationMs: p.recordingDurationMs || p.durationMs || 15000,
+              };
+            });
+
+            const effectiveBlockRecordings = subpointRecordings.length > 0
+              ? subpointRecordings
+              : (blockRecordings.length > 0
+                  ? blockRecordings
+                  : [{
+                      id: `rec-block-${block.id}`,
+                      blockId: block.id,
+                      blockTitle: block.title,
+                      durationMs: 30000,
+                    }]);
+
             // Bloque tipo Break / Descanso
             if (block.isBreak || block.type === 'break') {
               return (
                 <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-center">
+                  {/* Timeline lateral izquierdo */}
                   <div className="flex flex-col items-center text-[11px] sm:text-xs text-muted-foreground font-medium select-none">
-                    <span>{blockStart}</span>
-                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/60">{blockEnd}</span>
+                    <span className="text-muted-foreground/80">{blockStart}</span>
+                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/50">{blockEnd}</span>
                   </div>
-                  <Card className={`flex flex-row items-center justify-between gap-3 p-4 rounded-2xl transition-all shadow-2xs text-xs text-muted-foreground ${
-                    isLive
-                      ? 'border-primary/60 ring-1 ring-primary/20 bg-card'
-                      : 'bg-card border-border'
-                  }`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Coffee className={`size-3.5 ${isLive ? 'text-primary' : 'text-muted-foreground/80'}`} />
-                      <span className={`font-semibold truncate ${isLive ? 'text-primary font-bold' : 'text-foreground'}`}>{block.title}</span>
-                      {block.introDesc && <span className="truncate hidden sm:inline text-muted-foreground">· {block.introDesc}</span>}
+
+                  {/* Tarjeta de Break */}
+                  <Card className="flex flex-row items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl bg-card border border-border/80 shadow-2xs text-xs text-muted-foreground transition-all">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Coffee className="size-4 text-muted-foreground/80 shrink-0 stroke-[1.75]" />
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={block.title}
+                          onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
+                          placeholder="Break"
+                          className="text-xs sm:text-sm font-medium text-foreground bg-transparent border-0 outline-none p-0 focus:ring-0"
+                        />
+                      ) : (
+                        <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate select-none">
+                          {block.title || 'Break'}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <span>{blockDuration} min</span>
-                      {isLive && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={onAdvance}
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{blockDuration} min</span>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteBlock?.(block.id)}
+                            className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title="Eliminar break"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      ) : isCompleted ? (
+                        <div className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground select-none">
+                          <Check className="size-3.5 text-emerald-500 stroke-[2]" />
+                          <span>Terminado</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => (isLive ? onAdvance?.() : onSkipBlock ? onSkipBlock(block.id) : onAdvance?.())}
                           disabled={isTransitioning}
-                          className="h-6 px-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-muted/70 hover:bg-muted text-foreground font-medium text-xs shadow-2xs border-0 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                         >
-                          <span>Continuar</span>
-                          <ArrowRight className="size-3 text-muted-foreground/70" />
-                        </Button>
+                          <span>Terminar break</span>
+                          <ChevronRight className="size-3.5 text-foreground/80 stroke-[1.75]" />
+                        </button>
                       )}
                     </div>
                   </Card>
@@ -437,7 +576,7 @@ export function PlannerAgendaView({
                         <span className="text-xs text-muted-foreground font-medium">{block.durationMinutes || 30} min</span>
                       )}
 
-                      {isEditing && (
+                      {isEditing ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={
@@ -467,7 +606,45 @@ export function PlannerAgendaView({
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      )}
+                      ) : isCompleted ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Opciones de descarga del bloque"
+                                className="text-muted-foreground hover:text-foreground cursor-pointer"
+                              >
+                                <MoreVertical className="size-3.5" />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end" className="w-60">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel>Grabaciones del bloque</DropdownMenuLabel>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2"
+                                onClick={async () => {
+                                  await exportBlockRecordingsCombined(block.title, effectiveBlockRecordings);
+                                }}
+                              >
+                                <Download className="size-4 text-muted-foreground" />
+                                <span>Descargar bloque completo</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2"
+                                onClick={async () => {
+                                  await exportBlockRecordingsAsZip(block.title, effectiveBlockRecordings);
+                                }}
+                              >
+                                <Download className="size-4 text-muted-foreground" />
+                                <span>Descargar grabaciones por punto</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
                     </div>
                   </div>
 
@@ -477,11 +654,18 @@ export function PlannerAgendaView({
                       value={block.introDesc || ''}
                       onChange={(e) => onUpdateBlock?.(block.id, { introDesc: fieldValue(e.target.value) })}
                       placeholder="Contexto o descripción del bloque..."
-                      className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0"
+                      className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 field-sizing-content max-h-[9rem] overflow-y-hidden"
                     />
                   ) : (
                     block.introDesc && (
-                      <p className="text-xs text-muted-foreground leading-relaxed">{block.introDesc}</p>
+                      <Tooltip>
+                        <TooltipTrigger render={<p className="text-xs text-muted-foreground leading-relaxed line-clamp-6 cursor-default">{block.introDesc}</p>} />
+                        {block.introDesc.length > 200 && (
+                          <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                            {block.introDesc}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
                     )
                   )}
 
@@ -516,65 +700,31 @@ export function PlannerAgendaView({
                         })
                       );
 
-                      return (
-                        <div
-                          key={point.id}
-                          className={`group relative flex flex-col justify-center px-4 py-3 sm:px-4.5 sm:py-3.5 rounded-xl gap-2 transition-all ${
-                            isPointActive
-                              ? 'bg-primary/10 text-primary shadow-xs'
-                              : isDone || isPointSkipped
-                                ? 'bg-muted/40 text-muted-foreground'
-                                : 'bg-muted/50 hover:bg-muted/70 text-foreground'
-                          }`}
-                        >
-                          {/* Fila 1: Título del punto y Estado/Acción */}
-                          <div className="flex items-center justify-between gap-3 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {isDone && !isPointActive && (
-                                <CheckCircle2 className="size-3.5 text-primary shrink-0" />
-                              )}
+                      const pointRecordings = (sessionState?.recordings || []).filter(
+                        (r) => r.pointId === point.id || (r.pointTitle && r.pointTitle === point.title)
+                      );
+                      const fixtureRecordingDuration = point.recordingDurationMs || point.durationMs || 0;
+                      const rawPointDuration = fixtureRecordingDuration || pointRecordings.reduce((sum, r) => sum + (r.durationMs || 0), 0);
+                      const pointRecordingDurationMs = rawPointDuration > 0 ? rawPointDuration : 15000;
+                      const elapsedPointMs = isPointActive ? getElapsedActivePointMs(sessionState, nowTimestamp) : 0;
+                      const firstPointRecording = pointRecordings[0] || null;
+                      const isCurrentPlaying = playingAudioId === point.id;
 
-                              {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={point.title}
-                                  onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { title: fieldValue(e.target.value) })}
-                                  placeholder="Título del punto..."
-                                  className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all leading-normal"
-                                />
-                              ) : (
-                                <span
-                                  onClick={() => !isPointActive && onToggleSubpointStatus?.(block.id, point.id, !isDone)}
-                                  className={`text-sm leading-normal truncate ${
-                                    isDone
-                                      ? 'line-through text-foreground/60 font-normal cursor-pointer'
-                                      : isPointSkipped
-                                        ? 'text-muted-foreground font-normal cursor-pointer'
-                                        : isPointActive
-                                          ? 'font-bold text-primary'
-                                          : 'font-semibold text-foreground cursor-pointer hover:text-primary'
-                                  }`}
-                                >
-                                  {point.title || '(Punto sin título)'}
-                                </span>
-                              )}
-                            </div>
-
-                            {!isEditing && (
-                              <div className="flex items-center gap-1.5 text-xs shrink-0">
-                                {isDone && !isPointActive ? (
-                                  <span className="text-primary font-semibold">Revisado</span>
-                                ) : isPointSkipped ? (
-                                  <span className="text-muted-foreground font-medium">Saltado</span>
-                                ) : isPointActive ? (
-                                  <span className="text-primary font-semibold text-xs">
-                                    En curso
-                                  </span>
-                                ) : null}
-                              </div>
-                            )}
-
-                            {isEditing && (
+                      if (isEditing) {
+                        return (
+                          <div
+                            key={point.id}
+                            className="group relative flex flex-col justify-center px-4 py-3 sm:px-4.5 sm:py-3.5 rounded-xl gap-2 transition-all bg-muted/50 hover:bg-muted/70 text-foreground"
+                          >
+                            {/* Fila 1: Título e íconos de orden/eliminar */}
+                            <div className="flex items-center justify-between gap-3 min-w-0">
+                              <input
+                                type="text"
+                                value={point.title}
+                                onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { title: fieldValue(e.target.value) })}
+                                placeholder="Título del punto..."
+                                className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all leading-normal"
+                              />
                               <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
                                 <button
                                   type="button"
@@ -603,98 +753,131 @@ export function PlannerAgendaView({
                                   <Trash2 className="size-3.5" />
                                 </button>
                               </div>
-                            )}
-                          </div>
+                            </div>
 
-                          {/* Fila 2: Descripción */}
-                          {isEditing ? (
-                            <input
-                              type="text"
+                            {/* Fila 2: Descripción */}
+                            <textarea
+                              rows={1}
                               value={point.description || ''}
                               onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { description: fieldValue(e.target.value) })}
                               placeholder="Agregar descripción o detalle..."
-                              className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all"
+                              className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 field-sizing-content max-h-[9rem] overflow-y-hidden"
                             />
-                          ) : point.description ? (
-                            <p className={`text-xs line-clamp-2 leading-relaxed ${
-                              isPointActive ? 'text-primary/85' : 'text-muted-foreground'
-                            }`}>
-                              {point.description}
-                            </p>
-                          ) : null}
 
-                          {/* Fila inferior: Presentador y Acción Siguiente punto */}
-                          {(isEditing || pointPresenterList.length > 0 || (isPointActive && onAdvance)) && (
-                            <div className="flex items-center justify-between gap-2 pt-0.5 min-w-0">
-                              <div className="flex items-center gap-2 min-w-0">
-                                {isEditing ? (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger
-                                      render={
-                                        <button
-                                          type="button"
-                                          className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
-                                        >
-                                          {pointPresenterList.length > 0 ? (
-                                            <div className="inline-flex items-center gap-1.5">
-                                              <div className="flex items-center -space-x-1.5">
-                                                {pointPresenterList.slice(0, 3).map((pName, pIdx) => {
-                                                  const matched = discordMembers.find(
-                                                    (m) =>
-                                                      m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
-                                                      m.tag.toLowerCase().includes(pName.toLowerCase())
-                                                  );
-                                                  const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
-                                                  return (
-                                                    <Avatar
-                                                      key={pIdx}
-                                                      size="xs"
-                                                      className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                                      style={{ backgroundColor: `${color}35`, color }}
-                                                    >
-                                                      <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                                                        {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                                                      </AvatarFallback>
-                                                    </Avatar>
-                                                  );
-                                                })}
-                                              </div>
-                                              <span className="text-muted-foreground group-hover:text-foreground font-medium underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                                                {pointPresenterList.join(', ')}
-                                              </span>
-                                            </div>
-                                          ) : (
-                                            <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                                              Asignar responsable
-                                            </span>
-                                          )}
-                                        </button>
-                                      }
-                                    />
-                                    <DropdownMenuContent align="start" className="p-0">
-                                      <SearchableParticipantMenu
-                                        selectedKeys={selectedPointKeys}
-                                        onSelectionChange={(keys) => {
-                                          const names = keys.map((k) => {
-                                            const found = [...discordMembers, ...discordRoles].find(
-                                              (m) => m.tag.toLowerCase() === k.toLowerCase() || (m.globalName || m.name || '').toLowerCase() === k.replace(/^@/, '').toLowerCase()
-                                            );
-                                            return found ? (found.globalName || found.name) : k.replace(/^@/, '');
-                                          });
-                                          onUpdateSubpoint?.(block.id, point.id, { presenter: names.join(', ') });
-                                        }}
-                                        onAddCustomParticipant={(tag) => {
-                                          const cleanName = tag.replace(/^@/, '');
-                                          const updated = pointPresenterList.includes(cleanName)
-                                            ? pointPresenterList
-                                            : [...pointPresenterList, cleanName];
-                                          onUpdateSubpoint?.(block.id, point.id, { presenter: updated.join(', ') });
-                                        }}
-                                      />
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : pointPresenterList.length > 0 ? (
-                                  <div className="flex items-center gap-1.5">
+                            {/* Fila 3: Responsables */}
+                            <div className="flex items-center justify-between gap-3 pt-0.5 min-w-0">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
+                                    >
+                                      {pointPresenterList.length > 0 ? (
+                                        <div className="inline-flex items-center gap-1.5">
+                                          <div className="flex items-center -space-x-1.5">
+                                            {pointPresenterList.slice(0, 3).map((pName, pIdx) => {
+                                              const matched = discordMembers.find(
+                                                (m) =>
+                                                  m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                                  m.tag.toLowerCase().includes(pName.toLowerCase())
+                                              );
+                                              const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                              return (
+                                                <Avatar
+                                                  key={pIdx}
+                                                  size="xs"
+                                                  className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                                  style={{ backgroundColor: `${color}35`, color }}
+                                                >
+                                                  <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
+                                                    {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
+                                                  </AvatarFallback>
+                                                </Avatar>
+                                              );
+                                            })}
+                                          </div>
+                                          <span className="text-muted-foreground group-hover:text-foreground font-medium underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+                                            {pointPresenterList.join(', ')}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
+                                          Asignar responsable
+                                        </span>
+                                      )}
+                                    </button>
+                                  }
+                                />
+                                <DropdownMenuContent align="start" className="p-0">
+                                  <SearchableParticipantMenu
+                                    selectedKeys={selectedPointKeys}
+                                    onSelectionChange={(keys) => {
+                                      const names = keys.map((k) => {
+                                        const found = [...discordMembers, ...discordRoles].find(
+                                          (m) => m.tag.toLowerCase() === k.toLowerCase() || (m.globalName || m.name || '').toLowerCase() === k.replace(/^@/, '').toLowerCase()
+                                        );
+                                        return found ? (found.globalName || found.name) : k.replace(/^@/, '');
+                                      });
+                                      onUpdateSubpoint?.(block.id, point.id, { presenter: names.join(', ') });
+                                    }}
+                                    onAddCustomParticipant={(tag) => {
+                                      const cleanName = tag.replace(/^@/, '');
+                                      const updated = pointPresenterList.includes(cleanName)
+                                        ? pointPresenterList
+                                        : [...pointPresenterList, cleanName];
+                                      onUpdateSubpoint?.(block.id, point.id, { presenter: updated.join(', ') });
+                                    }}
+                                  />
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (isPointActive) {
+                        const isLastPointInBlock = pointIndex === (block.subpoints || []).length - 1;
+                        const nextActionLabel = isLast && isLastPointInBlock
+                          ? 'Finalizar sesión'
+                          : isLastPointInBlock
+                            ? 'Siguiente bloque'
+                            : 'Siguiente subpunto';
+
+                        return (
+                          <div
+                            key={point.id}
+                            className="group relative flex flex-col justify-between p-3.5 sm:px-4 sm:py-3.5 rounded-2xl gap-2.5 transition-all bg-primary/10 shadow-xs"
+                          >
+                            {/* Fila 1: Título activo (púrpura bold) y Estado de tiempo (rojo sin fondo de píldora) */}
+                            <div className="flex items-center justify-between gap-3 min-w-0">
+                              <span className="text-sm font-bold text-primary truncate leading-normal">
+                                {point.title || '(Punto sin título)'}
+                              </span>
+
+                              {isRecordingActive && (
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive shrink-0 select-none">
+                                  <span className={`size-2 rounded-full bg-destructive ${isRecordingPaused ? '' : 'animate-pulse'}`} />
+                                  <span>{isRecordingPaused ? 'En pausa' : 'En curso'}</span>
+                                  <span className="opacity-60">·</span>
+                                  <span className="font-mono tabular-nums">
+                                    {formatMsToClock(recordingElapsedMs || elapsedPointMs)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {point.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                                {point.description}
+                              </p>
+                            )}
+
+                            {/* Fila 2: Responsable (texto púrpura) y Botón de avance */}
+                            <div className="flex items-center justify-between gap-3 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {pointPresenterList.length > 0 && (
+                                  <>
                                     <div className="flex items-center -space-x-1.5">
                                       {pointPresenterList.map((pName, pIdx) => {
                                         const matched = discordMembers.find(
@@ -717,32 +900,172 @@ export function PlannerAgendaView({
                                         );
                                       })}
                                     </div>
-                                    <span className={`text-xs ${isPointActive ? 'text-primary font-medium' : 'text-muted-foreground font-normal'}`}>
+                                    <span className="text-xs text-primary font-medium truncate">
                                       {pointPresenterList.join(', ')}
                                     </span>
-                                  </div>
-                                ) : null}
+                                  </>
+                                )}
                               </div>
 
-                              {/* Botón Siguiente punto alineado a la derecha en la fila inferior */}
-                              {!isEditing && isPointActive && onAdvance && (
-                                <Button
+                              {onAdvance && (
+                                <button
                                   type="button"
-                                  size="xs"
-                                  variant="outline"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onAdvance();
                                   }}
                                   disabled={isTransitioning}
-                                  className="h-6 text-[11px] px-2.5 gap-1 shadow-xs cursor-pointer ml-auto shrink-0"
+                                  className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-background hover:bg-background/90 text-primary font-medium text-xs shadow-xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                                 >
-                                  <span>Siguiente punto</span>
-                                  <ChevronRight className="size-3" />
-                                </Button>
+                                  <span className="font-medium">{nextActionLabel}</span>
+                                  <ChevronRight strokeWidth={1.75} className="size-3.5 text-primary stroke-[1.75]" />
+                                </button>
                               )}
                             </div>
-                          )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={point.id}
+                          className={`group relative flex items-center justify-between px-4 py-3 sm:px-4.5 sm:py-3.5 rounded-xl gap-3 sm:gap-4 transition-all ${
+                            isDone || isPointSkipped
+                              ? 'bg-muted/40 text-muted-foreground'
+                              : 'bg-muted/50 hover:bg-muted/70 text-foreground'
+                          }`}
+                        >
+                          {/* Columna Izquierda: Checkbox/Título, Descripción y Responsable */}
+                          <div className="flex flex-col gap-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {isDone && (
+                                <CheckCircle2
+                                  onClick={() => onToggleSubpointStatus?.(block.id, point.id, false)}
+                                  className="size-4 text-emerald-500 shrink-0 cursor-pointer"
+                                />
+                              )}
+                              <span
+                                onClick={() => onToggleSubpointStatus?.(block.id, point.id, !isDone)}
+                                className={`text-sm leading-normal truncate ${
+                                  isDone
+                                    ? 'text-foreground/90 font-medium cursor-pointer'
+                                    : isPointSkipped
+                                      ? 'text-muted-foreground font-normal cursor-pointer'
+                                      : 'font-semibold text-foreground cursor-pointer hover:text-primary'
+                                }`}
+                              >
+                                {point.title || '(Punto sin título)'}
+                              </span>
+                            </div>
+
+                            {point.description && (
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed cursor-default pl-6">
+                                      {point.description}
+                                    </p>
+                                  }
+                                />
+                                {point.description.length > 100 && (
+                                  <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                                    {point.description}
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            )}
+
+                            {pointPresenterList.length > 0 && (
+                              <div className={`flex items-center gap-1.5 ${isDone ? 'pl-6' : ''}`}>
+                                <div className="flex items-center -space-x-1.5">
+                                  {pointPresenterList.map((pName, pIdx) => {
+                                    const matched = discordMembers.find(
+                                      (member) =>
+                                        member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
+                                        member.tag.toLowerCase().includes(pName.toLowerCase())
+                                    );
+                                    const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                                    return (
+                                      <Avatar
+                                        key={pIdx}
+                                        size="xs"
+                                        className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                        style={{ backgroundColor: `${color}35`, color }}
+                                      >
+                                        <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
+                                          {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                    );
+                                  })}
+                                </div>
+                                <span className="text-xs text-muted-foreground font-normal">
+                                  {pointPresenterList.join(', ')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Columna Derecha: Reproductor inline si isDone, o saltado */}
+                          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                            {isDone ? (
+                              <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                                <audio
+                                  id={`audio-element-${point.id}`}
+                                  className="bardo-point-audio hidden"
+                                  onTimeUpdate={(e) => handleTimeUpdate(point.id, e)}
+                                  onEnded={() => handleEnded(point.id)}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTogglePlay(point, firstPointRecording, pointRecordingDurationMs);
+                                  }}
+                                  aria-label={isCurrentPlaying ? 'Pausar audio' : 'Reproducir audio'}
+                                  className="size-6 sm:size-7 rounded-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                >
+                                  {isCurrentPlaying ? (
+                                    <Pause className="size-3.5 fill-primary text-primary" />
+                                  ) : (
+                                    <Play className="size-3.5 fill-primary text-primary ml-0.5" />
+                                  )}
+                                </button>
+                                <div
+                                  role="slider"
+                                  aria-label={`Progreso de audio de ${point.title}`}
+                                  aria-valuenow={Math.round(audioProgress[point.id]?.percent || 0)}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  tabIndex={0}
+                                  onClick={(e) => handleSeek(point.id, e, pointRecordingDurationMs)}
+                                  className="w-28 sm:w-44 h-1.5 bg-muted/80 hover:bg-muted rounded-full overflow-hidden relative cursor-pointer select-none"
+                                >
+                                  <div
+                                    className="h-full bg-primary rounded-full transition-all duration-100"
+                                    style={{ width: `${audioProgress[point.id]?.percent || 0}%` }}
+                                  />
+                                </div>
+                                <span className="font-mono text-xs text-muted-foreground tabular-nums select-none min-w-[36px]">
+                                  {formatMsToClock(audioProgress[point.id]?.currentMs || 0)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await downloadPointAudio(point.title, firstPointRecording || { pointTitle: point.title, durationMs: pointRecordingDurationMs });
+                                  }}
+                                  aria-label={`Descargar audio de ${point.title}`}
+                                  title={`Descargar audio: ${point.title}`}
+                                  className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-md hover:bg-muted/50"
+                                >
+                                  <Download className="size-4" />
+                                </button>
+                              </div>
+                            ) : isPointSkipped ? (
+                              <span className="text-muted-foreground font-medium text-xs">Saltado</span>
+                            ) : null}
+                          </div>
                         </div>
                       );
                     })}
@@ -763,64 +1086,91 @@ export function PlannerAgendaView({
                   <div className="flex flex-col gap-1.5 pt-2 border-t border-border/40">
                     {block.decisions.map((decision) => {
                       const point = (block.subpoints || []).find((candidate) => candidate.id === decision.pointId);
+                      const rawOwner = (decision.owner || '').trim().replace(/^@/, '');
+                      const ownerMember = rawOwner
+                        ? discordMembers.find(
+                            (m) =>
+                              m.globalName.toLowerCase() === rawOwner.toLowerCase() ||
+                              m.tag.toLowerCase() === `@${rawOwner.toLowerCase()}` ||
+                              m.globalName.toLowerCase().includes(rawOwner.toLowerCase()) ||
+                              rawOwner.toLowerCase().includes(m.globalName.toLowerCase())
+                          )
+                        : null;
+                      const ownerColor =
+                        ownerMember?.avatarColor ||
+                        DISCORD_PALETTES[
+                          Math.abs(
+                            rawOwner
+                              .split('')
+                              .reduce((acc, c) => acc + c.charCodeAt(0), 0)
+                          ) % DISCORD_PALETTES.length
+                        ] ||
+                        '#E67E22';
+                      const ownerDisplayName = ownerMember?.globalName || rawOwner;
+
                       return (
                         <div
                           key={decision.id}
-                          className="group px-3 py-2.5 rounded-lg bg-muted/60 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
+                          className="group px-3 py-2 rounded-lg bg-muted/40 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
                         >
                           <div className="flex items-start gap-2.5 min-w-0">
-                            <CheckSquare className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                            <Handshake className="size-4 text-foreground/80 shrink-0 mt-0.5" />
                             <span className="min-w-0">
                               <span className="font-medium break-words leading-snug">{decision.content}</span>
                               {point && <span className="block text-xs text-muted-foreground mt-0.5">{point.title}</span>}
                             </span>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label="Eliminar acuerdo"
-                            className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
-                            onClick={() => onDeleteDecision?.(block.id, decision.id)}
-                          >
-                            <Trash2 className="size-3" />
-                          </Button>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {ownerDisplayName && (
+                              <div className="inline-flex items-center gap-1.5">
+                                <Avatar
+                                  size="xs"
+                                  className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                                  style={{ backgroundColor: `${ownerColor}35`, color: ownerColor }}
+                                >
+                                  <AvatarFallback style={{ backgroundColor: `${ownerColor}35`, color: ownerColor }}>
+                                    {ownerDisplayName.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-muted-foreground font-medium">{ownerDisplayName}</span>
+                              </div>
+                            )}
+
+                            {isEditing && (
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Eliminar acuerdo"
+                                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
+                                onClick={() => onDeleteDecision?.(block.id, decision.id)}
+                              >
+                                <Trash2 className="size-3" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
 
-                {blockRecordings.length > 0 && (
-                  <div className="flex flex-col gap-2 pt-2 border-t border-border/30">
-                    <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                      <Mic className="size-3 text-primary" />
-                      Grabaciones ({blockRecordings.length})
-                    </span>
-                    <div className="flex flex-col gap-1.5">
-                      {blockRecordings.map((recording) => (
-                        <PlannerAudioPlayer key={recording.id} recording={recording} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {!isEditing && (
                   <div className="flex items-center justify-between pt-2.5 mt-1 border-t border-border/30 text-xs text-muted-foreground gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => onOpenCapture('decision', block.id)}
-                      className="h-8 text-xs text-muted-foreground hover:text-foreground px-2.5 gap-1.5 cursor-pointer font-medium"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-1 px-1 rounded-md transition-colors cursor-pointer font-medium select-none"
                     >
-                      <Plus className="size-3.5" />
+                      <Plus className="size-3.5 text-muted-foreground/80" />
                       <span>Acuerdo</span>
-                    </Button>
+                    </button>
 
-                    {isLive && onAdvance && (
+                    {isLive && (onAdvanceBlock || onAdvance) && (
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={onAdvance}
+                        onClick={onAdvanceBlock || onAdvance}
                         disabled={isTransitioning}
                         className="h-8 px-3.5 text-xs font-semibold rounded-full gap-1.5 cursor-pointer shadow-xs ml-auto"
                       >
@@ -846,11 +1196,15 @@ export function PlannerAgendaView({
                 {/* Timeline lateral izquierdo */}
                 <div className="flex flex-col items-center justify-between text-[11px] sm:text-xs text-muted-foreground font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-emerald-500 font-semibold' : 'text-muted-foreground'}>
+                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}>
                       {blockStart}
                     </span>
-                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/60">{blockEnd}</span>
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground/50 mt-0.5">{blockDuration}m</span>
+                    <span className={`text-[10px] sm:text-[11px] ${isLive ? 'text-primary/70 font-medium' : isCompleted ? 'text-muted-foreground/70 font-normal' : 'text-muted-foreground/60'}`}>
+                      {blockEnd}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/50 font-normal">
+                      {block.durationMinutes || 30}m
+                    </span>
                   </div>
 
                   <div className="flex-1 flex flex-col items-center my-1 relative w-full">
@@ -864,7 +1218,7 @@ export function PlannerAgendaView({
                           isCompleted={false}
                         />
                       ) : isCompleted ? (
-                        <div className="size-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shadow-2xs">
+                        <div className="size-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-2xs">
                           <Check className="size-3 stroke-[2.5]" />
                         </div>
                       ) : (
@@ -884,9 +1238,9 @@ export function PlannerAgendaView({
                           amplitude={3.5}
                         />
                       ) : isCompleted ? (
-                        <div className="w-[4px] h-full bg-emerald-500/40 rounded-full" />
+                        <div className="w-[3px] sm:w-[3.5px] h-full bg-emerald-400/50 dark:bg-emerald-500/40 rounded-full" />
                       ) : (
-                        <div className="w-[4px] h-full bg-border/40 rounded-full" />
+                        <div className="w-[3px] sm:w-[3.5px] h-full bg-border/40 rounded-full" />
                       )}
                     </div>
 

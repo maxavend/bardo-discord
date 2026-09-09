@@ -39,7 +39,8 @@ export function SessionRecapView({
     if (recap.decisions.length > 0) {
       text += '\n**Decisiones:**\n';
       recap.decisions.forEach((decision) => {
-        text += `- ${decision.content}\n`;
+        const ownerTag = decision.owner ? ` (@${decision.owner.replace(/^@/, '')})` : '';
+        text += `- ${decision.content}${ownerTag}\n`;
       });
     }
     try {
@@ -169,12 +170,20 @@ export function SessionRecapView({
                 {recap.decisions.map((decision, index) => {
                   const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
                   const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
+                  const ownerName = decision.owner ? decision.owner.trim().replace(/^@/, '') : null;
                   return (
-                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed">
-                      <strong className="font-semibold">{decision.content}</strong>
-                      {(point || block) && (
-                        <span className="block text-[11px] text-muted-foreground mt-0.5">
-                          {point ? `${block?.title} → ${point.title}` : block?.title}
+                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <strong className="font-semibold">{decision.content}</strong>
+                        {(point || block) && (
+                          <span className="block text-[11px] text-muted-foreground mt-0.5">
+                            {point ? `${block?.title} → ${point.title}` : block?.title}
+                          </span>
+                        )}
+                      </div>
+                      {ownerName && (
+                        <span className="text-[11px] text-muted-foreground font-medium shrink-0 bg-muted/60 px-2 py-0.5 rounded-full">
+                          {ownerName}
                         </span>
                       )}
                     </div>

@@ -115,17 +115,23 @@ export function MaterialMorphShape({
   }, []);
 
   const colorClass =
-    color === 'danger'
+    color === 'danger' || color === 'destructive'
       ? 'text-destructive'
-      : color === 'warning'
-      ? 'text-amber-500'
-      : color === 'success'
-      ? 'text-emerald-500'
+      : color === 'warning' || color === 'amber'
+      ? 'text-amber-500 dark:text-amber-400'
+      : color === 'success' || color === 'emerald'
+      ? 'text-emerald-500 dark:text-emerald-400'
+      : color === 'primary' || color === 'accent'
+      ? 'text-primary'
+      : color?.startsWith('text-')
+      ? color
       : 'text-primary';
 
   // Frecuencia dinámica: aumenta velocidad cuando se acaba el tiempo (<5m o overtime).
-  const morphDurationMs = color === 'danger' ? 1600 : color === 'warning' ? 3200 : 8000;
-  const rotationDuration = color === 'danger' ? '3s' : color === 'warning' ? '6s' : '16s';
+  const isDanger = color === 'danger' || color === 'destructive';
+  const isWarn = color === 'warning' || color === 'amber';
+  const morphDurationMs = isDanger ? 1600 : isWarn ? 3200 : 8000;
+  const rotationDuration = isDanger ? '3s' : isWarn ? '6s' : '16s';
   const [pathD, setPathD] = useState(paths.circle.d);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const motionRef = useRef({

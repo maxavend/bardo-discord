@@ -2,6 +2,7 @@ import {computePlannerTimes} from './time-engine.js';
 import {
   DEFAULT_LIVE_SESSION,
   POINT_STATUS,
+  SESSION_STATUS,
   getPointStatus,
   migrateLiveSessionState,
 } from './session-runner.js';
@@ -53,11 +54,11 @@ export const DEMO_PLANNER_FIXTURE = {
       introDesc: 'Puesta al día para alinearnos como equipo.',
       phases: {context: 2, review: 6, closing: 2},
       subpoints: [
-        {id: 'p-1', title: 'Novedades del equipo y de proyectos', presenter: 'Todos', status: 'done'},
-        {id: 'p-2', title: 'Coordinación sobre Minuta Weekly', presenter: 'Pau', status: 'done'},
-        {id: 'p-3', title: 'Agenda de la sesión', presenter: 'Pau', status: 'done'},
+        {id: 'p-1', title: 'Novedades del equipo y de proyectos', presenter: 'Todos', status: 'done', recordingDurationMs: 15000},
+        {id: 'p-2', title: 'Coordinación sobre Minuta Weekly', presenter: 'Pau', status: 'done', recordingDurationMs: 42000},
+        {id: 'p-3', title: 'Agenda de la sesión', presenter: 'Pau', status: 'done', recordingDurationMs: 11000},
       ],
-      decisions: [{id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.'}],
+      decisions: [{id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.', owner: 'Pau'}],
     },
     {
       id: 'b-2',
@@ -73,7 +74,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-6', title: 'Propuestas para mejorar el proceso de diseño', presenter: 'Todos', status: 'pending'},
       ],
       decisions: [
-        {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.'},
+        {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.', owner: 'Maxi'},
         {id: 'd-3', content: 'Compartir enlace al prototipo navegable Figma en el canal #orion.'},
       ],
     },
@@ -92,8 +93,8 @@ export const DEMO_PLANNER_FIXTURE = {
     {
       id: 'b-4',
       title: 'Revisión de diseño | Ecommerce',
-      durationMinutes: 60,
-      manualDuration: 60,
+      durationMinutes: 40,
+      manualDuration: 40,
       leader: 'Dani y Javi',
       participants: 'Diseño & SD + Nico',
       phases: {context: 5, review: 50, closing: 5},
@@ -102,7 +103,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-8', title: 'Landing Apple con Integración Claro Up', presenter: 'Javi', status: 'pending'},
         {id: 'p-9', title: 'Avance landing factibilidad (opcional)', presenter: 'Dani / Javi', status: 'pending'},
       ],
-      decisions: [{id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.'}],
+      decisions: [{id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.', owner: 'Dani'}],
     },
     {
       id: 'b-5',
@@ -116,7 +117,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-10', title: 'Landing OTT Mascotas (avances y soluciones)', presenter: 'Responsable', status: 'pending'},
         {id: 'p-11', title: 'Pantallas SSO para el flujo de Registro', presenter: 'Pau / Maxi', status: 'pending'},
       ],
-      decisions: [{id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.'}],
+      decisions: [{id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.', owner: 'Pau'}],
     },
     {
       id: 'b-6',
@@ -133,7 +134,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-14', title: 'Riesgos de instrumentación antes del release', presenter: 'Equipo de Desarrollo', status: 'pending'},
       ],
       decisions: [
-        {id: 'd-6', content: 'Definir un dueño por evento antes de cerrar la especificación.'},
+        {id: 'd-6', content: 'Definir un dueño por evento antes de cerrar la especificación.', owner: 'Nico'},
       ],
     },
     {
@@ -163,7 +164,7 @@ export const DEMO_PLANNER_FIXTURE = {
       subpoints: [
         {id: 'p-17', title: 'Confirmar acuerdos que pasan a la minuta', presenter: 'Pau', status: 'pending'},
       ],
-      decisions: [{id: 'd-7', content: 'La minuta se comparte en el canal antes del cierre del día.'}],
+      decisions: [{id: 'd-7', content: 'La minuta se comparte en el canal antes del cierre del día.', owner: 'Pau'}],
     },
   ],
 };
@@ -261,10 +262,80 @@ function normalizeReloadedRecording(recording) {
   };
 }
 
+export function createDemoLiveSession(_plannerState = DEMO_PLANNER_FIXTURE, now = Date.now()) {
+  const activeBlockStartedAt = now - 85000;
+  return {
+    ...DEFAULT_LIVE_SESSION,
+    sessionId: 'demo-session-weekly-design',
+    status: SESSION_STATUS.RUNNING,
+    scheduledStartAt: activeBlockStartedAt - 10 * 60 * 1000,
+    sessionStartedAt: activeBlockStartedAt - 10 * 60 * 1000,
+    liveActiveBlockId: 'b-2',
+    liveActivePointId: 'p-4',
+    activeBlockStartedAt,
+    activePointStartedAt: activeBlockStartedAt,
+    completedBlockIds: ['b-1'],
+    skippedBlockIds: [],
+    pointStatuses: {
+      'p-1': POINT_STATUS.DONE,
+      'p-2': POINT_STATUS.DONE,
+      'p-3': POINT_STATUS.DONE,
+      'p-4': POINT_STATUS.ACTIVE,
+      'p-5': POINT_STATUS.PENDING,
+      'p-6': POINT_STATUS.PENDING,
+    },
+    recordings: [
+      {
+        id: 'rec-demo-p-1',
+        name: 'Punto: Novedades del equipo y de proyectos',
+        blockId: 'b-1',
+        blockTitle: 'Check-in, contexto y novedades',
+        pointId: 'p-1',
+        pointTitle: 'Novedades del equipo y de proyectos',
+        durationMs: 15000,
+        createdAt: activeBlockStartedAt - 8 * 60 * 1000,
+        status: 'saved',
+      },
+      {
+        id: 'rec-demo-p-2',
+        name: 'Punto: Coordinación sobre Minuta Weekly',
+        blockId: 'b-1',
+        blockTitle: 'Check-in, contexto y novedades',
+        pointId: 'p-2',
+        pointTitle: 'Coordinación sobre Minuta Weekly',
+        durationMs: 42000,
+        createdAt: activeBlockStartedAt - 5 * 60 * 1000,
+        status: 'saved',
+      },
+      {
+        id: 'rec-demo-p-3',
+        name: 'Punto: Agenda de la sesión',
+        blockId: 'b-1',
+        blockTitle: 'Check-in, contexto y novedades',
+        pointId: 'p-3',
+        pointTitle: 'Agenda de la sesión',
+        durationMs: 11000,
+        createdAt: activeBlockStartedAt - 2 * 60 * 1000,
+        status: 'saved',
+      },
+    ],
+    decisions: [
+      {id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.', owner: 'Pau', pointId: 'p-2'},
+      {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.', owner: 'Maxi', pointId: 'p-4'},
+      {id: 'd-3', content: 'Compartir enlace al prototipo navegable Figma en el canal #orion.', pointId: 'p-4'},
+    ],
+  };
+}
+
 export function loadLiveSessionState(plannerState = null) {
   try {
     const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
-    if (!raw) return {...DEFAULT_LIVE_SESSION};
+    if (!raw) {
+      if (plannerState?.title === 'Weekly Diseño & SD' || plannerState?.title?.includes('Weekly Diseño')) {
+        return createDemoLiveSession(plannerState);
+      }
+      return {...DEFAULT_LIVE_SESSION};
+    }
     const parsed = JSON.parse(raw);
     const migrated = migrateLiveSessionState(plannerState, parsed);
     return {
@@ -305,7 +376,8 @@ export function clearLiveSessionState() {
 export function resetToDemoFixture() {
   const computed = computePlannerTimes(DEMO_PLANNER_FIXTURE);
   savePlannerState(computed);
-  clearLiveSessionState();
+  const demoLive = createDemoLiveSession(computed);
+  saveLiveSessionState(demoLive);
   return computed;
 }
 
@@ -352,6 +424,7 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       allDecisions.push({
         id: decision.id,
         content: decision.content,
+        owner: decision.owner || null,
         blockId: block.id,
         blockTitle: block.title,
         origin: block.title,
@@ -365,6 +438,7 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       allDecisions.push({
         id: decision.id,
         content: decision.content,
+        owner: decision.owner || null,
         blockId: block?.id || null,
         blockTitle: block?.title || 'Reunión',
         origin: point ? `${block?.title} → ${point.title}` : (block?.title || 'Reunión'),
@@ -379,7 +453,8 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
   markdown += '## 📋 Resumen de Acuerdos Principales\n\n';
   if (allDecisions.length > 0) {
     for (const decision of allDecisions) {
-      markdown += `- ✅ **${decision.content}**\n  *📌 Origen: ${decision.origin}*\n\n`;
+      const ownerStr = decision.owner ? ` | 👤 **Responsable:** @${decision.owner.replace(/^@/, '')}` : '';
+      markdown += `- ✅ **${decision.content}**\n  *📌 Origen: ${decision.origin}${ownerStr}*\n\n`;
     }
   } else {
     markdown += '*No se registraron decisiones en esta reunión.*\n\n';
@@ -401,7 +476,8 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       if (blockDecisions.length > 0) {
         markdown += `**Acuerdos de este bloque:**\n`;
         for (const decision of blockDecisions) {
-          markdown += `- ✅ ${decision.content}\n`;
+          const ownerStr = decision.owner ? ` (@${decision.owner.replace(/^@/, '')})` : '';
+          markdown += `- ✅ ${decision.content}${ownerStr}\n`;
         }
         markdown += '\n';
       }

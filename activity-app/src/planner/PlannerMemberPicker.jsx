@@ -264,14 +264,14 @@ export function PlannerMemberPicker({
         )}
 
         <div
-          className="max-h-72 w-full overflow-y-auto overscroll-contain pr-1"
+          className="max-h-72 w-full overflow-y-auto overflow-x-hidden overscroll-contain pr-1"
           onWheel={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
         >
           <div className="flex flex-col gap-1 pr-1">
             {filteredRoles.length > 0 && (
               <DropdownMenuGroup>
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
                   Roles del servidor
                 </DropdownMenuLabel>
                 <div className="flex flex-col gap-0.5">
@@ -292,7 +292,7 @@ export function PlannerMemberPicker({
                             #
                           </span>
                           <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
-                          <span className="text-[10.5px] text-muted-foreground ml-auto truncate">{role.tag}</span>
+                          <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{role.tag}</span>
                         </div>
                         {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
                       </button>
@@ -305,7 +305,7 @@ export function PlannerMemberPicker({
             {filteredMembers.length > 0 && (
               <DropdownMenuGroup>
                 {filteredRoles.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
                   Miembros del servidor y canal
                 </DropdownMenuLabel>
                 <div className="flex flex-col gap-0.5">
@@ -332,7 +332,7 @@ export function PlannerMemberPicker({
                             </AvatarFallback>
                           </Avatar>
                           <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
-                          <span className="text-[10.5px] text-muted-foreground ml-auto truncate">{member.tag}</span>
+                          <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{member.tag}</span>
                         </div>
                         {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
                       </button>
@@ -447,7 +447,7 @@ export function SearchableParticipantMenu({
   };
 
   return (
-    <div className="flex flex-col min-w-[280px] max-w-xs text-xs p-1">
+    <div className="flex flex-col min-w-[280px] max-w-xs text-xs p-1 overflow-x-hidden">
       {/* 1. SEARCH INPUT (Canonical shadcn Combobox placement at the TOP) */}
       <div className="p-1 pb-1.5">
         <InputGroup className="h-8">
@@ -487,7 +487,7 @@ export function SearchableParticipantMenu({
             className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
           >
             <Plus className="size-3.5 shrink-0" />
-                          <span className="truncate">
+            <span className="truncate">
               Agregar "<strong>{searchQuery.trim()}</strong>"
             </span>
           </button>
@@ -496,7 +496,7 @@ export function SearchableParticipantMenu({
 
       {/* Native scrollable container to allow wheel and touch scrolling smoothly inside DropdownMenuContent */}
       <div
-        className="max-h-64 w-full overflow-y-auto overscroll-contain px-1 py-0.5"
+        className="max-h-64 w-full overflow-y-auto overflow-x-hidden overscroll-contain px-1 py-0.5"
         onWheel={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
@@ -504,7 +504,7 @@ export function SearchableParticipantMenu({
           {/* 2. ROLES DEL SERVIDOR */}
           {filteredRoles.length > 0 && (
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/80">
+              <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
                 Roles del servidor
               </DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
@@ -536,7 +536,7 @@ export function SearchableParticipantMenu({
                         <span className="text-xs font-medium text-foreground truncate">
                           {role.name}
                         </span>
-                        <span className="text-[10.5px] text-muted-foreground ml-auto truncate">
+                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
                           {role.tag}
                         </span>
                       </div>
@@ -554,7 +554,7 @@ export function SearchableParticipantMenu({
           {filteredMembers.length > 0 && (
             <DropdownMenuGroup>
               {filteredRoles.length > 0 && <DropdownMenuSeparator className="my-1.5" />}
-              <DropdownMenuLabel className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/80">
+              <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
                 Miembros del servidor y canal
               </DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
@@ -593,7 +593,7 @@ export function SearchableParticipantMenu({
                         <span className="text-xs font-medium text-foreground truncate">
                           {member.globalName}
                         </span>
-                        <span className="text-[10.5px] text-muted-foreground ml-auto truncate">
+                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
                           {member.tag}
                         </span>
                       </div>

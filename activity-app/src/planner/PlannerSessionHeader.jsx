@@ -9,14 +9,19 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
+import { TimePicker } from '@/components/ui/time-picker.jsx';
 import {
   FileText,
   Pencil,
   Copy,
   Plus,
-  RotateCcw,
   MoreVertical,
   Play,
   Check,
@@ -77,7 +82,7 @@ export function PlannerSessionHeader({
   onLoadDemo,
   onStartSession,
   onResumeSession,
-  onInterruptSession,
+  onInterruptSession: _onInterruptSession,
   onGoHome: _onGoHome,
 }) {
   const {
@@ -137,7 +142,7 @@ export function PlannerSessionHeader({
                   value={title}
                   onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
                   placeholder="Nombre de la reunión"
-                  className="doc-title doc-title-input"
+                  className="doc-title doc-title-input field-sizing-content resize-none overflow-y-hidden"
                   aria-label="Nombre de la reunión"
                 />
                 <textarea
@@ -145,14 +150,29 @@ export function PlannerSessionHeader({
                   value={description}
                   onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
                   placeholder="Agregar objetivo o contexto de la reunión..."
-                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60"
+                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60 field-sizing-content max-h-[9rem] overflow-y-hidden"
                   aria-label="Objetivo de la reunión"
                 />
               </>
             ) : (
               <>
                 <h1 className="doc-title">{title || 'Reunión sin título'}</h1>
-                {description && <p className="doc-description">{description}</p>}
+                {description && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <p className="doc-description line-clamp-6 cursor-default">
+                          {description}
+                        </p>
+                      }
+                    />
+                    {description.length > 200 && (
+                      <TooltipContent className="max-w-md text-xs leading-relaxed">
+                        {description}
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                )}
               </>
             )}
           </div>
@@ -230,15 +250,6 @@ export function PlannerSessionHeader({
                       <span>Ver resumen</span>
                     </DropdownMenuItem>
                   )}
-                  {(isRunning || isPaused) && (
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => onInterruptSession?.()}
-                    >
-                      <RotateCcw className="size-4 text-destructive" />
-                      <span>Pausar reunión</span>
-                    </DropdownMenuItem>
-                  )}
                   {!isEditing && (
                     <DropdownMenuItem onClick={onToggleEditMode}>
                       <Pencil className="size-4 text-muted-foreground" />
@@ -298,21 +309,17 @@ export function PlannerSessionHeader({
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
-                <input
-                  type="time"
+                <TimePicker
                   value={startTime || '10:00'}
-                  onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
-                  className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 text-xs font-medium text-foreground transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-primary text-center"
+                  onChange={(val) => onUpdateHeaderField?.('startTime', val)}
                 />
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
-                <input
-                  type="time"
+                <TimePicker
                   value={estimatedEndTime || '11:00'}
-                  onChange={(e) => {
-                    const newEnd = e.target.value;
+                  onChange={(newEnd) => {
                     onUpdateHeaderField?.('endTime', newEnd);
                     try {
                       const [sh, sm] = (startTime || '10:00').split(':').map(Number);
@@ -324,7 +331,6 @@ export function PlannerSessionHeader({
                       // ignore parse errors
                     }
                   }}
-                  className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 text-xs font-medium text-foreground transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-primary text-center"
                 />
               </div>
 
@@ -476,8 +482,17 @@ export function PlannerSessionHeader({
               </span>
 
               {host && (
-                <div className="inline-flex items-center gap-1 text-xs sm:text-sm text-muted-foreground font-normal">
-                  <span>Organiza</span>
+                <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground font-normal">
+                  <span>Organiza:</span>
+                  <Avatar
+                    size="xs"
+                    className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                    style={{ backgroundColor: '#5865F235', color: '#5865F2' }}
+                  >
+                    <AvatarFallback style={{ backgroundColor: '#5865F235', color: '#5865F2' }}>
+                      {host.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <span className="font-semibold text-foreground">{host}</span>
                 </div>
               )}

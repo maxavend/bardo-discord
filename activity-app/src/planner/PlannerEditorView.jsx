@@ -20,6 +20,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { Field, FieldLabel, FieldDescription, FieldGroup } from '@/components/ui/field';
+import { TimePicker } from '@/components/ui/time-picker';
 import { toast } from '@/lib/toast';
 import {
   Plus,
@@ -237,7 +238,7 @@ export function PlannerEditorView({
           </div>
 
           {/* 1. Detalles */}
-          <Card className="p-5 sm:p-6 flex flex-col gap-4 rounded-2xl">
+          <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
             <h2 className="text-sm font-semibold text-foreground">
               Detalles
             </h2>
@@ -277,10 +278,9 @@ export function PlannerEditorView({
 
                 <Field>
                   <FieldLabel>Hora</FieldLabel>
-                  <Input
-                    type="time"
+                  <TimePicker
                     value={formData.startTime || '10:00'}
-                    onChange={(e) => updateHeaderField('startTime', e.target.value)}
+                    onChange={(val) => updateHeaderField('startTime', val)}
                   />
                 </Field>
 
@@ -354,7 +354,7 @@ export function PlannerEditorView({
             ) : (
               formData.blocks.map((block, bIdx) => {
                 return (
-                  <Card key={block.id || bIdx} className="p-5 sm:p-6 flex flex-col gap-4 rounded-2xl">
+                  <Card key={block.id || bIdx} className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
                     {/* Header del bloque */}
                     <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border">
                       <div className="flex items-center gap-2">
@@ -444,9 +444,9 @@ export function PlannerEditorView({
                       <div className="flex flex-col gap-2">
                         {(block.subpoints || []).map((p, pIdx) => {
                           return (
-                            <Card
+                            <div
                               key={p.id || pIdx}
-                              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 rounded-xl border border-border/40"
+                              className="group relative flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 sm:px-3 sm:py-2.5 rounded-xl bg-muted/50 hover:bg-muted/70 transition-all text-foreground"
                             >
                               {/* Flechitas directas para cambiar de posición */}
                               <div className="flex items-center gap-0.5 shrink-0 self-end sm:self-center">
@@ -495,7 +495,7 @@ export function PlannerEditorView({
                               >
                                 <X className="size-3.5" />
                               </Button>
-                            </Card>
+                            </div>
                           );
                         })}
 

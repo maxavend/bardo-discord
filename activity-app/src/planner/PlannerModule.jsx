@@ -34,6 +34,7 @@ import {
   pauseLiveSession,
   resumeLiveSession,
   advanceLiveSession,
+  advanceToNextBlock,
   skipActivePoint,
   skipActiveBlock,
   extendActiveBlock,
@@ -278,6 +279,27 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     void activePoint;
   }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
 
+  const handleAdvanceBlock = useCallback(() => runAtomicTransition(async () => {
+    const outgoing = sessionStateRef.current;
+    const activeBlock = getActiveBlock(plannerStateRef.current, outgoing);
+    const recording = await finalizeActiveRecording();
+    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
+    const next = advanceToNextBlock(plannerStateRef.current, withRecording);
+    commitSessionState(next);
+
+    if (recording) {
+      toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
+    }
+    if (next.status === SESSION_STATUS.COMPLETED) {
+      setActiveTab('recap');
+      toast('Sesión finalizada. Mostrando resumen.');
+      return;
+    }
+
+    const nextBlock = getActiveBlock(plannerStateRef.current, next);
+    toast(`Siguiente bloque: ${nextBlock?.title || activeBlock?.title || 'Bloque'}`);
+  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+
   const handleSkipPoint = useCallback(() => runAtomicTransition(async () => {
     const outgoing = sessionStateRef.current;
     const recording = await finalizeActiveRecording();
@@ -443,18 +465,20 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     });
   }, []);
 
-  const handleCaptureSubmit = useCallback(({blockId, content}) => {
+  const handleCaptureSubmit = useCallback(({blockId, content, owner = null}) => {
     const liveSession = sessionStateRef.current;
     const resolvedBlockId = blockId || liveSession.liveActiveBlockId || plannerStateRef.current.blocks[0]?.id;
     const isTargetLiveBlock = liveSession.liveActiveBlockId === resolvedBlockId;
     const pointId = isTargetLiveBlock ? liveSession.liveActivePointId : null;
     const timestamp = Date.now();
+    const cleanOwner = typeof owner === 'string' && owner.trim() ? owner.trim().replace(/^@/, '') : null;
     const decision = {
       id: `d-${timestamp}`,
       sessionId: liveSession.sessionId || null,
       blockId: resolvedBlockId,
       pointId,
       content,
+      owner: cleanOwner,
       timestamp,
     };
 
@@ -825,8 +849,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           state={plannerState}
           sessionState={sessionState}
           nowTimestamp={nowTimestamp}
+          recordingStatus={recordingStatus}
+          recordingElapsedMs={recordingElapsedMs}
           isEditing={isEditing}
           onAdvance={handleAdvance}
+          onAdvanceBlock={handleAdvanceBlock}
           onSkipBlock={handleSkipBlock}
           isTransitioning={isTransitioning}
           onUpdateBlock={handleUpdateBlock}
@@ -938,7 +965,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
               variant="default"
               size="default"
               onClick={fabAction}
-              className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 active:scale-95 transition-all shadow-lg border border-white/10"
+              className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 transition-all shadow-lg border border-white/10"
             >
               {fabIcon}
               <span>{fabLabel}</span>

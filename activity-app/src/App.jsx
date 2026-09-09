@@ -680,17 +680,22 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       ) : null}
     >
       {isPlanner ? (
-        <Button
-          key="planner-brand"
-          variant="ghost"
-          size="sm"
-          onClick={() => onNavigateModule?.('docs')}
-          aria-label="Volver a Documentos"
-          className="topbar-title header-slot-enter h-8 px-1.5 -ml-1 font-bold text-sm tracking-tight text-foreground hover:bg-muted"
-        >
-          <ChevronLeft width={15} height={15} />
-          <span>Bardo</span>
-        </Button>
+        route.tab && route.tab !== 'home' ? (
+          <Button
+            key="planner-back"
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            aria-label="Volver"
+            className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
+          >
+            <ChevronLeft width={15} height={15} /> Volver
+          </Button>
+        ) : (
+          <span key="planner-brand" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
+            <span>Bardo</span>
+          </span>
+        )
       ) : isLibrary ? (
         <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
           <span>Bardo</span>
@@ -2241,7 +2246,13 @@ function App() {
         <PersistentHeader
           route={route}
           doc={currentDoc}
-          onBack={() => go('#docs', {restore: scrollMemory.current.get('library') || 0})}
+          onBack={() => {
+            if (route.type === 'planner' && route.tab && route.tab !== 'home') {
+              go('#planner', {skipTransition: true});
+            } else {
+              go('#docs', {restore: scrollMemory.current.get('library') || 0});
+            }
+          }}
           onEdit={() => go(`#edit-${currentDoc.id}`, {preserveBody: true})}
           onAction={docAction}
           onNew={() => go('#new')}
