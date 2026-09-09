@@ -46,21 +46,14 @@ import {
   EmptyContent,
   EmptyMedia,
 } from '@/components/ui/empty';
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from '@/components/ui/item';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { toast } from '@/lib/toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useTheme } from '@/lib/theme';
 import {
-  RotateCcw as ArrowRotateLeft,
-  Undo2 as ArrowUturnCcwLeft,
-  Redo2 as ArrowUturnCwRight,
+  ArrowRotateLeft,
+  ArrowUturnCcwLeft,
+  ArrowUturnCwRight,
   Bold,
   Calendar,
   Check,
@@ -73,43 +66,40 @@ import {
   EllipsisVertical,
   Eye,
   File,
-  Upload as FileArrowUp,
+  FileArrowUp,
   FileText,
-  GripVertical as Grip,
+  Grip,
   Heading1,
   Heading2,
   Heading3,
   Italic,
   Link,
-  ListOrdered as ListOl,
-  List as ListUl,
-  Search as Magnifier,
+  ListOl,
+  ListUl,
+  Magnifier,
   Minus,
   Moon,
   Pencil,
   Plus,
   Printer,
-  Quote as QuoteOpen,
+  QuoteOpen,
   SquareCheck,
   Strikethrough,
   Sun,
-  Type as Text,
-  Trash2 as TrashBin,
+  Text,
+  TrashBin,
   Underline,
-  X as Xmark,
-} from 'lucide-react';
+  Xmark,
+} from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
 import {applyDiscordTheme} from './discord-theme.js';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
-const STORE_KEY = 'bardo.docs.v1';
-const DRAFT_KEY = 'bardo.docs.draft.v1';
-const LAST_OPENED_KEY = 'bardo.docs.last-opened.v1';
-const LEGACY_STORE_KEY = 'bardo.docs.heroui.v1';
-const LEGACY_DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
-const LEGACY_LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
+const STORE_KEY = 'bardo.docs.heroui.v1';
+const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
+const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
 const STORE_VERSION = 1;
 
 const BLOCK_TYPES = [
@@ -121,14 +111,11 @@ const BLOCK_TYPES = [
   {id: 'pre', label: 'Bloque de código', icon: Code, shortcut: '', hint: 'Escribe código con formato monoespaciado'},
 ];
 
-const PLANNER_ROUTE_TABS = new Set(['home', 'agenda', 'recap', 'new', 'demo']);
-
 function parseRoute() {
   const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
   if (raw === 'planner' || raw.startsWith('planner-')) {
-    const requestedTab = raw === 'planner' ? 'home' : raw.replace(/^planner-/, '');
-    const tab = PLANNER_ROUTE_TABS.has(requestedTab) ? requestedTab : 'home';
-    return {type: 'planner', tab, key: tab === 'home' ? 'planner' : `planner-${tab}`};
+    const tab = raw.replace(/^planner-?/, '') || 'home';
+    return {type: 'planner', tab: tab === 'planner' ? 'home' : tab, key: raw};
   }
   if (!raw || raw === 'docs') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
@@ -381,31 +368,24 @@ function isMobileViewport() {
   return window.matchMedia?.('(max-width: 759px)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
 }
 
-function readMigratedStorage(key, legacyKey) {
-  try {
-    const current = localStorage.getItem(key);
-    if (current !== null) return current;
-    const legacy = legacyKey ? localStorage.getItem(legacyKey) : null;
-    if (legacy !== null) {
-      localStorage.setItem(key, legacy);
-      return legacy;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 async function copyText(text) {
-  if (!navigator.clipboard?.writeText) {
-    throw new Error('El portapapeles no está disponible en este contexto.');
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
   }
-  await navigator.clipboard.writeText(text);
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  ta.remove();
 }
 
 function loadStore() {
   try {
-    const parsed = JSON.parse(readMigratedStorage(STORE_KEY, LEGACY_STORE_KEY) || 'null');
+    const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (!parsed || parsed.version !== STORE_VERSION || !Array.isArray(parsed.docs)) {
       return {version: STORE_VERSION, docs: [], deletedIds: []};
     }
@@ -422,10 +402,7 @@ function loadStore() {
 function saveStore(store) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    return true;
-  } catch {
-    return false;
-  }
+  } catch {}
 }
 
 function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
@@ -437,7 +414,7 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
             size="icon-sm"
             variant="ghost"
             aria-label={triggerLabel}
-            className="text-muted-foreground hover:text-foreground shrink-0"
+            className="icon-button-circle text-muted-foreground hover:text-foreground shrink-0"
           >
             <EllipsisVertical width={16} height={16} />
           </Button>
@@ -604,7 +581,7 @@ function ThemeModeMenu() {
           <Button
             size="icon-sm"
             variant="ghost"
-            className="theme-mode-trigger text-muted-foreground hover:text-foreground pointer-coarse:size-10"
+            className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted-foreground hover:text-foreground"
             aria-label="Cambiar tema de apariencia"
             title={`Tema actual: ${currentLabel}`}
           >
@@ -635,38 +612,10 @@ function ThemeModeMenu() {
   );
 }
 
-function ModuleNav({active, onNavigate}) {
-  return (
-    <ButtonGroup className="module-nav header-slot-enter" aria-label="Secciones de Bardo">
-      <Button
-        variant={active === 'docs' ? 'secondary' : 'ghost'}
-        size="sm"
-        aria-current={active === 'docs' ? 'page' : undefined}
-        onClick={() => onNavigate?.('docs')}
-        className="px-2.5 text-xs font-medium pointer-coarse:h-10"
-      >
-        <FileText width={14} height={14} />
-        <span>Documentos</span>
-      </Button>
-      <Button
-        variant={active === 'planner' ? 'secondary' : 'ghost'}
-        size="sm"
-        aria-current={active === 'planner' ? 'page' : undefined}
-        onClick={() => onNavigate?.('planner')}
-        className="px-2.5 text-xs font-medium pointer-coarse:h-10"
-      >
-        <Calendar width={14} height={14} />
-        <span>Reuniones</span>
-      </Button>
-    </ButtonGroup>
-  );
-}
-
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, uploadState, onNavigateModule, onPlannerNew}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
-  const activeModule = isPlanner ? 'planner' : 'docs';
 
   return (
     <DocsHeader
@@ -675,70 +624,84 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {route.tab === 'home' && (
             <Button
-              variant="default"
+              variant="secondary"
               size="sm"
               onClick={onPlannerNew}
-              className="px-2.5 font-medium text-xs pointer-coarse:h-10"
+              className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
             >
-              <Plus width={14} height={14} />
-              <span className="hidden sm:inline">Nueva reunión</span>
+              <Plus width={14} height={14} /> Nueva reunión
             </Button>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onNavigateModule?.('docs')}
+            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+          >
+            <FileText width={14} height={14} /> Documentos
+          </Button>
         </div>
       ) : isLibrary ? (
-        <div key="library-actions" className="header-slot-enter flex items-center gap-1.5">
+        <div key="library-actions" className="header-slot-enter flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onNavigateModule?.('planner')}
+            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+          >
+            <Calendar width={14} height={14} /> Reuniones
+          </Button>
           <input
             ref={fileInputRef}
             className="library-file-input"
             type="file"
             accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             aria-label="Seleccionar documento para subir"
-            disabled={uploadState?.status === 'processing'}
             onChange={event => {
               const file = event.target.files?.[0];
               event.target.value = '';
               if (file) onUpload(file);
             }}
           />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadState?.status === 'processing'}
-            aria-busy={uploadState?.status === 'processing'}
-            aria-label={uploadState?.status === 'processing' ? 'Importando archivo' : 'Subir archivo'}
-            className="px-2.5 font-medium text-xs pointer-coarse:h-10"
-          >
-            <FileArrowUp width={14} height={14} />
-            <span className="hidden sm:inline">{uploadState?.status === 'processing' ? 'Importando…' : 'Subir archivo'}</span>
+          <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+            <FileArrowUp width={14} height={14} /> Subir archivo
           </Button>
-          <Button
-            variant="default"
-            size="icon-sm"
-            onClick={onNew}
-            aria-label="Crear documento"
-            title="Crear documento"
-            className="pointer-coarse:size-10"
-          >
+          <Button variant="default" size="icon-sm" onClick={onNew} aria-label="Crear documento" className="icon-button-circle h-8 w-8">
             <Plus width={16} height={16} />
           </Button>
         </div>
       ) : doc ? (
         <div key="document-actions" className="header-slot-enter flex items-center gap-2">
-          <Button variant="default" size="sm" onClick={onEdit} className="px-3.5 font-medium text-xs flex items-center gap-1.5 pointer-coarse:h-10">
+          <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
             <Pencil width={14} height={14} /> Editar
           </Button>
           <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
         </div>
       ) : null}
     >
-      {isLibrary || isPlanner ? (
-        <div key="primary-nav" className="topbar-primary-nav header-slot-enter flex items-center gap-2">
-          <span className="topbar-title hidden sm:inline-flex font-bold text-sm tracking-tight text-foreground">Bardo</span>
-          <ModuleNav active={activeModule} onNavigate={onNavigateModule} />
-        </div>
+      {isPlanner ? (
+        route.tab && route.tab !== 'home' ? (
+          <Button
+            key="planner-back"
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            aria-label="Volver"
+            className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
+          >
+            <ChevronLeft width={15} height={15} /> Volver
+          </Button>
+        ) : (
+          <span key="planner-brand" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
+            <span>Bardo</span>
+          </span>
+        )
+      ) : isLibrary ? (
+        <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
+          <span>Bardo</span>
+        </span>
       ) : (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1 pointer-coarse:h-10">
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
           <ChevronLeft width={15} height={15} /> Documentos
         </Button>
       )}
@@ -756,7 +719,6 @@ function Library({
   onOpen,
   onNew,
   onUpload,
-  uploadState,
   onDocAction,
 }) {
   const fileInputRef = useRef(null);
@@ -769,7 +731,6 @@ function Library({
           type="file"
           accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           aria-label="Seleccionar documento para subir"
-          disabled={uploadState?.status === 'processing'}
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = '';
@@ -800,44 +761,17 @@ function Library({
           )}
         </InputGroup>
 
-        {uploadState?.status === 'processing' && (
-          <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
-            <strong className="text-foreground">Importando {uploadState.fileName || 'archivo'}…</strong>{' '}
-            Puedes seguir en esta pantalla mientras Bardo lo prepara.
-          </div>
-        )}
-
-        {uploadState?.status === 'error' && (
-          <div role="alert" className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5">
-            <div className="min-w-0 text-xs">
-              <strong className="text-destructive">No pudimos importar {uploadState.fileName || 'el archivo'}.</strong>{' '}
-              <span className="text-muted-foreground">{uploadState.error}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="shrink-0">
-              Probar otro archivo
-            </Button>
-          </div>
-        )}
-
         {continueDoc && !query && (
           <section className="library-section continue-section">
             <h2 className="section-title">Continuar lectura</h2>
-            <Item
-              variant="outline"
-              render={<button type="button" onClick={onContinue} />}
-              className="flex-nowrap text-left"
-            >
-              <ItemMedia variant="icon">
-                <FileText className="size-4 text-muted-foreground" />
-              </ItemMedia>
-              <ItemContent className="min-w-0">
-                <ItemTitle>{continueDoc.title || 'Sin título'}</ItemTitle>
-                <ItemDescription className="line-clamp-1">
-                  {continueDoc.origin || 'Creado en Bardo'} · {changeActorName(continueDoc)} · {formatChangeTime(continueDoc)}
-                </ItemDescription>
-              </ItemContent>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-            </Item>
+            <button className="continue-row" type="button" onClick={onContinue}>
+              <span className="continue-accent" aria-hidden="true" />
+              <span className="continue-copy">
+                <strong>{continueDoc.title || 'Sin título'}</strong>
+                <span>{continueDoc.origin || 'Creado en Bardo'} · {changeActorName(continueDoc)} · {formatChangeTime(continueDoc)}</span>
+              </span>
+              <ChevronRight width={16} height={16} className="text-muted-foreground" />
+            </button>
           </section>
         )}
 
@@ -850,29 +784,24 @@ function Library({
           {docs.length > 0 ? (
             <div className="docs-list">
               {docs.map(doc => (
-                <Item variant="outline" size="sm" className="flex-nowrap" key={doc.id}>
-                  <ItemMedia variant="icon">
-                    <File className="size-4 text-muted-foreground" />
-                  </ItemMedia>
-                  <Button
-                    variant="ghost"
-                    className="h-auto min-w-0 flex-1 justify-start rounded-lg p-0 text-left hover:bg-transparent"
+                <article className="doc-row" key={doc.id}>
+                  <span className="doc-symbol">
+                    <File width={18} height={18} />
+                  </span>
+                  <button
+                    className="doc-row-main"
                     type="button"
                     onClick={() => onOpen(doc.id)}
                   >
-                    <span className="flex min-w-0 flex-1 flex-col items-start">
-                      <ItemTitle className="w-full">{doc.title || 'Sin título'}</ItemTitle>
-                      <ItemDescription className="w-full line-clamp-1">
-                        {doc.origin || 'Creado en Bardo'} · {changeActorName(doc)} · {formatChangeTime(doc)}
-                      </ItemDescription>
-                    </span>
-                  </Button>
+                    <strong>{doc.title || 'Sin título'}</strong>
+                    <span>{doc.origin || 'Creado en Bardo'} · {changeActorName(doc)} · {formatChangeTime(doc)}</span>
+                  </button>
                   <DocActionMenu
                     doc={doc}
                     triggerLabel={`Acciones de ${doc.title || 'documento'}`}
                     onAction={(action) => onDocAction(action, doc.id)}
                   />
-                </Item>
+                </article>
               ))}
             </div>
           ) : (
@@ -901,15 +830,6 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
           </div>
           <h1 className="doc-title">{doc.title || 'Sin título'}</h1>
           {doc.description && <p className="doc-description">{doc.description}</p>}
-          {doc.importWarnings?.length > 0 && (
-            <div
-              role="status"
-              className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-            >
-              <strong className="text-foreground">Importación parcial.</strong>{' '}
-              {doc.importWarnings.join(' ')}
-            </div>
-          )}
         </header>
         <RichBody html={doc.body} onChecklistChange={onChecklistChange} />
       </article>
@@ -1098,7 +1018,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const initialDraft = useMemo(() => {
     if (!isNew) return null;
     try {
-      return JSON.parse(readMigratedStorage(DRAFT_KEY, LEGACY_DRAFT_KEY) || 'null');
+      return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
     } catch {
       return null;
     }
@@ -1132,7 +1052,6 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const lastRange = useRef(null);
   const activeEditable = useRef(null);
   const saveTimer = useRef(null);
-  const dirtyRef = useRef(false);
   const exitTimer = useRef(null);
   const titleRef = useRef(title);
   const descriptionRef = useRef(description);
@@ -1280,30 +1199,18 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
   const flushSave = useCallback(() => {
     clearTimeout(saveTimer.current);
     const snap = snapshot();
-    const result = onAutosave(snap);
-    const saved = result !== false;
-    dirtyRef.current = !saved;
-    setIsDirty(!saved);
-    setSaveState(saved ? (isNew ? 'Borrador guardado' : 'Guardado') : 'Error al guardar');
+    onAutosave(snap);
+    setIsDirty(false);
+    setSaveState(isNew ? 'Borrador guardado' : 'Guardado');
     return snap;
   }, [isNew, onAutosave, snapshot]);
 
-  const persistPendingChanges = useCallback(() => {
-    if (!dirtyRef.current) return;
-    clearTimeout(saveTimer.current);
-    const saved = onAutosave(snapshot()) !== false;
-    dirtyRef.current = !saved;
-    setIsDirty(!saved);
-    if (!saved) setSaveState('Error al guardar');
-  }, [onAutosave, snapshot]);
-
   const markDirty = useCallback(() => {
-    dirtyRef.current = true;
     setIsDirty(true);
-    setSaveState('Guardando…');
+    setSaveState('Cambios sin guardar');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSave, 1500);
-  }, [flushSave]);
+    saveTimer.current = setTimeout(flushSave, 30000);
+  }, [flushSave, isNew]);
 
   useLayoutEffect(() => {
     const key = isNew ? 'new' : doc?.id;
@@ -1322,23 +1229,10 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     });
   }, [title, description]);
 
-  useEffect(() => {
-    const handlePageHide = () => persistPendingChanges();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') persistPendingChanges();
-    };
-
-    window.addEventListener('pagehide', handlePageHide);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      persistPendingChanges();
-      clearTimeout(saveTimer.current);
-      clearTimeout(exitTimer.current);
-      window.removeEventListener('pagehide', handlePageHide);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [persistPendingChanges]);
+  useEffect(() => () => {
+    clearTimeout(saveTimer.current);
+    clearTimeout(exitTimer.current);
+  }, []);
 
   const leaveEditor = useCallback((callback) => {
     if (exitTimer.current) return;
@@ -1528,16 +1422,24 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
       else if (format === 'insertPre') insertTopLevelBlock(body, '<pre><code><br></code></pre>', lastRange);
       else if (format === 'blockquote' || format === 'pre') applyBlockFormat(body, lastRange, format);
       else if (format === 'insertUnorderedList' || format === 'insertOrderedList') {
-        manualList(body, lastRange, format === 'insertOrderedList');
+        const applied = manualList(body, lastRange, format === 'insertOrderedList');
+        if (!applied) execCommand(format);
       } else {
         const savedRange = lastRange.current?.cloneRange?.();
-        if (savedRange && body.contains(savedRange.commonAncestorContainer)) {
-          const currentSelection = window.getSelection();
-          currentSelection.removeAllRanges();
-          currentSelection.addRange(savedRange);
+        if (savedRange && !savedRange.collapsed && body.contains(savedRange.commonAncestorContainer)) {
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(savedRange);
           lastRange.current = savedRange.cloneRange();
+          manualInlineFormat(body, lastRange, format);
+        } else {
+          const before = body.innerHTML;
+          const applied = execCommand(format);
+          const range = lastRange.current;
+          if (range && !range.collapsed && (!applied || body.innerHTML === before)) {
+            manualInlineFormat(body, lastRange, format);
+          }
         }
-        manualInlineFormat(body, lastRange, format);
       }
     }, {kind: format === 'hr' || format === 'spoiler' || format === 'checklist' || format === 'callout' || format === 'insertPre' ? 'insert' : 'format'});
   }, [commitMutation, onOpenLink, restoreSelection]);
@@ -1561,14 +1463,18 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
     restoreSelection();
     if (action === 'copyAll') {
       const text = bodyRef.current?.innerText || '';
-      copyText(text).then(() => {
+      navigator.clipboard?.writeText(text).then(() => {
         toast('Texto copiado al portapapeles');
       }).catch(() => {
         toast('No se pudo copiar el texto');
       });
     } else if (action === 'removeFormat') {
       commitMutation(() => {
-        manualRemoveInlineFormatting(bodyRef.current, lastRange);
+        const before = bodyRef.current?.innerHTML;
+        const applied = execCommand('removeFormat');
+        if (!applied || before === bodyRef.current?.innerHTML) {
+          manualRemoveInlineFormatting(bodyRef.current, lastRange);
+        }
       }, {kind: 'format'});
       toast('Formato limpiado');
     } else if (action === 'redo') {
@@ -1673,7 +1579,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
           </Button>
           <Badge
             key={saveState}
-            variant={saveState === 'Error al guardar' ? 'destructive' : 'secondary'}
+            variant="secondary"
             className="save-state text-xs"
             data-dirty={isDirty ? 'true' : 'false'}
           >
@@ -1777,7 +1683,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                 <Button size="icon-sm" variant="ghost" aria-label="Deshacer" title="Deshacer (⌘/Ctrl+Z)" onClick={handleUndo} disabled={!historyState.canUndo} className="rounded-full">
                   <ArrowUturnCcwLeft width={15} height={15} />
                 </Button>
-                <Button size="icon-sm" variant="ghost" aria-label="Rehacer" title="Rehacer (⌘/Ctrl+Y)" onClick={handleRedo} disabled={!historyState.canRedo} className={`rounded-full ${isToolbarActionVisible('redo') ? '' : 'hidden'}`}>
+                <Button size="icon-sm" variant="ghost" aria-label="Rehacer" title="Rehacer (⌘/Ctrl+Y)" onClick={handleRedo} disabled={!historyState.canRedo} className={`rounded-full ${isToolbarActionVisible('redo') ? '' : 'toolbar-control-overflowed'}`}>
                   <ArrowUturnCwRight width={15} height={15} />
                 </Button>
               </ButtonGroup>
@@ -1791,16 +1697,16 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                 <ToggleGroupItem value="bold" aria-label="Negrita" title="Negrita (⌘/Ctrl+B)" onClick={() => runFormat('bold')} data-state={inlineState.bold ? 'on' : 'off'}>
                   <Bold width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="italic" aria-label="Cursiva" title="Cursiva (⌘/Ctrl+I)" onClick={() => runFormat('italic')} data-state={inlineState.italic ? 'on' : 'off'} className={`${isToolbarActionVisible('italic') ? '' : 'hidden'} ${lastVisibleStyleAction === 'italic' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="italic" aria-label="Cursiva" title="Cursiva (⌘/Ctrl+I)" onClick={() => runFormat('italic')} data-state={inlineState.italic ? 'on' : 'off'} className={`${isToolbarActionVisible('italic') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'italic' ? 'toolbar-last-visible' : ''}`}>
                   <Italic width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="underline" aria-label="Subrayado" title="Subrayado (⌘/Ctrl+U)" onClick={() => runFormat('underline')} data-state={inlineState.underline ? 'on' : 'off'} className={`${isToolbarActionVisible('underline') ? '' : 'hidden'} ${lastVisibleStyleAction === 'underline' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="underline" aria-label="Subrayado" title="Subrayado (⌘/Ctrl+U)" onClick={() => runFormat('underline')} data-state={inlineState.underline ? 'on' : 'off'} className={`${isToolbarActionVisible('underline') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'underline' ? 'toolbar-last-visible' : ''}`}>
                   <Underline width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="strikeThrough" aria-label="Tachado" title="Tachado" onClick={() => runFormat('strikeThrough')} data-state={inlineState.strikeThrough ? 'on' : 'off'} className={`${isToolbarActionVisible('strikeThrough') ? '' : 'hidden'} ${lastVisibleStyleAction === 'strikeThrough' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="strikeThrough" aria-label="Tachado" title="Tachado" onClick={() => runFormat('strikeThrough')} data-state={inlineState.strikeThrough ? 'on' : 'off'} className={`${isToolbarActionVisible('strikeThrough') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'strikeThrough' ? 'toolbar-last-visible' : ''}`}>
                   <Strikethrough width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="code" aria-label="Código en línea" title="Código en línea (⌘/Ctrl+E)" onClick={() => runFormat('code')} data-state={inlineState.code ? 'on' : 'off'} className={`${isToolbarActionVisible('code') ? '' : 'hidden'} ${lastVisibleStyleAction === 'code' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="code" aria-label="Código en línea" title="Código en línea (⌘/Ctrl+E)" onClick={() => runFormat('code')} data-state={inlineState.code ? 'on' : 'off'} className={`${isToolbarActionVisible('code') ? '' : 'toolbar-control-overflowed'} ${lastVisibleStyleAction === 'code' ? 'toolbar-last-visible' : ''}`}>
                   <Code width={15} height={15} />
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -1809,18 +1715,18 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                 type="single"
                 aria-label="Listas y bloques"
                 value={Array.from(selectedListKeys)[0] || ''}
-                className={`toolbar-list-group shrink-0 ${visibleListActions.length ? '' : 'hidden'} ${visibleListActions.length === 1 ? 'toolbar-group-standalone' : ''}`}
+                className={`toolbar-list-group shrink-0 ${visibleListActions.length ? '' : 'toolbar-control-overflowed'} ${visibleListActions.length === 1 ? 'toolbar-group-standalone' : ''}`}
               >
-                <ToggleGroupItem value="insertUnorderedList" aria-label="Lista con viñetas" title="Lista con viñetas" onClick={() => runFormat('insertUnorderedList')} data-state={inlineState.insertUnorderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'hidden'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="insertUnorderedList" aria-label="Lista con viñetas" title="Lista con viñetas" onClick={() => runFormat('insertUnorderedList')} data-state={inlineState.insertUnorderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}>
                   <ListUl width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="insertOrderedList" aria-label="Lista numerada" title="Lista numerada" onClick={() => runFormat('insertOrderedList')} data-state={inlineState.insertOrderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'hidden'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="insertOrderedList" aria-label="Lista numerada" title="Lista numerada" onClick={() => runFormat('insertOrderedList')} data-state={inlineState.insertOrderedList ? 'on' : 'off'} className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}>
                   <ListOl width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="checklist" aria-label="Lista de tareas" title="Lista de tareas" onClick={() => runFormat('checklist')} data-state={inlineState.checklist ? 'on' : 'off'} className={`${isToolbarActionVisible('checklist') ? '' : 'hidden'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="checklist" aria-label="Lista de tareas" title="Lista de tareas" onClick={() => runFormat('checklist')} data-state={inlineState.checklist ? 'on' : 'off'} className={`${isToolbarActionVisible('checklist') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}>
                   <SquareCheck width={15} height={15} />
                 </ToggleGroupItem>
-                <ToggleGroupItem value="blockquote" aria-label="Cita" title="Cita" onClick={() => runFormat('blockquote')} data-state={inlineState.blockquote ? 'on' : 'off'} className={`${isToolbarActionVisible('blockquote') ? '' : 'hidden'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}>
+                <ToggleGroupItem value="blockquote" aria-label="Cita" title="Cita" onClick={() => runFormat('blockquote')} data-state={inlineState.blockquote ? 'on' : 'off'} className={`${isToolbarActionVisible('blockquote') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}>
                   <QuoteOpen width={15} height={15} />
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -1833,7 +1739,7 @@ function Editor({doc, isNew, onBack, onFinish, onAutosave, onOpenLink}) {
                   title="Enlace (⌘/Ctrl+K)"
                   aria-pressed={inlineState.link}
                   onClick={() => runFormat('createLink')}
-                  className={`rounded-full ${isToolbarActionVisible('createLink') ? '' : 'hidden'}`}
+                  className={`rounded-full ${isToolbarActionVisible('createLink') ? '' : 'toolbar-control-overflowed'}`}
                 >
                   <Link width={15} height={15} />
                 </Button>
@@ -1987,7 +1893,7 @@ function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="flex flex-col overflow-hidden sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Vista previa de Markdown</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
@@ -2011,7 +1917,7 @@ function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
 function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="flex flex-col overflow-hidden sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Vista previa HTML</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
@@ -2039,7 +1945,7 @@ function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
 function PdfPreviewModal({isOpen, file, onCancel}) {
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="flex flex-col overflow-hidden sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Vista previa de PDF</DialogTitle>
           <DialogDescription className="truncate">{file?.filename || 'documento.pdf'}</DialogDescription>
@@ -2069,12 +1975,9 @@ function App() {
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
   const [linkValue, setLinkValue] = useState('');
-  const [uploadState, setUploadState] = useState({status: 'idle', fileName: '', error: ''});
-  const [storageError, setStorageError] = useState('');
-  const uploadLockRef = useRef(false);
   const [lastOpened, setLastOpened] = useState(() => {
     try {
-      return JSON.parse(readMigratedStorage(LAST_OPENED_KEY, LEGACY_LAST_OPENED_KEY) || 'null');
+      return JSON.parse(localStorage.getItem(LAST_OPENED_KEY) || 'null');
     } catch {
       return null;
     }
@@ -2090,10 +1993,7 @@ function App() {
   const docsById = useMemo(() => new Map(docs.map(doc => [doc.id, doc])), [docs]);
   const currentDoc = route.id ? docsById.get(route.id) : null;
 
-  useEffect(() => {
-    const saved = saveStore(store);
-    setStorageError(saved ? '' : 'Bardo no pudo guardar cambios en este dispositivo. El contenido sigue abierto, pero podría perderse al cerrar la Activity.');
-  }, [store]);
+  useEffect(() => saveStore(store), [store]);
 
   const showToast = useCallback(message => {
     toast(message);
@@ -2214,10 +2114,8 @@ function App() {
   }, [docsById, go, showToast]);
 
   const uploadDocument = useCallback(async file => {
-    if (!file || uploadLockRef.current) return;
-    uploadLockRef.current = true;
-    setUploadState({status: 'processing', fileName: file.name || 'archivo', error: ''});
     try {
+      showToast('Preparando documento…');
       const imported = await convertDocumentFile(file);
       const now = new Date().toISOString();
       const doc = {
@@ -2227,7 +2125,6 @@ function App() {
         body: markdownToHtml(imported.markdown, imported.title),
         origin: 'Subido a Bardo',
         sourceName: imported.sourceName,
-        importWarnings: imported.warnings || [],
         createdAt: now,
         updatedAt: now,
         createdByName: currentEditorName(),
@@ -2236,16 +2133,11 @@ function App() {
         stress: false,
       };
       setStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
-      setUploadState({status: 'idle', fileName: '', error: ''});
-      showToast(imported.warnings?.length ? 'Documento importado con cambios' : 'Documento listo');
+      showToast('Documento listo');
       go(`#doc-${doc.id}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo subir el documento', error);
-      const message = error instanceof Error ? error.message : 'No se pudo importar el documento.';
-      setUploadState({status: 'error', fileName: file.name || 'archivo', error: message});
-      showToast(message);
-    } finally {
-      uploadLockRef.current = false;
+      showToast(error instanceof Error ? error.message : 'No se pudo subir el documento');
     }
   }, [go, showToast]);
 
@@ -2354,36 +2246,21 @@ function App() {
         <PersistentHeader
           route={route}
           doc={currentDoc}
-          onBack={() => go('#docs', {restore: scrollMemory.current.get('library') || 0})}
+          onBack={() => {
+            if (route.type === 'planner' && route.tab && route.tab !== 'home') {
+              go('#planner', {skipTransition: true});
+            } else {
+              go('#docs', {restore: scrollMemory.current.get('library') || 0});
+            }
+          }}
           onEdit={() => go(`#edit-${currentDoc.id}`, {preserveBody: true})}
           onAction={docAction}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
-          uploadState={uploadState}
           onPlannerNew={() => go('#planner-new')}
           onPlannerDemo={() => go('#planner-demo')}
           onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
         />
-      )}
-      {storageError && (
-        <div role="alert" className="mx-4 mt-2 flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs sm:mx-auto sm:w-full sm:max-w-4xl sm:flex-row sm:items-center sm:justify-between">
-          <span className="leading-relaxed text-foreground">{storageError}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => {
-              if (saveStore(store)) {
-                setStorageError('');
-                showToast('Cambios guardados');
-              } else {
-                showToast('Todavía no hay espacio disponible para guardar');
-              }
-            }}
-          >
-            Reintentar
-          </Button>
-        </div>
       )}
       {route.type === 'planner' && (
         <PlannerModule
@@ -2425,7 +2302,6 @@ function App() {
           onOpen={openDoc}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
-          uploadState={uploadState}
           onDocAction={docAction}
         />
       )}
@@ -2441,7 +2317,7 @@ function App() {
         />
       )}
 
-      {((route.type === 'edit' && currentDoc) || route.type === 'new') && (
+      {(route.type === 'edit' || route.type === 'new') && (
         <Editor
           key={route.type === 'new' ? 'new' : currentDoc?.id}
           doc={route.type === 'new' ? null : currentDoc}
@@ -2476,14 +2352,8 @@ function App() {
             if (route.type === 'new') {
               try {
                 localStorage.setItem(DRAFT_KEY, JSON.stringify(snapshot));
-                return true;
-              } catch {
-                showToast('No se pudo guardar el borrador en este dispositivo.');
-                return false;
-              }
-            }
-            updateDoc(currentDoc.id, snapshot);
-            return true;
+              } catch {}
+            } else updateDoc(currentDoc.id, snapshot);
           }}
           onOpenLink={(api) => {
             setLinkValue('');
@@ -2597,6 +2467,14 @@ function elementForNode(node) {
   return node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
 }
 
+function execCommand(command, value = null) {
+  try {
+    return document.execCommand(command, false, value);
+  } catch {
+    return false;
+  }
+}
+
 function selectNodeContents(node, rangeRef) {
   const range = document.createRange();
   range.selectNodeContents(node);
@@ -2621,33 +2499,10 @@ function manualInlineFormat(body, rangeRef, command) {
   if (!sel?.rangeCount) return false;
   const range = sel.getRangeAt(0);
   const tag = INLINE_TAGS[command];
-  if (!tag) return false;
+  if (!tag || range.collapsed) return false;
   const startEl = elementForNode(range.startContainer);
   const endEl = elementForNode(range.endContainer);
   const existing = startEl?.closest?.(tag);
-
-  if (range.collapsed) {
-    if (existing && body.contains(existing)) {
-      const nextRange = document.createRange();
-      nextRange.setStartAfter(existing);
-      nextRange.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(nextRange);
-      rangeRef.current = nextRange.cloneRange();
-      return true;
-    }
-    const wrapper = document.createElement(tag);
-    const marker = document.createTextNode('\u200B');
-    wrapper.appendChild(marker);
-    range.insertNode(wrapper);
-    const nextRange = document.createRange();
-    nextRange.setStart(marker, marker.data.length);
-    nextRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(nextRange);
-    rangeRef.current = nextRange.cloneRange();
-    return true;
-  }
   if (existing && body.contains(existing) && existing.contains(endEl)) {
     unwrapElement(existing);
     return true;
@@ -2714,7 +2569,7 @@ function applyBlockFormat(body, rangeRef, tagName) {
     while (el && el.parentElement !== body) el = el.parentElement;
     if (el && /^(P|H1|H2|H3|H4|BLOCKQUOTE|PRE)$/i.test(el.tagName)) blocks = [el];
   }
-  if (!blocks.length) return false;
+  if (!blocks.length) return execCommand('formatBlock', tagName);
   const replacements = blocks.map(el => {
     const replacement = replaceTag(el, tagName);
     if (tagName.toLowerCase() === 'pre' && !replacement.querySelector(':scope > code')) {
@@ -2941,14 +2796,16 @@ function placeCaret(el, rangeRef, atStart = true) {
 }
 
 function updateToolbarState(body, setInline, setBlock) {
+  const next = {};
+  ['bold', 'italic', 'underline', 'strikeThrough'].forEach(cmd => {
+    try {
+      next[cmd] = document.queryCommandState(cmd);
+    } catch {
+      next[cmd] = false;
+    }
+  });
   const sel = window.getSelection();
   const el = sel?.rangeCount ? elementForNode(sel.getRangeAt(0).startContainer) : null;
-  const next = {
-    bold: Boolean(el?.closest?.('strong,b')),
-    italic: Boolean(el?.closest?.('em,i')),
-    underline: Boolean(el?.closest?.('u')),
-    strikeThrough: Boolean(el?.closest?.('s,del')),
-  };
   const list = el?.closest?.('ul,ol');
   const isChecklist = !!list && list.classList.contains('checklist');
   next.insertUnorderedList = !!list && body?.contains(list) && list.tagName === 'UL' && !isChecklist;

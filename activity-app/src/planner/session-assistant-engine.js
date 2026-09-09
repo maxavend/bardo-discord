@@ -155,7 +155,7 @@ function getNextAction(plannerState, sessionState, activeBlock, activePoint) {
 
   const nextBlock = blockIndex >= 0 ? blocks[blockIndex + 1] : null;
   if (nextBlock) return {key: 'next', label: 'Siguiente bloque', target: 'block', nextBlock};
-  return {key: 'finish', label: 'Finalizar reunión', target: 'session'};
+  return {key: 'finish', label: 'Finalizar sesión', target: 'session'};
 }
 
 export function getAssistantContextDetails(plannerState, sessionState, now = Date.now()) {
@@ -171,7 +171,7 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
 
   const blockProgressLabel = activeBlockIndex >= 0
     ? `Bloque ${activeBlockIndex + 1} de ${blocks.length}`
-    : 'Reunión en vivo';
+    : 'Sesión en vivo';
   const pointProgressLabel = activePointIndex >= 0
     ? `Punto ${activePointIndex + 1} de ${points.length}`
     : null;
@@ -215,7 +215,7 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
   if (isPaused) {
     stateVariant = 'paused';
     contextualHelperText = 'El tiempo está pausado. La grabación no se reanudará automáticamente.';
-    primaryAction = {label: 'Reanudar reunión', key: 'resume', variant: 'primary'};
+    primaryAction = {label: 'Reanudar sesión', key: 'resume', variant: 'primary'};
     secondaryAction = {...nextAction, variant: 'ghost'};
   } else if (isExpired) {
     stateVariant = 'expired';
@@ -245,7 +245,7 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
     isPaused,
     isExtended,
     stateVariant,
-    stateTitle: activePoint?.title || activeBlock?.title || 'Reunión en vivo',
+    stateTitle: activePoint?.title || activeBlock?.title || 'Sesión en vivo',
     blockTitle: activeBlock?.title || '',
     activeBlockDescription: activeBlock?.introDesc || '',
     activePointDescription: activePoint?.description || activePoint?.desc || '',
@@ -294,11 +294,11 @@ export function computeSessionRecap(plannerState, sessionState) {
   const statusLabel = isInterrupted ? 'Interrumpida' : 'Completada';
   const statusBadgeColor = isInterrupted ? 'warning' : 'success';
   const recapTitle = isInterrupted
-    ? `Reunión interrumpida · ${plannerState?.title || 'Reunión'}`
-    : `Reunión finalizada · ${plannerState?.title || 'Reunión'}`;
+    ? `Sesión interrumpida · ${plannerState?.title || 'Sesión'}`
+    : `Sesión finalizada · ${plannerState?.title || 'Sesión'}`;
   const recapDescription = isInterrupted
     ? 'El progreso se conservó exactamente en el bloque y punto donde se interrumpió.'
-    : 'Resumen de tiempo, bloques, puntos tratados, acuerdos y grabaciones.';
+    : 'Resumen de tiempo, bloques, puntos tratados y artefactos de la sesión.';
 
   const groupedRecordings = blocks.map((block) => {
     const blockRecordings = recordings.filter((recording) => recording.blockId === block.id);
@@ -311,7 +311,7 @@ export function computeSessionRecap(plannerState, sessionState) {
   }).filter((group) => group.pointGroups.length > 0 || group.blockFallbackRecordings.length > 0);
 
   return {
-    title: plannerState?.title || 'Reunión',
+    title: plannerState?.title || 'Sesión',
     date: plannerState?.date || '',
     host: plannerState?.host || '',
     status: sessionState?.status || SESSION_STATUS.COMPLETED,

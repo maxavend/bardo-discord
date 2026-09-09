@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,13 +12,22 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { SESSION_STATUS, recalculateEstimatedEndTime } from './session-runner.js';
-import { getAllDiscordEntities, parseMentionsToArray, discordColorFor } from './PlannerMemberPicker.jsx';
+import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
 import { pluralize, formatTopicsCountLabel, formatRecordingsCountLabel } from './copy-tokens.js';
+
+const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
+
+function parseMentions(mentionsStr = '') {
+  if (!mentionsStr) return [];
+  const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
+  if (matches && matches.length > 0) return matches.map((m) => m.trim()).filter(Boolean);
+  return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
+}
 
 function isDefaultEmptySession(plannerState) {
   if (!plannerState) return true;
   const { title, blocks = [] } = plannerState;
-  const hasDefaultTitle = title === 'Nueva reunión' || title === 'Nueva reunión' || !title;
+  const hasDefaultTitle = title === 'Nueva sesión de trabajo' || title === 'Nueva reunión' || !title;
   const hasOnlyDefaultBlock = blocks.length === 1 && blocks[0]?.id === 'b-default-1';
   return hasDefaultTitle && hasOnlyDefaultBlock;
 }
@@ -73,7 +81,7 @@ export function PlannerHomeView({
   const mins = totalMinutes % 60;
   const formattedDuration = hours > 0 ? (mins > 0 ? `${hours} h ${mins} min` : `${hours} h`) : `${mins} min`;
 
-  const participantsList = parseMentionsToArray(mentions);
+  const participantsList = parseMentions(mentions);
   const { members } = getAllDiscordEntities();
 
   const decisions = sessionState?.decisions || [];
@@ -85,11 +93,11 @@ export function PlannerHomeView({
 
   // ─── Status badge ─────────────────────────────────────────────────────────
   const StatusBadge = () => {
-    if (isRunning) return <Badge variant="default" className="text-xs font-semibold">En curso</Badge>;
-    if (isPaused) return <Badge variant="secondary" className="text-xs font-semibold">Pausada</Badge>;
-    if (isInterrupted) return <Badge variant="destructive" className="text-xs font-semibold">Interrumpida</Badge>;
-    if (isCompleted) return <Badge variant="secondary" className="text-xs font-semibold">Finalizada</Badge>;
-    return <Badge variant="outline" className="text-xs font-semibold text-muted-foreground">Pendiente</Badge>;
+    if (isRunning) return <Badge variant="default" className="text-[10.5px] font-semibold">En curso</Badge>;
+    if (isPaused) return <Badge variant="secondary" className="text-[10.5px] font-semibold">Pausada</Badge>;
+    if (isInterrupted) return <Badge variant="destructive" className="text-[10.5px] font-semibold">Interrumpida</Badge>;
+    if (isCompleted) return <Badge variant="secondary" className="text-[10.5px] font-semibold">Finalizada</Badge>;
+    return <Badge variant="outline" className="text-[10.5px] font-semibold text-muted-foreground">Pendiente</Badge>;
   };
 
   return (
@@ -130,7 +138,7 @@ export function PlannerHomeView({
                 onViewAgenda?.();
               }
             }}
-            className={`flex cursor-pointer flex-col gap-3 border bg-card p-4 transition-colors hover:border-primary/60 hover:bg-muted/20 focus-visible:outline-2 focus-visible:outline-ring sm:p-5 ${
+            className={`p-4 sm:p-5 flex flex-col gap-3 rounded-2xl cursor-pointer shadow-2xs focus-visible:outline-2 focus-visible:outline-ring bg-card border transition-all duration-[var(--duration-quick,150ms)] ease-[var(--ease-smooth-out,cubic-bezier(0.22,1,0.36,1))] hover:border-primary hover:bg-[color-mix(in_oklch,var(--card),var(--primary)_2%)] ${
               isLive
                 ? 'border-primary/60 ring-1 ring-primary/20'
                 : 'border-border'
@@ -173,13 +181,13 @@ export function PlannerHomeView({
                         m.tag.toLowerCase() === tag.toLowerCase() ||
                         `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                     );
-                    const color = matched?.avatarColor || discordColorFor(tag, i);
+                    const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                     const name = matched?.globalName || tag.replace(/^@/, '');
                     return (
                       <Avatar
                         key={i}
                         size="sm"
-                        className="size-5 text-xs font-bold border-2 border-card shadow-2xs shrink-0"
+                        className="size-5 text-[8.5px] font-bold border-2 border-card shadow-2xs shrink-0"
                         style={{ backgroundColor: `${color}30`, color }}
                       >
                         <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
@@ -228,8 +236,8 @@ export function PlannerHomeView({
       {events.length > 0 && (
         <section className="library-section recent-section">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="section-title mb-0">Reuniones ({events.length})</h3>
-            <span className="text-xs text-muted-foreground self-center">Próximas y recientes</span>
+            <h3 className="section-title mb-0">Eventos ({events.length})</h3>
+            <span className="text-[11px] text-muted-foreground self-center">Explora tus agendas</span>
           </div>
           <div className="docs-list">
             {events.map((event) => {
@@ -238,40 +246,27 @@ export function PlannerHomeView({
                 ? new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${event.date}T12:00:00`))
                 : 'Fecha por confirmar';
               const eventStatus = event.eventStatus === 'completed'
-                ? 'Finalizada'
+                ? 'Completado'
                 : event.eventStatus === 'in_progress'
                   ? 'En curso'
-                  : event.eventStatus === 'interrupted'
-                    ? 'Interrumpida'
-                    : 'Programada';
+                  : 'Programado';
               const isSelected = selectedEventId === event.eventId;
               return (
-                <Item
-                  key={event.eventId}
-                  variant="outline"
-                  size="sm"
-                  render={
-                    <button
-                      type="button"
-                      onClick={() => onSelectEvent?.(event)}
-                      aria-label={`Abrir reunión ${event.title}`}
-                    />
-                  }
-                  className={`flex-nowrap text-left ${isSelected ? 'border-primary/50 bg-primary/5' : ''}`}
-                >
-                  <ItemMedia variant="icon">
-                    {event.eventStatus === 'completed'
-                      ? <CheckCircle2 className="size-4 text-primary" />
-                      : <Calendar className="size-4 text-muted-foreground" />}
-                  </ItemMedia>
-                  <ItemContent className="min-w-0">
-                    <ItemTitle>{event.title}</ItemTitle>
-                    <ItemDescription className="line-clamp-1">
-                      {eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                </Item>
+                <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
+                  <span className="doc-symbol">
+                    {event.eventStatus === 'completed' ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
+                  </span>
+                  <button
+                    className="doc-row-main"
+                    type="button"
+                    onClick={() => onSelectEvent?.(event)}
+                    aria-label={`Abrir evento ${event.title}`}
+                  >
+                    <strong>{event.title}</strong>
+                    <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
+                  </button>
+                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                </article>
               );
             })}
           </div>

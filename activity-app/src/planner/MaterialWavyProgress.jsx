@@ -156,9 +156,9 @@ export function MaterialWavyProgress({
     color === 'danger'
       ? 'text-destructive'
       : color === 'warning'
-      ? 'text-amber-500'
+      ? 'text-warning'
       : color === 'success'
-      ? 'text-emerald-500'
+      ? 'text-success'
       : 'text-primary';
 
   return (

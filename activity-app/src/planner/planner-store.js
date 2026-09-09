@@ -2,18 +2,16 @@ import {computePlannerTimes} from './time-engine.js';
 import {
   DEFAULT_LIVE_SESSION,
   POINT_STATUS,
+  SESSION_STATUS,
   getPointStatus,
   migrateLiveSessionState,
 } from './session-runner.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
-export const LIVE_SESSIONS_STORE_KEY = 'bardo-planner-live-sessions-v1';
-export const PLANNER_RECOVERY_KEY = 'bardo-planner-recovery-v1';
-export const PLANNER_EVENTS_STORE_KEY = 'bardo-planner-events-v1';
 
 export const DEFAULT_EMPTY_SESSION = {
-  title: 'Nueva reunión',
+  title: 'Nueva sesión de trabajo',
   host: '',
   date: new Date().toISOString().split('T')[0],
   startTime: '10:00',
@@ -56,11 +54,11 @@ export const DEMO_PLANNER_FIXTURE = {
       introDesc: 'Puesta al día para alinearnos como equipo.',
       phases: {context: 2, review: 6, closing: 2},
       subpoints: [
-        {id: 'p-1', title: 'Novedades del equipo y de proyectos', presenter: 'Todos', status: 'done'},
-        {id: 'p-2', title: 'Coordinación sobre Minuta Weekly', presenter: 'Pau', status: 'done'},
-        {id: 'p-3', title: 'Agenda de la reunión', presenter: 'Pau', status: 'done'},
+        {id: 'p-1', title: 'Novedades del equipo y de proyectos', presenter: 'Todos', status: 'done', recordingDurationMs: 15000},
+        {id: 'p-2', title: 'Coordinación sobre Minuta Weekly', presenter: 'Pau', status: 'done', recordingDurationMs: 42000},
+        {id: 'p-3', title: 'Agenda de la sesión', presenter: 'Pau', status: 'done', recordingDurationMs: 11000},
       ],
-      decisions: [{id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.'}],
+      decisions: [{id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.', owner: 'Pau'}],
     },
     {
       id: 'b-2',
@@ -76,7 +74,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-6', title: 'Propuestas para mejorar el proceso de diseño', presenter: 'Todos', status: 'pending'},
       ],
       decisions: [
-        {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.'},
+        {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.', owner: 'Maxi'},
         {id: 'd-3', content: 'Compartir enlace al prototipo navegable Figma en el canal #orion.'},
       ],
     },
@@ -95,8 +93,8 @@ export const DEMO_PLANNER_FIXTURE = {
     {
       id: 'b-4',
       title: 'Revisión de diseño | Ecommerce',
-      durationMinutes: 60,
-      manualDuration: 60,
+      durationMinutes: 40,
+      manualDuration: 40,
       leader: 'Dani y Javi',
       participants: 'Diseño & SD + Nico',
       phases: {context: 5, review: 50, closing: 5},
@@ -105,7 +103,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-8', title: 'Landing Apple con Integración Claro Up', presenter: 'Javi', status: 'pending'},
         {id: 'p-9', title: 'Avance landing factibilidad (opcional)', presenter: 'Dani / Javi', status: 'pending'},
       ],
-      decisions: [{id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.'}],
+      decisions: [{id: 'd-4', content: 'Enviar especificaciones finales de Claro Up al equipo de desarrollo.', owner: 'Dani'}],
     },
     {
       id: 'b-5',
@@ -119,7 +117,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-10', title: 'Landing OTT Mascotas (avances y soluciones)', presenter: 'Responsable', status: 'pending'},
         {id: 'p-11', title: 'Pantallas SSO para el flujo de Registro', presenter: 'Pau / Maxi', status: 'pending'},
       ],
-      decisions: [{id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.'}],
+      decisions: [{id: 'd-5', content: 'Detalle de pedida SSO Registro entregado a Maxi para estimación.', owner: 'Pau'}],
     },
     {
       id: 'b-6',
@@ -136,7 +134,7 @@ export const DEMO_PLANNER_FIXTURE = {
         {id: 'p-14', title: 'Riesgos de instrumentación antes del release', presenter: 'Equipo de Desarrollo', status: 'pending'},
       ],
       decisions: [
-        {id: 'd-6', content: 'Definir un dueño por evento antes de cerrar la especificación.'},
+        {id: 'd-6', content: 'Definir un dueño por evento antes de cerrar la especificación.', owner: 'Nico'},
       ],
     },
     {
@@ -161,12 +159,12 @@ export const DEMO_PLANNER_FIXTURE = {
       manualDuration: 10,
       leader: 'Todo el equipo',
       participants: 'Diseño & SD',
-      introDesc: 'Recapitular acuerdos y confirmar los próximos pasos.',
+      introDesc: 'Recapitular acuerdos y confirmar la próxima sesión.',
       phases: {context: 2, review: 5, closing: 3},
       subpoints: [
         {id: 'p-17', title: 'Confirmar acuerdos que pasan a la minuta', presenter: 'Pau', status: 'pending'},
       ],
-      decisions: [{id: 'd-7', content: 'La minuta se comparte en el canal antes del cierre del día.'}],
+      decisions: [{id: 'd-7', content: 'La minuta se comparte en el canal antes del cierre del día.', owner: 'Pau'}],
     },
   ],
 };
@@ -211,7 +209,7 @@ export const DEMO_PLANNER_EVENTS = [
     date: '2026-08-21',
     startTime: '15:30',
     host: 'Daniela',
-    description: 'Revisión de catálogo, landing y factibilidad comercial.',
+    description: 'Sesión de crítica para catálogo, landing y factibilidad comercial.',
     blocks: DEMO_PLANNER_FIXTURE.blocks.slice(3, 5).map((block) => clonePlannerState(block)),
   }),
   createDemoEvent('event-retro-release', {
@@ -228,84 +226,26 @@ export const DEMO_PLANNER_EVENTS = [
   }),
 ];
 
-function createMeetingId() {
-  if (globalThis.crypto?.randomUUID) return `meeting-${globalThis.crypto.randomUUID()}`;
-  return `meeting-${Date.now().toString(36)}-${Math.floor(performance.now()).toString(36)}`;
-}
-
-function ensureMeetingIdentity(state) {
-  const source = state && typeof state === 'object' ? state : DEFAULT_EMPTY_SESSION;
-  return {
-    ...source,
-    eventId: source.eventId || createMeetingId(),
-    eventStatus: source.eventStatus || 'scheduled',
-  };
-}
-
-function readStoredPlannerEvents() {
-  try {
-    const raw = localStorage.getItem(PLANNER_EVENTS_STORE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function upsertPlannerEvent(state) {
-  const event = ensureMeetingIdentity(state);
-  const now = new Date().toISOString();
-  const nextEvent = {...clonePlannerState(event), updatedAt: now};
-  const events = readStoredPlannerEvents();
-  const next = [
-    nextEvent,
-    ...events.filter((candidate) => candidate?.eventId !== nextEvent.eventId),
-  ].slice(0, 100);
-  try {
-    localStorage.setItem(PLANNER_EVENTS_STORE_KEY, JSON.stringify(next));
-  } catch {
-    // Local storage persistence fallback.
-  }
-}
-
 export function loadPlannerEvents() {
-  return readStoredPlannerEvents()
-    .map((event) => computePlannerTimes(ensureMeetingIdentity(event)))
-    .sort((a, b) => {
-      const byUpdated = new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
-      if (byUpdated) return byUpdated;
-      return String(b.date || '').localeCompare(String(a.date || ''));
-    });
+  return DEMO_PLANNER_EVENTS.map(clonePlannerState);
 }
 
 export function loadPlannerState() {
   try {
     const raw = localStorage.getItem(PLANNER_STORE_KEY);
-    if (!raw) {
-      const initial = computePlannerTimes(ensureMeetingIdentity(DEFAULT_EMPTY_SESSION));
-      savePlannerState(initial);
-      return initial;
-    }
-    const parsed = JSON.parse(raw);
-    const normalized = computePlannerTimes(ensureMeetingIdentity(parsed));
-    if (!parsed?.eventId) savePlannerState(normalized);
-    return normalized;
+    if (!raw) return computePlannerTimes(DEMO_PLANNER_FIXTURE);
+    return computePlannerTimes(JSON.parse(raw));
   } catch {
-    const fallback = computePlannerTimes(ensureMeetingIdentity(DEFAULT_EMPTY_SESSION));
-    savePlannerState(fallback);
-    return fallback;
+    return computePlannerTimes(DEMO_PLANNER_FIXTURE);
   }
 }
 
 export function savePlannerState(state) {
-  const normalized = ensureMeetingIdentity(state);
   try {
-    localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(normalized));
-    upsertPlannerEvent(normalized);
+    localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(state));
   } catch {
     // Local storage persistence fallback.
   }
-  return normalized;
 }
 
 function normalizeReloadedRecording(recording) {
@@ -322,70 +262,88 @@ function normalizeReloadedRecording(recording) {
   };
 }
 
-function readLiveSessionsMap() {
-  try {
-    const raw = localStorage.getItem(LIVE_SESSIONS_STORE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeLiveSessionsMap(sessions) {
-  try {
-    localStorage.setItem(LIVE_SESSIONS_STORE_KEY, JSON.stringify(sessions || {}));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function activePlannerEventId() {
-  try {
-    const raw = localStorage.getItem(PLANNER_STORE_KEY);
-    return raw ? JSON.parse(raw)?.eventId || null : null;
-  } catch {
-    return null;
-  }
+export function createDemoLiveSession(_plannerState = DEMO_PLANNER_FIXTURE, now = Date.now()) {
+  const activeBlockStartedAt = now - 85000;
+  return {
+    ...DEFAULT_LIVE_SESSION,
+    sessionId: 'demo-session-weekly-design',
+    status: SESSION_STATUS.RUNNING,
+    scheduledStartAt: activeBlockStartedAt - 10 * 60 * 1000,
+    sessionStartedAt: activeBlockStartedAt - 10 * 60 * 1000,
+    liveActiveBlockId: 'b-2',
+    liveActivePointId: 'p-4',
+    activeBlockStartedAt,
+    activePointStartedAt: activeBlockStartedAt,
+    completedBlockIds: ['b-1'],
+    skippedBlockIds: [],
+    pointStatuses: {
+      'p-1': POINT_STATUS.DONE,
+      'p-2': POINT_STATUS.DONE,
+      'p-3': POINT_STATUS.DONE,
+      'p-4': POINT_STATUS.ACTIVE,
+      'p-5': POINT_STATUS.PENDING,
+      'p-6': POINT_STATUS.PENDING,
+    },
+    recordings: [
+      {
+        id: 'rec-demo-p-1',
+        name: 'Punto: Novedades del equipo y de proyectos',
+        blockId: 'b-1',
+        blockTitle: 'Check-in, contexto y novedades',
+        pointId: 'p-1',
+        pointTitle: 'Novedades del equipo y de proyectos',
+        durationMs: 15000,
+        createdAt: activeBlockStartedAt - 8 * 60 * 1000,
+        status: 'saved',
+      },
+      {
+        id: 'rec-demo-p-2',
+        name: 'Punto: Coordinación sobre Minuta Weekly',
+        blockId: 'b-1',
+        blockTitle: 'Check-in, contexto y novedades',
+        pointId: 'p-2',
+        pointTitle: 'Coordinación sobre Minuta Weekly',
+        durationMs: 42000,
+        createdAt: activeBlockStartedAt - 5 * 60 * 1000,
+        status: 'saved',
+      },
+      {
+        id: 'rec-demo-p-3',
+        name: 'Punto: Agenda de la sesión',
+        blockId: 'b-1',
+        blockTitle: 'Check-in, contexto y novedades',
+        pointId: 'p-3',
+        pointTitle: 'Agenda de la sesión',
+        durationMs: 11000,
+        createdAt: activeBlockStartedAt - 2 * 60 * 1000,
+        status: 'saved',
+      },
+    ],
+    decisions: [
+      {id: 'd-1', content: 'Se aprueba el nuevo flujo de minutas en Bardo Docs.', owner: 'Pau', pointId: 'p-2'},
+      {id: 'd-2', content: 'Maxi actualizará los breadcrumbs de navegación del prototipo antes del viernes.', owner: 'Maxi', pointId: 'p-4'},
+      {id: 'd-3', content: 'Compartir enlace al prototipo navegable Figma en el canal #orion.', pointId: 'p-4'},
+    ],
+  };
 }
 
 export function loadLiveSessionState(plannerState = null) {
   try {
-    const eventId = plannerState?.eventId || null;
-    const sessions = readLiveSessionsMap();
-    let parsed = eventId ? sessions[eventId] : null;
-
-    if (!parsed) {
-      const rawLegacy = localStorage.getItem(LIVE_SESSION_STORE_KEY);
-      const legacy = rawLegacy ? JSON.parse(rawLegacy) : null;
-      const legacyBelongsToMeeting = legacy && (
-        legacy.eventId === eventId ||
-        (!legacy.eventId && eventId && activePlannerEventId() === eventId) ||
-        (!eventId && !legacy.eventId)
-      );
-      if (legacyBelongsToMeeting) {
-        parsed = legacy;
+    const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
+    if (!raw) {
+      if (plannerState?.title === 'Weekly Diseño & SD' || plannerState?.title?.includes('Weekly Diseño')) {
+        return createDemoLiveSession(plannerState);
       }
+      return {...DEFAULT_LIVE_SESSION};
     }
-
-    if (!parsed) return {...DEFAULT_LIVE_SESSION, eventId};
+    const parsed = JSON.parse(raw);
     const migrated = migrateLiveSessionState(plannerState, parsed);
-    const normalized = {
+    return {
       ...migrated,
-      eventId: eventId || parsed.eventId || null,
       recordings: (migrated.recordings || []).map(normalizeReloadedRecording),
     };
-
-    if (normalized.eventId && !sessions[normalized.eventId]) {
-      writeLiveSessionsMap({
-        ...sessions,
-        [normalized.eventId]: serializeLiveSessionState(normalized),
-      });
-    }
-    return normalized;
   } catch {
-    return {...DEFAULT_LIVE_SESSION, eventId: plannerState?.eventId || null};
+    return {...DEFAULT_LIVE_SESSION};
   }
 }
 
@@ -399,99 +357,32 @@ export function serializeLiveSessionState(sessionState) {
   };
 }
 
-export function saveLiveSessionState(sessionState, eventId = null) {
-  const resolvedEventId = eventId || sessionState?.eventId || null;
-  const normalized = {
-    ...(sessionState || DEFAULT_LIVE_SESSION),
-    eventId: resolvedEventId,
-  };
-  const serialized = serializeLiveSessionState(normalized);
-  let saved = true;
+export function saveLiveSessionState(sessionState) {
   try {
-    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(serialized));
-    if (resolvedEventId) {
-      const sessions = readLiveSessionsMap();
-      saved = writeLiveSessionsMap({
-        ...sessions,
-        [resolvedEventId]: serialized,
-      }) && saved;
-    }
-  } catch {
-    saved = false;
-  }
-  return saved;
-}
-
-export function clearLiveSessionState(eventId = null) {
-  try {
-    localStorage.removeItem(LIVE_SESSION_STORE_KEY);
-    if (eventId) {
-      const sessions = readLiveSessionsMap();
-      delete sessions[eventId];
-      writeLiveSessionsMap(sessions);
-    }
+    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(serializeLiveSessionState(sessionState)));
   } catch {
     // Local storage persistence fallback.
   }
 }
 
-export function savePlannerRecoverySnapshot(plannerState, liveSessionState) {
+export function clearLiveSessionState() {
   try {
-    localStorage.setItem(PLANNER_RECOVERY_KEY, JSON.stringify({
-      savedAt: Date.now(),
-      plannerState,
-      liveSessionState: serializeLiveSessionState(liveSessionState || DEFAULT_LIVE_SESSION),
-    }));
-    return true;
+    localStorage.removeItem(LIVE_SESSION_STORE_KEY);
   } catch {
-    return false;
-  }
-}
-
-export function hasPlannerRecoverySnapshot() {
-  try {
-    return Boolean(localStorage.getItem(PLANNER_RECOVERY_KEY));
-  } catch {
-    return false;
-  }
-}
-
-export function restorePlannerRecoverySnapshot() {
-  try {
-    const raw = localStorage.getItem(PLANNER_RECOVERY_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const plannerState = computePlannerTimes(parsed?.plannerState || DEFAULT_EMPTY_SESSION);
-    savePlannerState(plannerState);
-    saveLiveSessionState(parsed?.liveSessionState || DEFAULT_LIVE_SESSION, plannerState.eventId);
-    localStorage.removeItem(PLANNER_RECOVERY_KEY);
-    return {
-      plannerState,
-      liveSessionState: loadLiveSessionState(plannerState),
-      savedAt: parsed?.savedAt || null,
-    };
-  } catch {
-    return null;
+    // Local storage persistence fallback.
   }
 }
 
 export function resetToDemoFixture() {
-  const computed = computePlannerTimes({
-    ...clonePlannerState(DEMO_PLANNER_FIXTURE),
-    eventId: 'event-weekly-design',
-    eventStatus: 'scheduled',
-  });
+  const computed = computePlannerTimes(DEMO_PLANNER_FIXTURE);
   savePlannerState(computed);
-  clearLiveSessionState();
+  const demoLive = createDemoLiveSession(computed);
+  saveLiveSessionState(demoLive);
   return computed;
 }
 
 export function resetToCleanSession() {
-  const computed = computePlannerTimes({
-    ...clonePlannerState(DEFAULT_EMPTY_SESSION),
-    eventId: createMeetingId(),
-    eventStatus: 'scheduled',
-  });
+  const computed = computePlannerTimes(DEFAULT_EMPTY_SESSION);
   savePlannerState(computed);
   clearLiveSessionState();
   return computed;
@@ -510,7 +401,7 @@ export function generateDiscordAnnouncement(plannerState) {
   if (computed.host) text += `👤 **Modera:** ${computed.host}\n`;
   if (computed.description) text += `\n> ${computed.description}\n`;
 
-  text += `\n**📋 Agenda de la reunión:**\n`;
+  text += `\n**📋 Agenda de la sesión:**\n`;
   (computed.blocks || []).forEach((block, index) => {
     text += `${index + 1}. **${block.title}** (${block.durationMinutes}m)`;
     if (block.leader) text += ` — *Lidera: ${block.leader}*`;
@@ -533,6 +424,7 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       allDecisions.push({
         id: decision.id,
         content: decision.content,
+        owner: decision.owner || null,
         blockId: block.id,
         blockTitle: block.title,
         origin: block.title,
@@ -546,6 +438,7 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       allDecisions.push({
         id: decision.id,
         content: decision.content,
+        owner: decision.owner || null,
         blockId: block?.id || null,
         blockTitle: block?.title || 'Reunión',
         origin: point ? `${block?.title} → ${point.title}` : (block?.title || 'Reunión'),
@@ -554,20 +447,21 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
   }
 
   let markdown = `# Acta: ${computed.title}\n\n`;
-  markdown += `> **Fecha:** ${computed.date || 'Sin fecha'} | **Organiza:** ${computed.host || 'Sin asignar'} | **Duración:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${allDecisions.length}\n\n`;
+  markdown += `> **Fecha:** ${computed.date || 'Sin fecha'} | **Organiza:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${allDecisions.length}\n\n`;
   markdown += `---\n\n`;
 
-  markdown += '## Acuerdos\n\n';
+  markdown += '## 📋 Resumen de Acuerdos Principales\n\n';
   if (allDecisions.length > 0) {
     for (const decision of allDecisions) {
-      markdown += `- **${decision.content}**\n  *Origen: ${decision.origin}*\n\n`;
+      const ownerStr = decision.owner ? ` | 👤 **Responsable:** @${decision.owner.replace(/^@/, '')}` : '';
+      markdown += `- ✅ **${decision.content}**\n  *📌 Origen: ${decision.origin}${ownerStr}*\n\n`;
     }
   } else {
     markdown += '*No se registraron decisiones en esta reunión.*\n\n';
   }
 
   markdown += `---\n\n`;
-  markdown += '## Agenda por bloques\n\n';
+  markdown += '## ⏱️ Desglose de Agenda por Bloques\n\n';
 
   if ((computed.blocks || []).length === 0) {
     markdown += '*Sin bloques registrados en la reunión.*\n';
@@ -582,7 +476,8 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
       if (blockDecisions.length > 0) {
         markdown += `**Acuerdos de este bloque:**\n`;
         for (const decision of blockDecisions) {
-          markdown += `- ${decision.content}\n`;
+          const ownerStr = decision.owner ? ` (@${decision.owner.replace(/^@/, '')})` : '';
+          markdown += `- ✅ ${decision.content}${ownerStr}\n`;
         }
         markdown += '\n';
       }

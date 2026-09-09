@@ -65,15 +65,15 @@ export function Calendar({
   }
 
   return (
-    <div className={cn("w-64 select-none p-3 text-popover-foreground", className)}>
+    <div className={cn("p-3 w-64 select-none bg-popover text-popover-foreground border border-border rounded-xl shadow-lg", className)}>
       {/* Month / Year header with Canonical Shadcn Chevrons */}
       <div className="flex items-center justify-between pb-2 pt-0.5">
         <Button
-          variant="ghost"
-          size="icon-sm"
+          variant="outline"
+          size="icon-xs"
           type="button"
           onClick={prevMonth}
-          className="text-muted-foreground hover:text-foreground"
+          className="size-7 text-muted-foreground hover:text-foreground"
           aria-label="Mes anterior"
         >
           <ChevronLeft className="size-4" />
@@ -84,11 +84,11 @@ export function Calendar({
         </span>
 
         <Button
-          variant="ghost"
-          size="icon-sm"
+          variant="outline"
+          size="icon-xs"
           type="button"
           onClick={nextMonth}
-          className="text-muted-foreground hover:text-foreground"
+          className="size-7 text-muted-foreground hover:text-foreground"
           aria-label="Mes siguiente"
         >
           <ChevronRight className="size-4" />
@@ -96,9 +96,9 @@ export function Calendar({
       </div>
 
       {/* Weekday headers */}
-      <div className="my-1.5 grid grid-cols-7 text-center text-xs font-medium text-muted-foreground">
+      <div className="grid grid-cols-7 text-center text-[10.5px] font-medium text-muted-foreground my-1.5">
         {weekDays.map((wd, i) => (
-          <div key={`${wd}-${i}`} className="flex h-8 items-center justify-center">
+          <div key={`${wd}-${i}`} className="h-6 flex items-center justify-center">
             {wd}
           </div>
         ))}
@@ -108,7 +108,7 @@ export function Calendar({
       <div className="grid grid-cols-7 gap-1 text-center text-xs">
         {days.map((day, idx) => {
           if (day === null) {
-            return <div key={`empty-${idx}`} className="size-8" />
+            return <div key={`empty-${idx}`} className="size-7" />
           }
           const iso = formatIso(day)
           const isSelected = selected === iso
@@ -116,31 +116,41 @@ export function Calendar({
             new Date().toISOString().split("T")[0] === iso
 
           return (
-            <Button
+            <button
               key={iso}
               type="button"
-              size="icon-sm"
-              variant={isSelected ? "default" : isToday ? "secondary" : "ghost"}
               onClick={() => onSelect?.(iso)}
-              aria-pressed={isSelected}
-              aria-current={isToday ? "date" : undefined}
-              aria-label={`${day} de ${monthNames[month]} de ${year}`}
-              className="rounded-xl text-xs font-medium"
+              className={cn(
+                "size-7 rounded-md flex items-center justify-center text-xs transition-colors cursor-pointer font-medium",
+                isSelected
+                  ? "bg-primary text-primary-foreground font-bold shadow-2xs"
+                  : isToday
+                  ? "bg-accent text-accent-foreground font-semibold"
+                  : "text-foreground hover:bg-muted"
+              )}
             >
               {day}
-            </Button>
+            </button>
           )
         })}
       </div>
 
       {/* Footer: Borrar / Hoy */}
       <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-border/40 text-xs">
-        <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="text-muted-foreground">
+        <button
+          type="button"
+          onClick={handleClear}
+          className="text-muted-foreground hover:text-foreground font-medium hover:underline cursor-pointer"
+        >
           Borrar
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={handleToday} className="text-primary">
+        </button>
+        <button
+          type="button"
+          onClick={handleToday}
+          className="text-primary hover:text-primary/90 font-semibold hover:underline cursor-pointer"
+        >
           Hoy
-        </Button>
+        </button>
       </div>
     </div>
   )

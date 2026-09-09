@@ -1,5 +1,4 @@
 const MAX_PDF_PAGES = 80;
-const MAX_IMPORT_FILE_BYTES = 25 * 1024 * 1024;
 let installed = false;
 
 function ensureDocumentTitle(markdown, title) {
@@ -12,7 +11,7 @@ function ensureDocumentTitle(markdown, title) {
 function pdfTextToMarkdown(text, title) {
   const normalized = String(text || '').replace(/\r\n?/g, '\n').trim();
   if (normalized.replace(/\s/g, '').length < 30) {
-    throw new Error('Este PDF parece escaneado y no tiene suficiente texto seleccionable. Convierte el archivo con OCR e inténtalo de nuevo.');
+    return `# ${title}\n\n> Bardo no encontró suficiente texto seleccionable en este PDF. Los documentos escaneados todavía necesitan OCR para poder convertirse.`;
   }
 
   const output = [`# ${title}`];
@@ -61,10 +60,10 @@ async function importPdf(arrayBuffer, title) {
   const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer), {maxImageSize:16_777_216});
   try {
     if (pdf.numPages > MAX_PDF_PAGES) {
-      throw new Error(`Este PDF tiene ${pdf.numPages} páginas. Bardo puede importar hasta ${MAX_PDF_PAGES} por documento.`);
+      return `# ${title}\n\n> Este PDF tiene ${pdf.numPages} páginas. Por ahora Bardo convierte hasta ${MAX_PDF_PAGES} páginas por documento.`;
     }
     const {text} = await extractText(pdf, {mergePages:true});
-    return {markdown: pdfTextToMarkdown(text, title), warnings: []};
+    return pdfTextToMarkdown(text, title);
   } finally {
     await pdf.destroy?.();
   }
@@ -86,15 +85,10 @@ async function importDocx(arrayBuffer, title) {
   );
   const template = document.createElement('template');
   template.innerHTML = result.value || '';
-  const images = [...template.content.querySelectorAll('img')];
-  images.forEach(image => {
-    if (image.alt) {
-      const note = document.createElement('em');
-      note.textContent = image.alt;
-      image.replaceWith(note);
-    } else {
-      image.remove();
-    }
+  template.content.querySelectorAll('img').forEach(image => {
+    const note = document.createElement('em');
+    note.textContent = image.alt ? `Imagen: ${image.alt}` : 'Imagen omitida por Bardo';
+    image.replaceWith(note);
   });
 
   const turndown = new TurndownService({
@@ -106,15 +100,9 @@ async function importDocx(arrayBuffer, title) {
   });
   if (gfm) turndown.use(gfm);
   const markdown = turndown.turndown(template.innerHTML).replace(/\n{3,}/g, '\n\n').trim();
-  if (!markdown) {
-    throw new Error('No encontramos texto que pueda importarse desde este archivo Word.');
-  }
-  return {
-    markdown: ensureDocumentTitle(markdown, title),
-    warnings: images.length
-      ? [`${images.length === 1 ? 'Se omitió 1 imagen' : `Se omitieron ${images.length} imágenes`} durante la importación.`]
-      : [],
-  };
+  return markdown
+    ? ensureDocumentTitle(markdown, title)
+    : `# ${title}\n\n> Bardo no encontró contenido de texto que pudiera convertir en este documento Word.`;
 }
 
 function fileTitle(name) {
@@ -130,21 +118,16 @@ export async function convertDocumentFile(file) {
   const lowerName = name.toLocaleLowerCase('es');
   const title = fileTitle(name);
   if (!file || !name) throw new Error('Selecciona un archivo para subir.');
-  if (Number(file.size || 0) > MAX_IMPORT_FILE_BYTES) {
-    throw new Error('Este archivo pesa más de 25 MB. Usa una versión más liviana e inténtalo de nuevo.');
-  }
 
   if (/\.(?:md|markdown|txt)$/i.test(lowerName)) {
     const markdown = await file.text();
-    return {title, markdown: ensureDocumentTitle(markdown, title), sourceName:name, warnings:[]};
+    return {title, markdown: ensureDocumentTitle(markdown, title), sourceName:name};
   }
   if (/\.pdf$/i.test(lowerName)) {
-    const imported = await importPdf(await file.arrayBuffer(), title);
-    return {title, markdown: imported.markdown, sourceName:name, warnings:imported.warnings};
+    return {title, markdown: await importPdf(await file.arrayBuffer(), title), sourceName:name};
   }
   if (/\.docx$/i.test(lowerName)) {
-    const imported = await importDocx(await file.arrayBuffer(), title);
-    return {title, markdown: imported.markdown, sourceName:name, warnings:imported.warnings};
+    return {title, markdown: await importDocx(await file.arrayBuffer(), title), sourceName:name};
   }
   throw new Error('Usa un archivo .md, .markdown, .txt, .pdf o .docx.');
 }
@@ -160,10 +143,9 @@ async function normalizeDocument(doc, authenticatedFetch) {
   if (!sourceResponse.ok) throw new Error(`Source HTTP ${sourceResponse.status}`);
   const source = await sourceResponse.arrayBuffer();
 
-  const imported = doc.sourceType === 'pdf'
+  const markdown = doc.sourceType === 'pdf'
     ? await importPdf(source, doc.title || 'Documento')
     : await importDocx(source, doc.title || 'Documento');
-  const markdown = imported.markdown;
 
   const saveResponse = await authenticatedFetch(`/api/docs/${encodeURIComponent(doc.id)}/normalize`, {
     method:'POST',

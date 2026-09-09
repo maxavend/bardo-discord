@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,11 +9,9 @@ import {
   Copy,
   RotateCw,
   Play,
-  Download,
 } from 'lucide-react';
 import { computeSessionRecap } from './session-assistant-engine.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
-import { exportMeetingArchive, downloadArchive } from './session-export.js';
 
 export function SessionRecapView({
   plannerState,
@@ -27,7 +24,6 @@ export function SessionRecapView({
 }) {
   const recap = computeSessionRecap(plannerState, sessionState);
   const isInterrupted = recap.isInterrupted;
-  const [isExporting, setIsExporting] = useState(false);
 
   const handleCopyRecap = async () => {
     let text = `📋 **${recap.recapTitle}**\n`;
@@ -35,7 +31,7 @@ export function SessionRecapView({
     text += `📚 **Bloques:** ${recap.completedCount} / ${recap.totalBlocksCount} completados`;
     if (recap.skippedCount > 0) text += ` · ${recap.skippedCount} saltados`;
     text += '\n';
-    text += `✅ **Puntos tratados:** ${recap.completedPointsCount} / ${recap.totalPointsCount}`;
+    text += `✅ **Temas tratados:** ${recap.completedPointsCount} / ${recap.totalPointsCount}`;
     if (recap.skippedPointsCount > 0) text += ` · ${recap.skippedPointsCount} saltados`;
     text += '\n';
     text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${recap.totalRecordedMinutes} min de audio)\n`;
@@ -43,7 +39,8 @@ export function SessionRecapView({
     if (recap.decisions.length > 0) {
       text += '\n**Decisiones:**\n';
       recap.decisions.forEach((decision) => {
-        text += `- ${decision.content}\n`;
+        const ownerTag = decision.owner ? ` (@${decision.owner.replace(/^@/, '')})` : '';
+        text += `- ${decision.content}${ownerTag}\n`;
       });
     }
     try {
@@ -51,25 +48,6 @@ export function SessionRecapView({
       toast('Resumen copiado');
     } catch {
       toast('No se pudo copiar el resumen');
-    }
-  };
-
-  const handleExportArchive = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    try {
-      toast('Preparando archivos de la reunión…');
-      const archive = await exportMeetingArchive(plannerState, sessionState);
-      downloadArchive(archive);
-      toast(
-        archive.recordingsCount > 0
-          ? `ZIP listo · ${archive.recordingsCount} grabación${archive.recordingsCount === 1 ? '' : 'es'}`
-          : 'ZIP listo con el resumen de la reunión'
-      );
-    } catch (error) {
-      toast(error?.message || 'No se pudo preparar el ZIP de la reunión.');
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -98,9 +76,6 @@ export function SessionRecapView({
                   <Play className="size-3.5" /> Reanudar reunión
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={handleExportArchive} disabled={isExporting} className="h-8 px-3">
-                <Download className="size-3.5" /> {isExporting ? 'Preparando ZIP…' : 'Exportar ZIP'}
-              </Button>
               <Button variant="secondary" size="sm" onClick={handleCopyRecap} className="h-8 px-3">
                 <Copy className="size-3.5" /> Copiar resumen
               </Button>
@@ -113,29 +88,29 @@ export function SessionRecapView({
           <Card className="p-4 sm:p-5 rounded-2xl">
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Tiempo efectivo</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Tiempo efectivo</span>
                 <strong className="text-base text-foreground">{recap.actualDurationMinutes} min</strong>
-                <span className="text-xs text-muted-foreground">de {recap.plannedDurationMinutes} min</span>
+                <span className="text-[11px] text-muted-foreground">de {recap.plannedDurationMinutes} min</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">Bloques</span>
+                <span className="text-[11px] text-muted-foreground">Bloques</span>
                 <strong className="text-base text-foreground">{recap.completedCount} / {recap.totalBlocksCount}</strong>
-                {recap.skippedCount > 0 && <span className="text-xs text-muted-foreground">{recap.skippedCount} saltados</span>}
+                {recap.skippedCount > 0 && <span className="text-[11px] text-muted-foreground">{recap.skippedCount} saltados</span>}
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground">Puntos tratados</span>
+                <span className="text-[11px] text-muted-foreground">Temas tratados</span>
                 <strong className="text-base text-foreground">{recap.completedPointsCount} / {recap.totalPointsCount}</strong>
-                {recap.skippedPointsCount > 0 && <span className="text-xs text-muted-foreground">{recap.skippedPointsCount} saltados</span>}
+                {recap.skippedPointsCount > 0 && <span className="text-[11px] text-muted-foreground">{recap.skippedPointsCount} saltados</span>}
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Mic className="size-3" /> Grabaciones</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Mic className="size-3" /> Grabaciones</span>
                 <strong className="text-base text-foreground">{recap.totalRecordingsCount}</strong>
-                <span className="text-xs text-muted-foreground">{recap.totalRecordedMinutes} min de audio</span>
+                <span className="text-[11px] text-muted-foreground">{recap.totalRecordedMinutes} min de audio</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Decisiones</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Decisiones</span>
                 <strong className="text-base text-foreground">{recap.decisions.length}</strong>
-                <span className="text-xs text-muted-foreground">registradas</span>
+                <span className="text-[11px] text-muted-foreground">registradas</span>
               </div>
             </div>
           </Card>
@@ -195,12 +170,20 @@ export function SessionRecapView({
                 {recap.decisions.map((decision, index) => {
                   const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
                   const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
+                  const ownerName = decision.owner ? decision.owner.trim().replace(/^@/, '') : null;
                   return (
-                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed">
-                      <strong className="font-semibold">{decision.content}</strong>
-                      {(point || block) && (
-                        <span className="block text-xs text-muted-foreground mt-0.5">
-                          {point ? `${block?.title} → ${point.title}` : block?.title}
+                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <strong className="font-semibold">{decision.content}</strong>
+                        {(point || block) && (
+                          <span className="block text-[11px] text-muted-foreground mt-0.5">
+                            {point ? `${block?.title} → ${point.title}` : block?.title}
+                          </span>
+                        )}
+                      </div>
+                      {ownerName && (
+                        <span className="text-[11px] text-muted-foreground font-medium shrink-0 bg-muted/60 px-2 py-0.5 rounded-full">
+                          {ownerName}
                         </span>
                       )}
                     </div>
@@ -208,7 +191,7 @@ export function SessionRecapView({
                 })}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta reunión.</p>
+              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta sesión.</p>
             )}
           </Card>
         </div>

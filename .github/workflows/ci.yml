@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['main', 'module/bardo-docs', 'feat/**', 'ux-product-integrity']
+    branches: ['main', 'module/bardo-docs', 'feat/**']
   pull_request:
     branches: ['main', 'module/bardo-docs']
 

@@ -16,24 +16,12 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Slider } from '@/components/ui/slider';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog';
 import {
   Play,
   Pause,
   MoreVertical,
   Pencil,
   Trash2,
-  Download,
   Info,
 } from 'lucide-react';
 import { formatMsToClock } from './session-assistant-engine.js';
@@ -43,7 +31,6 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [showTechModal, setShowTechModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [renameValue, setRenameValue] = useState(recording?.name || '');
   const audioRef = useRef(null);
 
@@ -74,8 +61,8 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
     else audioRef.current.play().catch(() => setIsPlaying(false));
   };
 
-  const handleSeek = (value) => {
-    const percent = Number(Array.isArray(value) ? value[0] : value);
+  const handleSeek = (event) => {
+    const percent = Number(event.target.value);
     const nextTimeMs = (percent / 100) * durationMs;
     setCurrentTimeMs(nextTimeMs);
     if (audioRef.current) audioRef.current.currentTime = nextTimeMs / 1000;
@@ -85,24 +72,6 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
     const trimmed = renameValue.trim();
     if (trimmed && onRename) onRename(recording.id, trimmed);
     setShowRenameModal(false);
-  };
-
-  const handleEmergencyDownload = () => {
-    if (!recording?.blobUrl) return;
-    const mimeType = recording?.mimeType || 'audio/webm';
-    const extension = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
-    const stem = String(recording?.name || recording?.pointTitle || recording?.blockTitle || 'grabacion')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .toLowerCase() || 'grabacion';
-    const anchor = document.createElement('a');
-    anchor.href = recording.blobUrl;
-    anchor.download = `${stem}.${extension}`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
   };
 
   return (
@@ -128,10 +97,10 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
               {recording?.name || recording?.pointTitle || recording?.blockTitle || 'Grabación'}
             </span>
             {recording?.pointTitle && recording?.name !== recording.pointTitle && (
-              <span className="text-xs text-muted-foreground truncate">· {recording.pointTitle}</span>
+              <span className="text-[11px] text-muted-foreground truncate">· {recording.pointTitle}</span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
             <span>{totalFormatted}</span>
             <span>·</span>
             <span>{recording?.sourcesLabel || 'Micrófono'}</span>
@@ -154,17 +123,18 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
           </Button>
 
           <div className="flex items-center gap-2 flex-1 sm:w-48">
-            <Slider
-              min={0}
-              max={100}
-              step={0.5}
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.5"
               value={progressPercent}
-              onValueChange={handleSeek}
+              onChange={handleSeek}
               disabled={!canPlay}
-              ariaLabel="Progreso de reproducción de audio"
-              className="flex-1"
+              aria-label="Progreso de reproducción de audio"
+              className="w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed bg-border accent-primary"
             />
-            <span className="text-xs font-mono text-muted-foreground tabular-nums shrink-0">{currentFormatted}</span>
+            <span className="text-[10px] font-mono text-muted-foreground tabular-nums shrink-0">{currentFormatted}</span>
           </div>
 
           {(onRename || onDelete) && (
@@ -185,12 +155,12 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                 )}
                 <DropdownMenuItem onClick={() => setShowTechModal(true)}>
                   <Info className="size-4 text-muted-foreground" />
-                  <span>Información de la grabación</span>
+                  <span>Detalles técnicos</span>
                 </DropdownMenuItem>
                 {onDelete && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
+                    <DropdownMenuItem variant="destructive" onClick={() => onDelete(recording.id)}>
                       <Trash2 className="size-4 text-destructive" />
                       <span>Eliminar grabación</span>
                     </DropdownMenuItem>
@@ -202,21 +172,8 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
         </div>
       </div>
 
-      {hasPersistenceError && (
-        <div role="alert" className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-2.5">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-destructive">Este audio todavía no está guardado de forma segura.</p>
-            {recording?.persistenceError && (
-              <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{recording.persistenceError}</p>
-            )}
-          </div>
-          {canPlay && (
-            <Button variant="outline" size="sm" onClick={handleEmergencyDownload} className="shrink-0">
-              <Download className="size-3.5" />
-              Descargar ahora
-            </Button>
-          )}
-        </div>
+      {hasPersistenceError && recording?.persistenceError && (
+        <p className="text-[11px] text-destructive leading-relaxed">{recording.persistenceError}</p>
       )}
 
       {/* Modal de detalles técnicos */}
@@ -225,48 +182,21 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
           <DialogHeader>
             <div className="flex items-center gap-2">
               <Info className="size-4 text-primary" />
-              <DialogTitle>Información de la grabación de la grabación</DialogTitle>
+              <DialogTitle>Detalles técnicos de la grabación</DialogTitle>
             </div>
           </DialogHeader>
           <div className="flex flex-col gap-2 divide-y divide-border/30 text-xs">
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Formato</span><span className="font-mono text-foreground text-right">{recording?.mimeType || 'audio/webm'}</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Tamaño</span><span className="font-semibold text-foreground">{fileSizeKb} KB</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Segmentos</span><span className="font-semibold text-foreground">{segmentsCount}</span></div>
-            <div className="flex justify-between gap-3 py-1.5">
-              <span className="text-muted-foreground">Guardado</span>
-              <span className="font-semibold text-foreground">
-                {recording?.status === 'saved' ? 'En este dispositivo' : recording?.status === 'pending' ? 'Recuperando…' : 'Requiere atención'}
-              </span>
-            </div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Persistencia</span><span className="font-semibold text-foreground">{recording?.binaryStorage === 'indexeddb' ? 'IndexedDB' : 'No persistida'}</span></div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Estado</span><span className="font-semibold text-foreground">{recording?.status || 'desconocido'}</span></div>
           </div>
           <DialogFooter>
             <Button variant="secondary" size="sm" onClick={() => setShowTechModal(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar esta grabación?</AlertDialogTitle>
-            <AlertDialogDescription>
-              El audio se borrará del almacenamiento local y no se puede recuperar desde Bardo.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                setShowDeleteConfirm(false);
-                onDelete?.(recording.id);
-              }}
-            >
-              Eliminar grabación
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Modal de renombrar grabación */}
       <Dialog open={showRenameModal} onOpenChange={setShowRenameModal}>

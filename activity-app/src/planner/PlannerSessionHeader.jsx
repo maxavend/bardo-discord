@@ -1,8 +1,5 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Field, FieldLabel } from '@/components/ui/field';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -12,14 +9,19 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
+import { TimePicker } from '@/components/ui/time-picker.jsx';
 import {
   FileText,
   Pencil,
   Copy,
   Plus,
-  RotateCcw,
   MoreVertical,
   Play,
   Check,
@@ -34,14 +36,21 @@ import {
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
-  parseMentionsToArray,
-  resolveDiscordEntity,
-  entityIdsFromSelection,
-  discordColorFor,
 } from './PlannerMemberPicker.jsx';
 
+const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
+
+function parseMentions(mentionsStr = '') {
+  if (!mentionsStr) return [];
+  const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
+  if (matches && matches.length > 0) {
+    return matches.map((m) => m.trim()).filter(Boolean);
+  }
+  return mentionsStr.split(/\s+/).map((m) => m.trim()).filter(Boolean);
+}
+
 function formatDisplayDate(dateStr) {
-  if (!dateStr) return 'Seleccionar fecha';
+  if (!dateStr) return '01/09/2026';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -70,25 +79,21 @@ export function PlannerSessionHeader({
   onUpdateHeaderField,
   onCopyAnnouncement,
   onNewCleanSession,
-  hasPreviousMeeting = false,
-  onRestorePreviousMeeting,
-  _onLoadDemo,
+  onLoadDemo,
   onStartSession,
   onResumeSession,
-  onInterruptSession,
+  onInterruptSession: _onInterruptSession,
   onGoHome: _onGoHome,
 }) {
   const {
-    title = 'Reunión sin título',
+    title = 'Sesión sin título',
     description = '',
     date = '',
     startTime = '17:45',
     blocks = [],
     totalCalculatedDuration = 0,
     host = '',
-    hostId = null,
     mentions = '',
-    participantIds = [],
   } = state || {};
 
   const totalPlannedMinutes = (blocks || []).reduce(
@@ -107,9 +112,7 @@ export function PlannerSessionHeader({
   const isCompleted = status === SESSION_STATUS.COMPLETED;
 
   const { members } = getAllDiscordEntities();
-  void hostId;
-  void participantIds;
-  const selectedKeys = new Set(parseMentionsToArray(mentions));
+  const selectedKeys = new Set(parseMentions(mentions));
 
   const formatHeaderDate = (isoDate) => {
     if (!isoDate) return 'Fecha por definir';
@@ -134,27 +137,42 @@ export function PlannerSessionHeader({
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             {isEditing ? (
               <>
-                <Textarea
+                <textarea
                   rows={1}
                   value={title}
                   onChange={(e) => onUpdateHeaderField?.('title', e.target.value)}
                   placeholder="Nombre de la reunión"
-                  className="doc-title doc-title-input"
+                  className="doc-title doc-title-input field-sizing-content resize-none overflow-y-hidden"
                   aria-label="Nombre de la reunión"
                 />
-                <Textarea
+                <textarea
                   rows={1}
                   value={description}
                   onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
                   placeholder="Agregar objetivo o contexto de la reunión..."
-                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60"
+                  className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60 field-sizing-content max-h-[9rem] overflow-y-hidden"
                   aria-label="Objetivo de la reunión"
                 />
               </>
             ) : (
               <>
                 <h1 className="doc-title">{title || 'Reunión sin título'}</h1>
-                {description && <p className="doc-description">{description}</p>}
+                {description && (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <p className="doc-description line-clamp-6 cursor-default">
+                          {description}
+                        </p>
+                      }
+                    />
+                    {description.length > 200 && (
+                      <TooltipContent className="max-w-md text-xs leading-relaxed">
+                        {description}
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                )}
               </>
             )}
           </div>
@@ -232,15 +250,6 @@ export function PlannerSessionHeader({
                       <span>Ver resumen</span>
                     </DropdownMenuItem>
                   )}
-                  {(isRunning || isPaused) && (
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => onInterruptSession?.()}
-                    >
-                      <RotateCcw className="size-4 text-destructive" />
-                      <span>Interrumpir reunión</span>
-                    </DropdownMenuItem>
-                  )}
                   {!isEditing && (
                     <DropdownMenuItem onClick={onToggleEditMode}>
                       <Pencil className="size-4 text-muted-foreground" />
@@ -254,17 +263,14 @@ export function PlannerSessionHeader({
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={onNewCleanSession}
-                    disabled={isRunning || isPaused}
-                  >
+                  <DropdownMenuItem onClick={onNewCleanSession}>
                     <Plus className="size-4 text-muted-foreground" />
                     <span>Nueva reunión</span>
                   </DropdownMenuItem>
-                  {hasPreviousMeeting && !isRunning && !isPaused && (
-                    <DropdownMenuItem onClick={onRestorePreviousMeeting}>
-                      <RotateCcw className="size-4 text-muted-foreground" />
-                      <span>Restaurar reunión anterior</span>
+                  {onLoadDemo && (
+                    <DropdownMenuItem onClick={onLoadDemo}>
+                      <RotateCw className="size-4 text-muted-foreground" />
+                      <span>Cargar demo (Reset)</span>
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuGroup>
@@ -275,100 +281,99 @@ export function PlannerSessionHeader({
 
         {/* Modo edición vs modo lectura */}
         {isEditing ? (
-          <div className="mt-4 flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Field>
-                <FieldLabel>Fecha</FieldLabel>
+          <div className="flex flex-col gap-3 mt-4">
+            {/* Fila 1: Fecha, Hora de inicio, Término, Duración */}
+            <div className="grid grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Fecha</label>
                 <Popover>
                   <PopoverTrigger
                     render={
-                      <Button
+                      <button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full min-w-0 justify-between text-xs font-medium"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between text-xs font-medium text-foreground transition-colors cursor-pointer"
                       >
-                        <span className="truncate">{formatDisplayDate(date)}</span>
-                        <Calendar className="size-4 shrink-0 text-muted-foreground" />
-                      </Button>
+                        <span>{formatDisplayDate(date)}</span>
+                        <Calendar className="size-4 text-foreground/80 shrink-0" />
+                      </button>
                     }
                   />
-                  <PopoverContent align="start" className="w-auto p-0">
+                  <PopoverContent align="start" className="w-auto p-0 border-0 bg-transparent shadow-none">
                     <CalendarComponent
                       selected={date}
                       onSelect={(newDate) => onUpdateHeaderField?.('date', newDate)}
                     />
                   </PopoverContent>
                 </Popover>
-              </Field>
+              </div>
 
-              <Field>
-                <FieldLabel htmlFor="meeting-start-time">Hora de inicio</FieldLabel>
-                <Input
-                  id="meeting-start-time"
-                  type="time"
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
+                <TimePicker
                   value={startTime || '10:00'}
-                  onChange={(e) => onUpdateHeaderField?.('startTime', e.target.value)}
-                  className="text-center text-xs font-medium"
+                  onChange={(val) => onUpdateHeaderField?.('startTime', val)}
                 />
-              </Field>
+              </div>
 
-              <Field>
-                <FieldLabel htmlFor="meeting-end-time">Término</FieldLabel>
-                <Input
-                  id="meeting-end-time"
-                  value={estimatedEndTime || '—'}
-                  readOnly
-                  aria-readonly="true"
-                  className="text-center text-xs font-medium text-muted-foreground"
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
+                <TimePicker
+                  value={estimatedEndTime || '11:00'}
+                  onChange={(newEnd) => {
+                    onUpdateHeaderField?.('endTime', newEnd);
+                    try {
+                      const [sh, sm] = (startTime || '10:00').split(':').map(Number);
+                      const [eh, em] = newEnd.split(':').map(Number);
+                      let diff = (eh * 60 + em) - (sh * 60 + sm);
+                      if (diff < 0) diff += 1440;
+                      if (diff > 0) onUpdateHeaderField?.('totalCalculatedDuration', diff);
+                    } catch {
+                      // ignore parse errors
+                    }
+                  }}
                 />
-              </Field>
+              </div>
 
-              <Field>
-                <FieldLabel htmlFor="meeting-duration">Duración</FieldLabel>
-                <Input
-                  id="meeting-duration"
-                  value={totalPlannedMinutes >= 60 ? `${Math.floor(totalPlannedMinutes / 60)}h${totalPlannedMinutes % 60 ? ` ${totalPlannedMinutes % 60}m` : ''}` : `${totalPlannedMinutes}m`}
-                  readOnly
-                  aria-readonly="true"
-                  className="text-center text-xs font-medium text-muted-foreground"
-                />
-              </Field>
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Duración</label>
+                <div className="w-full h-9 rounded-full bg-muted/40 border border-border/50 px-3.5 flex items-center justify-center text-xs font-medium text-foreground">
+                  {totalPlannedMinutes >= 60 ? `${Math.floor(totalPlannedMinutes / 60)}h${totalPlannedMinutes % 60 ? ` ${totalPlannedMinutes % 60}m` : ''}` : `${totalPlannedMinutes}m`}
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <Field>
-                <FieldLabel>Facilita</FieldLabel>
+            {/* Fila 2: Facilita (1fr), Participan (3fr) */}
+            <div className="grid grid-cols-[1fr_3fr] gap-3 items-end">
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <Button
+                      <button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full min-w-0 justify-between text-xs font-medium"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0"
                       >
                         {host ? (
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
                             {(() => {
                               const matched = members.find(
                                 (m) =>
                                   m.globalName.toLowerCase() === host.toLowerCase() ||
                                   m.tag.toLowerCase() === `@${host.toLowerCase()}`
                               );
-                              const color = matched?.avatarColor || discordColorFor(host);
+                              const color = matched?.avatarColor || DISCORD_PALETTES[Math.abs(host.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
                               return (
                                 <>
                                   <Avatar
                                     size="xs"
-                                    className="size-5 shrink-0 text-xs font-bold shadow-2xs"
+                                    className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
                                     <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
                                       {host.slice(0, 2).toUpperCase()}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="truncate">{host}</span>
+                                  <span className="font-medium text-foreground truncate">{host}</span>
                                 </>
                               );
                             })()}
@@ -376,8 +381,8 @@ export function PlannerSessionHeader({
                         ) : (
                           <span className="truncate text-muted-foreground">Buscar persona</span>
                         )}
-                        <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
-                      </Button>
+                        <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
+                      </button>
                     }
                   />
                   <DropdownMenuContent align="start" className="p-0">
@@ -386,37 +391,30 @@ export function PlannerSessionHeader({
                       hideRoles
                       selectedKeys={host ? new Set([host]) : new Set()}
                       onSelectionChange={(keys) => {
-                        const selectedTag = keys[0] || '';
-                        const selectedEntity = resolveDiscordEntity(selectedTag);
-                        const selectedHost = selectedEntity?.globalName || selectedTag.replace(/^@/, '');
+                        const selectedHost = keys[0] ? keys[0].replace(/^@/, '') : '';
                         onUpdateHeaderField?.('host', selectedHost);
-                        onUpdateHeaderField?.('hostId', selectedEntity?.id || null);
                       }}
                       onAddCustomParticipant={(tag) => {
                         const clean = tag.replace(/^@/, '');
-                        const entity = resolveDiscordEntity(tag);
                         onUpdateHeaderField?.('host', clean);
-                        onUpdateHeaderField?.('hostId', entity?.id || null);
                       }}
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </Field>
+              </div>
 
-              <Field className="sm:col-span-3">
-                <FieldLabel>Participan</FieldLabel>
+              <div>
+                <label className="text-xs font-semibold text-foreground mb-1.5 block">Participan</label>
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <Button
+                      <button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full min-w-0 justify-between text-xs font-medium"
+                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-3 text-xs text-foreground transition-colors cursor-pointer min-w-0"
                       >
                         {selectedKeys.size > 0 ? (
-                          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                            <div className="flex shrink-0 items-center -space-x-1.5">
+                          <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                            <div className="flex items-center -space-x-1.5 shrink-0">
                               {Array.from(selectedKeys).slice(0, 4).map((tag, idx) => {
                                 const cleanName = tag.replace(/^[@#]/, '');
                                 const matched = members.find(
@@ -426,12 +424,13 @@ export function PlannerSessionHeader({
                                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                                 );
                                 const isRole = tag.startsWith('#') || (!matched && tag.startsWith('@'));
-                                const color = matched?.avatarColor || discordColorFor(tag, idx + 1);
+                                const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
+
                                 return (
                                   <Avatar
                                     key={tag}
                                     size="xs"
-                                    className="size-5 shrink-0 border border-card text-xs font-bold shadow-2xs ring-1 ring-background"
+                                    className="size-5 text-[8.5px] font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
                                     <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
@@ -441,28 +440,27 @@ export function PlannerSessionHeader({
                                 );
                               })}
                             </div>
-                            <span className="min-w-0 truncate">
+                            <span className="font-medium text-foreground truncate min-w-0">
                               {Array.from(selectedKeys).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
                             </span>
                           </div>
                         ) : (
                           <span className="truncate text-muted-foreground">Buscar personas o roles</span>
                         )}
-                        <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
-                      </Button>
+                        <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
+                      </button>
                     }
                   />
                   <DropdownMenuContent align="start" className="p-0">
                     <SearchableParticipantMenu
                       selectedKeys={selectedKeys}
-                      onSelectionChange={(nextKeys) => {
-                        onUpdateHeaderField?.('mentions', nextKeys.join(' '));
-                        onUpdateHeaderField?.('participantIds', entityIdsFromSelection(nextKeys));
-                      }}
+                      onSelectionChange={(nextKeys) =>
+                        onUpdateHeaderField?.('mentions', nextKeys.join(' '))
+                      }
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </Field>
+              </div>
             </div>
           </div>
         ) : (
@@ -484,8 +482,17 @@ export function PlannerSessionHeader({
               </span>
 
               {host && (
-                <div className="inline-flex items-center gap-1 text-xs sm:text-sm text-muted-foreground font-normal">
-                  <span>Organiza</span>
+                <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground font-normal">
+                  <span>Organiza:</span>
+                  <Avatar
+                    size="xs"
+                    className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
+                    style={{ backgroundColor: '#5865F235', color: '#5865F2' }}
+                  >
+                    <AvatarFallback style={{ backgroundColor: '#5865F235', color: '#5865F2' }}>
+                      {host.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
                   <span className="font-semibold text-foreground">{host}</span>
                 </div>
               )}
@@ -506,13 +513,14 @@ export function PlannerSessionHeader({
                             `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                         );
                         const color =
-                          matched?.avatarColor || discordColorFor(tag, i);
+                          matched?.avatarColor ||
+                          DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                         const name = matched?.globalName || tag.replace(/^@/, '');
                         return (
                           <Avatar
                             key={i}
                             size="sm"
-                            className="size-5 text-xs font-bold border-2 border-background shadow-2xs shrink-0"
+                            className="size-5 text-[8.5px] font-bold border-2 border-background shadow-2xs shrink-0"
                             style={{ backgroundColor: `${color}30`, color }}
                           >
                             <AvatarFallback
