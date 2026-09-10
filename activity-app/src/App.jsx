@@ -49,8 +49,6 @@ import {
   Archive,
   ArrowUturnCwRight,
   Calendar,
-  Check,
-  Circle,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -71,7 +69,6 @@ import {
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {markdownToHtml} from './production-bridge.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
-import {applyDiscordTheme} from './discord-theme.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
@@ -383,14 +380,29 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
           <span>Imprimir / PDF</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onAction('archive', doc)}>
-          <Archive width={15} height={15} className="text-muted-foreground" />
-          <span>Archivar documento</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onClick={() => onAction('delete', doc)}>
-          <TrashBin width={15} height={15} className="text-destructive" />
-          <span>Eliminar documento</span>
-        </DropdownMenuItem>
+        {doc.archived ? (
+          <>
+            <DropdownMenuItem onClick={() => onAction('restore', doc)}>
+              <Archive width={15} height={15} className="text-muted-foreground" />
+              <span>Restaurar documento</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={() => onAction('permanent-delete', doc)}>
+              <TrashBin width={15} height={15} className="text-destructive" />
+              <span>Eliminar definitivamente</span>
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuItem onClick={() => onAction('archive', doc)}>
+              <Archive width={15} height={15} className="text-muted-foreground" />
+              <span>Archivar documento</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={() => onAction('delete', doc)}>
+              <TrashBin width={15} height={15} className="text-destructive" />
+              <span>Eliminar documento</span>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -418,18 +430,30 @@ function RichBody({html, onChecklistChange, className = ''}) {
   );
 }
 
-function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
+function EmptyState({query, onClearSearch, onNewDoc, onUpload, isArchived = false}) {
   return (
     <Empty className="my-8">
       <EmptyMedia variant="icon">
-        <Magnifier width={20} height={20} className="text-muted-foreground" />
+        {isArchived ? (
+          <Archive width={20} height={20} className="text-muted-foreground" />
+        ) : (
+          <Magnifier width={20} height={20} className="text-muted-foreground" />
+        )}
       </EmptyMedia>
       <EmptyHeader>
-        <EmptyTitle>{query ? 'Sin resultados' : 'Todavía no hay documentos'}</EmptyTitle>
+        <EmptyTitle>
+          {query
+            ? 'Sin resultados'
+            : isArchived
+              ? 'No hay documentos archivados'
+              : 'Todavía no hay documentos'}
+        </EmptyTitle>
         <EmptyDescription>
           {query
             ? `No encontramos documentos con “${query}”.`
-            : 'Crea un documento o sube un archivo para empezar.'}
+            : isArchived
+              ? 'Los documentos que archives en Bardo aparecerán en este lugar.'
+              : 'Crea un documento o sube un archivo para empezar.'}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
@@ -437,7 +461,7 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
           <Button variant="secondary" size="sm" onClick={onClearSearch}>
             Limpiar búsqueda
           </Button>
-        ) : (
+        ) : !isArchived ? (
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button variant="default" size="sm" onClick={onNewDoc}>
               <Plus width={16} height={16} /> Crear documento
@@ -446,7 +470,7 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload}) {
               <File width={16} height={16} /> Subir archivo
             </Button>
           </div>
-        )}
+        ) : null}
       </EmptyContent>
     </Empty>
   );
@@ -464,66 +488,26 @@ function DocsHeader({children, actions, className = ''}) {
   );
 }
 
-const THEME_MODE_LABELS = {
-  light: 'Modo claro',
-  dark: 'Modo oscuro',
-  system: 'Modo del sistema',
-};
-
-const THEME_MODE_ICONS = {
-  light: Sun,
-  dark: Moon,
-  system: Circle,
-};
-
 function ThemeModeMenu() {
-  const {theme: preference, setTheme} = useTheme('system');
-  const CurrentIcon = THEME_MODE_ICONS[preference] || Circle;
-  const currentLabel = THEME_MODE_LABELS[preference] || THEME_MODE_LABELS.system;
+  const {theme, setTheme} = useTheme('dark');
+  const isDark = theme === 'dark';
 
-  useEffect(() => {
-    const syncDiscordTheme = () => {
-      if (preference === 'system') applyDiscordTheme();
-    };
-    window.addEventListener('discord-theme-change', syncDiscordTheme);
-    return () => window.removeEventListener('discord-theme-change', syncDiscordTheme);
-  }, [preference]);
+  const toggleTheme = () => {
+    const nextTheme = isDark ? 'light' : 'dark';
+    setTheme(nextTheme);
+  };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted-foreground hover:text-foreground"
-            aria-label="Cambiar tema de apariencia"
-            title={`Tema actual: ${currentLabel}`}
-          >
-            <CurrentIcon width={16} height={16} />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>Apariencia</DropdownMenuLabel>
-        {Object.entries(THEME_MODE_LABELS).map(([id, label]) => {
-          const Icon = THEME_MODE_ICONS[id];
-          return (
-            <DropdownMenuItem
-              key={id}
-              onClick={() => {
-                setTheme(id);
-                applyDiscordTheme();
-              }}
-            >
-              <Icon width={15} height={15} className="text-muted-foreground" />
-              <span>{label}</span>
-              {preference === id && <Check width={15} height={15} className="theme-mode-check text-primary ml-auto" />}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      onClick={toggleTheme}
+      className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+      aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+    >
+      {isDark ? <Sun width={16} height={16} /> : <Moon width={16} height={16} />}
+    </Button>
   );
 }
 
@@ -626,7 +610,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
 
 function Library({
   docs,
-  total,
+  total: _total,
   query,
   setQuery,
   continueDoc,
@@ -635,8 +619,14 @@ function Library({
   onNew,
   onUpload,
   onDocAction,
+  activeTab = 'active',
+  onTabChange,
+  activeCount = 0,
+  archivedCount = 0,
 }) {
   const fileInputRef = useRef(null);
+  const isArchivedTab = activeTab === 'archived';
+
   return (
     <section className="library route-active">
       <div className="library-inner">
@@ -676,7 +666,7 @@ function Library({
           )}
         </InputGroup>
 
-        {continueDoc && !query && (
+        {continueDoc && !query && !isArchivedTab && (
           <section className="library-section continue-section">
             <h2 className="section-title">Continuar lectura</h2>
             <button className="continue-row" type="button" onClick={onContinue}>
@@ -691,17 +681,43 @@ function Library({
         )}
 
         <section className="library-section recent-section">
-          <div className="flex items-center justify-between">
-            <h2 className="section-title mb-0">
-              {query ? `Resultados (${docs.length})` : `Recientes (${total})`}
-            </h2>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs">
+              <button
+                type="button"
+                onClick={() => onTabChange?.('active')}
+                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                  activeTab === 'active'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Activos ({activeCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => onTabChange?.('archived')}
+                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                  activeTab === 'archived'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Archivados ({archivedCount})
+              </button>
+            </div>
+            {query && (
+              <span className="text-xs text-muted-foreground">
+                {docs.length} {docs.length === 1 ? 'resultado' : 'resultados'}
+              </span>
+            )}
           </div>
           {docs.length > 0 ? (
             <div className="docs-list">
               {docs.map(doc => (
-                <article className="doc-row" key={doc.id}>
+                <article className={`doc-row ${doc.archived ? 'opacity-85' : ''}`} key={doc.id}>
                   <span className="doc-symbol">
-                    <File width={18} height={18} />
+                    {doc.archived ? <Archive width={18} height={18} /> : <File width={18} height={18} />}
                   </span>
                   <button
                     className="doc-row-main"
@@ -709,7 +725,9 @@ function Library({
                     onClick={() => onOpen(doc.id)}
                   >
                     <strong>{doc.title || 'Sin título'}</strong>
-                    <span>{doc.origin || 'Creado en Bardo'} · {changeActorName(doc)} · {formatChangeTime(doc)}</span>
+                    <span>
+                      {doc.archived ? 'Archivado' : (doc.origin || 'Creado en Bardo')} · {changeActorName(doc)} · {formatChangeTime(doc)}
+                    </span>
                   </button>
                   <DocActionMenu
                     doc={doc}
@@ -722,6 +740,7 @@ function Library({
           ) : (
             <EmptyState
               query={query}
+              isArchived={isArchivedTab}
               onClearSearch={() => setQuery('')}
               onNewDoc={onNew}
               onUpload={() => fileInputRef.current?.click()}
@@ -732,6 +751,7 @@ function Library({
     </section>
   );
 }
+
 
 function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onChecklistChange, skipTransition = false}) {
   return (
@@ -754,15 +774,20 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
 
 function DeleteAlertDialog({isOpen, doc, action = 'delete', onConfirm, onCancel}) {
   const isArchive = action === 'archive';
+  const isPermanent = action === 'permanent-delete';
   return (
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>{isArchive ? 'Archivar documento' : 'Eliminar documento'}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {isArchive ? 'Archivar documento' : isPermanent ? 'Eliminar definitivamente' : 'Eliminar documento'}
+          </AlertDialogTitle>
           <AlertDialogDescription>
             {isArchive
-              ? `“${doc?.title || 'Sin título'}” se archivará y saldrá de la vista principal.`
-              : `“${doc?.title || 'Sin título'}” se eliminará de la biblioteca. Puedes restaurar los datos iniciales desde el menú de opciones.`}
+              ? `“${doc?.title || 'Sin título'}” se archivará y saldrá de la vista de documentos activos.`
+              : isPermanent
+                ? `“${doc?.title || 'Sin título'}” se eliminará de forma permanente. Esta acción no se puede deshacer.`
+                : `“${doc?.title || 'Sin título'}” se eliminará de la biblioteca.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -773,7 +798,7 @@ function DeleteAlertDialog({isOpen, doc, action = 'delete', onConfirm, onCancel}
             variant={isArchive ? 'default' : 'destructive'}
             onClick={() => onConfirm(doc?.id, action)}
           >
-            {isArchive ? 'Archivar' : 'Eliminar'}
+            {isArchive ? 'Archivar' : isPermanent ? 'Eliminar definitivamente' : 'Eliminar'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -916,12 +941,37 @@ function App() {
   const pendingRestore = useRef(null);
   const skipNextRouteAnimation = useRef(false);
 
+  const [libraryTab, setLibraryTab] = useState('active');
+
   const docs = store.docs;
-  const sortedDocs = useMemo(() => [...docs].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)), [docs]);
+  const activeDocs = useMemo(() => docs.filter(doc => !doc.archived), [docs]);
+  const archivedDocs = useMemo(() => docs.filter(doc => Boolean(doc.archived)), [docs]);
+
+  const displayedDocs = libraryTab === 'archived' ? archivedDocs : activeDocs;
+  const sortedDocs = useMemo(() => [...displayedDocs].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)), [displayedDocs]);
   const docsById = useMemo(() => new Map(docs.map(doc => [doc.id, doc])), [docs]);
   const currentDoc = route.id ? docsById.get(route.id) : null;
 
   useEffect(() => saveStore(store), [store]);
+
+  // Load archived docs from backend when switching to archived tab in production
+  useEffect(() => {
+    if (libraryTab === 'archived' && window.__bardoFetchArchivedDocs) {
+      window.__bardoFetchArchivedDocs().then(archived => {
+        if (Array.isArray(archived) && archived.length > 0) {
+          setStore(prev => {
+            const existingIds = new Set(prev.docs.map(d => d.id));
+            const newArchived = archived.filter(d => !existingIds.has(d.id));
+            if (newArchived.length === 0) return prev;
+            return {
+              ...prev,
+              docs: [...prev.docs, ...newArchived],
+            };
+          });
+        }
+      }).catch(err => console.error('Bardo Docs: error fetching archived docs', err));
+    }
+  }, [libraryTab]);
 
   const showToast = useCallback(message => {
     toast(message);
@@ -1069,16 +1119,60 @@ function App() {
     }
   }, [go, showToast]);
 
-  const deleteDoc = useCallback((id, action = 'delete') => {
+  const deleteDoc = useCallback(async (id, action = 'delete') => {
+    setModal(null);
+    if (action === 'archive') {
+      setStore(prev => ({
+        ...prev,
+        docs: prev.docs.map(doc => doc.id === id ? {
+          ...doc,
+          archived: true,
+          archivedAt: new Date().toISOString(),
+        } : doc),
+      }));
+      showToast('Documento archivado');
+      go('#docs');
+      return;
+    }
+
+    if (action === 'permanent-delete') {
+      setStore(prev => ({
+        ...prev,
+        docs: prev.docs.filter(doc => doc.id !== id),
+        deletedIds: [...new Set([...(prev.deletedIds || []), id])],
+      }));
+      if (window.__bardoDeleteDocumentPermanent) {
+        await window.__bardoDeleteDocumentPermanent(id).catch(err => console.error(err));
+      }
+      showToast('Documento eliminado definitivamente');
+      go('#docs');
+      return;
+    }
+
+    // Default delete
     setStore(prev => ({
       ...prev,
       docs: prev.docs.filter(doc => doc.id !== id),
-      deletedIds: [...new Set([...(prev.deletedIds || []), id])]
+      deletedIds: [...new Set([...(prev.deletedIds || []), id])],
     }));
-    setModal(null);
-    showToast(action === 'archive' ? 'Documento archivado' : 'Documento eliminado');
+    showToast('Documento eliminado');
     go('#docs');
   }, [go, showToast]);
+
+  const restoreDoc = useCallback(async (id) => {
+    setStore(prev => ({
+      ...prev,
+      docs: prev.docs.map(doc => doc.id === id ? {
+        ...doc,
+        archived: false,
+        archivedAt: null,
+      } : doc),
+    }));
+    if (window.__bardoRestoreDocument) {
+      await window.__bardoRestoreDocument(id).catch(err => console.error(err));
+    }
+    showToast('Documento restaurado');
+  }, [showToast]);
 
   const openDoc = useCallback((id, fromContinue = false) => {
     const target = `#doc-${id}`;
@@ -1094,7 +1188,7 @@ function App() {
     return sortedDocs.filter(doc => `${doc.title} ${doc.description} ${doc.origin} ${stripHtml(doc.body)}`.toLocaleLowerCase('es').includes(q));
   }, [query, sortedDocs]);
 
-  const continueDoc = lastOpened?.id && docsById.has(lastOpened.id) ? docsById.get(lastOpened.id) : sortedDocs[0];
+  const continueDoc = lastOpened?.id && docsById.has(lastOpened.id) ? docsById.get(lastOpened.id) : activeDocs[0];
 
   const docAction = useCallback(async (action, targetDoc) => {
     const doc = targetDoc?.id ? targetDoc : docsById.get(targetDoc);
@@ -1104,6 +1198,9 @@ function App() {
     if (action === 'duplicate') duplicateDoc(doc.id);
     if (action === 'archive') setModal({type: 'delete', docId: doc.id, action: 'archive'});
     if (action === 'delete') setModal({type: 'delete', docId: doc.id, action: 'delete'});
+    if (action === 'restore') restoreDoc(doc.id);
+    if (action === 'permanent-delete') setModal({type: 'delete', docId: doc.id, action: 'permanent-delete'});
+
     if (action === 'copy') {
       try {
         await copyText(`${doc.title}\n\n${doc.description}\n\n${stripHtml(doc.body)}`);
@@ -1222,7 +1319,7 @@ function App() {
       {route.type === 'library' && (
         <Library
           docs={filteredDocs}
-          total={docs.length}
+          total={displayedDocs.length}
           query={query}
           setQuery={setQuery}
           continueDoc={continueDoc}
@@ -1231,6 +1328,10 @@ function App() {
           onNew={() => go('#new')}
           onUpload={uploadDocument}
           onDocAction={docAction}
+          activeTab={libraryTab}
+          onTabChange={setLibraryTab}
+          activeCount={activeDocs.length}
+          archivedCount={archivedDocs.length}
         />
       )}
 

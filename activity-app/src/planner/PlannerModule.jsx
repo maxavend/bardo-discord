@@ -34,6 +34,9 @@ import {
   resetToDemoFixture,
   resetToCleanSession,
   deletePlannerSessionById,
+  restorePlannerSessionById,
+  deletePlannerSessionPermanentlyById,
+  fetchArchivedPlannerSessions,
   shouldLoadDemoFixture,
   generateDiscordAnnouncement,
   generateMinutesMarkdown,
@@ -621,6 +624,20 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     toast(`Evento abierto: ${event.title}`);
   }, [commitSessionState, handleTabChange]);
 
+  const [archivedPlannerEvents, setArchivedPlannerEvents] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchArchivedPlannerSessions().then((archived) => {
+      if (!cancelled && Array.isArray(archived)) {
+        setArchivedPlannerEvents(archived);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleCleanSession = useCallback(() => {
     const clean = resetToCleanSession();
     plannerStateRef.current = clean;
@@ -638,22 +655,60 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     setDeleteSessionModal({
       isOpen: true,
       session: target,
-      action: action === 'archive' ? 'archive' : 'delete',
+      action: action === 'archive' ? 'archive' : action === 'permanent-delete' ? 'permanent-delete' : 'delete',
     });
+  }, []);
+
+  const handleRestoreSession = useCallback(async (sessionToRestore) => {
+    if (!sessionToRestore) return;
+    const targetId = sessionToRestore.id || sessionToRestore.eventId || sessionToRestore.sessionId;
+    if (!targetId) return;
+
+    await restorePlannerSessionById(targetId);
+    setArchivedPlannerEvents((prev) => prev.filter((ev) => (ev.eventId || ev.id) !== targetId));
+    setPlannerEvents((prev) => [
+      {
+        ...sessionToRestore,
+        eventStatus: sessionToRestore.eventStatus || 'scheduled',
+        archived: false,
+      },
+      ...prev,
+    ]);
+    toast('Reunión restaurada');
   }, []);
 
   const handleConfirmDeleteSession = useCallback(async () => {
     const target = deleteSessionModal.session;
-    const isArchive = deleteSessionModal.action === 'archive';
+    const action = deleteSessionModal.action;
     setDeleteSessionModal({isOpen: false, session: null, action: 'delete'});
     if (!target) return;
 
     const targetId = target.id || target.eventId || target.sessionId;
     const currentId = plannerStateRef.current.id || plannerStateRef.current.eventId || plannerStateRef.current.sessionId;
 
-    // Eliminar o archivar de los eventos
+    if (action === 'permanent-delete') {
+      if (targetId) {
+        setArchivedPlannerEvents((prev) => prev.filter((ev) => (ev.eventId || ev.id) !== targetId));
+        await deletePlannerSessionPermanentlyById(targetId);
+      }
+      toast('Reunión eliminada definitivamente');
+      return;
+    }
+
+    const isArchive = action === 'archive';
+
+    // Eliminar o archivar de los eventos activos
     if (targetId) {
       setPlannerEvents((prev) => prev.filter((ev) => (ev.eventId || ev.id) !== targetId));
+      setArchivedPlannerEvents((prev) => [
+        {
+          ...target,
+          eventId: targetId,
+          archived: true,
+          archivedAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
       await deletePlannerSessionById(targetId);
     }
 
@@ -901,9 +956,12 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           plannerState={plannerState}
           sessionState={sessionState}
           events={plannerEvents}
+          archivedEvents={archivedPlannerEvents}
           selectedEventId={selectedEventId}
           onSelectEvent={handleSelectEvent}
           onDeleteSession={handleDeleteSessionPrompt}
+          onRestoreSession={handleRestoreSession}
+          onPermanentDeleteSession={(ev) => handleDeleteSessionPrompt(ev, 'permanent-delete')}
           onStartSession={() => {
             handleStartSession();
             handleTabChange('agenda');
@@ -1036,12 +1094,18 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {deleteSessionModal.action === 'archive' ? 'Archivar reunión' : 'Eliminar reunión'}
+              {deleteSessionModal.action === 'archive'
+                ? 'Archivar reunión'
+                : deleteSessionModal.action === 'permanent-delete'
+                  ? 'Eliminar reunión definitivamente'
+                  : 'Eliminar reunión'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteSessionModal.action === 'archive'
                 ? `“${deleteSessionModal.session?.title || 'Esta reunión'}” se archivará y dejará de mostrarse en la lista de reuniones activas.`
-                : `¿Estás seguro de que deseas eliminar “${deleteSessionModal.session?.title || 'esta reunión'}”? Esta acción no se puede deshacer.`}
+                : deleteSessionModal.action === 'permanent-delete'
+                  ? `¿Estás seguro de que deseas eliminar definitivamente “${deleteSessionModal.session?.title || 'esta reunión'}”? Esta acción no se puede deshacer.`
+                  : `¿Estás seguro de que deseas eliminar “${deleteSessionModal.session?.title || 'esta reunión'}”?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -2,7 +2,10 @@ import { requireDocsSession } from './discord-auth.js';
 import { canUserViewChannel, getUserChannelContext } from './discord-permissions.js';
 import {
   archivePlannerSession,
+  restorePlannerSession,
+  deletePlannerSessionPermanently,
   listPlannerSessionsForChannel,
+  listArchivedPlannerSessionsForChannel,
   loadLiveSessionState,
   loadPlannerSession,
   saveLiveSessionState,
@@ -34,8 +37,8 @@ function parsePlannerRoute(pathname) {
   if (parts.length === 1) {
     return { type: 'sessions', collection: false, id: decodeURIComponent(parts[0]), action: null };
   }
-  if (parts.length === 2 && parts[1] === 'live') {
-    return { type: 'sessions', collection: false, id: decodeURIComponent(parts[0]), action: 'live' };
+  if (parts.length === 2 && ['live', 'restore', 'permanent'].includes(parts[1])) {
+    return { type: 'sessions', collection: false, id: decodeURIComponent(parts[0]), action: parts[1] };
   }
   return null;
 }
@@ -72,7 +75,10 @@ export async function handlePlannerApi(request, url, env) {
   // 2. Planner Sessions Collection
   if (plannerRoute.collection) {
     if (request.method === 'GET') {
-      const sessions = await listPlannerSessionsForChannel(env.DB, session.guildId, session.channelId, 25);
+      const isArchived = url.searchParams.get('archived') === '1' || url.searchParams.get('status') === 'archived';
+      const sessions = isArchived
+        ? await listArchivedPlannerSessionsForChannel(env.DB, session.guildId, session.channelId, 25)
+        : await listPlannerSessionsForChannel(env.DB, session.guildId, session.channelId, 25);
       return json({ sessions });
     }
 
@@ -157,6 +163,16 @@ export async function handlePlannerApi(request, url, env) {
 
   // 4. Single Session by ID
   const sessionId = plannerRoute.id;
+
+  if (plannerRoute.action === 'restore' && request.method === 'POST') {
+    await restorePlannerSession(env.DB, sessionId, session.guildId, session.channelId, session.userId);
+    return json({ ok: true, restored: true, id: sessionId });
+  }
+
+  if (plannerRoute.action === 'permanent' && request.method === 'DELETE') {
+    await deletePlannerSessionPermanently(env.DB, sessionId, session.guildId, session.channelId);
+    return json({ ok: true, deleted: true, id: sessionId });
+  }
 
   if (request.method === 'GET') {
     const existing = await loadPlannerSession(env.DB, sessionId, session.guildId, session.channelId);

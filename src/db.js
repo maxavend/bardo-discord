@@ -214,6 +214,39 @@ export async function archiveDocument(
     .run();
 }
 
+export async function listArchivedDocumentsWithChannelAccessForGuild(db, guildId, limit = 100) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 250));
+  const result = await db
+    .prepare(
+      `SELECT d.id, d.title, d.description, d.original_markdown, d.pages, d.source_name,
+              d.created_at, d.updated_at, d.archived_at, d.created_by, d.source_mime,
+              d.source_type, d.import_status,
+              CASE WHEN d.source_blob IS NULL THEN 0 ELSE 1 END AS has_source,
+              GROUP_CONCAT(DISTINCT a.channel_id) AS access_channel_ids
+       FROM documents d
+       INNER JOIN document_channel_access a ON a.document_id = d.id
+       WHERE a.guild_id = ? AND d.archived_at IS NOT NULL
+       GROUP BY d.id, d.title, d.description, d.original_markdown, d.pages, d.source_name,
+                d.created_at, d.updated_at, d.archived_at, d.created_by, d.source_mime,
+                d.source_type, d.import_status, d.source_blob
+       ORDER BY COALESCE(d.archived_at, d.updated_at) DESC
+       LIMIT ?`,
+    )
+    .bind(guildId, safeLimit)
+    .all();
+
+  return (result?.results || []).map(row => ({
+    ...mapDocumentRow(row),
+    accessChannels: String(row.access_channel_ids || '').split(',').filter(Boolean),
+  })).filter(Boolean);
+}
+
+export async function deleteDocumentPermanently(db, documentId) {
+  await db.prepare('DELETE FROM document_channel_access WHERE document_id = ?').bind(documentId).run();
+  await db.prepare('DELETE FROM document_guild_access WHERE document_id = ?').bind(documentId).run();
+  await db.prepare('DELETE FROM documents WHERE id = ?').bind(documentId).run();
+}
+
 export async function restoreDocument(db, documentId) {
   const updatedAt = new Date().toISOString();
   await db
@@ -594,6 +627,40 @@ export async function listPlannerSessionsForChannel(db, guildId, channelId, limi
     .all();
 
   return (results || []).map(mapPlannerSessionRow);
+}
+
+export async function listArchivedPlannerSessionsForChannel(db, guildId, channelId, limit = 20) {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM planner_sessions
+       WHERE guild_id = ? AND channel_id = ? AND status = 'archived'
+       ORDER BY updated_at DESC, date DESC
+       LIMIT ?`,
+    )
+    .bind(guildId, channelId, limit)
+    .all();
+
+  return (results || []).map(mapPlannerSessionRow);
+}
+
+export async function restorePlannerSession(db, sessionId, guildId, channelId, userId) {
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE planner_sessions
+       SET status = 'scheduled', updated_at = ?, updated_by = ?
+       WHERE id = ? AND guild_id = ? AND channel_id = ?`,
+    )
+    .bind(now, userId, sessionId, guildId, channelId)
+    .run();
+}
+
+export async function deletePlannerSessionPermanently(db, sessionId, guildId, channelId) {
+  await db.prepare('DELETE FROM planner_live_sessions WHERE session_id = ?').bind(sessionId).run();
+  await db
+    .prepare('DELETE FROM planner_sessions WHERE id = ? AND guild_id = ? AND channel_id = ?')
+    .bind(sessionId, guildId, channelId)
+    .run();
 }
 
 export async function archivePlannerSession(db, sessionId, guildId, channelId, userId) {

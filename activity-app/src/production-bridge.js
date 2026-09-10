@@ -431,6 +431,33 @@ export async function prepareBardoProduction(options = {}) {
     return request(`/api/docs/${encodeURIComponent(documentId)}/message`, {method:'POST'});
   };
 
+  window.__bardoRestoreDocument = async documentId => {
+    return request(`/api/docs/${encodeURIComponent(documentId)}/restore`, {method:'POST'});
+  };
+
+  window.__bardoDeleteDocumentPermanent = async documentId => {
+    return request(`/api/docs/${encodeURIComponent(documentId)}/permanent`, {method:'DELETE'});
+  };
+
+  window.__bardoFetchArchivedDocs = async () => {
+    const res = await request('/api/docs?archived=1');
+    return (res?.documents || []).map(item => ({
+      id: item.id,
+      title: item.title || 'Sin título',
+      description: item.description || '',
+      body: markdownToHtml(item.markdown || '', item.title || ''),
+      origin: item.sourceName ? 'Desde Discord' : 'Creado en Bardo',
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
+      archivedAt: item.archivedAt || null,
+      createdByName: item.createdByName || null,
+      updatedByName: item.updatedByName || item.createdByName || null,
+      builtin: false,
+      stress: false,
+      archived: true,
+    }));
+  };
+
   async function syncStore(nextJson) {
     if (nextJson === lastStoreJson) return;
     lastStoreJson = nextJson;

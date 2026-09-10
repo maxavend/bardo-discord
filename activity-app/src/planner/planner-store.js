@@ -508,10 +508,94 @@ export async function deletePlannerSessionById(sessionId) {
         headers,
       });
     } catch (err) {
-      console.error('Bardo Planner: error eliminando sesión en servidor', err);
+      console.error('Bardo Planner: error archivando sesión en servidor', err);
     }
   }
 }
+
+export async function restorePlannerSessionById(sessionId) {
+  if (!sessionId) return;
+  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
+        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
+        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
+      };
+      await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}/restore`, {
+        method: 'POST',
+        headers,
+      });
+    } catch (err) {
+      console.error('Bardo Planner: error restaurando sesión en servidor', err);
+    }
+  }
+}
+
+export async function deletePlannerSessionPermanentlyById(sessionId) {
+  if (!sessionId) return;
+  if (typeof window !== 'undefined' && Array.isArray(window.__bardoChannelSessions)) {
+    window.__bardoChannelSessions = window.__bardoChannelSessions.filter((s) => s.id !== sessionId);
+  }
+
+  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
+        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
+        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
+      };
+      await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}/permanent`, {
+        method: 'DELETE',
+        headers,
+      });
+    } catch (err) {
+      console.error('Bardo Planner: error eliminando permanentemente sesión en servidor', err);
+    }
+  }
+}
+
+export async function fetchArchivedPlannerSessions() {
+  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
+        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
+        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
+      };
+      const res = await fetch('/api/planner/sessions?archived=1', {
+        headers,
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return (data.sessions || []).map((s) => ({
+          eventId: s.id,
+          id: s.id,
+          eventStatus: s.status,
+          title: s.title,
+          date: s.date,
+          startTime: s.startTime,
+          host: s.hostName || s.host || '',
+          description: s.description || '',
+          blocks: s.blocks || [],
+          archived: true,
+          archivedAt: s.archivedAt,
+        }));
+      }
+    } catch (err) {
+      console.error('Bardo Planner: error al obtener sesiones archivadas', err);
+    }
+  }
+  return [];
+}
+
 
 export function generateDiscordAnnouncement(plannerState) {
   const computed = computePlannerTimes(plannerState);

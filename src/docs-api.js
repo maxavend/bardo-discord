@@ -6,10 +6,13 @@ import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
   adoptLegacyDocumentsForGuild,
   archiveDocument,
+  restoreDocument,
+  deleteDocumentPermanently,
   cacheNormalizedDocument,
   grantDocumentGuildAccess,
   grantDocumentChannelAccess,
   listDocumentsWithChannelAccessForGuild,
+  listArchivedDocumentsWithChannelAccessForGuild,
   listDocumentChannelAccess,
   loadDocument,
   loadDocumentSource,
@@ -91,7 +94,7 @@ function parsePath(pathname) {
   const rest = pathname.slice(DOCS_API_PREFIX.length + 1);
   const [encodedId, action, extra] = rest.split('/');
   if (!encodedId || extra) return null;
-  if (action && !['source', 'normalize', 'message'].includes(action)) return null;
+  if (action && !['source', 'normalize', 'message', 'restore', 'permanent'].includes(action)) return null;
 
   try {
     const id = normalizeDocumentId(decodeURIComponent(encodedId));
@@ -257,12 +260,17 @@ export async function handleDocsApi(request, url, env) {
   if (!route.collection && route.action === 'message') return handleMessage(route, request, env, session);
 
   if (route.collection && request.method === 'GET') {
+    const isArchivedQuery = url.searchParams.get('archived') === '1' || url.searchParams.get('status') === 'archived';
+    const rawList = isArchivedQuery
+      ? await listArchivedDocumentsWithChannelAccessForGuild(env.DB, session.guildId, 150)
+      : await listDocumentsWithChannelAccessForGuild(env.DB, session.guildId, 150);
+
     const documents = await filterDocumentsBySessionAccess(
       env,
       session,
-      await listDocumentsWithChannelAccessForGuild(env.DB, session.guildId, 150),
+      rawList,
     );
-    const contextDocumentId = await resolveContextDocument(request, env, session);
+    const contextDocumentId = isArchivedQuery ? null : await resolveContextDocument(request, env, session);
 
     if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
       const contextDocument = await loadDocument(env.DB, contextDocumentId);
@@ -285,8 +293,10 @@ export async function handleDocsApi(request, url, env) {
     let payload;
     try { payload = await request.json(); } catch { return json({ error: 'Invalid JSON payload' }, 400); }
 
-    const preferredId = typeof payload?.id === 'string' ? payload.id.trim() : '';
-    const documentId = preferredId && /^[A-Za-z0-9._:-]{1,128}$/.test(preferredId)
+    const preferredId = typeof payload?.id === 'string' && payload.id.trim()
+      ? normalizeDocumentId(payload.id.trim())
+      : null;
+    const documentId = preferredId && !await loadDocument(env.DB, preferredId)
       ? preferredId
       : crypto.randomUUID();
 
@@ -325,6 +335,16 @@ export async function handleDocsApi(request, url, env) {
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
   const existing = access.document;
+
+  if (route.action === 'restore' && request.method === 'POST') {
+    await restoreDocument(env.DB, route.id);
+    return json({ ok: true, restored: true, id: route.id });
+  }
+
+  if (route.action === 'permanent' && request.method === 'DELETE') {
+    await deleteDocumentPermanently(env.DB, route.id);
+    return json({ ok: true, deleted: true, id: route.id });
+  }
 
   if (request.method === 'GET') return json(serialize(existing));
 

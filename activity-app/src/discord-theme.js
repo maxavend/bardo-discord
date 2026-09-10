@@ -12,18 +12,20 @@ function normalizePreference(value) {
 
 export function getThemePreference() {
   try {
-    const preference = normalizePreference(localStorage.getItem(THEME_PREFERENCE_KEY));
+    const preference = normalizeTheme(localStorage.getItem(THEME_PREFERENCE_KEY));
     if (preference) return preference;
     for (const legacyKey of LEGACY_THEME_KEYS) {
-      const legacyPreference = normalizePreference(localStorage.getItem(legacyKey));
+      const legacyPreference = normalizeTheme(localStorage.getItem(legacyKey));
       if (legacyPreference) {
         localStorage.setItem(THEME_PREFERENCE_KEY, legacyPreference);
         return legacyPreference;
       }
     }
-    return 'system';
+    // Default to discord client theme or system theme on first visit
+    const detected = resolveDiscordTheme({allowSystem: true}) || 'dark';
+    return detected;
   } catch {
-    return 'system';
+    return 'dark';
   }
 }
 

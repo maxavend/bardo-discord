@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -18,6 +19,7 @@ import {
   ChevronRight,
   Archive,
   MoreVertical,
+  RotateCcw,
 } from 'lucide-react';
 import { PlusIcon, DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
 import { SESSION_STATUS, recalculateEstimatedEndTime } from './session-runner.js';
@@ -48,9 +50,13 @@ export function PlannerHomeView({
   onNewCleanSession,
   onDeleteSession,
   events = [],
+  archivedEvents = [],
   selectedEventId = null,
   onSelectEvent,
+  onRestoreSession,
+  onPermanentDeleteSession,
 }) {
+  const [eventsTab, setEventsTab] = useState('active');
   const {
     title = 'Reunión sin título',
     description = '',
@@ -293,91 +299,202 @@ export function PlannerHomeView({
       </section>
 
       {/* ── Event index / stress fixture ─────────────────────────────────── */}
-      {events.length > 0 && (
+      {(events.length > 0 || archivedEvents.length > 0) && (
         <section className="library-section recent-section">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="section-title mb-0">Eventos ({events.length})</h3>
-            <span className="text-[11px] text-muted-foreground self-center">Explora tus agendas</span>
+          <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs">
+              <button
+                type="button"
+                onClick={() => setEventsTab('active')}
+                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                  eventsTab === 'active'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Reuniones ({events.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEventsTab('archived')}
+                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                  eventsTab === 'archived'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Archivadas ({archivedEvents.length})
+              </button>
+            </div>
+            <span className="text-[11px] text-muted-foreground self-center">
+              {eventsTab === 'active' ? 'Explora tus agendas' : 'Reuniones archivadas'}
+            </span>
           </div>
-          <div className="docs-list">
-            {events.map((event) => {
-              const eventMinutes = (event.blocks || []).reduce((sum, block) => sum + (block.durationMinutes || 0), 0);
-              const eventDate = event.date
-                ? new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${event.date}T12:00:00`))
-                : 'Fecha por confirmar';
-              const eventStatus = event.eventStatus === 'completed'
-                ? 'Completado'
-                : event.eventStatus === 'in_progress'
-                  ? 'En curso'
-                  : 'Programado';
-              const isSelected = selectedEventId === event.eventId;
-              return (
-                <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
-                  <span className="doc-symbol">
-                    {event.eventStatus === 'completed' ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
-                  </span>
-                  <button
-                    className="doc-row-main"
-                    type="button"
-                    onClick={() => onSelectEvent?.(event)}
-                    aria-label={`Abrir evento ${event.title}`}
-                  >
-                    <strong>{event.title}</strong>
-                    <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
-                  </button>
-                  {onDeleteSession && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              aria-label={`Opciones del evento ${event.title}`}
-                              className="text-muted-foreground hover:text-foreground shrink-0 rounded-full cursor-pointer"
-                              onClick={(e) => e.stopPropagation()}
-                              onPointerDown={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical className="size-3.5" />
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuGroup>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDeleteSession(event, 'archive');
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Archive className="size-4 text-muted-foreground" />
-                              <span>Archivar reunión</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDeleteSession(event, 'delete');
-                              }}
-                              className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                            >
-                              <TrashIcon className="size-4" />
-                              <span>Eliminar reunión</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  )}
-                  <ChevronRight className="size-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                </article>
-              );
-            })}
-          </div>
+
+          {eventsTab === 'active' ? (
+            events.length > 0 ? (
+              <div className="docs-list">
+                {events.map((event) => {
+                  const eventMinutes = (event.blocks || []).reduce((sum, block) => sum + (block.durationMinutes || 0), 0);
+                  const eventDate = event.date
+                    ? new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${event.date}T12:00:00`))
+                    : 'Fecha por confirmar';
+                  const eventStatus = event.eventStatus === 'completed'
+                    ? 'Completado'
+                    : event.eventStatus === 'in_progress'
+                      ? 'En curso'
+                      : 'Programado';
+                  const isSelected = selectedEventId === event.eventId;
+                  return (
+                    <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
+                      <span className="doc-symbol">
+                        {event.eventStatus === 'completed' ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
+                      </span>
+                      <button
+                        className="doc-row-main"
+                        type="button"
+                        onClick={() => onSelectEvent?.(event)}
+                        aria-label={`Abrir evento ${event.title}`}
+                      >
+                        <strong>{event.title}</strong>
+                        <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
+                      </button>
+                      {onDeleteSession && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  aria-label={`Opciones del evento ${event.title}`}
+                                  className="text-muted-foreground hover:text-foreground shrink-0 rounded-full cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="size-3.5" />
+                                </Button>
+                              }
+                            />
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteSession(event, 'archive');
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <Archive className="size-4 text-muted-foreground" />
+                                  <span>Archivar reunión</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteSession(event, 'delete');
+                                  }}
+                                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                                >
+                                  <TrashIcon className="size-4" />
+                                  <span>Eliminar reunión</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
+                      <ChevronRight className="size-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted-foreground rounded-xl border border-dashed border-border/60">
+                No hay reuniones activas programadas.
+              </div>
+            )
+          ) : (
+            archivedEvents.length > 0 ? (
+              <div className="docs-list">
+                {archivedEvents.map((event) => {
+                  const eventMinutes = (event.blocks || []).reduce((sum, block) => sum + (block.durationMinutes || 0), 0);
+                  const eventDate = event.date
+                    ? new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${event.date}T12:00:00`))
+                    : 'Fecha por confirmar';
+                  return (
+                    <article className="doc-row opacity-85" key={event.eventId || event.id}>
+                      <span className="doc-symbol">
+                        <Archive className="size-4.5 text-muted-foreground" />
+                      </span>
+                      <button
+                        className="doc-row-main"
+                        type="button"
+                        onClick={() => onSelectEvent?.(event)}
+                        aria-label={`Abrir reunión archivada ${event.title}`}
+                      >
+                        <strong>{event.title}</strong>
+                        <span>Archivada · {eventDate} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
+                      </button>
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label={`Opciones de reunión archivada ${event.title}`}
+                                className="text-muted-foreground hover:text-foreground shrink-0 rounded-full cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="size-3.5" />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRestoreSession?.(event);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <RotateCcw className="size-4 text-muted-foreground" />
+                                <span>Restaurar reunión</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onPermanentDeleteSession?.(event);
+                                }}
+                                className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                              >
+                                <TrashIcon className="size-4" />
+                                <span>Eliminar definitivamente</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted-foreground rounded-xl border border-dashed border-border/60">
+                No hay reuniones archivadas.
+              </div>
+            )
+          )}
         </section>
       )}
 
