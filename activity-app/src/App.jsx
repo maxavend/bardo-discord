@@ -6,7 +6,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
@@ -349,37 +351,49 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
           <ArrowUturnCwRight width={15} height={15} className="text-muted-foreground" />
           <span>Compartir en el canal</span>
         </DropdownMenuItem>
+
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Descargar</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => onAction('markdown-preview', doc)}>
-          <Eye width={15} height={15} className="text-muted-foreground" />
-          <span>Ver Markdown</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction('markdown', doc)}>
-          <FileText width={15} height={15} className="text-muted-foreground" />
-          <span>Descargar Markdown</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction('html', doc)}>
-          <FileText width={15} height={15} className="text-muted-foreground" />
-          <span>Descargar HTML</span>
-        </DropdownMenuItem>
-        {window.__BARDO_PRODUCTION__ && (
-          <>
-            <DropdownMenuItem onClick={() => onAction('pdf', doc)}>
-              <FileText width={15} height={15} className="text-muted-foreground" />
-              <span>Descargar PDF</span>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <FileArrowUp width={15} height={15} className="text-muted-foreground" />
+            <span>Descargar y exportar</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-52">
+            <DropdownMenuItem onClick={() => onAction('markdown-preview', doc)}>
+              <Eye width={15} height={15} className="text-muted-foreground" />
+              <span>Ver Markdown</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAction('docx', doc)}>
+            <DropdownMenuItem onClick={() => onAction('markdown', doc)}>
               <FileText width={15} height={15} className="text-muted-foreground" />
-              <span>Descargar Word</span>
+              <span>Markdown (.md)</span>
             </DropdownMenuItem>
-          </>
-        )}
-        <DropdownMenuItem onClick={() => onAction('print', doc)}>
-          <Printer width={15} height={15} className="text-muted-foreground" />
-          <span>Imprimir / PDF</span>
-        </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction('html', doc)}>
+              <FileText width={15} height={15} className="text-muted-foreground" />
+              <span>HTML (.html)</span>
+            </DropdownMenuItem>
+            {window.__BARDO_PRODUCTION__ && (
+              <>
+                <DropdownMenuItem onClick={() => onAction('pdf', doc)}>
+                  <FileText width={15} height={15} className="text-muted-foreground" />
+                  <span>PDF (.pdf)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onAction('docx', doc)}>
+                  <FileText width={15} height={15} className="text-muted-foreground" />
+                  <span>Word (.docx)</span>
+                </DropdownMenuItem>
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onAction('print', doc)}>
+              <Printer width={15} height={15} className="text-muted-foreground" />
+              <span>Imprimir / PDF</span>
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
         <DropdownMenuSeparator />
+
         {doc.archived ? (
           <>
             <DropdownMenuItem onClick={() => onAction('restore', doc)}>
