@@ -6,11 +6,15 @@ import {
   CheckCircle2,
   Clock,
   Mic,
-  Copy,
   RotateCw,
-  Play,
 } from 'lucide-react';
+import {
+  PlayIcon,
+  CopyIcon,
+  FileTextIcon,
+} from '@/components/ui/animated-icons';
 import { computeSessionRecap } from './session-assistant-engine.js';
+import { generateMinutesMarkdown } from './planner-store.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
 
 export function SessionRecapView({
@@ -21,9 +25,21 @@ export function SessionRecapView({
   onNewSession,
   onRenameRecording,
   onDeleteRecording,
+  onSaveDocToLibrary,
 }) {
   const recap = computeSessionRecap(plannerState, sessionState);
   const isInterrupted = recap.isInterrupted;
+
+  const handleSaveDoc = () => {
+    if (!onSaveDocToLibrary) return;
+    const md = generateMinutesMarkdown(plannerState, sessionState);
+    onSaveDocToLibrary({
+      id: `minutes-${Date.now().toString(36)}`,
+      title: `Acta: ${plannerState.title || 'Reunión'}`,
+      description: `Acta y acuerdos de la sesión del ${plannerState.date || new Date().toISOString().split('T')[0]}`,
+      body: md,
+    });
+  };
 
   const handleCopyRecap = async () => {
     let text = `📋 **${recap.recapTitle}**\n`;
@@ -73,12 +89,17 @@ export function SessionRecapView({
             <div className="flex items-center gap-2 flex-wrap">
               {isInterrupted && onResumeSession && (
                 <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3">
-                  <Play className="size-3.5" /> Reanudar reunión
+                  <PlayIcon className="size-3.5" /> Reanudar reunión
                 </Button>
               )}
               <Button variant="secondary" size="sm" onClick={handleCopyRecap} className="h-8 px-3">
-                <Copy className="size-3.5" /> Copiar resumen
+                <CopyIcon className="size-3.5" /> Copiar resumen
               </Button>
+              {onSaveDocToLibrary && (
+                <Button variant="default" size="sm" onClick={handleSaveDoc} className="h-8 px-3 font-semibold">
+                  <FileTextIcon className="size-3.5" /> Guardar acta en Docs
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={onNewSession} className="h-8 px-2.5 text-muted-foreground hover:text-foreground">
                 <RotateCw className="size-3.5" /> Nueva reunión
               </Button>

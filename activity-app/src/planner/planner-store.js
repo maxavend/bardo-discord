@@ -81,11 +81,13 @@ export const DEMO_PLANNER_FIXTURE = {
     {
       id: 'b-3',
       title: 'Break',
+      type: 'break',
+      isBreak: true,
       durationMinutes: 10,
       manualDuration: 10,
-      leader: 'Todos',
-      participants: 'Todo el equipo',
-      introDesc: 'Pausa para descansar y prepararnos para la siguiente revisión.',
+      leader: '',
+      participants: '',
+      introDesc: '',
       phases: {context: 0, review: 10, closing: 0},
       subpoints: [],
       decisions: [],
@@ -226,17 +228,100 @@ export const DEMO_PLANNER_EVENTS = [
   }),
 ];
 
+export function isProductionActivity() {
+  if (typeof window === 'undefined') return false;
+  if (window.__BARDO_PRODUCTION__) return true;
+  const params = new URLSearchParams(window.location.search);
+  return params.has('instance_id') || params.has('frame_id') || /\.discordsays\.com$/i.test(window.location.hostname || '');
+}
+
+export function shouldLoadDemoFixture() {
+  if (typeof window === 'undefined') return false;
+  if (isProductionActivity()) return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('demo') === '1';
+}
+
+export function isDemoPlannerState(state) {
+  if (!state || typeof state !== 'object') return false;
+  return state.id === 'demo-session-weekly-design'
+    || state.sessionId === 'demo-session-weekly-design'
+    || state.title === 'Weekly de Diseño & SD'
+    || state.title === 'Weekly Diseño & SD'
+    || (state.host === 'Camila' && (state.mentions || '').includes('@diseño'));
+}
+
 export function loadPlannerEvents() {
+  if (typeof window !== 'undefined') {
+    const channelSessions = window.__bardoChannelSessions || [];
+    if (channelSessions.length > 0) {
+      return channelSessions.map((s) => ({
+        eventId: s.id,
+        id: s.id,
+        eventStatus: s.status === 'live' ? 'in_progress' : s.status,
+        title: s.title,
+        date: s.date,
+        startTime: s.startTime,
+        host: s.hostName || s.host || '',
+        description: s.description || '',
+        blocks: (s.blocks || []).map(clonePlannerState),
+      }));
+    }
+    if (!shouldLoadDemoFixture()) {
+      return [];
+    }
+  }
+  if (!shouldLoadDemoFixture()) {
+    return [];
+  }
   return DEMO_PLANNER_EVENTS.map(clonePlannerState);
 }
 
 export function loadPlannerState() {
   try {
     const raw = localStorage.getItem(PLANNER_STORE_KEY);
-    if (!raw) return computePlannerTimes(DEMO_PLANNER_FIXTURE);
-    return computePlannerTimes(JSON.parse(raw));
+    if (!raw) {
+      if (shouldLoadDemoFixture()) {
+        return computePlannerTimes(DEMO_PLANNER_FIXTURE);
+      }
+      const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
+      const host = u?.global_name || u?.username || '';
+      return computePlannerTimes({
+        ...DEFAULT_EMPTY_SESSION,
+        id: `sess-${Date.now().toString(36)}`,
+        host,
+        date: new Date().toISOString().split('T')[0],
+      });
+    }
+    const parsed = JSON.parse(raw);
+    if (!shouldLoadDemoFixture() && isDemoPlannerState(parsed)) {
+      try {
+        localStorage.removeItem(PLANNER_STORE_KEY);
+      } catch {}
+      const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
+      const host = u?.global_name || u?.username || '';
+      const clean = computePlannerTimes({
+        ...DEFAULT_EMPTY_SESSION,
+        id: `sess-${Date.now().toString(36)}`,
+        host,
+        date: new Date().toISOString().split('T')[0],
+      });
+      savePlannerState(clean);
+      return clean;
+    }
+    return computePlannerTimes(parsed);
   } catch {
-    return computePlannerTimes(DEMO_PLANNER_FIXTURE);
+    if (shouldLoadDemoFixture()) {
+      return computePlannerTimes(DEMO_PLANNER_FIXTURE);
+    }
+    const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
+    const host = u?.global_name || u?.username || '';
+    return computePlannerTimes({
+      ...DEFAULT_EMPTY_SESSION,
+      id: `sess-${Date.now().toString(36)}`,
+      host,
+      date: new Date().toISOString().split('T')[0],
+    });
   }
 }
 
@@ -331,12 +416,18 @@ export function loadLiveSessionState(plannerState = null) {
   try {
     const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
     if (!raw) {
-      if (plannerState?.title === 'Weekly Diseño & SD' || plannerState?.title?.includes('Weekly Diseño')) {
+      if (shouldLoadDemoFixture() && (plannerState?.title === 'Weekly Diseño & SD' || plannerState?.title?.includes('Weekly Diseño'))) {
         return createDemoLiveSession(plannerState);
       }
       return {...DEFAULT_LIVE_SESSION};
     }
     const parsed = JSON.parse(raw);
+    if (!shouldLoadDemoFixture() && (parsed?.sessionId === 'demo-session-weekly-design' || parsed?.sessionId?.startsWith('demo-session-'))) {
+      try {
+        localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+      } catch {}
+      return {...DEFAULT_LIVE_SESSION};
+    }
     const migrated = migrateLiveSessionState(plannerState, parsed);
     return {
       ...migrated,
@@ -382,10 +473,44 @@ export function resetToDemoFixture() {
 }
 
 export function resetToCleanSession() {
-  const computed = computePlannerTimes(DEFAULT_EMPTY_SESSION);
+  const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
+  const host = u?.global_name || u?.username || '';
+  const cleanSession = {
+    ...DEFAULT_EMPTY_SESSION,
+    id: `sess-${Date.now().toString(36)}`,
+    host: host || DEFAULT_EMPTY_SESSION.host,
+    date: new Date().toISOString().split('T')[0],
+  };
+  const computed = computePlannerTimes(cleanSession);
   savePlannerState(computed);
   clearLiveSessionState();
   return computed;
+}
+
+export async function deletePlannerSessionById(sessionId) {
+  if (!sessionId) return;
+  if (typeof window !== 'undefined' && Array.isArray(window.__bardoChannelSessions)) {
+    window.__bardoChannelSessions = window.__bardoChannelSessions.filter((s) => s.id !== sessionId);
+  }
+
+  // Notificar al backend si estamos en producción con token de sesión
+  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
+        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
+        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
+      };
+      await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+        headers,
+      });
+    } catch (err) {
+      console.error('Bardo Planner: error eliminando sesión en servidor', err);
+    }
+  }
 }
 
 export function generateDiscordAnnouncement(plannerState) {
@@ -403,6 +528,10 @@ export function generateDiscordAnnouncement(plannerState) {
 
   text += `\n**📋 Agenda de la sesión:**\n`;
   (computed.blocks || []).forEach((block, index) => {
+    if (block.isBreak) {
+      text += `☕ *${block.title || 'Break'} (${block.durationMinutes}m)*\n`;
+      return;
+    }
     text += `${index + 1}. **${block.title}** (${block.durationMinutes}m)`;
     if (block.leader) text += ` — *Lidera: ${block.leader}*`;
     text += '\n';

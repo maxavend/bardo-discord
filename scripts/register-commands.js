@@ -8,8 +8,8 @@ if (!DISCORD_TOKEN || !DISCORD_GUILD_ID) {
   process.exit(1);
 }
 
-const documentCommand = new SlashCommandBuilder()
-  .setName('upload-docs')
+const docUploadCommand = new SlashCommandBuilder()
+  .setName('doc-upload')
   .setDescription('Sube un documento al espacio de Docs de este canal.')
   .addAttachmentOption((option) =>
     option
@@ -22,6 +22,73 @@ const documentCommand = new SlashCommandBuilder()
       .setName('titulo')
       .setDescription('Título opcional para el documento.'),
   );
+
+const legacyUploadCommand = new SlashCommandBuilder()
+  .setName('upload-docs')
+  .setDescription('Sube un documento al espacio de Docs de este canal (alias de /doc-upload).')
+  .addAttachmentOption((option) =>
+    option
+      .setName('archivo')
+      .setDescription('Markdown, TXT, PDF o Word (.docx)')
+      .setRequired(true),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('titulo')
+      .setDescription('Título opcional para el documento.'),
+  );
+
+const docNewCommand = new SlashCommandBuilder()
+  .setName('doc-new')
+  .setDescription('Crea un nuevo documento colaborativo en Bardo para este canal.')
+  .addStringOption((option) =>
+    option
+      .setName('titulo')
+      .setDescription('Título opcional para el nuevo documento.'),
+  );
+
+const reuNewCommand = new SlashCommandBuilder()
+  .setName('reu-new')
+  .setDescription('Crea y agenda una nueva reunión con orden del día y tiempos para este canal.')
+  .addStringOption((option) =>
+    option
+      .setName('titulo')
+      .setDescription('Título o tema de la reunión.')
+      .setRequired(true),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('fecha')
+      .setDescription('Fecha en formato YYYY-MM-DD (ej: 2026-09-15). Por defecto hoy.'),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('hora')
+      .setDescription('Hora en formato HH:MM (ej: 15:30). Por defecto 10:00.'),
+  )
+  .addIntegerOption((option) =>
+    option
+      .setName('duracion')
+      .setDescription('Duración estimada en minutos (ej: 45, 60). Por defecto 60.'),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('descripcion')
+      .setDescription('Descripción u objetivo general de la reunión.'),
+  );
+
+const reusCommand = new SlashCommandBuilder()
+  .setName('reus')
+  .setDescription('Muestra las reuniones agendadas, en curso y concluidas de este canal.');
+
+const allCommands = [
+  reuNewCommand,
+  reusCommand,
+  docUploadCommand,
+  docNewCommand,
+  legacyUploadCommand,
+];
+
 
 async function registerCommands() {
   console.log('Obteniendo información de la aplicación de Discord...');
@@ -37,7 +104,7 @@ async function registerCommands() {
   const app = await appRes.json();
   const applicationId = app.id;
 
-  console.log(`Registrando comando /upload-docs en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
+  console.log(`Registrando comandos (/reu-new, /reus, /doc-upload, /doc-new, /upload-docs) en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
 
   const regRes = await fetch(
     `https://discord.com/api/v10/applications/${applicationId}/guilds/${DISCORD_GUILD_ID}/commands`,
@@ -47,7 +114,7 @@ async function registerCommands() {
         Authorization: `Bot ${DISCORD_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify([documentCommand.toJSON()]),
+      body: JSON.stringify(allCommands.map((cmd) => cmd.toJSON())),
     },
   );
 
@@ -57,7 +124,7 @@ async function registerCommands() {
   }
 
   const registered = await regRes.json();
-  console.log(`✅ Comando /upload-docs registrado exitosamente (${registered.length} comandos activos en guild).`);
+  console.log(`✅ Comandos registrados exitosamente (${registered.length} comandos activos en guild): ${registered.map((c) => `/${c.name}`).join(', ')}.`);
 }
 
 registerCommands().catch((err) => {

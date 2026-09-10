@@ -1,5 +1,7 @@
 const STORE_KEY = 'bardo.docs.heroui.v1';
 const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
+const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
+const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 
 function escapeHtml(value = '') {
@@ -286,6 +288,63 @@ export async function prepareBardoProduction(options = {}) {
     }
   }
 
+  try {
+    const contextRes = await fetch('/api/discord/channel-context', {headers, cache:'no-store'});
+    if (contextRes.ok) {
+      window.__bardoChannelContext = await contextRes.json();
+    }
+  } catch (err) {
+    console.warn('Bardo: no se pudo cargar contexto de canal', err);
+  }
+
+  if (sdk?.commands?.getInstanceConnectedParticipants) {
+    try {
+      const participants = await sdk.commands.getInstanceConnectedParticipants();
+      if (participants && Array.isArray(participants.participants)) {
+        window.__bardoLiveParticipants = participants.participants.map((p) => ({
+          id: p.id,
+          username: p.username,
+          globalName: p.global_name || p.username,
+          avatar: p.avatar,
+        }));
+      }
+    } catch {}
+  }
+
+  try {
+    const plannerRes = await fetch('/api/planner/sessions', {headers, cache:'no-store'});
+    if (plannerRes.ok) {
+      const plannerPayload = await plannerRes.json();
+      window.__bardoChannelSessions = plannerPayload.sessions || [];
+      if (Array.isArray(plannerPayload.sessions) && plannerPayload.sessions.length > 0) {
+        const activeOrLatest = plannerPayload.sessions.find((s) => s.status === 'live') || plannerPayload.sessions[0];
+        localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(activeOrLatest));
+        try {
+          const liveRes = await fetch(`/api/planner/sessions/${encodeURIComponent(activeOrLatest.id)}/live`, {headers, cache:'no-store'});
+          if (liveRes.ok) {
+            const liveData = await liveRes.json();
+            if (liveData?.liveState) {
+              localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(liveData.liveState));
+            }
+          }
+        } catch {}
+      } else {
+        try {
+          const rawLocal = localStorage.getItem(PLANNER_STORE_KEY);
+          if (rawLocal) {
+            const parsedLocal = JSON.parse(rawLocal);
+            if (parsedLocal?.id === 'demo-session-weekly-design' || parsedLocal?.title?.includes('Weekly') || (parsedLocal?.host === 'Camila' && parsedLocal?.mentions?.includes('@diseño'))) {
+              localStorage.removeItem(PLANNER_STORE_KEY);
+              localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('Bardo: no se pudieron cargar sesiones de D1', err);
+  }
+
   const remote = new Map();
   const docs = (payload.documents || []).map(item => {
     const doc = {
@@ -318,7 +377,20 @@ export async function prepareBardoProduction(options = {}) {
   // omit it, in which case the API returns the short-lived launch intent.
   const contextId = payload.contextDocumentId || explicitCustomId;
 
-  if (contextId && docs.some(doc => doc.id === contextId)) {
+  if (explicitCustomId === 'new-doc') {
+    history.replaceState(null, '', '#new');
+  } else if (explicitCustomId === 'planner') {
+    history.replaceState(null, '', '#planner');
+  } else if (explicitCustomId?.startsWith('planner-session:')) {
+    const targetSessionId = explicitCustomId.slice('planner-session:'.length);
+    if (targetSessionId && Array.isArray(window.__bardoChannelSessions)) {
+      const match = window.__bardoChannelSessions.find((s) => s.id === targetSessionId);
+      if (match) {
+        localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(match));
+      }
+    }
+    history.replaceState(null, '', '#planner');
+  } else if (contextId && docs.some(doc => doc.id === contextId)) {
     localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:contextId, offset:0, at:Date.now()}));
     window.__BARDO_DOCUMENT_ID__ = contextId;
     history.replaceState(null, '', `#doc-${encodeURIComponent(contextId)}`);
@@ -390,10 +462,47 @@ export async function prepareBardoProduction(options = {}) {
     }
   }
 
+  async function syncPlannerStore(nextJson) {
+    let parsed;
+    try { parsed = JSON.parse(nextJson); } catch { return; }
+    if (!parsed || typeof parsed !== 'object') return;
+    const sessionId = parsed.id || `sess-${Date.now().toString(36)}`;
+    try {
+      await request(`/api/planner/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({...parsed, id: sessionId}),
+      });
+    } catch {
+      await request('/api/planner/sessions', {
+        method: 'POST',
+        body: JSON.stringify({...parsed, id: sessionId}),
+      }).catch(err => console.error('Bardo Planner: error guardando sesión en D1', err));
+    }
+  }
+
+  async function syncLiveSessionStore(nextJson) {
+    let parsed;
+    try { parsed = JSON.parse(nextJson); } catch { return; }
+    if (!parsed || typeof parsed !== 'object') return;
+    const currentPlanner = JSON.parse(localStorage.getItem(PLANNER_STORE_KEY) || '{}');
+    const sessionId = currentPlanner.id || parsed.sessionId;
+    if (!sessionId) return;
+    await request(`/api/planner/sessions/${encodeURIComponent(sessionId)}/live`, {
+      method: 'POST',
+      body: JSON.stringify({...parsed, sessionId}),
+    }).catch(err => console.error('Bardo Planner: error guardando live state en D1', err));
+  }
+
   Storage.prototype.setItem = function patchedSetItem(key, value) {
     nativeSetItem.call(this, key, value);
-    if (this === localStorage && key === STORE_KEY && window.__BARDO_PRODUCTION__) {
-      syncChain = syncChain.then(() => syncStore(String(value))).catch(error => console.error('Bardo Docs: error sincronizando D1', error));
+    if (this === localStorage && window.__BARDO_PRODUCTION__) {
+      if (key === STORE_KEY) {
+        syncChain = syncChain.then(() => syncStore(String(value))).catch(error => console.error('Bardo Docs: error sincronizando D1', error));
+      } else if (key === PLANNER_STORE_KEY) {
+        syncChain = syncChain.then(() => syncPlannerStore(String(value))).catch(error => console.error('Bardo Planner: error sincronizando D1', error));
+      } else if (key === LIVE_SESSION_STORE_KEY) {
+        syncChain = syncChain.then(() => syncLiveSessionStore(String(value))).catch(error => console.error('Bardo Live: error sincronizando D1', error));
+      }
     }
   };
 

@@ -2,8 +2,8 @@ import * as React from "react"
 import { Clock } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
 
 /**
@@ -60,7 +60,6 @@ export function TimePicker({
   const [open, setOpen] = React.useState(false)
   const { hour12: initHour, minute: initMin, period: initPeriod } = parseTime24(value)
 
-  const [activeUnit, setActiveUnit] = React.useState("hour") // 'hour' | 'minute'
   const [hour, setHour] = React.useState(String(initHour).padStart(2, "0"))
   const [minute, setMinute] = React.useState(String(initMin).padStart(2, "0"))
   const [period, setPeriod] = React.useState(initPeriod)
@@ -72,7 +71,6 @@ export function TimePicker({
       setHour(String(parsed.hour12).padStart(2, "0"))
       setMinute(String(parsed.minute).padStart(2, "0"))
       setPeriod(parsed.period)
-      setActiveUnit("hour")
     }
   }, [open, value])
 
@@ -85,7 +83,6 @@ export function TimePicker({
     if (raw.length === 2) {
       const num = parseInt(raw, 10)
       if (num >= 1 && num <= 12) {
-        setActiveUnit("minute")
         minuteInputRef.current?.focus()
         minuteInputRef.current?.select()
       }
@@ -135,11 +132,9 @@ export function TimePicker({
         setMinute(String(num).padStart(2, "0"))
       }
     } else if (e.key === "ArrowRight" && unit === "hour") {
-      setActiveUnit("minute")
       minuteInputRef.current?.focus()
       minuteInputRef.current?.select()
     } else if (e.key === "ArrowLeft" && unit === "minute") {
-      setActiveUnit("hour")
       hourInputRef.current?.focus()
       hourInputRef.current?.select()
     }
@@ -204,149 +199,111 @@ export function TimePicker({
       <PopoverContent
         align="start"
         sideOffset={6}
-        className="w-auto p-4 rounded-3xl shadow-xl border border-border/60 bg-popover text-popover-foreground flex flex-col gap-4 select-none"
+        className="w-[300px] p-3.5 rounded-2xl shadow-lg border border-border bg-popover text-popover-foreground flex flex-col gap-3 select-none overflow-hidden"
       >
-        <FieldGroup className="gap-3">
-          <Field>
-            <FieldLabel className="text-xs font-semibold text-muted-foreground tracking-wide">
-              Ingresar hora
-            </FieldLabel>
-
-            {/* Time digits & AM/PM selectors */}
-            <div className="flex items-center gap-3">
-              {/* Hour block composed with Field */}
-              <div className="flex flex-col items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setActiveUnit("hour")
-                    hourInputRef.current?.focus()
-                    hourInputRef.current?.select()
-                  }}
-                  className={cn(
-                    "flex h-20 w-24 items-center justify-center rounded-2xl border-2 p-0 text-4xl font-semibold tracking-tight transition-all cursor-text",
-                    activeUnit === "hour"
-                      ? "border-primary bg-primary/10 text-primary shadow-xs ring-2 ring-primary/20"
-                      : "border-transparent bg-muted/60 text-foreground hover:bg-muted"
-                  )}
-                >
-                  <input
-                    ref={hourInputRef}
-                    type="text"
-                    inputMode="numeric"
-                    value={hour}
-                    onChange={handleHourChange}
-                    onBlur={handleHourBlur}
-                    onFocus={() => setActiveUnit("hour")}
-                    onKeyDown={(e) => handleKeyDown("hour", e)}
-                    aria-label="Hora"
-                    className="w-full bg-transparent text-center text-4xl font-semibold tracking-tight outline-none select-all"
-                  />
-                </Button>
-                <span className="text-[11px] font-medium text-muted-foreground">Hora</span>
+        {/* Matched row: 2 labeled input columns + 1 labeled AM/PM column */}
+        <div className="grid grid-cols-[1fr_auto_1fr_auto] items-start gap-1.5 w-full">
+              {/* Columna Hora */}
+              <div className="flex flex-col items-center gap-1 min-w-0">
+                <Input
+                  ref={hourInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  value={hour}
+                  onChange={handleHourChange}
+                  onBlur={handleHourBlur}
+                  onKeyDown={(e) => handleKeyDown("hour", e)}
+                  aria-label="Hora"
+                  className="h-9 w-full rounded-xl border border-input/60 bg-muted/30 text-center text-sm font-semibold tracking-tight px-0 hover:bg-muted/50 focus:bg-background"
+                />
+                <span className="text-[11px] leading-4 text-muted-foreground">Hora</span>
               </div>
 
-              {/* Separator colon */}
-              <span className="text-3xl font-bold text-muted-foreground pb-5">:</span>
-
-              {/* Minute block composed with Field */}
-              <div className="flex flex-col items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setActiveUnit("minute")
-                    minuteInputRef.current?.focus()
-                    minuteInputRef.current?.select()
-                  }}
-                  className={cn(
-                    "flex h-20 w-24 items-center justify-center rounded-2xl border-2 p-0 text-4xl font-semibold tracking-tight transition-all cursor-text",
-                    activeUnit === "minute"
-                      ? "border-primary bg-primary/10 text-primary shadow-xs ring-2 ring-primary/20"
-                      : "border-transparent bg-muted/60 text-foreground hover:bg-muted"
-                  )}
-                >
-                  <input
-                    ref={minuteInputRef}
-                    type="text"
-                    inputMode="numeric"
-                    value={minute}
-                    onChange={handleMinuteChange}
-                    onBlur={handleMinuteBlur}
-                    onFocus={() => setActiveUnit("minute")}
-                    onKeyDown={(e) => handleKeyDown("minute", e)}
-                    aria-label="Minutos"
-                    className="w-full bg-transparent text-center text-4xl font-semibold tracking-tight outline-none select-all"
-                  />
-                </Button>
-                <span className="text-[11px] font-medium text-muted-foreground">Minuto</span>
+              {/* Separador de dos puntos: centrado matemáticamente con los inputs (h-9) */}
+              <div className="flex h-9 items-center justify-center px-0.5 shrink-0">
+                <span className="text-sm font-bold text-muted-foreground leading-none">:</span>
               </div>
 
-              {/* AM/PM ToggleGroup Lego */}
-              <div className="flex flex-col items-center gap-1 pb-5">
-                <ToggleGroup
-                  type="single"
-                  orientation="vertical"
-                  spacing={0}
-                  value={[period]}
-                  onValueChange={(val) => {
-                    const selected = Array.isArray(val) ? val[0] : val
-                    if (selected) setPeriod(selected)
-                  }}
-                  className="rounded-2xl border border-border bg-muted/40 p-0.5 overflow-hidden"
-                >
-                  <ToggleGroupItem
-                    value="AM"
-                    aria-label="AM"
-                    className={cn(
-                      "h-9 px-3 text-xs font-bold rounded-xl transition-all",
-                      period === "AM"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
+              {/* Columna Minuto */}
+              <div className="flex flex-col items-center gap-1 min-w-0">
+                <Input
+                  ref={minuteInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  value={minute}
+                  onChange={handleMinuteChange}
+                  onBlur={handleMinuteBlur}
+                  onKeyDown={(e) => handleKeyDown("minute", e)}
+                  aria-label="Minutos"
+                  className="h-9 w-full rounded-xl border border-input/60 bg-muted/30 text-center text-sm font-semibold tracking-tight px-0 hover:bg-muted/50 focus:bg-background"
+                />
+                <span className="text-[11px] leading-4 text-muted-foreground">Minuto</span>
+              </div>
+
+              {/* Columna AM / PM: contenedor h-9 y ToggleGroup horizontal contenido */}
+              <div className="flex flex-col items-center gap-1 pl-1 shrink-0">
+                <div className="h-9 flex items-center">
+                  <ToggleGroup
+                    type="single"
+                    spacing={0}
+                    value={[period]}
+                    onValueChange={(val) => {
+                      const selected = Array.isArray(val) ? val[0] : val
+                      if (selected) setPeriod(selected)
+                    }}
+                    className="h-9 rounded-xl border border-input/60 bg-muted/30 p-0.5 box-border"
                   >
-                    AM
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="PM"
-                    aria-label="PM"
-                    className={cn(
-                      "h-9 px-3 text-xs font-bold rounded-xl transition-all",
-                      period === "PM"
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    PM
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                    <ToggleGroupItem
+                      value="AM"
+                      aria-label="AM"
+                      className={cn(
+                        "h-full px-2 text-xs rounded-lg transition-all border-0 shadow-none font-medium",
+                        period === "AM"
+                          ? "bg-background text-foreground shadow-2xs font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                      )}
+                    >
+                      AM
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="PM"
+                      aria-label="PM"
+                      className={cn(
+                        "h-full px-2 text-xs rounded-lg transition-all border-0 shadow-none font-medium",
+                        period === "PM"
+                          ? "bg-background text-foreground shadow-2xs font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                      )}
+                    >
+                      PM
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+                {/* Spacer idéntico a las etiquetas para alineación matemática total */}
+                <span className="text-[11px] leading-4 invisible select-none">Periodo</span>
               </div>
             </div>
-          </Field>
-        </FieldGroup>
 
-        {/* Footer actions with Button Legos */}
-        <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-4">
+        {/* Footer actions */}
+        <div className="flex items-center justify-between pt-2.5 mt-0.5 border-t border-border/40 gap-2 w-full">
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={handleNow}
-            title="Hora actual"
-            aria-label="Poner hora actual"
-            className="text-muted-foreground hover:text-foreground rounded-xl"
+            className="h-8 px-2 text-xs font-medium text-muted-foreground hover:text-foreground gap-1.5 shrink-0"
           >
-            <Clock className="size-4" />
+            <Clock data-icon="inline-start" className="size-3.5" />
+            <span>Ahora</span>
           </Button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={handleCancel}
-              className="h-8 px-3 rounded-xl text-xs font-medium"
+              className="h-8 px-3 text-xs font-medium"
             >
               Cancelar
             </Button>
@@ -355,7 +312,7 @@ export function TimePicker({
               variant="default"
               size="sm"
               onClick={handleConfirm}
-              className="h-8 px-3.5 rounded-xl text-xs font-semibold shadow-xs"
+              className="h-8 px-3.5 text-xs font-semibold"
             >
               Aceptar
             </Button>

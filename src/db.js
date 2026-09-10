@@ -471,3 +471,193 @@ export async function loadActivityContext(db, instanceId) {
     createdAt: row.created_at,
   };
 }
+
+function parseJsonSafe(val, fallback) {
+  try {
+    return val ? JSON.parse(val) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function mapPlannerSessionRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    guildId: row.guild_id,
+    channelId: row.channel_id,
+    title: row.title,
+    hostId: row.host_id || null,
+    hostName: row.host_name || null,
+    date: row.date,
+    startTime: row.start_time,
+    targetDuration: Number(row.target_duration || 60),
+    description: row.description || '',
+    mentions: row.mentions || '',
+    blocks: parseJsonSafe(row.blocks_json, []),
+    status: row.status || 'scheduled',
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  };
+}
+
+function mapPlannerLiveSessionRow(row) {
+  if (!row) return null;
+  return {
+    sessionId: row.session_id,
+    guildId: row.guild_id,
+    channelId: row.channel_id,
+    status: row.status,
+    activeBlockId: row.active_block_id || null,
+    activePointId: row.active_point_id || null,
+    blockStartedAt: row.block_started_at ? Number(row.block_started_at) : null,
+    blockElapsedBeforePauseMs: Number(row.block_elapsed_before_pause_ms || 0),
+    sessionStartedAt: row.session_started_at ? Number(row.session_started_at) : null,
+    sessionPausedAt: row.session_paused_at ? Number(row.session_paused_at) : null,
+    totalPausedMs: Number(row.total_paused_ms || 0),
+    decisions: parseJsonSafe(row.decisions_json, []),
+    recordingsMeta: parseJsonSafe(row.recordings_meta_json, []),
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  };
+}
+
+export async function savePlannerSession(db, session) {
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO planner_sessions (
+         id, guild_id, channel_id, title, host_id, host_name, date, start_time,
+         target_duration, description, mentions, blocks_json, status, created_at,
+         created_by, updated_at, updated_by
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         title = excluded.title,
+         host_id = excluded.host_id,
+         host_name = excluded.host_name,
+         date = excluded.date,
+         start_time = excluded.start_time,
+         target_duration = excluded.target_duration,
+         description = excluded.description,
+         mentions = excluded.mentions,
+         blocks_json = excluded.blocks_json,
+         status = excluded.status,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`,
+    )
+    .bind(
+      session.id,
+      session.guildId,
+      session.channelId,
+      session.title || 'Nueva sesión',
+      session.hostId || null,
+      session.hostName || null,
+      session.date || now.split('T')[0],
+      session.startTime || '10:00',
+      session.targetDuration || 60,
+      session.description || '',
+      session.mentions || '',
+      JSON.stringify(session.blocks || []),
+      session.status || 'scheduled',
+      session.createdAt || now,
+      session.createdBy || 'unknown',
+      session.updatedAt || now,
+      session.updatedBy || session.createdBy || 'unknown',
+    )
+    .run();
+}
+
+export async function loadPlannerSession(db, sessionId, guildId, channelId) {
+  const row = await db
+    .prepare(
+      `SELECT * FROM planner_sessions
+       WHERE id = ? AND guild_id = ? AND channel_id = ?`,
+    )
+    .bind(sessionId, guildId, channelId)
+    .first();
+
+  return mapPlannerSessionRow(row);
+}
+
+export async function listPlannerSessionsForChannel(db, guildId, channelId, limit = 20) {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM planner_sessions
+       WHERE guild_id = ? AND channel_id = ? AND status != 'archived'
+       ORDER BY date DESC, created_at DESC
+       LIMIT ?`,
+    )
+    .bind(guildId, channelId, limit)
+    .all();
+
+  return (results || []).map(mapPlannerSessionRow);
+}
+
+export async function archivePlannerSession(db, sessionId, guildId, channelId, userId) {
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `UPDATE planner_sessions
+       SET status = 'archived', updated_at = ?, updated_by = ?
+       WHERE id = ? AND guild_id = ? AND channel_id = ?`,
+    )
+    .bind(now, userId, sessionId, guildId, channelId)
+    .run();
+}
+
+export async function saveLiveSessionState(db, liveState) {
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO planner_live_sessions (
+         session_id, guild_id, channel_id, status, active_block_id, active_point_id,
+         block_started_at, block_elapsed_before_pause_ms, session_started_at,
+         session_paused_at, total_paused_ms, decisions_json, recordings_meta_json,
+         updated_at, updated_by
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_id) DO UPDATE SET
+         status = excluded.status,
+         active_block_id = excluded.active_block_id,
+         active_point_id = excluded.active_point_id,
+         block_started_at = excluded.block_started_at,
+         block_elapsed_before_pause_ms = excluded.block_elapsed_before_pause_ms,
+         session_started_at = excluded.session_started_at,
+         session_paused_at = excluded.session_paused_at,
+         total_paused_ms = excluded.total_paused_ms,
+         decisions_json = excluded.decisions_json,
+         recordings_meta_json = excluded.recordings_meta_json,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`,
+    )
+    .bind(
+      liveState.sessionId,
+      liveState.guildId,
+      liveState.channelId,
+      liveState.status || 'idle',
+      liveState.activeBlockId || null,
+      liveState.activePointId || null,
+      liveState.blockStartedAt || null,
+      liveState.blockElapsedBeforePauseMs || 0,
+      liveState.sessionStartedAt || null,
+      liveState.sessionPausedAt || null,
+      liveState.totalPausedMs || 0,
+      JSON.stringify(liveState.decisions || []),
+      JSON.stringify(liveState.recordingsMeta || []),
+      now,
+      liveState.updatedBy || 'unknown',
+    )
+    .run();
+}
+
+export async function loadLiveSessionState(db, sessionId) {
+  const row = await db
+    .prepare('SELECT * FROM planner_live_sessions WHERE session_id = ?')
+    .bind(sessionId)
+    .first();
+
+  return mapPlannerLiveSessionRow(row);
+}

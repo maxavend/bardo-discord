@@ -11,27 +11,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
 } from '@/components/ui/tooltip';
 import {
-  Plus,
   MoreVertical,
-  Trash2,
-  Coffee,
   CheckCircle2,
   Handshake,
   Check,
   Play,
   Pause,
-  Download,
   ChevronUp,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { clockToMinutes, minutesToClock } from './time-engine.js';
+import {
+  CoffeeIcon,
+  DownloadIcon,
+  PlusIcon,
+  DeleteIcon as TrashIcon,
+} from '@/components/ui/animated-icons';
+import { clockToMinutes, minutesToClock, isBreakBlock } from './time-engine.js';
 import {
   POINT_STATUS,
   SESSION_STATUS,
@@ -165,10 +168,10 @@ export function PlannerAgendaView({
 
   const [, setTicker] = useState(0);
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isSessionActive) return;
     const interval = setInterval(() => setTicker((t) => t + 1), 1000);
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isSessionActive]);
 
   // Render facilitador del bloque
   const renderBlockLeader = (block) => {
@@ -178,26 +181,28 @@ export function PlannerAgendaView({
         m.globalName.toLowerCase() === leaderName.toLowerCase() ||
         m.tag.toLowerCase() === `@${leaderName.toLowerCase()}`
     );
-    const color = matched?.avatarColor || DISCORD_PALETTES[Math.abs(leaderName.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
+    const leaderColor = matched?.avatarColor || DISCORD_PALETTES[Math.abs(leaderName.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
 
     if (isEditing) {
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger
+        <Popover>
+          <PopoverTrigger
             render={
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
+                className="inline-flex items-center gap-1 text-xs transition-colors cursor-pointer group text-left"
               >
                 {leaderName ? (
-                  <div className="inline-flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Facilita</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <Avatar
                       size="xs"
-                      className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                      style={{ backgroundColor: `${color}35`, color }}
+                      className="size-4 text-[8px] font-bold shrink-0 shadow-2xs"
+                      style={{
+                        backgroundColor: `${leaderColor}30`,
+                        color: leaderColor,
+                      }}
                     >
-                      <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
+                      <AvatarFallback style={{ backgroundColor: `${leaderColor}30`, color: leaderColor }}>
                         {leaderName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -213,7 +218,7 @@ export function PlannerAgendaView({
               </button>
             }
           />
-          <DropdownMenuContent align="start" className="p-0">
+          <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
             <SearchableParticipantMenu
               singleSelect
               hideRoles
@@ -227,8 +232,8 @@ export function PlannerAgendaView({
                 onUpdateBlock?.(block.id, { leader: clean });
               }}
             />
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverContent>
+        </Popover>
       );
     }
 
@@ -239,9 +244,9 @@ export function PlannerAgendaView({
         <Avatar
           size="xs"
           className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-          style={{ backgroundColor: `${color}35`, color }}
+          style={{ backgroundColor: `${leaderColor}35`, color: leaderColor }}
         >
-          <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
+          <AvatarFallback style={{ backgroundColor: `${leaderColor}35`, color: leaderColor }}>
             {leaderName.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -272,33 +277,34 @@ export function PlannerAgendaView({
 
     if (isEditing) {
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger
+        <Popover>
+          <PopoverTrigger
             render={
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 hover:text-foreground text-foreground text-xs cursor-pointer select-none group"
+                className="inline-flex items-center gap-1.5 text-xs transition-colors cursor-pointer group text-left"
               >
                 {mentions.length > 0 ? (
-                  <div className="inline-flex items-center gap-1.5">
-                    <span className="text-muted-foreground">Participan</span>
-                    <div className="flex items-center -space-x-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="flex items-center -space-x-1 shrink-0">
                       {mentions.slice(0, 3).map((pName, pIdx) => {
                         const matched = discordMembers.find(
                           (m) =>
-                            m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
-                            m.tag.toLowerCase().includes(pName.toLowerCase())
+                            m.globalName.toLowerCase() === pName.toLowerCase() ||
+                            m.tag.toLowerCase() === `@${pName.toLowerCase()}` ||
+                            m.tag.toLowerCase() === pName.toLowerCase()
                         );
-                        const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
+                        const isRole = pName.startsWith('@') || pName.startsWith('#');
+                        const pColor = matched?.avatarColor || DISCORD_PALETTES[(pIdx + 2) % DISCORD_PALETTES.length];
                         return (
                           <Avatar
-                            key={pIdx}
+                            key={pName}
                             size="xs"
-                            className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                            style={{ backgroundColor: `${color}35`, color }}
+                            className="size-4 text-[7px] font-bold shrink-0 shadow-2xs border border-card"
+                            style={{ backgroundColor: `${pColor}30`, color: pColor }}
                           >
-                            <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                              {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
+                            <AvatarFallback style={{ backgroundColor: `${pColor}30`, color: pColor }}>
+                              {isRole ? '#' : pName.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                         );
@@ -316,7 +322,7 @@ export function PlannerAgendaView({
               </button>
             }
           />
-          <DropdownMenuContent align="start" className="p-0">
+          <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
             <SearchableParticipantMenu
               selectedKeys={selectedKeys}
               onSelectionChange={(keys) => {
@@ -334,8 +340,8 @@ export function PlannerAgendaView({
                 onUpdateBlock?.(block.id, { participants: updated.join(', ') });
               }}
             />
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </PopoverContent>
+        </Popover>
       );
     }
 
@@ -375,7 +381,7 @@ export function PlannerAgendaView({
   let runningMinutes = clockToMinutes(state?.startTime || '10:00');
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 pb-28 pt-2 sm:px-0 flex flex-col gap-4 animate-in fade-in duration-150">
+    <div className="w-full max-w-4xl mx-auto pb-28 pt-2 flex flex-col gap-4 animate-in fade-in duration-150">
       {dockSlot}
 
       {blocks.length === 0 ? (
@@ -383,7 +389,7 @@ export function PlannerAgendaView({
           <p className="text-sm text-muted-foreground">No hay bloques en la agenda.</p>
           {isEditing && (
             <Button variant="default" size="sm" onClick={() => onAddBlock?.()} className="mt-2">
-              <Plus className="size-3.5" /> Agregar primer bloque
+              <PlusIcon className="size-3.5" /> Agregar primer bloque
             </Button>
           )}
         </Card>
@@ -452,77 +458,164 @@ export function PlannerAgendaView({
                     }]);
 
             // Bloque tipo Break / Descanso
-            if (block.isBreak || block.type === 'break') {
-              return (
-                <div key={block.id} className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-center">
-                  {/* Timeline lateral izquierdo */}
-                  <div className="flex flex-col items-center text-[11px] sm:text-xs text-muted-foreground font-medium select-none">
-                    <span className="text-muted-foreground/80">{blockStart}</span>
-                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/50">{blockEnd}</span>
-                  </div>
-
-                  {/* Tarjeta de Break */}
-                  <Card className="flex flex-row items-center justify-between gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl bg-card border border-border/80 shadow-2xs text-xs text-muted-foreground transition-all">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Coffee className="size-4 text-muted-foreground/80 shrink-0 stroke-[1.75]" />
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={block.title}
-                          onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
-                          placeholder="Break"
-                          className="text-xs sm:text-sm font-medium text-foreground bg-transparent border-0 outline-none p-0 focus:ring-0"
-                        />
-                      ) : (
-                        <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate select-none">
-                          {block.title || 'Break'}
-                        </span>
-                      )}
+            if (isBreakBlock(block)) {
+              if (isEditing) {
+                return (
+                  <div
+                    key={block.id}
+                    className="w-full min-w-0 rounded-2xl border border-dashed border-border/80 hover:border-border bg-muted/20 hover:bg-muted/30 px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 text-xs text-muted-foreground transition-all"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <CoffeeIcon className="size-4 text-muted-foreground/70 shrink-0 stroke-[1.75]" />
+                      <input
+                        type="text"
+                        value={block.title}
+                        onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
+                        placeholder="Break / Descanso"
+                        className="text-xs sm:text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0 placeholder:text-muted-foreground/40 font-inherit"
+                      />
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {isEditing ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{blockDuration} min</span>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteBlock?.(block.id)}
-                            className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            title="Eliminar break"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </div>
-                      ) : isCompleted ? (
-                        <div className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground select-none">
-                          <Check className="size-3.5 text-emerald-500 stroke-[2]" />
-                          <span>Terminado</span>
-                        </div>
-                      ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                            >
+                              {blockDuration} min
+                            </button>
+                          }
+                        />
+                        <DropdownMenuContent align="end" className="w-36 p-1">
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel>Duración</DropdownMenuLabel>
+                            <div
+                              className="max-h-52 overflow-y-auto overscroll-contain pr-0.5"
+                              onWheel={(e) => e.stopPropagation()}
+                              onTouchMove={(e) => e.stopPropagation()}
+                            >
+                              {[5, 10, 15, 20, 25, 30, 45, 60].map((mins) => (
+                                <DropdownMenuItem
+                                  key={mins}
+                                  onClick={() => onUpdateBlock?.(block.id, { durationMinutes: mins })}
+                                >
+                                  {mins} min
+                                </DropdownMenuItem>
+                              ))}
+                            </div>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => (isLive ? onAdvance?.() : onSkipBlock ? onSkipBlock(block.id) : onAdvance?.())}
+                          onClick={() => onMoveBlock?.(block.id, -1)}
+                          disabled={index === 0}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
+                          title="Mover arriba"
+                        >
+                          <ChevronUp className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onMoveBlock?.(block.id, 1)}
+                          disabled={isLast}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
+                          title="Mover abajo"
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteBlock?.(block.id)}
+                          className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer ml-0.5"
+                          title="Eliminar break"
+                        >
+                          <TrashIcon className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Vista normal / Sesión en vivo
+              return (
+                <div
+                  key={block.id}
+                  className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-center my-0.5"
+                >
+                  {/* Timeline lateral izquierdo */}
+                  <div className="flex flex-col items-center text-[10px] sm:text-[11px] text-muted-foreground/60 font-medium select-none py-0.5">
+                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600/80 dark:text-emerald-400/80 font-medium' : 'text-muted-foreground/70'}>
+                      {blockStart}
+                    </span>
+                    <span className="text-[9px] sm:text-[10px] text-muted-foreground/40 font-normal">
+                      {blockDuration}m
+                    </span>
+                  </div>
+
+                  {/* Separador sutil de Break */}
+                  <div
+                    className={`group relative flex items-center justify-between gap-3 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl transition-all ${
+                      isLive
+                        ? 'bg-primary/5 border border-primary/25 text-primary shadow-2xs'
+                        : isCompleted
+                          ? 'bg-muted/20 border border-border/40 text-muted-foreground/70'
+                          : 'bg-muted/15 hover:bg-muted/30 border border-border/30 text-muted-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CoffeeIcon
+                        className={`size-3.5 shrink-0 stroke-[1.75] ${
+                          isLive ? 'text-primary animate-pulse' : isCompleted ? 'text-muted-foreground/50' : 'text-muted-foreground/70'
+                        }`}
+                      />
+                      <span className={`text-xs font-medium truncate select-none ${isLive ? 'text-primary font-semibold' : ''}`}>
+                        {block.title || 'Break'}
+                      </span>
+                      <span className={`text-[10px] font-mono select-none ${isLive ? 'text-primary/70 font-semibold' : 'text-muted-foreground/50'}`}>
+                        ({blockDuration} min)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isLive ? (
+                        <button
+                          type="button"
+                          onClick={() => (onAdvanceBlock ? onAdvanceBlock() : onSkipBlock ? onSkipBlock(block.id) : onAdvance?.())}
                           disabled={isTransitioning}
-                          className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-muted/70 hover:bg-muted text-foreground font-medium text-xs shadow-2xs border-0 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-2xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                         >
                           <span>Terminar break</span>
-                          <ChevronRight className="size-3.5 text-foreground/80 stroke-[1.75]" />
+                          <ChevronRight className="size-3 stroke-[2]" />
                         </button>
+                      ) : isCompleted ? (
+                        <div className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 select-none">
+                          <Check className="size-3 text-emerald-500 stroke-[2]" />
+                          <span>Completado</span>
+                        </div>
+                      ) : (
+                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hidden sm:block" />
                       )}
                     </div>
-                  </Card>
+                  </div>
                 </div>
               );
             }
 
+
             const blockCardElement = (
               <Card
-                className={`p-4 sm:p-5 flex flex-col gap-3 rounded-2xl transition-all shadow-2xs ${
+                className={`p-4 sm:p-5 flex flex-col gap-3 rounded-2xl transition-all shadow-[0_1px_3px_0_oklch(0_0_0/0.04)] ${
                   isLive && !isEditing
                     ? 'border-primary/60 ring-1 ring-primary/20 bg-card'
                     : isSkipped && !isEditing
                       ? 'opacity-60 bg-muted/30 border-border/40'
-                      : 'bg-card border-border'
+                      : 'bg-card border-border/60'
                 }`}
               >
                 <div className="flex flex-col gap-2">
@@ -533,7 +626,8 @@ export function PlannerAgendaView({
                         value={block.title}
                         onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
                         placeholder="Título del bloque"
-                        className="text-base font-bold tracking-tight text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0"
+                        className="text-base font-bold tracking-tight text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0 placeholder:font-bold placeholder:text-muted-foreground/40 font-inherit leading-normal"
+                        style={{ fontWeight: 700 }}
                       />
                     ) : (
                       <h3 className="text-base font-bold tracking-tight text-foreground min-w-0">{block.title}</h3>
@@ -600,7 +694,7 @@ export function PlannerAgendaView({
                             <DropdownMenuSeparator />
                             <DropdownMenuGroup>
                               <DropdownMenuItem variant="destructive" onClick={() => onDeleteBlock?.(block.id)}>
-                                <Trash2 className="size-4 text-destructive" />
+                                <TrashIcon className="size-4 text-destructive" />
                                 <span>Eliminar bloque</span>
                               </DropdownMenuItem>
                             </DropdownMenuGroup>
@@ -629,7 +723,7 @@ export function PlannerAgendaView({
                                   await exportBlockRecordingsCombined(block.title, effectiveBlockRecordings);
                                 }}
                               >
-                                <Download className="size-4 text-muted-foreground" />
+                                <DownloadIcon className="size-4 text-muted-foreground" />
                                 <span>Descargar bloque completo</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
@@ -638,7 +732,7 @@ export function PlannerAgendaView({
                                   await exportBlockRecordingsAsZip(block.title, effectiveBlockRecordings);
                                 }}
                               >
-                                <Download className="size-4 text-muted-foreground" />
+                                <DownloadIcon className="size-4 text-muted-foreground" />
                                 <span>Descargar grabaciones por punto</span>
                               </DropdownMenuItem>
                             </DropdownMenuGroup>
@@ -723,7 +817,8 @@ export function PlannerAgendaView({
                                 value={point.title}
                                 onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { title: fieldValue(e.target.value) })}
                                 placeholder="Título del punto..."
-                                className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-1 focus:ring-primary/40 rounded px-1 -mx-1 transition-all leading-normal"
+                                className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0 rounded px-1 -mx-1 transition-all leading-normal placeholder:font-semibold placeholder:text-muted-foreground/40 font-inherit"
+                                style={{ fontWeight: 600 }}
                               />
                               <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
                                 <button
@@ -750,7 +845,7 @@ export function PlannerAgendaView({
                                   aria-label="Eliminar punto"
                                   className="p-1 text-muted-foreground hover:text-destructive cursor-pointer ml-0.5"
                                 >
-                                  <Trash2 className="size-3.5" />
+                                  <TrashIcon className="size-3.5" />
                                 </button>
                               </div>
                             </div>
@@ -766,8 +861,8 @@ export function PlannerAgendaView({
 
                             {/* Fila 3: Responsables */}
                             <div className="flex items-center justify-between gap-3 pt-0.5 min-w-0">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger
+                              <Popover>
+                                <PopoverTrigger
                                   render={
                                     <button
                                       type="button"
@@ -809,7 +904,7 @@ export function PlannerAgendaView({
                                     </button>
                                   }
                                 />
-                                <DropdownMenuContent align="start" className="p-0">
+                                <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
                                   <SearchableParticipantMenu
                                     selectedKeys={selectedPointKeys}
                                     onSelectionChange={(keys) => {
@@ -829,8 +924,8 @@ export function PlannerAgendaView({
                                       onUpdateSubpoint?.(block.id, point.id, { presenter: updated.join(', ') });
                                     }}
                                   />
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </div>
                         );
@@ -1059,7 +1154,7 @@ export function PlannerAgendaView({
                                   title={`Descargar audio: ${point.title}`}
                                   className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-md hover:bg-muted/50"
                                 >
-                                  <Download className="size-4" />
+                                  <DownloadIcon className="size-4" />
                                 </button>
                               </div>
                             ) : isPointSkipped ? (
@@ -1076,7 +1171,7 @@ export function PlannerAgendaView({
                         onClick={() => onAddSubpoint?.(block.id)}
                         className="text-xs text-muted-foreground/70 hover:text-foreground flex items-center gap-1.5 py-1 px-1 transition-colors self-start mt-0.5 cursor-pointer font-medium"
                       >
-                        <Plus className="size-3 text-primary" /> <span>Agregar tema</span>
+                        <PlusIcon className="size-3 text-primary" /> <span>Agregar tema</span>
                       </button>
                     )}
                   </div>
@@ -1111,7 +1206,7 @@ export function PlannerAgendaView({
                       return (
                         <div
                           key={decision.id}
-                          className="group px-3 py-2 rounded-lg bg-muted/40 text-xs text-foreground flex items-center justify-between gap-2 transition-colors"
+                          className="group px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-muted/40 hover:bg-muted/60 border border-border/40 text-xs text-foreground flex items-center justify-between gap-3 transition-colors"
                         >
                           <div className="flex items-start gap-2.5 min-w-0">
                             <Handshake className="size-4 text-foreground/80 shrink-0 mt-0.5" />
@@ -1145,7 +1240,7 @@ export function PlannerAgendaView({
                                 className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
                                 onClick={() => onDeleteDecision?.(block.id, decision.id)}
                               >
-                                <Trash2 className="size-3" />
+                                <TrashIcon className="size-3" />
                               </Button>
                             )}
                           </div>
@@ -1156,13 +1251,13 @@ export function PlannerAgendaView({
                 )}
 
                 {!isEditing && (
-                  <div className="flex items-center justify-between pt-2.5 mt-1 border-t border-border/30 text-xs text-muted-foreground gap-2">
+                  <div className="flex items-center justify-between pt-2.5 mt-1 border-t border-border/40 text-xs text-muted-foreground gap-2">
                     <button
                       type="button"
                       onClick={() => onOpenCapture('decision', block.id)}
-                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-1 px-1 rounded-md transition-colors cursor-pointer font-medium select-none"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-1 px-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer font-medium select-none"
                     >
-                      <Plus className="size-3.5 text-muted-foreground/80" />
+                      <PlusIcon className="size-3.5 text-muted-foreground/80" />
                       <span>Acuerdo</span>
                     </button>
 
@@ -1268,7 +1363,7 @@ export function PlannerAgendaView({
                 onClick={() => onAddBlock?.()}
                 className="flex-1 py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
               >
-                <Plus className="size-3.5 text-primary" />
+                <PlusIcon className="size-3.5 text-primary" />
                 <span>Agregar bloque</span>
               </button>
 
@@ -1277,7 +1372,7 @@ export function PlannerAgendaView({
                 onClick={() => (onAddBreak ? onAddBreak() : onAddBlock?.({ title: 'Descanso', type: 'break', durationMinutes: 10, isBreak: true, subpoints: [] }))}
                 className="py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none sm:w-auto"
               >
-                <Coffee className="size-3.5 text-muted-foreground/70" />
+                <CoffeeIcon className="size-3.5 text-muted-foreground/70" />
                 <span>Agregar descanso</span>
               </button>
             </div>

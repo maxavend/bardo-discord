@@ -18,17 +18,21 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
 import { TimePicker } from '@/components/ui/time-picker.jsx';
 import {
-  FileText,
   Pencil,
-  Copy,
-  Plus,
   MoreVertical,
-  Play,
-  Check,
   RotateCw,
   Calendar,
   ChevronDown,
+  Archive,
 } from 'lucide-react';
+import {
+  FileTextIcon,
+  CopyIcon,
+  PlusIcon,
+  PlayIcon,
+  CircleCheckIcon as CheckIcon,
+  DeleteIcon as TrashIcon,
+} from '@/components/ui/animated-icons';
 import {
   SESSION_STATUS,
   recalculateEstimatedEndTime,
@@ -79,7 +83,7 @@ export function PlannerSessionHeader({
   onUpdateHeaderField,
   onCopyAnnouncement,
   onNewCleanSession,
-  onLoadDemo,
+  onDeleteSession,
   onStartSession,
   onResumeSession,
   onInterruptSession: _onInterruptSession,
@@ -130,7 +134,7 @@ export function PlannerSessionHeader({
   };
 
   return (
-    <header className="w-full max-w-4xl mx-auto px-4 py-3 sm:px-0 sm:py-4 animate-in fade-in duration-150">
+    <header className="w-full max-w-4xl mx-auto py-3 sm:py-4 animate-in fade-in duration-150">
       <div className="flex flex-col min-w-0 w-full">
         {/* Fila 1: Título alineado con el botón ⋮ y acciones principales */}
         <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -185,7 +189,7 @@ export function PlannerSessionHeader({
                 onClick={onCopyAnnouncement}
                 className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
               >
-                <Copy className="size-3.5" /> <span>Copiar anuncio</span>
+                <CopyIcon className="size-3.5" /> <span>Copiar anuncio</span>
               </Button>
             )}
 
@@ -196,7 +200,7 @@ export function PlannerSessionHeader({
                 onClick={onToggleEditMode}
                 className="font-medium h-8 px-3.5"
               >
-                <Check className="size-3.5" /> <span>Listo</span>
+                <CheckIcon className="size-3.5" /> <span>Listo</span>
               </Button>
             ) : isInterrupted && onResumeSession ? (
               <Button
@@ -205,7 +209,7 @@ export function PlannerSessionHeader({
                 onClick={onResumeSession}
                 className="font-medium h-8 px-3.5"
               >
-                <Play className="size-3.5" /> <span>Reanudar</span>
+                <PlayIcon className="size-3.5" /> <span>Reanudar</span>
               </Button>
             ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
               <Button
@@ -214,7 +218,7 @@ export function PlannerSessionHeader({
                 onClick={onStartSession}
                 className="font-medium h-8 px-3.5"
               >
-                <Play className="size-3.5" /> <span>Iniciar reunión</span>
+                <PlayIcon className="size-3.5" /> <span>Iniciar reunión</span>
               </Button>
             ) : isCompleted ? (
               <Button
@@ -223,7 +227,7 @@ export function PlannerSessionHeader({
                 onClick={() => onTabChange('recap')}
                 className="font-medium h-8 px-3.5"
               >
-                <FileText className="size-3.5" /> <span>Ver resumen</span>
+                <FileTextIcon className="size-3.5" /> <span>Ver resumen</span>
               </Button>
             ) : null}
 
@@ -257,21 +261,33 @@ export function PlannerSessionHeader({
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={onCopyAnnouncement}>
-                    <Copy className="size-4 text-muted-foreground" />
+                    <CopyIcon className="size-4 text-muted-foreground" />
                     <span>Copiar anuncio</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={onNewCleanSession}>
-                    <Plus className="size-4 text-muted-foreground" />
+                    <PlusIcon className="size-4 text-muted-foreground" />
                     <span>Nueva reunión</span>
                   </DropdownMenuItem>
-                  {onLoadDemo && (
-                    <DropdownMenuItem onClick={onLoadDemo}>
-                      <RotateCw className="size-4 text-muted-foreground" />
-                      <span>Cargar demo (Reset)</span>
-                    </DropdownMenuItem>
+                  {onDeleteSession && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => onDeleteSession(state, 'archive')}
+                        className="cursor-pointer"
+                      >
+                        <Archive className="size-4 text-muted-foreground" />
+                        <span>Archivar reunión</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onDeleteSession(state, 'delete')}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                      >
+                        <TrashIcon className="size-4" />
+                        <span>Eliminar reunión</span>
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -346,8 +362,8 @@ export function PlannerSessionHeader({
             <div className="grid grid-cols-[1fr_3fr] gap-3 items-end">
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
+                <Popover>
+                  <PopoverTrigger
                     render={
                       <button
                         type="button"
@@ -385,7 +401,7 @@ export function PlannerSessionHeader({
                       </button>
                     }
                   />
-                  <DropdownMenuContent align="start" className="p-0">
+                  <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
                     <SearchableParticipantMenu
                       singleSelect
                       hideRoles
@@ -399,14 +415,14 @@ export function PlannerSessionHeader({
                         onUpdateHeaderField?.('host', clean);
                       }}
                     />
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Participan</label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
+                <Popover>
+                  <PopoverTrigger
                     render={
                       <button
                         type="button"
@@ -451,15 +467,15 @@ export function PlannerSessionHeader({
                       </button>
                     }
                   />
-                  <DropdownMenuContent align="start" className="p-0">
+                  <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
                     <SearchableParticipantMenu
                       selectedKeys={selectedKeys}
                       onSelectionChange={(nextKeys) =>
                         onUpdateHeaderField?.('mentions', nextKeys.join(' '))
                       }
                     />
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </div>

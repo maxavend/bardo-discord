@@ -67,14 +67,26 @@ export function minutesToClock(total) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+export function isBreakBlock(block) {
+  if (!block) return false;
+  return Boolean(
+    block.isBreak ||
+    block.type === 'break' ||
+    block.title?.trim().toLowerCase() === 'break' ||
+    block.title?.trim().toLowerCase() === 'descanso' ||
+    block.title?.trim().toLowerCase() === 'pausa'
+  );
+}
+
 export function computePlannerTimes(plannerState) {
   let grandTotalMinutes = 0;
 
   const computedBlocks = (plannerState.blocks || []).map(block => {
-    const duration = parseSmartDuration(block.durationMinutes ?? block.manualDuration) || 30;
+    const isBreak = isBreakBlock(block);
+    const duration = parseSmartDuration(block.durationMinutes ?? block.manualDuration) || (isBreak ? 10 : 30);
     grandTotalMinutes += duration;
 
-    const computedSubpoints = (block.subpoints || []).map(p => ({
+    const computedSubpoints = isBreak ? [] : (block.subpoints || []).map(p => ({
       ...p,
       title: p.title || '',
       presenter: p.presenter || '',
@@ -83,8 +95,14 @@ export function computePlannerTimes(plannerState) {
 
     return {
       ...block,
+      type: isBreak ? 'break' : (block.type || 'block'),
+      isBreak,
       durationMinutes: duration,
       subpoints: computedSubpoints,
+      decisions: isBreak ? [] : (block.decisions || []),
+      leader: isBreak ? '' : (block.leader || ''),
+      participants: isBreak ? '' : (block.participants || ''),
+      introDesc: isBreak ? '' : (block.introDesc || ''),
     };
   });
 

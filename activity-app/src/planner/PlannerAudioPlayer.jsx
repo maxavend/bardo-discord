@@ -21,9 +21,9 @@ import {
   Pause,
   MoreVertical,
   Pencil,
-  Trash2,
   Info,
 } from 'lucide-react';
+import { DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
 import { formatMsToClock } from './session-assistant-engine.js';
 
 export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
@@ -161,7 +161,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" onClick={() => onDelete(recording.id)}>
-                      <Trash2 className="size-4 text-destructive" />
+                      <TrashIcon className="size-4 text-destructive" />
                       <span>Eliminar grabación</span>
                     </DropdownMenuItem>
                   </>

@@ -6,9 +6,17 @@ import {
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import { generateDocxDocument, generatePdfDocument, sanitizeExportFileName } from './export-format.js';
-import { buildDocumentPayload, buildErrorPayload, BARDO_OPEN_PREFIX } from './components.js';
+import {
+  buildDocumentPayload,
+  buildDocNewPayload,
+  buildErrorPayload,
+  buildReuNewPayload,
+  buildReusListPayload,
+  BARDO_OPEN_PREFIX,
+} from './components.js';
 import { normalizeDocumentId } from './document-id.js';
 import { handleDocsApi } from './docs-api.js';
+import { handlePlannerApi } from './planner-api.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
 import { sessionCanAccessDocument } from './document-access.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
@@ -17,14 +25,16 @@ import {
   cacheNormalizedDocument,
   grantDocumentGuildAccess,
   grantDocumentChannelAccess,
+  listDocumentChannelAccess,
+  listPlannerSessionsForChannel,
   loadActivityContext,
   loadDocument,
   loadDocumentSource,
-  listDocumentChannelAccess,
   saveActivityContext,
   saveDocsLaunchIntent,
   saveDocument,
   saveDocumentSource,
+  savePlannerSession,
 } from './db.js';
 
 const MAX_STORED_DOCUMENT_BYTES = 1_800_000;
@@ -188,7 +198,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 async function handleCommandInteraction(interaction, env, ctx) {
   const commandName = interaction.data?.name;
 
-  if (commandName === 'upload-docs') {
+  if (commandName === 'doc-upload' || commandName === 'upload-docs') {
     const options = interaction.data?.options || [];
     const archivoOption = options.find((opt) => opt.name === 'archivo');
     const tituloOption = options.find((opt) => opt.name === 'titulo');
@@ -211,6 +221,125 @@ async function handleCommandInteraction(interaction, env, ctx) {
 
     return jsonResponse({
       type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+    });
+  }
+
+  if (commandName === 'doc-new') {
+    const options = interaction.data?.options || [];
+    const tituloOption = options.find((opt) => opt.name === 'titulo');
+    const title = tituloOption?.value || null;
+
+    const payload = buildDocNewPayload({ title });
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: payload,
+    });
+  }
+
+  if (commandName === 'reu-new') {
+    if (!env.DB) {
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'La base de datos de Bardo no está disponible.',
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
+    }
+
+    if (!interaction.guild_id || !interaction.channel_id) {
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'Las reuniones de Bardo solo se pueden crear dentro de un canal de servidor de Discord.',
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
+    }
+
+    const options = interaction.data?.options || [];
+    const titulo = options.find((opt) => opt.name === 'titulo')?.value?.trim();
+    const fecha = options.find((opt) => opt.name === 'fecha')?.value?.trim();
+    const hora = options.find((opt) => opt.name === 'hora')?.value?.trim();
+    const duracion = options.find((opt) => opt.name === 'duracion')?.value;
+    const descripcion = options.find((opt) => opt.name === 'descripcion')?.value?.trim() || '';
+
+    const hostId = interaction.member?.user?.id || interaction.user?.id || null;
+    const hostName = interaction.member?.nick || interaction.member?.user?.global_name || interaction.member?.user?.username || interaction.user?.username || 'Organizador';
+
+    const now = new Date().toISOString();
+    const session = {
+      id: crypto.randomUUID(),
+      guildId: interaction.guild_id,
+      channelId: interaction.channel_id,
+      title: titulo || 'Nueva reunión',
+      hostId,
+      hostName,
+      date: fecha || now.split('T')[0],
+      startTime: hora || '10:00',
+      targetDuration: typeof duracion === 'number' && duracion > 0 ? duracion : 60,
+      description: descripcion,
+      mentions: '',
+      blocks: [],
+      status: 'scheduled',
+      createdAt: now,
+      createdBy: hostId || 'unknown',
+      updatedAt: now,
+      updatedBy: hostId || 'unknown',
+    };
+
+    try {
+      await savePlannerSession(env.DB, session);
+    } catch (err) {
+      console.error('Error guardando planner session:', err);
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'No se pudo crear la reunión en la base de datos.',
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
+    }
+
+    const payload = buildReuNewPayload({ session });
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: payload,
+    });
+  }
+
+  if (commandName === 'reus') {
+    if (!env.DB) {
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'La base de datos de Bardo no está disponible.',
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
+    }
+
+    if (!interaction.guild_id || !interaction.channel_id) {
+      return jsonResponse({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+          content: 'Las reuniones de Bardo solo están disponibles dentro de un canal de servidor.',
+          flags: InteractionResponseFlags.EPHEMERAL,
+        },
+      });
+    }
+
+    let sessions = [];
+    try {
+      sessions = await listPlannerSessionsForChannel(env.DB, interaction.guild_id, interaction.channel_id, 20);
+    } catch (err) {
+      console.error('Error consultando reuniones de canal:', err);
+    }
+
+    const payload = buildReusListPayload({ sessions });
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: payload,
     });
   }
 
@@ -249,6 +378,17 @@ async function handleComponentInteraction(interaction, env, ctx) {
     });
   }
 
+  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;
+
+  // Non-document routes like planner, new document, etc.
+  const isSpecialTarget = customId.startsWith(`${BARDO_OPEN_PREFIX}planner`) ||
+    customId.startsWith(`${BARDO_OPEN_PREFIX}new-doc`);
+
+  if (isSpecialTarget) {
+    // Discord HTTP interactions support responding inline with LAUNCH_ACTIVITY (type 12)
+    return jsonResponse({ type: 12 });
+  }
+
   const documentId = legacyPageInteraction
     ? normalizeDocumentId(interaction.message?.id)
     : normalizeDocumentId(customId);
@@ -261,8 +401,6 @@ async function handleComponentInteraction(interaction, env, ctx) {
       },
     });
   }
-
-  const invokingUserId = interaction.member?.user?.id || interaction.user?.id || null;
 
   const persistLaunchContext = async () => {
     try {
@@ -619,6 +757,9 @@ export default {
 
     const docsApiResponse = await handleDocsApi(request, url, env);
     if (docsApiResponse) return docsApiResponse;
+
+    const plannerApiResponse = await handlePlannerApi(request, url, env);
+    if (plannerApiResponse) return plannerApiResponse;
 
     if (url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
       const route = parseDocumentApiPath(url.pathname);

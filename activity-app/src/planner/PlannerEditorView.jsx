@@ -23,14 +23,16 @@ import { Field, FieldLabel, FieldDescription, FieldGroup } from '@/components/ui
 import { TimePicker } from '@/components/ui/time-picker';
 import { toast } from '@/lib/toast';
 import {
-  Plus,
-  Trash2,
-  Check,
   ChevronUp,
   ChevronDown,
   MoreVertical,
-  X,
 } from 'lucide-react';
+import {
+  PlusIcon,
+  CircleCheckIcon as CheckIcon,
+  DeleteIcon as TrashIcon,
+  XIcon,
+} from '@/components/ui/animated-icons';
 import {
   computePlannerTimes,
   parseSmartDuration,
@@ -232,7 +234,7 @@ export function PlannerEditorView({
                 Cancelar
               </Button>
               <Button variant="default" size="sm" onClick={handleSave} className="h-8 px-3.5">
-                <Check className="size-3.5" /> {initialState?.id ? 'Guardar cambios' : 'Crear reunión'}
+                <CheckIcon className="size-3.5" /> {initialState?.id ? 'Guardar cambios' : 'Crear reunión'}
               </Button>
             </div>
           </div>
@@ -340,7 +342,7 @@ export function PlannerEditorView({
                 </p>
               </div>
               <Button variant="secondary" size="sm" onClick={addBlock} className="h-8 px-3 shrink-0">
-                <Plus className="size-3.5" /> Agregar bloque
+                <PlusIcon className="size-3.5" /> Agregar bloque
               </Button>
             </div>
 
@@ -348,7 +350,7 @@ export function PlannerEditorView({
               <Card className="p-8 border border-dashed border-border/70 rounded-2xl text-center flex flex-col items-center gap-2">
                 <p className="text-xs text-muted-foreground">No hay bloques en la agenda.</p>
                 <Button variant="default" size="sm" onClick={addBlock}>
-                  <Plus className="size-3.5" /> Crear primer bloque
+                  <PlusIcon className="size-3.5" /> Crear primer bloque
                 </Button>
               </Card>
             ) : (
@@ -383,7 +385,7 @@ export function PlannerEditorView({
                             variant="destructive"
                             onClick={() => confirmDeleteBlock(bIdx)}
                           >
-                            <Trash2 className="size-4 text-destructive" />
+                            <TrashIcon className="size-4 text-destructive" />
                             <span>Eliminar bloque</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -493,7 +495,7 @@ export function PlannerEditorView({
                                 className="text-muted-foreground hover:text-destructive shrink-0 self-end sm:self-center"
                                 aria-label={`Eliminar tema «${p.title || 'sin título'}»`}
                               >
-                                <X className="size-3.5" />
+                                <XIcon className="size-3.5" />
                               </Button>
                             </div>
                           );
@@ -505,7 +507,7 @@ export function PlannerEditorView({
                           onClick={() => addSubpoint(bIdx)}
                           className="w-full text-xs text-primary hover:text-primary hover:bg-primary/10 border border-dashed border-primary/30 justify-center h-8"
                         >
-                          <Plus className="size-3" /> Agregar tema
+                          <PlusIcon className="size-3" /> Agregar tema
                         </Button>
                       </div>
                     </div>
@@ -520,7 +522,7 @@ export function PlannerEditorView({
               onClick={addBlock}
               className="w-full py-3 font-semibold"
             >
-              <Plus className="size-3.5" /> Agregar nuevo bloque a la agenda
+              <PlusIcon className="size-3.5" /> Agregar nuevo bloque a la agenda
             </Button>
           </div>
 

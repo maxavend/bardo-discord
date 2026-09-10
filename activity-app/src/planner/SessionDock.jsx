@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Mic, Square } from 'lucide-react';
-import { SESSION_STATUS, getElapsedActivePointMs } from './session-runner.js';
+import { Play, Pause, Square } from 'lucide-react';
+import { MicIcon } from '@/components/ui/animated-icons';
+import { SESSION_STATUS } from './session-runner.js';
 import { formatMsToClock, getAssistantContextDetails } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
@@ -27,6 +29,13 @@ export function SessionDock({
   onOpenDecisionCapture: _onOpenDecisionCapture,
   onInterruptSession: _onInterruptSession,
 }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   if (
     !sessionState ||
     sessionState.status === SESSION_STATUS.IDLE ||
@@ -45,8 +54,10 @@ export function SessionDock({
   const isBusy = isTransitioning || isRecSaving;
   const isPaused = details.isPaused;
 
-  const now = Date.now();
-  const elapsedPointMs = activePoint ? getElapsedActivePointMs(sessionState, now) : details.elapsedBlockMs;
+  // El timer corre de manera continua desde que inicia la sesión (o punto activo),
+  // incluso si la reunión está en pausa.
+  const sessionStartTime = sessionState.sessionStartedAt || sessionState.activeBlockStartedAt || now;
+  const elapsedContinuousMs = Math.max(0, now - sessionStartTime);
 
   return (
     <aside
@@ -60,21 +71,14 @@ export function SessionDock({
       }}
     >
       <div className="w-full max-w-4xl mx-auto rounded-full bg-card/95 border border-border/80 shadow-xs backdrop-blur-md p-2 flex items-center justify-between gap-3 transition-all duration-150">
-        {/* Resumen operacional: Dot ámbar + Tema activo + Píldora de tiempo */}
+        {/* Resumen operacional: Timer primero + Tema activo */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1 pl-1">
-          <MaterialMorphShape
-            size={14}
-            color={details.isOvertime ? 'danger' : 'amber'}
-            isPaused={isPaused}
-            className="shrink-0"
-          />
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium bg-primary/15 text-primary tabular-nums shrink-0">
+            {formatMsToClock(elapsedContinuousMs)}
+          </span>
 
           <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
             {activePoint?.title || activeBlock?.title || 'Reunión en vivo'}
-          </span>
-
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400 tabular-nums shrink-0">
-            {formatMsToClock(elapsedPointMs)}
           </span>
         </div>
 
@@ -141,7 +145,7 @@ export function SessionDock({
               title="Iniciar grabación de audio"
               className="h-7 rounded-full gap-1.5 px-3 text-xs font-medium cursor-pointer shadow-2xs transition-all"
             >
-              <Mic className="size-3.5 text-destructive shrink-0" />
+              <MicIcon className="size-3.5 text-destructive shrink-0" />
               <span>Grabar</span>
             </Button>
           )}

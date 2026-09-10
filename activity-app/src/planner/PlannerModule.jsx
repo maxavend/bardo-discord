@@ -12,6 +12,16 @@ import {PlannerHomeView} from './PlannerHomeView.jsx';
 import {PlannerCaptureModal} from './PlannerCaptureModal.jsx';
 import {SessionDock} from './SessionDock.jsx';
 import {SessionRecapView} from './SessionRecapView.jsx';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import {PlannerUpcomingBanner} from './PlannerUpcomingBanner.jsx';
 import {RecordingSaveModal} from './RecordingSaveModal.jsx';
 import {SessionInterruptModal} from './SessionInterruptModal.jsx';
@@ -23,6 +33,8 @@ import {
   saveLiveSessionState,
   resetToDemoFixture,
   resetToCleanSession,
+  deletePlannerSessionById,
+  shouldLoadDemoFixture,
   generateDiscordAnnouncement,
   generateMinutesMarkdown,
 } from './planner-store.js';
@@ -63,13 +75,17 @@ import {
   hydrateRecordingBinary,
 } from './recording-storage.js';
 
-export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLibrary}) {
+export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
-  const [plannerEvents] = useState(loadPlannerEvents);
+  const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
   const [selectedEventId, setSelectedEventId] = useState(() => plannerState.eventId || null);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+
+  useEffect(() => {
+    setActiveTab(initialTab || 'home');
+  }, [initialTab]);
   const [recordingStatus, setRecordingStatus] = useState(RECORDING_STATUS.IDLE);
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [dismissedUpcomingBanner, setDismissedUpcomingBanner] = useState(false);
@@ -78,6 +94,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const [captureModal, setCaptureModal] = useState({isOpen: false, blockId: null});
   const [saveRecordingModal, setSaveRecordingModal] = useState({isOpen: false, recordingEntity: null});
   const [interruptModal, setInterruptModal] = useState({isOpen: false});
+  const [deleteSessionModal, setDeleteSessionModal] = useState({isOpen: false, session: null});
 
   const recordingControllerRef = useRef(null);
   const warned5MinBlockIdsRef = useRef(new Set());
@@ -113,6 +130,46 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Sincronización en vivo con Cloudflare D1 en producción Discord
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.__BARDO_PRODUCTION__) return;
+    const sessionId = plannerState?.id;
+    if (!sessionId) return;
+
+    const pollLive = async () => {
+      try {
+        const res = await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}/live`, {
+          headers: window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {},
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.liveState && data.liveState.status && data.liveState.status !== 'idle') {
+            setSessionState((prev) => {
+              if (
+                data.liveState.activeBlockId !== prev.liveActiveBlockId ||
+                data.liveState.activePointId !== prev.liveActivePointId ||
+                data.liveState.status !== prev.status
+              ) {
+                return {
+                  ...prev,
+                  status: data.liveState.status,
+                  liveActiveBlockId: data.liveState.activeBlockId,
+                  liveActivePointId: data.liveState.activePointId,
+                  decisions: data.liveState.decisions?.length ? data.liveState.decisions : prev.decisions,
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(pollLive, 3000);
+    return () => clearInterval(interval);
+  }, [plannerState?.id]);
 
   // Restore binary audio from IndexedDB after metadata is loaded from localStorage.
   useEffect(() => {
@@ -225,9 +282,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const handleStartSession = useCallback(() => {
     const next = createLiveSession(plannerStateRef.current);
     commitSessionState(next);
-    setActiveTab('agenda');
+    handleTabChange('agenda');
     toast('Sesión en vivo iniciada');
-  }, [commitSessionState]);
+  }, [commitSessionState, handleTabChange]);
 
   const handlePauseSession = useCallback(() => {
     const next = pauseLiveSession(sessionStateRef.current);
@@ -244,9 +301,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
       ? resumeInterruptedSession(current)
       : resumeLiveSession(current);
     commitSessionState(next);
-    setActiveTab('agenda');
+    handleTabChange('agenda');
     toast('Sesión reanudada');
-  }, [commitSessionState]);
+  }, [commitSessionState, handleTabChange]);
 
   const handleAdvance = useCallback(() => runAtomicTransition(async () => {
     const outgoing = sessionStateRef.current;
@@ -560,9 +617,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setPlannerState(next);
     setSelectedEventId(event.eventId);
     commitSessionState(loadLiveSessionState(next));
-    setActiveTab('agenda');
+    handleTabChange('agenda');
     toast(`Evento abierto: ${event.title}`);
-  }, [commitSessionState]);
+  }, [commitSessionState, handleTabChange]);
 
   const handleCleanSession = useCallback(() => {
     const clean = resetToCleanSession();
@@ -570,19 +627,59 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
     setPlannerState(clean);
     const live = loadLiveSessionState(clean);
     commitSessionState(live);
-    setActiveTab('agenda');
+    handleTabChange('agenda');
     setIsEditing(true);
     toast('Nueva reunión creada — edita los campos directamente');
-  }, [commitSessionState]);
+  }, [commitSessionState, handleTabChange]);
+
+  const handleDeleteSessionPrompt = useCallback((sessionToDelete = null, action = 'delete') => {
+    const target = sessionToDelete || plannerStateRef.current;
+    if (!target) return;
+    setDeleteSessionModal({
+      isOpen: true,
+      session: target,
+      action: action === 'archive' ? 'archive' : 'delete',
+    });
+  }, []);
+
+  const handleConfirmDeleteSession = useCallback(async () => {
+    const target = deleteSessionModal.session;
+    const isArchive = deleteSessionModal.action === 'archive';
+    setDeleteSessionModal({isOpen: false, session: null, action: 'delete'});
+    if (!target) return;
+
+    const targetId = target.id || target.eventId || target.sessionId;
+    const currentId = plannerStateRef.current.id || plannerStateRef.current.eventId || plannerStateRef.current.sessionId;
+
+    // Eliminar o archivar de los eventos
+    if (targetId) {
+      setPlannerEvents((prev) => prev.filter((ev) => (ev.eventId || ev.id) !== targetId));
+      await deletePlannerSessionById(targetId);
+    }
+
+    // Si la sesión afectada es la que estaba abierta
+    const isCurrentSession = !targetId || targetId === currentId;
+    if (isCurrentSession) {
+      const clean = resetToCleanSession();
+      plannerStateRef.current = clean;
+      setPlannerState(clean);
+      const live = loadLiveSessionState(clean);
+      commitSessionState(live);
+      setSelectedEventId(null);
+      handleTabChange('home');
+    }
+
+    toast(isArchive ? 'Reunión archivada' : 'Reunión eliminada');
+  }, [deleteSessionModal.session, deleteSessionModal.action, commitSessionState, handleTabChange]);
 
   useEffect(() => {
     if (initialTab === 'new') {
       handleCleanSession();
-    } else if (initialTab === 'demo') {
+    } else if (initialTab === 'demo' && shouldLoadDemoFixture()) {
       handleLoadDemo();
-      setActiveTab('agenda');
+      handleTabChange('agenda');
     }
-  }, [initialTab, handleCleanSession, handleLoadDemo]);
+  }, [initialTab, handleCleanSession, handleLoadDemo, handleTabChange]);
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -789,7 +886,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
   const decisionsCount = (sessionState.decisions || []).length;
 
   return (
-    <div className="planner-module-root w-full px-3 sm:px-4 pt-[calc(var(--bardo-topbar,52px)+12px)] relative min-h-screen">
+    <div className="planner-module-root w-full px-4 pt-[calc(var(--bardo-topbar,52px)+12px)] relative min-h-screen">
       {showUpcomingBanner && (
         <PlannerUpcomingBanner
           plannerState={plannerState}
@@ -806,6 +903,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           events={plannerEvents}
           selectedEventId={selectedEventId}
           onSelectEvent={handleSelectEvent}
+          onDeleteSession={handleDeleteSessionPrompt}
           onStartSession={() => {
             handleStartSession();
             handleTabChange('agenda');
@@ -817,10 +915,6 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           onViewAgenda={() => handleTabChange('agenda')}
           onViewMinutes={() => handleTabChange('minutes')}
           onViewRecap={() => handleTabChange('recap')}
-          onLoadDemo={() => {
-            handleLoadDemo();
-            handleTabChange('agenda');
-          }}
           onNewCleanSession={handleCleanSession}
         />
       )}
@@ -836,7 +930,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           onUpdateHeaderField={handleUpdateHeaderField}
           onCopyAnnouncement={handleCopyAnnouncement}
           onNewCleanSession={handleCleanSession}
-          onLoadDemo={handleLoadDemo}
+          onDeleteSession={handleDeleteSessionPrompt}
           onStartSession={handleStartSession}
           onResumeSession={handleResumeSession}
           onInterruptSession={handleOpenInterrupt}
@@ -904,6 +998,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
           onNewSession={handleCleanSession}
           onRenameRecording={handleRenameRecording}
           onDeleteRecording={handleDeleteRecording}
+          onSaveDocToLibrary={onSaveDocToLibrary}
         />
       )}
 
@@ -933,6 +1028,35 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, _onSaveDocToLib
         onClose={() => setInterruptModal({isOpen: false})}
         onConfirmInterrupt={handleConfirmInterrupt}
       />
+
+      <AlertDialog
+        open={deleteSessionModal.isOpen}
+        onOpenChange={(open) => !open && setDeleteSessionModal({isOpen: false, session: null, action: 'delete'})}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteSessionModal.action === 'archive' ? 'Archivar reunión' : 'Eliminar reunión'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteSessionModal.action === 'archive'
+                ? `“${deleteSessionModal.session?.title || 'Esta reunión'}” se archivará y dejará de mostrarse en la lista de reuniones activas.`
+                : `¿Estás seguro de que deseas eliminar “${deleteSessionModal.session?.title || 'esta reunión'}”? Esta acción no se puede deshacer.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteSessionModal({isOpen: false, session: null, action: 'delete'})}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant={deleteSessionModal.action === 'archive' ? 'default' : 'destructive'}
+              onClick={handleConfirmDeleteSession}
+            >
+              {deleteSessionModal.action === 'archive' ? 'Archivar' : 'Eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* FAB móvil persistente y sin glow al inicio/edición/reanudación */}
       {activeTab === 'agenda' && !isLive && (() => {

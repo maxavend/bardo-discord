@@ -53,6 +53,7 @@ function createMockDb(initialDocs = []) {
   const channelAccess = new Map();
   const launchIntents = new Map();
   const sessions = new Map();
+  const plannerSessions = new Map();
   const activityContexts = new Map([
     ['inst-123', { instance_id: 'inst-123', document_id: 'doc-123', created_at: '2026-08-19T12:00:00.000Z' }],
   ]);
@@ -172,9 +173,39 @@ function createMockDb(initialDocs = []) {
                   .filter(access => access.document_id === docId && access.guild_id === guildId)
                   .map(access => ({channel_id: access.channel_id}))};
               }
+              if (query.includes('FROM planner_sessions') && query.includes('WHERE guild_id = ?')) {
+                const [guildId, channelId] = params;
+                const filtered = [...plannerSessions.values()].filter(
+                  (s) => s.guild_id === guildId && s.channel_id === channelId && s.status !== 'archived'
+                );
+                return { results: filtered };
+              }
               return { results: [] };
             },
             async run() {
+              if (query.includes('INSERT INTO planner_sessions')) {
+                const [id, guild_id, channel_id, title, host_id, host_name, date, start_time, target_duration, description, mentions, blocks_json, status, created_at, created_by, updated_at, updated_by] = params;
+                plannerSessions.set(id, {
+                  id,
+                  guild_id,
+                  channel_id,
+                  title,
+                  host_id,
+                  host_name,
+                  date,
+                  start_time,
+                  target_duration,
+                  description,
+                  mentions,
+                  blocks_json,
+                  status,
+                  created_at,
+                  created_by,
+                  updated_at,
+                  updated_by,
+                });
+                return { meta: { changes: 1 } };
+              }
               if (query.includes('INSERT INTO documents')) {
                 const [id, title, original_markdown, pages, source_name, created_at, created_by] = params;
                 documents.set(id, { id, title, original_markdown, pages, source_name, created_at, created_by });
@@ -578,3 +609,157 @@ test('Worker delega assets GET cuando existe el binding ASSETS', async () => {
   assert.equal(res.status, 200);
   assert.equal(await res.text(), 'asset-ok');
 });
+
+test('Worker responde a /doc-new con Container V2 y botón para crear documento', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const interactionPayload = {
+    type: 2,
+    id: 'cmd-doc-new',
+    token: 'token-cmd-doc-new',
+    guild_id: 'guild-123',
+    channel_id: 'channel-123',
+    member: { user: { id: 'user-123' } },
+    data: {
+      name: 'doc-new',
+      options: [{ name: 'titulo', value: 'Borrador Sprint' }],
+    },
+  };
+
+  const body = JSON.stringify(interactionPayload);
+  const signature = signBody(privateKey, timestamp, body);
+
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() });
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 4); // CHANNEL_MESSAGE_WITH_SOURCE
+  assert.ok(json.data?.components?.length > 0);
+  const actionRow = json.data.components[0].components.at(-1);
+  assert.equal(actionRow.components[0].custom_id, 'bardo:open:new-doc');
+});
+
+test('Worker responde a /reu-new creando reunión en DB y enviando tarjeta Components V2', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const interactionPayload = {
+    type: 2,
+    id: 'cmd-reu-new',
+    token: 'token-cmd-reu-new',
+    guild_id: 'guild-123',
+    channel_id: 'channel-123',
+    member: { user: { id: 'user-123', username: 'Max' } },
+    data: {
+      name: 'reu-new',
+      options: [
+        { name: 'titulo', value: 'Sincronización Semanal' },
+        { name: 'fecha', value: '2026-09-15' },
+        { name: 'hora', value: '11:30' },
+        { name: 'duracion', value: 45 },
+      ],
+    },
+  };
+
+  const body = JSON.stringify(interactionPayload);
+  const signature = signBody(privateKey, timestamp, body);
+
+  const mockDb = createMockDb();
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: mockDb });
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 4);
+  assert.ok(json.data?.components?.length > 0);
+  const actionRow = json.data.components[0].components.at(-1);
+  assert.match(actionRow.components[0].custom_id, /^bardo:open:planner-session:/);
+});
+
+test('Worker responde a /reus listando reuniones del canal', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const interactionPayload = {
+    type: 2,
+    id: 'cmd-reus',
+    token: 'token-cmd-reus',
+    guild_id: 'guild-123',
+    channel_id: 'channel-123',
+    member: { user: { id: 'user-123' } },
+    data: {
+      name: 'reus',
+    },
+  };
+
+  const body = JSON.stringify(interactionPayload);
+  const signature = signBody(privateKey, timestamp, body);
+
+  const req = new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
+    },
+    body,
+  });
+
+  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() });
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.type, 4);
+  assert.ok(json.data?.components?.length > 0);
+  const actionRow = json.data.components[0].components.at(-1);
+  assert.equal(actionRow.components[0].custom_id, 'bardo:open:planner');
+});
+
+test('Worker responde con LAUNCH_ACTIVITY (type 12) a botones bardo:open:planner y bardo:open:new-doc', async () => {
+  const { publicKey, privateKey } = getTestKeys();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+
+  for (const customId of ['bardo:open:planner', 'bardo:open:new-doc', 'bardo:open:planner-session:xyz-123']) {
+    const interactionPayload = {
+      type: 3,
+      id: `btn-${customId}`,
+      guild_id: 'guild-123',
+      channel_id: 'channel-123',
+      member: { user: { id: 'user-123' } },
+      data: { custom_id: customId },
+    };
+
+    const body = JSON.stringify(interactionPayload);
+    const signature = signBody(privateKey, timestamp, body);
+
+    const req = new Request('http://localhost/', {
+      method: 'POST',
+      headers: {
+        'x-signature-ed25519': signature,
+        'x-signature-timestamp': timestamp,
+        'content-type': 'application/json',
+      },
+      body,
+    });
+
+    const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() });
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.equal(json.type, 12);
+  }
+});
+

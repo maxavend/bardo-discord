@@ -1,14 +1,19 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupButton } from '@/components/ui/input-group';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
-  DropdownMenuSeparator,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
-import { X, Plus, Check, Search, ChevronDown } from 'lucide-react';
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+} from '@/components/ui/command';
+import { ChevronDown } from 'lucide-react';
+import { XIcon, PlusIcon } from '@/components/ui/animated-icons';
+import { isProductionActivity, shouldLoadDemoFixture } from './planner-store.js';
 
 export const DEFAULT_DISCORD_MEMBERS = [
   { id: 'u-1', type: 'user', username: 'nico.g', globalName: 'Nico G', tag: '@Nico G', avatarColor: '#5865F2' },
@@ -51,28 +56,85 @@ export function saveCustomParticipant(item) {
 }
 
 export function getAllDiscordEntities() {
+  const isProduction = isProductionActivity();
+  const channelContext = (typeof window !== 'undefined' && window.__bardoChannelContext) || null;
   const liveParticipants = (typeof window !== 'undefined' && window.__bardoLiveParticipants) || [];
   const custom = getSavedCustomParticipants();
 
-  const allMembers = [...DEFAULT_DISCORD_MEMBERS];
-  const allRoles = [...DEFAULT_DISCORD_ROLES];
+  let members = [];
+  let roles = [];
 
-  for (const item of [...liveParticipants, ...custom]) {
-    if (item.type === 'role') {
-      if (!allRoles.some((r) => r.tag.toLowerCase() === item.tag.toLowerCase())) {
-        allRoles.push(item);
-      }
+  if (channelContext) {
+    roles = (channelContext.roles || []).map((r) => ({
+      id: r.id,
+      type: 'role',
+      name: r.name,
+      tag: r.tag || `@${r.name}`,
+      color: r.color || '#5865F2',
+    }));
+
+    members = (channelContext.members || []).map((m, idx) => ({
+      id: m.id,
+      type: 'user',
+      username: m.username,
+      globalName: m.globalName || m.username,
+      tag: m.tag || `@${m.globalName || m.username}`,
+      avatar: m.avatar,
+      avatarColor: DISCORD_PALETTES[idx % DISCORD_PALETTES.length],
+    }));
+  } else if (!isProduction && shouldLoadDemoFixture()) {
+    members = [...DEFAULT_DISCORD_MEMBERS];
+    roles = [...DEFAULT_DISCORD_ROLES];
+  }
+
+  // Prioritize active participants in call/activity
+  liveParticipants.forEach((p, idx) => {
+    const existingIndex = members.findIndex((m) => m.id === p.id || m.username === p.username);
+    if (existingIndex >= 0) {
+      members[existingIndex].inCall = true;
+      if (p.globalName) members[existingIndex].globalName = p.globalName;
+      if (p.avatar) members[existingIndex].avatar = p.avatar;
     } else {
-      if (!allMembers.some((m) => m.tag.toLowerCase() === item.tag.toLowerCase())) {
-        allMembers.push(item);
-      }
+      members.unshift({
+        id: p.id,
+        type: 'user',
+        username: p.username,
+        globalName: p.globalName || p.username,
+        tag: `@${p.globalName || p.username}`,
+        avatar: p.avatar,
+        avatarColor: p.avatarColor || DISCORD_PALETTES[idx % DISCORD_PALETTES.length],
+        inCall: true,
+      });
+    }
+  });
+
+  // Ensure current user is in members list
+  if (typeof window !== 'undefined' && window.__BARDO_USER__) {
+    const u = window.__BARDO_USER__;
+    if (!members.some((m) => m.id === u.id)) {
+      members.unshift({
+        id: u.id,
+        type: 'user',
+        username: u.username,
+        globalName: u.global_name || u.username,
+        tag: `@${u.global_name || u.username}`,
+        avatar: u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=64` : null,
+        avatarColor: '#5865F2',
+        isMe: true,
+      });
     }
   }
 
-  return { members: allMembers, roles: allRoles };
+  custom.forEach((c) => {
+    if (!members.some((m) => m.tag.toLowerCase() === c.tag.toLowerCase())) {
+      members.push(c);
+    }
+  });
+
+  return { members, roles };
 }
 
-export function parseMentionsToArray(mentionsStr = '') {
+function parseMentionsToArray(mentionsStr) {
   if (!mentionsStr) return [];
   const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
   if (matches && matches.length > 0) {
@@ -91,26 +153,29 @@ export function PlannerMemberPicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const inputRef = useRef(null);
+  const [entities, setEntities] = useState(() => getAllDiscordEntities());
+  const _inputRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.__bardoChannelContext && window.__BARDO_PRODUCTION__) {
+      fetch('/api/discord/channel-context', {
+        headers: window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {},
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((ctx) => {
+          if (ctx) {
+            window.__bardoChannelContext = ctx;
+            setEntities(getAllDiscordEntities());
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const selectedTags = parseMentionsToArray(value);
   const selectedSet = new Set(selectedTags.map((t) => (t.startsWith('@') ? t : `@${t}`)));
-  const { members, roles } = getAllDiscordEntities();
-
-  const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
-  const filteredRoles = hideRoles ? [] : roles.filter(
-    (r) => !q || r.name.toLowerCase().includes(q) || r.tag.toLowerCase().includes(q)
-  );
-  const filteredMembers = members.filter(
-    (m) => !q || m.globalName.toLowerCase().includes(q) || m.tag.toLowerCase().includes(q)
-  );
-
-  const hasExactMatch = [...roles, ...members].some(
-    (e) =>
-      e.tag.toLowerCase() === `@${q}`.toLowerCase() ||
-      e.tag.toLowerCase() === searchQuery.toLowerCase() ||
-      (e.globalName || e.name || '').toLowerCase() === q
-  );
+  const { members, roles } = entities;
 
   const handleToggleTag = (tag) => {
     let cleanTag = tag.trim();
@@ -178,6 +243,13 @@ export function PlannerMemberPicker({
     setSearchQuery('');
   };
 
+  const hasExactMatch = [...roles, ...members].some(
+    (e) =>
+      e.tag.toLowerCase() === `@${searchQuery.trim()}`.toLowerCase() ||
+      e.tag.toLowerCase() === searchQuery.trim().toLowerCase() ||
+      (e.globalName || e.name || '').toLowerCase() === searchQuery.trim().toLowerCase()
+  );
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger
@@ -185,7 +257,6 @@ export function PlannerMemberPicker({
           <div
             onClick={() => {
               setIsOpen(true);
-              inputRef.current?.focus();
             }}
             className="min-h-10 w-full px-3 py-1.5 rounded-3xl bg-input/50 border border-transparent hover:border-border/60 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 transition-all flex items-center justify-between gap-2 flex-wrap cursor-text"
           >
@@ -213,142 +284,108 @@ export function PlannerMemberPicker({
                       className="text-muted-foreground hover:text-foreground p-0.5 rounded-sm cursor-pointer ml-0.5"
                       aria-label={`Eliminar ${label}`}
                     >
-                      <X className="size-3" />
+                      <XIcon className="size-3" />
                     </button>
                   </Badge>
                 );
               })}
-
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (!isOpen) setIsOpen(true);
-                }}
-                onFocus={() => setIsOpen(true)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchQuery.trim()) {
-                    e.preventDefault();
-                    handleAddGuest(searchQuery);
-                  } else if (e.key === 'Backspace' && !searchQuery && selectedSet.size > 0) {
-                    const lastTag = Array.from(selectedSet).pop();
-                    if (lastTag) handleRemoveTag(lastTag);
-                  }
-                }}
-                placeholder={selectedSet.size === 0 ? placeholder : 'Agregar...'}
-                className="text-xs bg-transparent border-0 outline-none p-0 flex-1 min-w-[120px] text-foreground placeholder:text-muted-foreground focus:ring-0"
-              />
+              <span className="text-xs text-muted-foreground">{selectedSet.size === 0 ? placeholder : ''}</span>
             </div>
-
             <ChevronDown className={`size-4 text-muted-foreground transition-transform shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
           </div>
         }
       />
 
-      <PopoverContent align="start" className="w-[300px] p-1.5 flex flex-col gap-1">
-        {searchQuery.trim() && !hasExactMatch && (
-          <div className="p-1 border-b border-border/40">
-            <button
-              type="button"
-              onClick={() => handleAddGuest(searchQuery)}
-              className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
-            >
-              <Plus className="size-3.5 shrink-0" />
-              <span className="truncate">
-                Agregar invitado "<strong>{searchQuery.trim()}</strong>"
-              </span>
-            </button>
-          </div>
-        )}
+      <PopoverContent align="start" className="w-[300px] p-0 overflow-hidden">
+        <Command className="w-full">
+          <CommandInput 
+            placeholder="Buscar..." 
+            value={searchQuery} 
+            onValueChange={setSearchQuery} 
+          />
+          {searchQuery.trim() && !hasExactMatch && (
+            <div className="p-1 border-b border-border/40">
+              <button
+                type="button"
+                onClick={() => handleAddGuest(searchQuery)}
+                className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                <PlusIcon className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  Agregar invitado "<strong>{searchQuery.trim()}</strong>"
+                </span>
+              </button>
+            </div>
+          )}
 
-        <div
-          className="max-h-72 w-full overflow-y-auto overflow-x-hidden overscroll-contain pr-1"
-          onWheel={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-        >
-          <div className="flex flex-col gap-1 pr-1">
-            {filteredRoles.length > 0 && (
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
-                  Roles del servidor
-                </DropdownMenuLabel>
-                <div className="flex flex-col gap-0.5">
-                  {filteredRoles.map((role) => {
-                    const isSelected = selectedSet.has(role.tag);
-                    return (
-                      <button
-                        key={role.tag}
-                        type="button"
-                        onClick={() => handleToggleTag(role.tag)}
-                        className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span
-                            className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
-                            style={{ backgroundColor: role.color }}
-                          >
-                            #
-                          </span>
-                          <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
-                          <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{role.tag}</span>
-                        </div>
-                        {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </DropdownMenuGroup>
+          <CommandList className="max-h-64">
+            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+
+            {!hideRoles && roles.length > 0 && (
+              <CommandGroup heading="Roles del servidor">
+                {roles.map((role) => {
+                  const isSelected = selectedSet.has(role.tag);
+                  return (
+                    <CommandItem
+                      key={role.tag}
+                      value={`${role.name} ${role.tag}`}
+                      onSelect={() => handleToggleTag(role.tag)}
+                      data-checked={isSelected}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span
+                          className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                          style={{ backgroundColor: role.color }}
+                        >
+                          #
+                        </span>
+                        <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
+                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{role.tag}</span>
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
             )}
 
-            {filteredMembers.length > 0 && (
-              <DropdownMenuGroup>
-                {filteredRoles.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
-                  Miembros del servidor y canal
-                </DropdownMenuLabel>
-                <div className="flex flex-col gap-0.5">
-                  {filteredMembers.map((member) => {
-                    const isSelected = selectedSet.has(member.tag);
-                    return (
-                      <button
-                        key={member.tag}
-                        type="button"
-                        onClick={() => handleToggleTag(member.tag)}
-                        className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <Avatar
-                            size="xs"
-                            className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                            style={{
-                              backgroundColor: `${member.avatarColor}30`,
-                              color: member.avatarColor,
-                            }}
-                          >
-                            <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
-                              {member.globalName.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
-                          <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{member.tag}</span>
-                        </div>
-                        {isSelected && <Check className="size-3.5 text-primary shrink-0 ml-1" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </DropdownMenuGroup>
-            )}
+            {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
-            {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
-              <div className="px-3 py-3 text-center text-xs text-muted-foreground">
-                No hay miembros ni roles disponibles.
-              </div>
+            {members.length > 0 && (
+              <CommandGroup heading="Miembros del servidor y canal">
+                {members.map((member) => {
+                  const isSelected = selectedSet.has(member.tag);
+                  return (
+                    <CommandItem
+                      key={member.tag}
+                      value={`${member.globalName} ${member.username} ${member.tag}`}
+                      onSelect={() => handleToggleTag(member.tag)}
+                      data-checked={isSelected}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Avatar
+                          size="xs"
+                          className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                          style={{
+                            backgroundColor: `${member.avatarColor}30`,
+                            color: member.avatarColor,
+                          }}
+                        >
+                          <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
+                            {member.globalName.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
+                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{member.tag}</span>
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
             )}
-          </div>
-        </div>
+          </CommandList>
+        </Command>
       </PopoverContent>
     </Popover>
   );
@@ -361,23 +398,8 @@ export function SearchableParticipantMenu({
   singleSelect = false,
   hideRoles = false,
 }) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchValue, setSearchValue] = useState('');
   const { members, roles } = getAllDiscordEntities();
-
-  const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
-  const filteredRoles = hideRoles ? [] : roles.filter(
-    (r) => !q || r.name.toLowerCase().includes(q) || r.tag.toLowerCase().includes(q)
-  );
-  const filteredMembers = members.filter(
-    (m) => !q || m.globalName.toLowerCase().includes(q) || m.tag.toLowerCase().includes(q)
-  );
-
-  const hasExactMatch = [...roles, ...members].some(
-    (e) =>
-      e.tag.toLowerCase() === `@${q}`.toLowerCase() ||
-      e.tag.toLowerCase() === searchQuery.toLowerCase() ||
-      (e.globalName || e.name || '').toLowerCase() === q
-  );
 
   const handleToggle = (tag) => {
     if (singleSelect) {
@@ -443,177 +465,134 @@ export function SearchableParticipantMenu({
     nextKeys.add(cleanTag);
     onSelectionChange(Array.from(nextKeys));
     onAddCustomParticipant?.(cleanTag);
-    setSearchQuery('');
+    setSearchValue('');
   };
 
+  const hasExactMatch = [...roles, ...members].some(
+    (e) =>
+      e.tag.toLowerCase() === `@${searchValue.trim()}`.toLowerCase() ||
+      e.tag.toLowerCase() === searchValue.trim().toLowerCase() ||
+      (e.globalName || e.name || '').toLowerCase() === searchValue.trim().toLowerCase()
+  );
+
   return (
-    <div className="flex flex-col min-w-[280px] max-w-xs text-xs p-1 overflow-x-hidden">
-      {/* 1. SEARCH INPUT (Canonical shadcn Combobox placement at the TOP) */}
-      <div className="p-1 pb-1.5">
-        <InputGroup className="h-8">
-          <InputGroupAddon align="inline-start">
-            <Search className="size-3.5 text-muted-foreground" />
-          </InputGroupAddon>
-          <InputGroupInput
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && searchQuery.trim()) {
-                e.preventDefault();
-                handleAddGuest(searchQuery);
-              }
-            }}
-            placeholder="Buscar miembro o rol..."
-            className="text-xs"
-          />
-          {searchQuery && (
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton size="icon-xs" variant="ghost" onClick={() => setSearchQuery('')}>
-                <X className="size-3" />
-              </InputGroupButton>
-            </InputGroupAddon>
-          )}
-        </InputGroup>
-      </div>
+    <Command className="w-[300px] p-1">
+      <CommandInput
+        value={searchValue}
+        onValueChange={setSearchValue}
+        placeholder="Buscar miembro o rol..."
+        className="text-xs"
+      />
 
-      <DropdownMenuSeparator className="my-1" />
-
-      {/* Guest addition option */}
-      {searchQuery.trim() && !hasExactMatch && (
-        <div className="px-1 py-0.5">
+      {searchValue.trim() && !hasExactMatch && (
+        <div className="px-1 py-1 border-b border-border/40">
           <button
             type="button"
-            onClick={() => handleAddGuest(searchQuery)}
+            onClick={() => handleAddGuest(searchValue)}
             className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
           >
-            <Plus className="size-3.5 shrink-0" />
+            <PlusIcon className="size-3.5 shrink-0" />
             <span className="truncate">
-              Agregar "<strong>{searchQuery.trim()}</strong>"
+              Agregar "<strong>{searchValue.trim()}</strong>"
             </span>
           </button>
         </div>
       )}
 
-      {/* Native scrollable container to allow wheel and touch scrolling smoothly inside DropdownMenuContent */}
-      <div
-        className="max-h-64 w-full overflow-y-auto overflow-x-hidden overscroll-contain px-1 py-0.5"
-        onWheel={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
-      >
-        <div className="flex flex-col gap-1 pr-0.5">
-          {/* 2. ROLES DEL SERVIDOR */}
-          {filteredRoles.length > 0 && (
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
-                Roles del servidor
-              </DropdownMenuLabel>
-              <div className="flex flex-col gap-0.5">
-                {filteredRoles.map((role) => {
-                  const isSelected =
-                    selectedKeys.has(role.tag) ||
-                    selectedKeys.has(role.name) ||
-                    selectedKeys.has(`@${role.name}`) ||
-                    Array.from(selectedKeys).some(
-                      (k) =>
-                        k.toLowerCase() === role.tag.toLowerCase() ||
-                        k.toLowerCase() === `@${role.name.toLowerCase()}`
-                    );
+      <CommandList className="max-h-64 mt-1">
+        <CommandEmpty>No se encontraron resultados.</CommandEmpty>
 
-                  return (
-                    <button
-                      key={role.tag}
-                      type="button"
-                      onClick={() => handleToggle(role.tag)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
+        {!hideRoles && roles.length > 0 && (
+          <CommandGroup heading="Roles del servidor">
+            {roles.map((role) => {
+              const isSelected =
+                selectedKeys.has(role.tag) ||
+                selectedKeys.has(role.name) ||
+                selectedKeys.has(`@${role.name}`) ||
+                Array.from(selectedKeys).some(
+                  (k) =>
+                    k.toLowerCase() === role.tag.toLowerCase() ||
+                    k.toLowerCase() === `@${role.name.toLowerCase()}`
+                );
+
+              return (
+                <CommandItem
+                  key={role.tag}
+                  value={`${role.name} ${role.tag}`}
+                  onSelect={() => handleToggle(role.tag)}
+                  data-checked={isSelected}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span
+                      className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
+                      style={{ backgroundColor: role.color }}
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span
-                          className="size-4 rounded-md text-[10px] font-bold flex items-center justify-center text-white shrink-0 shadow-2xs"
-                          style={{ backgroundColor: role.color }}
-                        >
-                          #
-                        </span>
-                        <span className="text-xs font-medium text-foreground truncate">
-                          {role.name}
-                        </span>
-                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
-                          {role.tag}
-                        </span>
-                      </div>
-                      {isSelected && (
-                        <Check className="size-3.5 text-primary shrink-0 ml-1.5" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </DropdownMenuGroup>
-          )}
+                      #
+                    </span>
+                    <span className="text-xs font-medium text-foreground truncate">
+                      {role.name}
+                    </span>
+                    <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
+                      {role.tag}
+                    </span>
+                  </div>
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        )}
 
-          {/* 3. MIEMBROS DEL SERVIDOR Y CANAL */}
-          {filteredMembers.length > 0 && (
-            <DropdownMenuGroup>
-              {filteredRoles.length > 0 && <DropdownMenuSeparator className="my-1.5" />}
-              <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground/80">
-                Miembros del servidor y canal
-              </DropdownMenuLabel>
-              <div className="flex flex-col gap-0.5">
-                {filteredMembers.map((member) => {
-                  const isSelected =
-                    selectedKeys.has(member.tag) ||
-                    selectedKeys.has(member.globalName) ||
-                    selectedKeys.has(`@${member.globalName}`) ||
-                    Array.from(selectedKeys).some(
-                      (k) =>
-                        k.toLowerCase() === member.tag.toLowerCase() ||
-                        k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
-                        k.toLowerCase() === member.globalName.toLowerCase()
-                    );
+        {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
-                  return (
-                    <button
-                      key={member.tag}
-                      type="button"
-                      onClick={() => handleToggle(singleSelect ? member.globalName : member.tag)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer hover:bg-accent hover:text-accent-foreground text-foreground"
+        {members.length > 0 && (
+          <CommandGroup heading="Miembros del servidor y canal">
+            {members.map((member) => {
+              const isSelected =
+                selectedKeys.has(member.tag) ||
+                selectedKeys.has(member.globalName) ||
+                selectedKeys.has(`@${member.globalName}`) ||
+                Array.from(selectedKeys).some(
+                  (k) =>
+                    k.toLowerCase() === member.tag.toLowerCase() ||
+                    k.toLowerCase() === `@${member.globalName.toLowerCase()}` ||
+                    k.toLowerCase() === member.globalName.toLowerCase()
+                );
+
+              return (
+                <CommandItem
+                  key={member.tag}
+                  value={`${member.globalName} ${member.username} ${member.tag}`}
+                  onSelect={() => handleToggle(singleSelect ? member.globalName : member.tag)}
+                  data-checked={isSelected}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Avatar
+                      size="xs"
+                      className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
+                      style={{
+                        backgroundColor: `${member.avatarColor}30`,
+                        color: member.avatarColor,
+                      }}
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Avatar
-                          size="xs"
-                          className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                          style={{
-                            backgroundColor: `${member.avatarColor}30`,
-                            color: member.avatarColor,
-                          }}
-                        >
-                          <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
-                            {member.globalName.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs font-medium text-foreground truncate">
-                          {member.globalName}
-                        </span>
-                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
-                          {member.tag}
-                        </span>
-                      </div>
-                      {isSelected && (
-                        <Check className="size-3.5 text-primary shrink-0 ml-1.5" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </DropdownMenuGroup>
-          )}
-
-          {filteredRoles.length === 0 && filteredMembers.length === 0 && !searchQuery.trim() && (
-            <div className="px-3 py-3 text-center text-xs text-muted-foreground">
-              No hay miembros ni roles disponibles.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+                      <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
+                        {member.globalName.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs font-medium text-foreground truncate">
+                      {member.globalName}
+                    </span>
+                    <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
+                      {member.tag}
+                    </span>
+                  </div>
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        )}
+      </CommandList>
+    </Command>
   );
 }

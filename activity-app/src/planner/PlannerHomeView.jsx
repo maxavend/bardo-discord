@@ -3,14 +3,23 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuGroup,
+} from '@/components/ui/dropdown-menu';
+import {
   FileText,
-  Plus,
   Clock,
   Calendar,
   CheckCircle2,
   Mic,
   ChevronRight,
+  Archive,
+  MoreVertical,
 } from 'lucide-react';
+import { PlusIcon, DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
 import { SESSION_STATUS, recalculateEstimatedEndTime } from './session-runner.js';
 import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
 import { pluralize, formatTopicsCountLabel, formatRecordingsCountLabel } from './copy-tokens.js';
@@ -37,6 +46,7 @@ export function PlannerHomeView({
   sessionState,
   onViewAgenda,
   onNewCleanSession,
+  onDeleteSession,
   events = [],
   selectedEventId = null,
   onSelectEvent,
@@ -101,14 +111,14 @@ export function PlannerHomeView({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 sm:px-0 pt-2 pb-28 flex flex-col gap-5 animate-in fade-in duration-200">
+    <div className="w-full max-w-2xl mx-auto pt-2 pb-28 flex flex-col gap-5 animate-in fade-in duration-200">
 
       {/* ── Reunión actual / Empty state ─────────────────────────────────────── */}
       <section className="flex flex-col gap-2">
         {isEmpty && isIdle ? (
           /* Empty state */
-          <Card className="p-5 flex flex-col items-center gap-3 rounded-2xl shadow-2xs border-border bg-card text-center">
-            <div className="size-10 rounded-xl bg-muted border border-border flex items-center justify-center">
+          <Card className="p-5 flex flex-col items-center gap-3 rounded-2xl shadow-[0_1px_3px_0_oklch(0_0_0/0.04)] border-border/60 bg-card text-center">
+            <div className="size-10 rounded-xl bg-muted border border-border/60 flex items-center justify-center">
               <Calendar className="size-4.5 text-muted-foreground" />
             </div>
             <div>
@@ -122,7 +132,7 @@ export function PlannerHomeView({
                 onClick={onNewCleanSession}
                 className="text-xs font-semibold h-8 px-4 flex items-center justify-center gap-1.5"
               >
-                <Plus className="size-3.5" /> Nueva reunión
+                <PlusIcon className="size-3.5" /> Nueva reunión
               </Button>
             </div>
           </Card>
@@ -138,10 +148,10 @@ export function PlannerHomeView({
                 onViewAgenda?.();
               }
             }}
-            className={`p-4 sm:p-5 flex flex-col gap-3 rounded-2xl cursor-pointer shadow-2xs focus-visible:outline-2 focus-visible:outline-ring bg-card border transition-all duration-[var(--duration-quick,150ms)] ease-[var(--ease-smooth-out,cubic-bezier(0.22,1,0.36,1))] hover:border-primary hover:bg-[color-mix(in_oklch,var(--card),var(--primary)_2%)] ${
+            className={`p-4 sm:p-5 flex flex-col gap-3 rounded-2xl cursor-pointer shadow-[0_1px_3px_0_oklch(0_0_0/0.04)] focus-visible:outline-2 focus-visible:outline-ring bg-card border transition-all duration-[var(--duration-quick,150ms)] ease-[var(--ease-smooth-out,cubic-bezier(0.22,1,0.36,1))] hover:border-primary hover:bg-[color-mix(in_oklch,var(--card),var(--primary)_2%)] ${
               isLive
                 ? 'border-primary/60 ring-1 ring-primary/20'
-                : 'border-border'
+                : 'border-border/60'
             }`}
           >
             {/* Status + fecha + horario */}
@@ -161,13 +171,63 @@ export function PlannerHomeView({
               <span className="ml-auto"><StatusBadge /></span>
             </div>
 
-            {/* Título */}
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-foreground leading-tight">
-                {title}
-              </h2>
-              {description && (
-                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mt-0.5">{description}</p>
+            {/* Título y acciones */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold tracking-tight text-foreground leading-tight">
+                  {title}
+                </h2>
+                {description && (
+                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mt-0.5">{description}</p>
+                )}
+              </div>
+              {onDeleteSession && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={`Opciones de la reunión ${title}`}
+                          className="text-muted-foreground hover:text-foreground shrink-0 -mr-1 -mt-1 rounded-full cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteSession(plannerState, 'archive');
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Archive className="size-4 text-muted-foreground" />
+                          <span>Archivar reunión</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteSession(plannerState, 'delete');
+                          }}
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                        >
+                          <TrashIcon className="size-4" />
+                          <span>Eliminar reunión</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
             </div>
 
@@ -265,7 +325,55 @@ export function PlannerHomeView({
                     <strong>{event.title}</strong>
                     <span>{eventStatus} · {eventDate} · {event.startTime} · {event.blocks?.length || 0} bloques · {eventMinutes >= 60 && eventMinutes % 60 === 0 ? `${eventMinutes / 60} h` : `${eventMinutes} min`}</span>
                   </button>
-                  <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                  {onDeleteSession && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Opciones del evento ${event.title}`}
+                              className="text-muted-foreground hover:text-foreground shrink-0 rounded-full cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteSession(event, 'archive');
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <Archive className="size-4 text-muted-foreground" />
+                              <span>Archivar reunión</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteSession(event, 'delete');
+                              }}
+                              className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                            >
+                              <TrashIcon className="size-4" />
+                              <span>Eliminar reunión</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                  <ChevronRight className="size-4 text-muted-foreground shrink-0" aria-hidden="true" />
                 </article>
               );
             })}

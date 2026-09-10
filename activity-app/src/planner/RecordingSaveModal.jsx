@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Field, FieldLabel } from '@/components/ui/field';
-import { Mic, Clock } from 'lucide-react';
+import { MicIcon, ClockIcon } from '@/components/ui/animated-icons';
 import { formatMsToClock } from './session-assistant-engine.js';
 
 export function RecordingSaveModal({
@@ -50,7 +50,7 @@ export function RecordingSaveModal({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <Mic className="size-4" />
+              <MicIcon className="size-4" />
             </div>
             <DialogTitle>Grabación finalizada</DialogTitle>
           </div>
@@ -87,7 +87,7 @@ export function RecordingSaveModal({
             </div>
 
             <div className="flex items-center gap-1.5 text-primary font-semibold shrink-0">
-              <Clock className="size-3.5" />
+              <ClockIcon className="size-3.5" />
               <span>{durationClock}</span>
             </div>
           </div>
