@@ -304,7 +304,6 @@ async function startNewDocumentFromEditor(page) {
 
 test('escribir varios párrafos seguidos (incluso muy rápido) no lanza errores de React', async ({page}, testInfo) => {
   test.skip(!['mobile-standard', 'laptop'].includes(testInfo.project.name), 'Una vista táctil y una de escritorio bastan.');
-  test.fixme(true, 'BUG: con pulsaciones sin pausa (Enter + texto) el editor lanza a menudo React #185 "Maximum update depth exceeded" desde los listeners onChange de Slate/Plate.');
   const errors = collectRuntimeErrors(page);
   await seedDocs(page, []);
   // Tres documentos nuevos con 10 párrafos tecleados sin pausa: el error es intermitente.

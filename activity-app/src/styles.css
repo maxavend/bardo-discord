@@ -129,6 +129,18 @@ body {
   overscroll-behavior-x: none;
   touch-action: pan-y;
 }
+/*
+ * Bloqueo de scroll de menús y diálogos (react-remove-scroll pone
+ * body{overflow:hidden}). Como html tiene overflow-x:clip, ese overflow de body
+ * no se propaga a la ventana y body pasa a ser un contenedor de scroll: la
+ * cabecera y la barra sticky saltaban fuera de pantalla y los menús se abrían
+ * en y<0. Se mantiene body sin contenedor de scroll (el bloqueo ya impide el
+ * scroll con sus propios eventos) y sin scroll horizontal.
+ */
+html body[data-scroll-locked] {
+  overflow-x: clip !important;
+  overflow-y: visible !important;
+}
 button, input, select { font: inherit; }
 button { font-size: 14px; }
 .app-root, .route-active {
@@ -821,8 +833,51 @@ button { font-size: 14px; }
 .check-control { position: absolute; left: 0; top: 0; width: 40px; height: 40px; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; color: transparent; border-radius: var(--radius-lg); }
 .check-control::before { content: ""; position: absolute; width: 18px; height: 18px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); }
 .check-control span { position: relative; z-index: 1; font-size: 12px; font-weight: 800; }
-.checklist li.done > .check-control { color: var(--accent-foreground); }
-.checklist li.done > .check-control::before { background: var(--accent); border-color: var(--accent); }
+.check-control .check-control-mark { position: relative; z-index: 1; width: 12px; height: 12px; }
+.checklist li.done > .check-control,
+.checklist-item.done > .check-control { color: var(--accent-foreground); }
+.checklist li.done > .check-control::before,
+.checklist-item.done > .check-control::before { background: var(--accent); border-color: var(--accent); }
+
+/* Desplegable dentro del editor: mismo aspecto que details.spoiler del lector. */
+.editable-body .spoiler > .spoiler-summary {
+  margin: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+.editable-body .spoiler[data-open="false"] > .spoiler-summary { border-bottom: 0; }
+.editable-body .spoiler > .spoiler-content { margin: 0; padding: 0 16px 8px; }
+.editable-body .spoiler > .spoiler-content[hidden] { display: none; }
+.spoiler-toggle {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.spoiler-toggle svg { transition: transform var(--duration-fast) var(--ease-smooth-out); }
+.spoiler-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.spoiler-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.spoiler-title-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 700;
+}
+.spoiler-title-input:focus { outline: none; }
+.spoiler-title-input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
 
 /* HeroUI Toolbar owns surface, border, radius and keyboard navigation */
 .editor-shell .doc-body { margin-top: 36px; }
@@ -963,9 +1018,11 @@ button { font-size: 14px; }
   color: var(--destructive) !important;
 }
 .editable-body { min-height: 45vh; }
-/* Pista del menú "/" en un párrafo vacío (BardoParagraphElement). */
-.has-block-placeholder { position: relative; }
-.block-placeholder {
+/* Pista del menú "/" en el párrafo vacío bajo el cursor (BlockPlaceholderPlugin
+   pone el atributo `placeholder`; aquí solo se dibuja, sin nodos extra). */
+.editable-body .block-placeholder-target[placeholder] { position: relative; }
+.editable-body .block-placeholder-target[placeholder]::before {
+  content: attr(placeholder);
   position: absolute;
   inset-inline-start: 0;
   top: 0;
@@ -1114,7 +1171,7 @@ button { font-size: 14px; }
     width: auto;
     padding-inline: 8px;
   }
-  .block-placeholder { white-space: normal; }
+  .editable-body .block-placeholder-target[placeholder]::before { white-space: normal; }
 }
 
 @media (max-width: 480px) {
@@ -1312,6 +1369,11 @@ button { font-size: 14px; }
 }
 
 @layer utilities {
+  /* Un control solo en su grupo de la barra: pastilla completa (los grupos
+     redondean solo los extremos y dejaban media pastilla). */
+  .editor-toolbar-container [role="toolbar"] .toolbar-group-standalone > [data-slot] {
+    border-radius: 9999px !important;
+  }
   .text-muted {
     color: var(--muted-foreground) !important;
   }

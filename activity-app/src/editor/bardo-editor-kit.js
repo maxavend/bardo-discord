@@ -1,5 +1,6 @@
 import { PathApi } from 'platejs';
 import {
+  BlockPlaceholderPlugin,
   createPlateEditor,
   createPlatePlugin,
   ParagraphPlugin,
@@ -43,6 +44,7 @@ import {
   BardoTableRowElement,
   BardoTableCellElement,
   BardoTableCellHeaderElement,
+  BLOCK_PLACEHOLDER,
 } from './bardo-editor-nodes.jsx';
 
 /**
@@ -50,8 +52,9 @@ import {
  */
 export const BardoCodeBlockPlugin = createPlatePlugin({
   key: 'code_block',
-  node: { isElement: true },
-  component: BardoCodeBlockElement,
+  // Plate 53 lee el componente de `node.component` (uno de primer nivel se ignora
+  // y el bloque se veía como texto plano).
+  node: { isElement: true, component: BardoCodeBlockElement },
 });
 
 /**
@@ -59,8 +62,9 @@ export const BardoCodeBlockPlugin = createPlatePlugin({
  */
 export const BardoCalloutPlugin = createPlatePlugin({
   key: 'callout',
-  node: { isElement: true },
-  component: BardoCalloutElement,
+  // Plate 53 lee el componente de `node.component` (uno de primer nivel se ignora
+  // y el bloque se veía como texto plano).
+  node: { isElement: true, component: BardoCalloutElement },
 });
 
 /**
@@ -68,8 +72,9 @@ export const BardoCalloutPlugin = createPlatePlugin({
  */
 export const BardoActionItemPlugin = createPlatePlugin({
   key: 'action_item',
-  node: { isElement: true },
-  component: BardoChecklistElement,
+  // Plate 53 lee el componente de `node.component` (uno de primer nivel se ignora
+  // y el bloque se veía como texto plano).
+  node: { isElement: true, component: BardoChecklistElement },
 });
 
 /**
@@ -77,8 +82,9 @@ export const BardoActionItemPlugin = createPlatePlugin({
  */
 export const BardoTogglePlugin = createPlatePlugin({
   key: 'toggle',
-  node: { isElement: true },
-  component: BardoSpoilerElement,
+  // Plate 53 lee el componente de `node.component` (uno de primer nivel se ignora
+  // y el bloque se veía como texto plano).
+  node: { isElement: true, component: BardoSpoilerElement },
 });
 
 const MAX_LIST_INDENT = 6;
@@ -228,6 +234,16 @@ export const bardoPlugins = [
   }),
   TableCellHeaderPlugin.configure({
     node: { component: BardoTableCellHeaderElement },
+  }),
+
+  // Pista "/" en el párrafo vacío bajo el cursor (atributo `placeholder`, sin
+  // nodos extra en el texto editable ni suscripciones por párrafo).
+  BlockPlaceholderPlugin.configure({
+    options: {
+      className: 'block-placeholder-target',
+      placeholders: { p: BLOCK_PLACEHOLDER },
+      query: ({ node, path }) => path.length === 1 && !node.listStyleType,
+    },
   }),
 
   // Nodos específicos de Bardo

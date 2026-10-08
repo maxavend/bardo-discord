@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { PlateElement, PlateLeaf, useFocused, usePath, useReadOnly, useSelected } from 'platejs/react';
+import { PlateElement, PlateLeaf, useReadOnly } from 'platejs/react';
 import { ChevronRight } from '@gravity-ui/icons';
 import { openExternalUrl } from '../discord-links.js';
 
@@ -48,11 +48,7 @@ const LIST_INDENT_PX = 24;
  * div: ListPlugin envuelve su contenido en <ul>/<ol><li>, que no puede ir dentro de <p>.
  */
 export function BardoParagraphElement(props) {
-  const { element, editor } = props;
-  const selected = useSelected();
-  const focused = useFocused();
-  const readOnly = useReadOnly();
-  const path = usePath();
+  const { element } = props;
   if (element.listStyleType) {
     const indent = Math.max(1, Number(element.indent) || 1);
     return (
@@ -66,15 +62,12 @@ export function BardoParagraphElement(props) {
       </PlateElement>
     );
   }
-  // Pista del menú "/" en el párrafo vacío donde está el cursor (el editor
-  // completamente vacío ya muestra el placeholder de PlateContent).
-  const isEmpty = element.children?.length === 1 && element.children[0]?.text === '';
-  const showHint = !readOnly && focused && selected && isEmpty && path?.length === 1 && (editor?.children?.length || 0) > 1;
+  // La pista del menú "/" en el párrafo vacío la pone BlockPlaceholderPlugin
+  // (atributo `placeholder` + CSS). No se usa useSelected por párrafo: cada
+  // párrafo suscrito a la selección y un nodo extra dentro del texto editable
+  // provocaban un bucle de actualizaciones (React #185) al teclear rápido.
   return (
-    <PlateElement as="p" {...props} className={showHint ? 'has-block-placeholder' : undefined}>
-      {showHint && (
-        <span className="block-placeholder" contentEditable={false} aria-hidden="true">{BLOCK_PLACEHOLDER}</span>
-      )}
+    <PlateElement as="p" {...props}>
       {props.children}
     </PlateElement>
   );
@@ -175,7 +168,10 @@ export function BardoChecklistElement(props) {
         onClick={handleToggle}
         onMouseDown={(e) => e.preventDefault()}
       >
-        <span aria-hidden="true">✓</span>
+        {/* Marca dibujada con SVG (sin texto): el contenido de la tarea es solo lo que se escribe. */}
+        <svg className="check-control-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       <div className="checklist-content">{children}</div>
     </PlateElement>
@@ -183,12 +179,13 @@ export function BardoChecklistElement(props) {
 }
 
 /**
- * Spoiler / Desplegable con summary interactivo
+ * Desplegable: mismo aspecto que en el lector (details.spoiler). El contenido
+ * se oculta con `hidden` en vez de desmontarse: Slate necesita sus nodos en el DOM.
  */
 export function BardoSpoilerElement(props) {
   const { element, editor, children } = props;
   const [isOpen, setIsOpen] = useState(true);
-  const summary = element.summary || 'Detalles';
+  const summary = element.summary ?? 'Detalles';
 
   const handleSummaryChange = useCallback(
     (e) => {
@@ -203,27 +200,28 @@ export function BardoSpoilerElement(props) {
   );
 
   return (
-    <PlateElement as="div" {...props} className="spoiler my-6 border border-border rounded-xl bg-muted overflow-clip">
-      <div
-        contentEditable={false}
-        className="flex items-center gap-2 px-4 py-3 font-bold text-sm text-foreground cursor-pointer select-none border-b border-border"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <ChevronRight
-          width={16}
-          height={16}
-          className={`transition-transform duration-200 text-muted-foreground ${isOpen ? 'rotate-90' : ''}`}
-        />
+    <PlateElement as="div" {...props} className="spoiler" data-open={isOpen ? 'true' : 'false'}>
+      <div contentEditable={false} className="spoiler-summary">
+        <button
+          type="button"
+          className="spoiler-toggle"
+          aria-expanded={isOpen}
+          aria-label={isOpen ? 'Ocultar contenido del desplegable' : 'Mostrar contenido del desplegable'}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setIsOpen(open => !open)}
+        >
+          <ChevronRight width={16} height={16} aria-hidden="true" />
+        </button>
         <input
           type="text"
-          className="bg-transparent border-0 font-bold text-sm text-foreground focus:outline-none flex-1"
+          className="spoiler-title-input"
+          aria-label="Título del desplegable"
           value={summary}
           onChange={handleSummaryChange}
-          onClick={(e) => e.stopPropagation()}
           placeholder="Detalles"
         />
       </div>
-      {isOpen && <div className="p-4">{children}</div>}
+      <div className="spoiler-content" hidden={!isOpen}>{children}</div>
     </PlateElement>
   );
 }
