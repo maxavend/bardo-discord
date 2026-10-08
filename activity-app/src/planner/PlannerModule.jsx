@@ -1345,6 +1345,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           plannerState={plannerState}
           onStartSession={handleStartSession}
           onDismiss={() => setDismissedUpcomingBanner(true)}
+          showStartAction={activeTab !== 'agenda'}
         />
       )}
 

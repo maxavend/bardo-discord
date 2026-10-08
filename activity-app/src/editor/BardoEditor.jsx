@@ -400,11 +400,12 @@ export function BardoEditor({
           </Badge>
         </div>
         <div className="topbar-right flex items-center gap-2">
-          {ThemeModeMenu && <ThemeModeMenu />}
-          {/* Un solo botón: el contenido ya se guarda solo; "Listo" vuelve al lector. */}
+          {/* Un solo botón: el contenido ya se guarda solo; "Listo" vuelve al lector.
+              El tema va último, igual que en el resto de las barras. */}
           <Button variant="default" size="sm" onClick={finish} className="save-action-button">
             <span className="save-action-label">Listo</span>
           </Button>
+          {ThemeModeMenu && <ThemeModeMenu />}
         </div>
       </header>
 

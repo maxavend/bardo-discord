@@ -6,8 +6,17 @@ import {
   CheckCircle2,
   Clock,
   Mic,
+  MoreVertical,
+  Plus,
   RotateCcw,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   PlayIcon,
   CopyIcon,
@@ -71,8 +80,7 @@ export function SessionRecapView({
   onResumeSession,
   onReopenSession,
   _onViewMinutes,
-  // "Nueva reunión" vive en el inicio; aquí solo acciones sobre esta reunión.
-  onNewSession: _onNewSession,
+  onNewSession,
   onRenameRecording,
   onDeleteRecording,
   onSaveDocToLibrary,
@@ -129,34 +137,65 @@ export function SessionRecapView({
   return (
     <div className="w-full max-w-4xl mx-auto pb-16 pt-2 animate-in fade-in duration-150">
       <div className="flex flex-col gap-5 min-w-0 w-full">
-        {/* Jerarquía: estado + fecha → nombre de la reunión → acciones (principal primero). */}
-        <header className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-            <Badge variant={isInterrupted ? 'destructive' : 'secondary'}>{recap.statusLabel}</Badge>
-            {metaLine && <span>{metaLine}</span>}
+        {/* Título → estado y fecha → una acción principal, ícono para copiar, "⋯" para el resto. */}
+        <header className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground text-balance">{recap.recapTitle}</h1>
+            <div className="mt-2 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+              <Badge variant={isInterrupted ? 'destructive' : 'secondary'}>{recap.statusLabel}</Badge>
+              {metaLine && <span>{metaLine}</span>}
+            </div>
+            {recap.recapDescription && <p className="text-sm text-muted-foreground mt-2">{recap.recapDescription}</p>}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground text-balance">{recap.recapTitle}</h1>
-          {recap.recapDescription && <p className="text-sm text-muted-foreground -mt-1">{recap.recapDescription}</p>}
 
-          <div className="flex flex-wrap items-center gap-2">
-            {isInterrupted && onResumeSession && (
-              <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-9 px-4">
+          <div className="flex items-center gap-1 shrink-0">
+            <IconButton label="Copiar resumen" onClick={handleCopyRecap}>
+              <CopyIcon className="size-4" />
+            </IconButton>
+            {isInterrupted && onResumeSession ? (
+              <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3.5 ml-1">
                 <PlayIcon className="size-3.5" /> Reanudar reunión
               </Button>
-            )}
-            {onSaveDocToLibrary && (
-              <Button variant={isInterrupted ? 'secondary' : 'default'} size="sm" onClick={handleSaveDoc} className="font-semibold h-9 px-4">
+            ) : onSaveDocToLibrary ? (
+              <Button variant="default" size="sm" onClick={handleSaveDoc} className="font-semibold h-8 px-3.5 ml-1">
                 <FileTextIcon className="size-3.5" /> Guardar acta en Documentos
               </Button>
-            )}
-            <Button variant="secondary" size="sm" onClick={handleCopyRecap} className="h-9 px-4">
-              <CopyIcon className="size-3.5" /> Copiar resumen
-            </Button>
-            {canReopen && onReopenSession && (
-              <Button variant="ghost" size="sm" onClick={onReopenSession} className="h-9 px-3 text-muted-foreground hover:text-foreground" title="Vuelve a la reunión donde quedó; el tiempo cerrada no se cuenta">
-                <RotateCcw className="size-3.5" /> Reabrir reunión
-              </Button>
-            )}
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Más opciones del resumen"
+                    title="Más opciones"
+                    className="rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <MoreVertical className="size-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56">
+                {isInterrupted && onSaveDocToLibrary && (
+                  <DropdownMenuItem onClick={handleSaveDoc}>
+                    <FileTextIcon className="size-4 text-muted-foreground" />
+                    <span>Guardar acta en Documentos</span>
+                  </DropdownMenuItem>
+                )}
+                {canReopen && onReopenSession && (
+                  <DropdownMenuItem onClick={onReopenSession}>
+                    <RotateCcw className="size-4 text-muted-foreground" />
+                    <span>Reabrir reunión</span>
+                  </DropdownMenuItem>
+                )}
+                {onNewSession && (
+                  <DropdownMenuItem onClick={onNewSession}>
+                    <Plus className="size-4 text-muted-foreground" />
+                    <span>Nueva reunión</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 

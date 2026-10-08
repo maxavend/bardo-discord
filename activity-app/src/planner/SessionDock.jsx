@@ -283,7 +283,8 @@ export function SessionDock({
             ¿Quieres grabar el audio? Si grabas, la grabación sigue sola al pasar al siguiente tema.
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
-            <Button variant="default" size="xs" onClick={onStartRecording} disabled={isBusy} className="h-7 rounded-full px-3 text-xs gap-1.5">
+            {/* Invitation, not the main action: "Terminar/Siguiente" stays the only primary. */}
+            <Button variant="secondary" size="xs" onClick={onStartRecording} disabled={isBusy} className="h-7 rounded-full px-3 text-xs gap-1.5">
               <MicIcon className="size-3.5" /> Grabar
             </Button>
             <Button
