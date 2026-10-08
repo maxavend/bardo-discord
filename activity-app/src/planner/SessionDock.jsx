@@ -23,7 +23,8 @@ import {
   X,
 } from 'lucide-react';
 import { MicIcon } from '@/components/ui/animated-icons';
-import { SESSION_STATUS } from './session-runner.js';
+import { SESSION_STATUS, getElapsedSessionMs } from './session-runner.js';
+import { getPlannedSchedule, wasMeetingLeftOpen } from './time-engine.js';
 import { formatMsToClock, getAssistantContextDetails, getLiveBlockClock } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
@@ -72,6 +73,15 @@ export function SessionDock({
 
   const details = getAssistantContextDetails(plannerState, sessionState, now);
   const clock = getLiveBlockClock(plannerState, sessionState, now);
+  // A meeting nobody ended (e.g. before "Terminar reunión" existed) shows up
+  // "En curso" for days: say so plainly and offer to end it.
+  const leftOpen = wasMeetingLeftOpen(
+    Math.round(getElapsedSessionMs(sessionState, now) / 60000),
+    getPlannedSchedule(plannerState || {}).plannedMinutes,
+  );
+  const openSince = leftOpen && sessionState.sessionStartedAt
+    ? new Intl.DateTimeFormat('es-CL', {day: 'numeric', month: 'short'}).format(new Date(sessionState.sessionStartedAt)).replace(/\./g, '')
+    : null;
   const activeBlock = details.activeBlock;
   const activePoint = details.activePoint;
   const primary = details.nextAction;
@@ -83,7 +93,9 @@ export function SessionDock({
   const isUnlimited = clock.mode === 'unlimited';
   const recordingLabel = recordingContext?.recordingName;
 
-  const clockClass = clock.mode === 'overtime'
+  const clockClass = leftOpen
+    ? 'bg-muted text-muted-foreground'
+    : clock.mode === 'overtime'
     ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
     : clock.isWarning
       ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
@@ -105,11 +117,11 @@ export function SessionDock({
         <div className="flex items-center gap-2.5 min-w-0 flex-1 pl-1">
           <span
             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold tabular-nums shrink-0 ${clockClass}`}
-            aria-label={clock.mode === 'overtime' ? `Tiempo excedido ${clock.label}` : clock.label}
+            aria-label={leftOpen ? 'Reunión abierta hace días' : clock.mode === 'overtime' ? `Tiempo excedido ${clock.label}` : clock.label}
             title={isPaused ? 'Reunión en pausa: el tiempo está detenido' : clock.mode === 'overtime' ? 'Tiempo del bloque excedido' : 'Tiempo restante del bloque'}
           >
             {isPaused && <Pause className="size-2.5 fill-current" />}
-            {clock.label}
+            {leftOpen ? 'Abierta' : clock.label}
           </span>
 
           <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
@@ -189,7 +201,8 @@ export function SessionDock({
           </Button>
 
           {/* Acción principal adaptable: Siguiente tema / Siguiente bloque / Terminar reunión */}
-          {!isPaused && (
+          {/* Left open for days: the notice below carries "Terminar reunión". */}
+          {!isPaused && !leftOpen && (
             <Button
               variant="default"
               size="xs"
@@ -253,7 +266,18 @@ export function SessionDock({
         </div>
       </div>
 
-      {details.showInitialRecordingPrompt && !isRecording && !isRecPaused && (
+      {leftOpen && (
+        <div role="status" className="w-full max-w-4xl mx-auto mt-2 flex items-center justify-between gap-2 rounded-2xl border border-warning/30 bg-card/95 backdrop-blur-md px-3 py-2 text-xs shadow-2xs">
+          <span className="text-foreground min-w-0">
+            Esta reunión sigue abierta{openSince ? ` desde el ${openSince}` : ''}. Si ya terminó, ciérrala para guardar su resumen.
+          </span>
+          <Button variant="default" size="xs" onClick={() => onRequestFinish?.()} disabled={isBusy} className="h-7 rounded-full px-3 text-xs shrink-0">
+            Terminar reunión
+          </Button>
+        </div>
+      )}
+
+      {!leftOpen && details.showInitialRecordingPrompt && !isRecording && !isRecPaused && (
         <div className="w-full max-w-4xl mx-auto mt-2 flex items-center justify-between gap-2 rounded-2xl border border-border/70 bg-card/95 backdrop-blur-md px-3 py-2 text-xs shadow-2xs animate-in fade-in duration-200">
           <span className="text-muted-foreground min-w-0">
             ¿Quieres grabar el audio? Si grabas, la grabación sigue sola al pasar al siguiente tema.

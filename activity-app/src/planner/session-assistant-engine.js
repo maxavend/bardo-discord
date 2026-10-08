@@ -12,7 +12,7 @@ import {
   getRecordingContextKey,
   getNextUnhandledPoint,
 } from './session-runner.js';
-import {isBreakBlock} from './time-engine.js';
+import {getPlannedSchedule, isBreakBlock, wasMeetingLeftOpen} from './time-engine.js';
 
 export const ASSISTANT_EVENT = {
   SESSION_UPCOMING: 'SESSION_UPCOMING',
@@ -333,9 +333,12 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
 
 export function computeSessionRecap(plannerState, sessionState) {
   const blocks = plannerState?.blocks || [];
-  const plannedDurationMinutes = plannerState?.totalCalculatedDuration || 0;
+  // Same planned duration the header shows (start + max(reserved, bloques)).
+  const plannedDurationMinutes = getPlannedSchedule(plannerState || {}).plannedMinutes
+    || plannerState?.totalCalculatedDuration || 0;
   const actualDurationMs = getElapsedSessionMs(sessionState, sessionState?.sessionEndedAt || Date.now());
   const actualDurationMinutes = Math.round(actualDurationMs / (60 * 1000));
+  const leftOpen = wasMeetingLeftOpen(actualDurationMinutes, plannedDurationMinutes);
   const isInterrupted = sessionState?.status === SESSION_STATUS.INTERRUPTED;
   const isCompleted = sessionState?.status === SESSION_STATUS.COMPLETED;
 
@@ -355,12 +358,11 @@ export function computeSessionRecap(plannerState, sessionState) {
 
   const statusLabel = isInterrupted ? 'Interrumpida' : 'Terminada';
   const statusBadgeColor = isInterrupted ? 'warning' : 'success';
-  const recapTitle = isInterrupted
-    ? `Reunión interrumpida · ${plannerState?.title || 'Reunión'}`
-    : `Reunión terminada · ${plannerState?.title || 'Reunión'}`;
+  // The meeting's own name is the heading; the status lives in the badge.
+  const recapTitle = plannerState?.title || 'Reunión';
   const recapDescription = isInterrupted
-    ? 'El avance se conservó exactamente en el bloque y tema donde quedó.'
-    : 'Resumen del tiempo, los bloques, los temas tratados, las grabaciones y los acuerdos.';
+    ? 'El avance se conservó en el bloque y tema donde quedó.'
+    : '';
 
   const groupedRecordings = blocks.map((block) => {
     const blockRecordings = recordings.filter((recording) => recording.blockId === block.id);
@@ -385,6 +387,8 @@ export function computeSessionRecap(plannerState, sessionState) {
     recapDescription,
     actualDurationMinutes,
     plannedDurationMinutes,
+    leftOpen,
+    sessionStartedAt: sessionState?.sessionStartedAt || null,
     timeEffectiveLabel: isInterrupted ? 'Tiempo transcurrido' : 'Tiempo efectivo',
     timeEffectiveSubtext: `de ${plannedDurationMinutes} min planificados`,
     completedCount,

@@ -132,7 +132,9 @@ test('recap uses the meeting vocabulary', () => {
   const closed = completeLiveSession(createLiveSession(PLANNER, T0), T0 + MINUTE);
   const recap = computeSessionRecap(PLANNER, closed);
   assert.equal(recap.statusLabel, 'Terminada');
-  assert.match(recap.recapTitle, /^Reunión terminada · /);
+  // El nombre de la reunión es el título; el estado va en la etiqueta.
+  assert.equal(recap.statusLabel, 'Terminada');
+  assert.doesNotMatch(recap.recapTitle, /Reunión terminada/);
   assert.match(recap.pointsProgressSubtext, /temas tratados$/);
 });
 
