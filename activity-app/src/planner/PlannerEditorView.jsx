@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { todayLocalIso } from './date-utils.js';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,7 @@ export function PlannerEditorView({
   const [formData, setFormData] = useState(() => {
     return initialState ? JSON.parse(JSON.stringify(initialState)) : {
       title: 'Nueva reunión',
-      date: new Date().toISOString().split('T')[0],
+      date: todayLocalIso(),
       startTime: '10:00',
       targetDuration: 60,
       description: '',

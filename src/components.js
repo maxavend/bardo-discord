@@ -13,6 +13,13 @@ import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 export { BARDO_OPEN_PREFIX, normalizeDocumentId };
 
 const PREVIEW_LIMIT = 1200;
+const REUS_LIST_TEXT_MAX = 3000;
+const REU_CARD_TEXT_MAX = 3200;
+
+function truncateText(text, max) {
+  const value = String(text ?? '');
+  return value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`;
+}
 
 function isMarkdownTable(block) {
   const lines = block.trim().split('\n');
@@ -85,7 +92,7 @@ export function buildDocumentPayload(document, { documentId }) {
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# 📚 ${document.title}`),
+      new TextDisplayBuilder().setContent(`# 📚 ${truncateText(document.title || 'Documento', 200)}`),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -128,7 +135,7 @@ export function buildReuNewPayload({ session, channelName = null }) {
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# 🎙️ ${session.title || 'Nueva Reunión'}`),
+      new TextDisplayBuilder().setContent(`# 🎙️ ${truncateText(session.title || 'Nueva Reunión', 200)}`),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -136,7 +143,9 @@ export function buildReuNewPayload({ session, channelName = null }) {
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`${metaLine}${descLine}`),
+      // Guarantees Discord's 4000-character Components V2 limit even if a
+      // long description reaches here (the meeting is saved before sending).
+      new TextDisplayBuilder().setContent(truncateText(`${metaLine}${descLine}`, REU_CARD_TEXT_MAX)),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -189,13 +198,13 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
 
   const live = sessions.filter((s) => s.status === 'live');
   const scheduled = sessions.filter((s) => s.status === 'scheduled' || !s.status);
-  const finished = sessions.filter((s) => s.status === 'finished' || s.status === 'recap');
+  const finished = sessions.filter((s) => s.status === 'finished' || s.status === 'recap' || s.status === 'completed');
 
   let listText = '';
 
   if (live.length > 0) {
     listText += '🔴 **En curso**\n';
-    for (const s of live) {
+    for (const s of live.slice(0, 5)) {
       listText += `• **${s.title}** (${s.startTime || ''}) - *En vivo*\n`;
     }
     listText += '\n';
@@ -226,7 +235,8 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(listText.trim()),
+      // Components V2 messages allow 4000 characters in total.
+      new TextDisplayBuilder().setContent(truncateText(listText.trim(), REUS_LIST_TEXT_MAX)),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -245,12 +255,24 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
   };
 }
 
+// Discord caps custom_id at 100 characters.
+const CUSTOM_ID_MAX = 100;
+const NEW_DOC_TARGET = 'new-doc';
+
+/** custom_id of "Crear en Bardo"; carries the title so the editor can prefill it. */
+export function newDocCustomId(title = null) {
+  const base = `${BARDO_OPEN_PREFIX}${NEW_DOC_TARGET}`;
+  const clean = title?.trim().replace(/\s+/g, ' ');
+  if (!clean) return base;
+  return `${base}:${Array.from(clean).slice(0, CUSTOM_ID_MAX - base.length - 1).join('')}`;
+}
+
 export function buildDocNewPayload({ title = null }) {
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setLabel('Crear en Bardo')
       .setStyle(ButtonStyle.Primary)
-      .setCustomId(`${BARDO_OPEN_PREFIX}new-doc`),
+      .setCustomId(newDocCustomId(title)),
   );
 
   const displayTitle = title?.trim() ? `"${title.trim()}"` : 'un nuevo documento';
@@ -276,9 +298,96 @@ export function buildDocNewPayload({ title = null }) {
   };
 }
 
+const DOCS_LIST_BUTTONS_MAX = 5;
+const DOCS_LIST_TEXT_MAX = 3000;
+
+export function buildDocsListPayload({ documents = [], channelName = null }) {
+  const channelHeading = channelName ? ` en #${channelName}` : '';
+  const actionsRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('Abrir Bardo')
+      .setStyle(ButtonStyle.Primary)
+      .setCustomId(`${BARDO_OPEN_PREFIX}docs`),
+    new ButtonBuilder()
+      .setLabel('Nuevo documento')
+      .setStyle(ButtonStyle.Secondary)
+      .setCustomId(newDocCustomId()),
+  );
+
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 📚 Documentos${channelHeading}`))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+
+  if (!documents.length) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('Todavía no hay documentos en este canal.\nCrea uno con `/doc-new` o sube un archivo con `/doc-upload`.'),
+    );
+  } else {
+    const lines = documents.map((doc, index) => {
+      const title = truncateText(doc.title || 'Sin título', 120);
+      return index < DOCS_LIST_BUTTONS_MAX ? `**${index + 1}.** ${title}` : `• ${title}`;
+    });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(truncateText(lines.join('\n'), DOCS_LIST_TEXT_MAX)),
+    );
+    const openButtons = documents.slice(0, DOCS_LIST_BUTTONS_MAX).map((doc, index) =>
+      new ButtonBuilder()
+        .setLabel(`${index + 1}. ${truncateText(doc.title || 'Sin título', 60)}`)
+        .setStyle(ButtonStyle.Secondary)
+        .setCustomId(`${BARDO_OPEN_PREFIX}${normalizeDocumentId(doc.id) || doc.id}`),
+    );
+    container
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
+      .addActionRowComponents(new ActionRowBuilder().addComponents(...openButtons));
+  }
+
+  container.addActionRowComponents(actionsRow);
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    allowed_mentions: { parse: [] },
+    components: [container.toJSON()],
+  };
+}
+
+export const HELP_TEXT = [
+  '**Abrir**',
+  '`/bardo` — abre Bardo en este canal (elige sección: documentos, reuniones o nuevo documento).',
+  '',
+  '**Documentos**',
+  '`/doc-new` — crea un documento nuevo (título opcional).',
+  '`/doc-upload` — sube un Markdown, TXT, PDF o Word.',
+  '`/docs` — lista los documentos del canal con botones para abrirlos.',
+  '',
+  '**Reuniones**',
+  '`/reu-new` — agenda una reunión (título, fecha AAAA-MM-DD, hora HH:MM, duración, descripción).',
+  '`/reus` — muestra las reuniones programadas, en curso y pasadas.',
+].join('\n');
+
+export function buildHelpPayload() {
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('# 🧭 Comandos de Bardo'))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(HELP_TEXT))
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel('Abrir Bardo')
+          .setStyle(ButtonStyle.Primary)
+          .setCustomId(`${BARDO_OPEN_PREFIX}docs`),
+      ),
+    );
+
+  return {
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    allowed_mentions: { parse: [] },
+    components: [container.toJSON()],
+  };
+}
+
 export function buildErrorPayload(message) {
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## No se pudo procesar la solicitud\n\n${message}`),
+    new TextDisplayBuilder().setContent(`## No se pudo procesar la solicitud\n\n${truncateText(message, 3000)}`),
   );
 
   return {

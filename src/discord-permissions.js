@@ -42,16 +42,100 @@ function applyCombinedRoleOverwrites(permissions, combined) {
   return (permissions & ~combined.deny) | combined.allow;
 }
 
-async function readDiscord(path, botToken, fetchImpl = fetch) {
-  const response = await fetchImpl(`${DISCORD_API_BASE}${path}`, {
-    headers: {Authorization: `Bot ${botToken}`},
+const PERMISSION_CACHE_TTL_MS = 60_000;
+const DEFAULT_RETRY_AFTER_MS = 2_000;
+
+/**
+ * Discord could not answer (rate limit, 5xx or network failure). This is NOT a
+ * permission denial: callers must surface it as a retryable 503 instead of a
+ * 403, otherwise a transient Discord hiccup looks like "no access" and the
+ * client drops the write.
+ */
+export class DiscordUnavailableError extends Error {
+  constructor(message, {status = null, retryAfterMs = DEFAULT_RETRY_AFTER_MS, cause} = {}) {
+    super(message);
+    this.name = 'DiscordUnavailableError';
+    this.code = 'discord_unavailable';
+    this.status = status;
+    this.retryAfterMs = Math.max(0, Math.round(Number(retryAfterMs) || DEFAULT_RETRY_AFTER_MS));
+    if (cause) this.cause = cause;
+  }
+}
+
+export function isDiscordUnavailableError(error) {
+  return error instanceof DiscordUnavailableError || error?.code === 'discord_unavailable';
+}
+
+export function discordUnavailableResponse(error) {
+  const retryAfterMs = error?.retryAfterMs || DEFAULT_RETRY_AFTER_MS;
+  return new Response(JSON.stringify({
+    error: 'discord_unavailable',
+    message: 'Discord no respondió al verificar tus permisos. Reintentando…',
+    retryAfterMs,
+  }), {
+    status: 503,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Retry-After': String(Math.max(1, Math.ceil(retryAfterMs / 1000))),
+    },
   });
+}
+
+async function retryAfterFromResponse(response) {
+  const header = Number(response.headers?.get?.('retry-after'));
+  let bodySeconds = NaN;
+  try {
+    const payload = await response.clone().json();
+    bodySeconds = Number(payload?.retry_after);
+  } catch {
+    // Discord sometimes answers 5xx with HTML; fall back to the header/default.
+  }
+  const seconds = Number.isFinite(bodySeconds) && bodySeconds > 0
+    ? bodySeconds
+    : (Number.isFinite(header) && header > 0 ? header : NaN);
+  return Number.isFinite(seconds) ? seconds * 1000 : DEFAULT_RETRY_AFTER_MS;
+}
+
+async function readDiscord(path, botToken, fetchImpl = fetch) {
+  let response;
+  try {
+    response = await fetchImpl(`${DISCORD_API_BASE}${path}`, {
+      headers: {Authorization: `Bot ${botToken}`},
+    });
+  } catch (cause) {
+    throw new DiscordUnavailableError('Discord API network failure', {cause});
+  }
+  if (response.status === 429 || response.status >= 500) {
+    throw new DiscordUnavailableError(`Discord API ${response.status}`, {
+      status: response.status,
+      retryAfterMs: await retryAfterFromResponse(response),
+    });
+  }
   if (!response.ok) {
     const error = new Error(`Discord API ${response.status}`);
     error.status = response.status;
     throw error;
   }
   return response.json();
+}
+
+// Per-isolate cache of computed channel permissions. Keyed by the fetch
+// implementation so tests (which inject DISCORD_FETCH) never share entries.
+const permissionCaches = new WeakMap();
+
+function permissionCacheFor(fetchImpl) {
+  let cache = permissionCaches.get(fetchImpl);
+  if (!cache) {
+    cache = new Map();
+    permissionCaches.set(fetchImpl, cache);
+  }
+  return cache;
+}
+
+export function clearDiscordPermissionCache(fetchImpl = fetch) {
+  permissionCaches.delete(fetchImpl);
 }
 
 export function createDiscordPermissionChecker(env, guildId, userId) {
@@ -77,9 +161,27 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     fetchImpl,
   ));
 
+  const permissionCache = permissionCacheFor(fetchImpl);
+  const cacheTtlMs = Number.isFinite(Number(env?.DISCORD_PERMISSION_CACHE_TTL_MS))
+    ? Number(env.DISCORD_PERMISSION_CACHE_TTL_MS)
+    : PERMISSION_CACHE_TTL_MS;
+
   const computeChannelPermissions = async channelId => {
     if (!botToken || !guildId || !userId || !channelId) return 0n;
 
+    const cacheKey = `${botToken}:${guildId}:${userId}:${channelId}`;
+    const hit = permissionCache.get(cacheKey);
+    if (hit && hit.expiresAt > Date.now()) return hit.permissions;
+
+    const permissions = await computeChannelPermissionsUncached(channelId);
+    if (cacheTtlMs > 0) {
+      permissionCache.set(cacheKey, {permissions, expiresAt: Date.now() + cacheTtlMs});
+      if (permissionCache.size > 5_000) permissionCache.delete(permissionCache.keys().next().value);
+    }
+    return permissions;
+  };
+
+  const computeChannelPermissionsUncached = async channelId => {
     const [guild, member, roles] = await Promise.all([loadGuild(), loadMember(), loadRoles()]);
     const channel = await loadChannel(channelId);
     if (!channel || String(channel.guild_id) !== String(guildId)) return 0n;
@@ -119,25 +221,37 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     return permissions;
   };
 
-  const canViewChannel = async channelId => {
+  // Definitive answers (403/404 from Discord, foreign channel…) fail closed.
+  // Transient failures (429/5xx/network) are rethrown as DiscordUnavailableError
+  // so the API can answer 503 and the client retries instead of losing writes.
+  const permissionsOrZero = async channelId => {
     try {
-      const permissions = await computeChannelPermissions(channelId);
-      return (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
-    } catch {
-      return false;
+      return await computeChannelPermissions(channelId);
+    } catch (error) {
+      if (isDiscordUnavailableError(error)) throw error;
+      return 0n;
     }
   };
 
+  const canViewChannel = async channelId => {
+    const permissions = await permissionsOrZero(channelId);
+    return (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
+  };
+
   const canManageChannel = async channelId => {
-    try {
-      const permissions = await computeChannelPermissions(channelId);
-      const isManage = (permissions & DISCORD_PERMISSION.ADMINISTRATOR) !== 0n
-        || (permissions & DISCORD_PERMISSION.MANAGE_CHANNELS) !== 0n
-        || (permissions & DISCORD_PERMISSION.MANAGE_EVENTS) !== 0n;
-      return isManage;
-    } catch {
-      return false;
-    }
+    const permissions = await permissionsOrZero(channelId);
+    return (permissions & DISCORD_PERMISSION.ADMINISTRATOR) !== 0n
+      || (permissions & DISCORD_PERMISSION.MANAGE_CHANNELS) !== 0n
+      || (permissions & DISCORD_PERMISSION.MANAGE_EVENTS) !== 0n;
+  };
+
+  // Moderation of shared documents (permanent deletion) mirrors Discord's own
+  // message moderation: Manage Messages or Manage Channels (Admin implies both).
+  const canModerateDocuments = async channelId => {
+    const permissions = await permissionsOrZero(channelId);
+    return (permissions & DISCORD_PERMISSION.ADMINISTRATOR) !== 0n
+      || (permissions & DISCORD_PERMISSION.MANAGE_CHANNELS) !== 0n
+      || (permissions & DISCORD_PERMISSION.MANAGE_MESSAGES) !== 0n;
   };
 
   const getChannelContext = async channelId => {
@@ -145,12 +259,19 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
       return { roles: [], members: [], permissions: { canView: false, canManage: false, isHost: false } };
     }
 
+    // Best effort, except when Discord itself is unavailable (429/5xx): that
+    // must surface as a retryable 503 instead of an empty context.
+    const softFail = fallback => error => {
+      if (isDiscordUnavailableError(error)) throw error;
+      return fallback;
+    };
+
     try {
       const [guild, roles, channel, permissions] = await Promise.all([
-        loadGuild().catch(() => null),
-        loadRoles().catch(() => []),
-        loadChannel(channelId).catch(() => null),
-        computeChannelPermissions(channelId).catch(() => 0n),
+        loadGuild().catch(softFail(null)),
+        loadRoles().catch(softFail([])),
+        loadChannel(channelId).catch(softFail(null)),
+        computeChannelPermissions(channelId).catch(softFail(0n)),
       ]);
 
       const canView = (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
@@ -195,7 +316,8 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
             };
           });
         }
-      } catch {
+      } catch (error) {
+        if (isDiscordUnavailableError(error)) throw error;
         // If members intent is restricted, members can be augmented by client
         members = [];
       }
@@ -213,7 +335,8 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
           isOwner,
         },
       };
-    } catch {
+    } catch (error) {
+      if (isDiscordUnavailableError(error)) throw error;
       return { roles: [], members: [], permissions: { canView: false, canManage: false, isHost: false } };
     }
   };
@@ -221,6 +344,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
   return {
     canViewChannel,
     canManageChannel,
+    canModerateDocuments,
     computeChannelPermissions,
     getChannelContext,
   };

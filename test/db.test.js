@@ -5,89 +5,18 @@ import {
   loadDocument,
   saveActivityContext,
   loadActivityContext,
+  listDocumentsForChannel,
+  savePlannerSession,
+  loadPlannerSession,
+  updateDocumentContent,
 } from '../src/db.js';
-
-class MockD1PreparedStatement {
-  constructor(db, query, params = []) {
-    this.db = db;
-    this.query = query;
-    this.params = params;
-  }
-
-  bind(...params) {
-    return new MockD1PreparedStatement(this.db, this.query, params);
-  }
-
-  async run() {
-    if (this.query.includes('INSERT INTO documents')) {
-      const [
-        id,
-        title,
-        original_markdown,
-        pages,
-        source_name,
-        created_at,
-        created_by,
-        created_by_name,
-        updated_at,
-        updated_by,
-        updated_by_name,
-      ] = this.params;
-      this.db.storage.set(id, {
-        id,
-        title,
-        original_markdown,
-        pages,
-        source_name,
-        created_at,
-        created_by,
-        created_by_name,
-        updated_at,
-        updated_by,
-        updated_by_name,
-      });
-      return { success: true };
-    }
-    if (this.query.includes('INSERT INTO activity_contexts')) {
-      const [instance_id, document_id, created_at] = this.params;
-      this.db.activityContexts.set(instance_id, {
-        instance_id,
-        document_id,
-        created_at,
-      });
-      return { success: true };
-    }
-    return { success: true };
-  }
-
-  async first() {
-    if (this.query.includes('FROM documents')) {
-      const [id] = this.params;
-      return this.db.storage.get(id) || null;
-    }
-    if (this.query.includes('FROM activity_contexts')) {
-      const [instanceId] = this.params;
-      return this.db.activityContexts.get(instanceId) || null;
-    }
-    return null;
-  }
-}
-
-class MockD1Database {
-  constructor() {
-    this.storage = new Map();
-    this.activityContexts = new Map();
-  }
-
-  prepare(query) {
-    return new MockD1PreparedStatement(this, query);
-  }
-}
+import { createTestDb, insertDocument } from './helpers/sqlite-d1.js';
 
 test('saveDocument y loadDocument persisten y recuperan el documento correctamente', async () => {
-  const db = new MockD1Database();
+  const db = createTestDb();
   const document = {
     title: 'Minuta D1',
+    description: 'Resumen',
     originalMarkdown: '# Minuta D1\n\nTexto original.',
     pages: ['Texto original.'],
     sourceName: 'minuta.md',
@@ -102,9 +31,9 @@ test('saveDocument y loadDocument persisten y recuperan el documento correctamen
   await saveDocument(db, 'msg-123456', document);
   const loaded = await loadDocument(db, 'msg-123456');
 
-  assert.ok(loaded);
   assert.equal(loaded.id, 'msg-123456');
   assert.equal(loaded.title, 'Minuta D1');
+  assert.equal(loaded.description, 'Resumen');
   assert.equal(loaded.originalMarkdown, '# Minuta D1\n\nTexto original.');
   assert.deepEqual(loaded.pages, ['Texto original.']);
   assert.equal(loaded.sourceName, 'minuta.md');
@@ -114,24 +43,50 @@ test('saveDocument y loadDocument persisten y recuperan el documento correctamen
 });
 
 test('loadDocument devuelve null si el documento no existe', async () => {
-  const db = new MockD1Database();
-  const loaded = await loadDocument(db, 'inexistente');
-  assert.equal(loaded, null);
+  assert.equal(await loadDocument(createTestDb(), 'inexistente'), null);
 });
 
-test('saveActivityContext y loadActivityContext persisten y recuperan el contexto correctamente', async () => {
-  const db = new MockD1Database();
+test('saveActivityContext y loadActivityContext persisten y recuperan el contexto', async () => {
+  const db = createTestDb();
   await saveActivityContext(db, 'inst-123', 'doc-abc');
-
   const loaded = await loadActivityContext(db, 'inst-123');
-  assert.ok(loaded);
   assert.equal(loaded.instanceId, 'inst-123');
   assert.equal(loaded.documentId, 'doc-abc');
   assert.ok(loaded.createdAt);
+  assert.equal(await loadActivityContext(db, 'inst-inexistente'), null);
 });
 
-test('loadActivityContext devuelve null si el contexto no existe', async () => {
-  const db = new MockD1Database();
-  const loaded = await loadActivityContext(db, 'inst-inexistente');
-  assert.equal(loaded, null);
+test('listDocumentsForChannel incluye autoría y canales sin seleccionar el blob', async () => {
+  const db = createTestDb();
+  insertDocument(db, { id: 'a', channelIds: ['c1', 'c2'], guildId: 'g1' });
+  db.run("UPDATE documents SET created_by_name = 'Ana', updated_by = 'u2', updated_by_name = 'Beto' WHERE id = 'a'");
+  const [doc] = await listDocumentsForChannel(db, 'g1', 'c1');
+  assert.equal(doc.createdByName, 'Ana');
+  assert.equal(doc.updatedBy, 'u2');
+  assert.equal(doc.updatedByName, 'Beto');
+  assert.deepEqual(doc.accessChannels.sort(), ['c1', 'c2']);
+  assert.ok(!db.queries.at(-1).includes('source_blob,'), 'no debe seleccionar source_blob');
+});
+
+test('updateDocumentContent descarta el original solo si la fila superaría el límite de D1', async () => {
+  const db = createTestDb();
+  insertDocument(db, { id: 'pdf', sourceBlob: new Uint8Array(1_000_000), sourceType: 'pdf' });
+  const base = { title: 'PDF', pages: ['x'], updatedAt: '2026-09-01T00:00:00.000Z' };
+
+  assert.equal(await updateDocumentContent(db, 'pdf', { ...base, originalMarkdown: 'pequeño' }), true);
+  assert.equal(db.row("SELECT LENGTH(source_blob) AS n FROM documents WHERE id = 'pdf'").n, 1_000_000);
+
+  assert.equal(await updateDocumentContent(db, 'pdf', { ...base, originalMarkdown: 'x'.repeat(1_000_000) }), true);
+  assert.equal(db.row("SELECT source_blob FROM documents WHERE id = 'pdf'").source_blob, null);
+});
+
+test('savePlannerSession nunca sobrescribe una reunión de otro canal con el mismo id', async () => {
+  const db = createTestDb();
+  const base = { id: 's1', title: 'Original', blocks: [{ id: 'b' }], createdBy: 'u1' };
+  assert.equal(await savePlannerSession(db, { ...base, guildId: 'g1', channelId: 'c1' }), true);
+  assert.equal(await savePlannerSession(db, { ...base, title: 'Pisada', blocks: [], guildId: 'g1', channelId: 'c2' }), false);
+  assert.equal(await savePlannerSession(db, { ...base, title: 'Pisada', blocks: [], guildId: 'g2', channelId: 'c1' }), false);
+  const stored = await loadPlannerSession(db, 's1', 'g1', 'c1');
+  assert.equal(stored.title, 'Original');
+  assert.equal(stored.blocks.length, 1);
 });

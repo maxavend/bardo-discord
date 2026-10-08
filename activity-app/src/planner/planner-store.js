@@ -5,7 +5,10 @@ import {
   SESSION_STATUS,
   getPointStatus,
   migrateLiveSessionState,
+  normalizeLegacyLiveShape,
 } from './session-runner.js';
+import {todayLocalIso} from './date-utils.js';
+import {plannerRequest, isPlannerRemoteEnabled} from './planner-sync.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
@@ -13,7 +16,7 @@ export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 export const DEFAULT_EMPTY_SESSION = {
   title: 'Nueva sesión de trabajo',
   host: '',
-  date: new Date().toISOString().split('T')[0],
+  date: todayLocalIso(),
   startTime: '10:00',
   targetDuration: 60,
   description: '',
@@ -251,21 +254,46 @@ export function isDemoPlannerState(state) {
     || (state.host === 'Camila' && (state.mentions || '').includes('@diseño'));
 }
 
+/**
+ * Maps a server planner session row ({hostName, status, …}) to the client
+ * planner state shape ({host, eventId, …}). Idempotent for client shapes.
+ */
+export function normalizeServerSession(session) {
+  if (!session || typeof session !== 'object') return session;
+  const {status: _status, ...rest} = session;
+  return {
+    ...rest,
+    eventId: session.eventId || session.id,
+    host: session.host ?? session.hostName ?? '',
+    mentions: session.mentions || '',
+    description: session.description || '',
+    blocks: Array.isArray(session.blocks) ? session.blocks.map(clonePlannerState) : [],
+  };
+}
+
+export function toPlannerEvent(s) {
+  return {
+    eventId: s.id,
+    id: s.id,
+    eventStatus: s.status === 'live' ? 'in_progress' : (s.status || 'scheduled'),
+    title: s.title,
+    date: s.date,
+    startTime: s.startTime,
+    targetDuration: s.targetDuration,
+    host: s.host ?? s.hostName ?? '',
+    hostId: s.hostId || null,
+    mentions: s.mentions || '',
+    description: s.description || '',
+    updatedAt: s.updatedAt || null,
+    blocks: (s.blocks || []).map(clonePlannerState),
+  };
+}
+
 export function loadPlannerEvents() {
   if (typeof window !== 'undefined') {
     const channelSessions = window.__bardoChannelSessions || [];
     if (channelSessions.length > 0) {
-      return channelSessions.map((s) => ({
-        eventId: s.id,
-        id: s.id,
-        eventStatus: s.status === 'live' ? 'in_progress' : s.status,
-        title: s.title,
-        date: s.date,
-        startTime: s.startTime,
-        host: s.hostName || s.host || '',
-        description: s.description || '',
-        blocks: (s.blocks || []).map(clonePlannerState),
-      }));
+      return channelSessions.map(toPlannerEvent);
     }
     if (!shouldLoadDemoFixture()) {
       return [];
@@ -290,7 +318,7 @@ export function loadPlannerState() {
         ...DEFAULT_EMPTY_SESSION,
         id: `sess-${Date.now().toString(36)}`,
         host,
-        date: new Date().toISOString().split('T')[0],
+        date: todayLocalIso(),
       });
     }
     const parsed = JSON.parse(raw);
@@ -304,12 +332,12 @@ export function loadPlannerState() {
         ...DEFAULT_EMPTY_SESSION,
         id: `sess-${Date.now().toString(36)}`,
         host,
-        date: new Date().toISOString().split('T')[0],
+        date: todayLocalIso(),
       });
       savePlannerState(clean);
       return clean;
     }
-    return computePlannerTimes(parsed);
+    return computePlannerTimes(normalizeServerSession(parsed));
   } catch {
     if (shouldLoadDemoFixture()) {
       return computePlannerTimes(DEMO_PLANNER_FIXTURE);
@@ -320,7 +348,7 @@ export function loadPlannerState() {
       ...DEFAULT_EMPTY_SESSION,
       id: `sess-${Date.now().toString(36)}`,
       host,
-      date: new Date().toISOString().split('T')[0],
+      date: todayLocalIso(),
     });
   }
 }
@@ -412,6 +440,20 @@ export function createDemoLiveSession(_plannerState = DEMO_PLANNER_FIXTURE, now 
   };
 }
 
+export function createEmptyLiveSession(plannerState = null) {
+  return {...DEFAULT_LIVE_SESSION, plannerSessionId: plannerState?.id || null};
+}
+
+/**
+ * True when a live state belongs to a different agenda than `plannerState`.
+ * Legacy states without `plannerSessionId` are accepted (backwards compat).
+ */
+export function isLiveStateForOtherPlanner(liveState, plannerState) {
+  const ownerId = liveState?.plannerSessionId || null;
+  const plannerId = plannerState?.id || null;
+  return Boolean(ownerId && plannerId && ownerId !== plannerId);
+}
+
 export function loadLiveSessionState(plannerState = null) {
   try {
     const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
@@ -419,25 +461,30 @@ export function loadLiveSessionState(plannerState = null) {
       if (shouldLoadDemoFixture() && (plannerState?.title === 'Weekly Diseño & SD' || plannerState?.title?.includes('Weekly Diseño'))) {
         return createDemoLiveSession(plannerState);
       }
-      return {...DEFAULT_LIVE_SESSION};
+      return createEmptyLiveSession(plannerState);
     }
     const parsed = JSON.parse(raw);
     if (!shouldLoadDemoFixture() && (parsed?.sessionId === 'demo-session-weekly-design' || parsed?.sessionId?.startsWith('demo-session-'))) {
       try {
         localStorage.removeItem(LIVE_SESSION_STORE_KEY);
       } catch {}
-      return {...DEFAULT_LIVE_SESSION};
+      return createEmptyLiveSession(plannerState);
+    }
+    if (isLiveStateForOtherPlanner(parsed, plannerState)) {
+      return createEmptyLiveSession(plannerState);
     }
     const migrated = migrateLiveSessionState(plannerState, parsed);
     return {
       ...migrated,
+      plannerSessionId: migrated.plannerSessionId || plannerState?.id || null,
       recordings: (migrated.recordings || []).map(normalizeReloadedRecording),
     };
   } catch {
-    return {...DEFAULT_LIVE_SESSION};
+    return createEmptyLiveSession(plannerState);
   }
 }
 
+/** Full client live state minus transient binary fields (Blob / object URL). */
 export function serializeLiveSessionState(sessionState) {
   return {
     ...sessionState,
@@ -446,6 +493,124 @@ export function serializeLiveSessionState(sessionState) {
       return metadata;
     }),
   };
+}
+
+export function stampLiveState(sessionState, now = Date.now()) {
+  if (!sessionState) return sessionState;
+  return {...sessionState, updatedAt: new Date(now).toISOString()};
+}
+
+/** Whether a live state carries anything worth persisting server-side. */
+export function isMeaningfulLiveState(state) {
+  if (!state || typeof state !== 'object') return false;
+  if (state.status && state.status !== SESSION_STATUS.IDLE) return true;
+  return Boolean(
+    state.sessionStartedAt ||
+    (state.recordings || []).length ||
+    (state.decisions || []).length ||
+    (state.completedBlockIds || []).length ||
+    (state.skippedBlockIds || []).length
+  );
+}
+
+const ACTIVE_STATUSES = new Set([SESSION_STATUS.RUNNING, SESSION_STATUS.PAUSED]);
+// Fields that a running/paused session can never legitimately lose. A null in
+// a remote copy is treated as "missing" and never clobbers a local value.
+const PROTECTED_WHEN_ACTIVE = new Set([
+  'liveActiveBlockId',
+  'sessionStartedAt',
+  'activeBlockStartedAt',
+  'sessionId',
+  'plannerSessionId',
+]);
+
+function timeOf(iso) {
+  const value = Date.parse(iso || '');
+  return Number.isFinite(value) ? value : 0;
+}
+
+function mergeRecordings(localRecordings = [], remoteRecordings = []) {
+  const localById = new Map((localRecordings || []).map((recording) => [recording.id, recording]));
+  const merged = (remoteRecordings || []).map((remote) => {
+    const local = localById.get(remote.id);
+    if (local?.blobUrl) return {...remote, blobUrl: local.blobUrl, status: local.status, persistenceError: local.persistenceError ?? null};
+    return normalizeReloadedRecording(remote);
+  });
+  const remoteIds = new Set(merged.map((recording) => recording.id));
+  // Recordings captured on this device that the remote copy does not know yet
+  // are never dropped.
+  for (const local of localRecordings || []) {
+    if (!remoteIds.has(local.id) && (local.blobUrl || local.binaryStorage === 'indexeddb')) merged.push(local);
+  }
+  return merged;
+}
+
+/**
+ * Reconciles the local live state with a copy fetched from the server.
+ * - The remote copy is adopted only when it is newer (`updatedAt`) or the
+ *   local state is empty / belongs to another agenda.
+ * - Missing (undefined) remote fields never overwrite local ones, and null
+ *   never clears structural fields of a running/paused session.
+ * - `options.keepLocalSessionId`: when this device has captures in progress
+ *   (tagged with the local run id), the local `sessionId` is never replaced.
+ * Returns {state, source: 'local' | 'remote'}.
+ */
+export function reconcileLiveState(plannerState, localState, remoteState, options = {}) {
+  const plannerId = plannerState?.id || null;
+  const local = localState && !isLiveStateForOtherPlanner(localState, plannerState)
+    ? localState
+    : createEmptyLiveSession(plannerState);
+  if (!remoteState || typeof remoteState !== 'object') return {state: local, source: 'local'};
+
+  const remote = normalizeLegacyLiveShape(remoteState);
+  if (isLiveStateForOtherPlanner(remote, plannerState)) return {state: local, source: 'local'};
+
+  const localHasContent = isMeaningfulLiveState(local);
+  const remoteTime = timeOf(remote.updatedAt);
+  const localTime = timeOf(local.updatedAt);
+  if (localHasContent && remoteTime <= localTime) return {state: local, source: 'local'};
+  if (!isMeaningfulLiveState(remote) && localHasContent) return {state: local, source: 'local'};
+
+  const merged = {...local};
+  const remoteActive = ACTIVE_STATUSES.has(remote.status);
+  for (const [key, value] of Object.entries(remote)) {
+    if (value === undefined) continue;
+    if (value === null && remoteActive && PROTECTED_WHEN_ACTIVE.has(key) && local[key] != null) continue;
+    merged[key] = value;
+  }
+  if (options?.keepLocalSessionId && local.sessionId) merged.sessionId = local.sessionId;
+  merged.recordings = mergeRecordings(local.recordings, Array.isArray(remote.recordings) ? remote.recordings : local.recordings);
+  merged.plannerSessionId = merged.plannerSessionId || plannerId;
+  if (!merged.updatedAt) merged.updatedAt = remote.updatedAt || local.updatedAt || null;
+
+  const migrated = migrateLiveSessionState(plannerState, merged);
+  return {
+    state: {...migrated, plannerSessionId: migrated.plannerSessionId || plannerId, recordings: merged.recordings},
+    source: 'remote',
+  };
+}
+
+/**
+ * Chooses which server session to open at Activity boot and whether the local
+ * copy must be kept (unsynced local edits or local copy at least as new).
+ */
+export function choosePlannerBootSession(sessions = [], localPlanner = null, pendingEdits = {}, preferredId = null) {
+  const list = Array.isArray(sessions) ? sessions : [];
+  if (list.length === 0) return {session: null, keepLocal: false};
+  const localId = localPlanner?.id || null;
+  const live = list.filter((session) => session.status === 'live');
+  // An explicit launch target (Discord button "planner-session:<id>") wins.
+  const session = (preferredId && list.find((candidate) => candidate.id === preferredId))
+    || live.find((candidate) => candidate.id === localId)
+    || live[0]
+    || list.find((candidate) => candidate.id === localId)
+    || list[0];
+  const sameAsLocal = Boolean(localId && session.id === localId);
+  const keepLocal = sameAsLocal && (
+    Boolean(pendingEdits?.[localId]) ||
+    (timeOf(localPlanner?.updatedAt) > 0 && timeOf(localPlanner.updatedAt) >= timeOf(session.updatedAt))
+  );
+  return {session, keepLocal};
 }
 
 export function saveLiveSessionState(sessionState) {
@@ -479,7 +644,7 @@ export function resetToCleanSession() {
     ...DEFAULT_EMPTY_SESSION,
     id: `sess-${Date.now().toString(36)}`,
     host: host || DEFAULT_EMPTY_SESSION.host,
-    date: new Date().toISOString().split('T')[0],
+    date: todayLocalIso(),
   };
   const computed = computePlannerTimes(cleanSession);
   savePlannerState(computed);
@@ -487,115 +652,56 @@ export function resetToCleanSession() {
   return computed;
 }
 
+/**
+ * Server mutations for archive/restore/permanent delete. Each returns
+ * `{ok: true}` or throws a PlannerApiError so callers can revert optimistic UI.
+ * Outside Discord (no session token) they are local-only and succeed.
+ */
 export async function deletePlannerSessionById(sessionId) {
-  if (!sessionId) return;
+  if (!sessionId) return {ok: true};
+  if (isPlannerRemoteEnabled()) {
+    await plannerRequest(`/api/planner/sessions/${encodeURIComponent(sessionId)}`, {method: 'DELETE'});
+  }
   if (typeof window !== 'undefined' && Array.isArray(window.__bardoChannelSessions)) {
     window.__bardoChannelSessions = window.__bardoChannelSessions.filter((s) => s.id !== sessionId);
   }
-
-  // Notificar al backend si estamos en producción con token de sesión
-  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
-        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
-        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
-      };
-      await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'DELETE',
-        headers,
-      });
-    } catch (err) {
-      console.error('Bardo Planner: error archivando sesión en servidor', err);
-    }
-  }
+  return {ok: true};
 }
 
 export async function restorePlannerSessionById(sessionId) {
-  if (!sessionId) return;
-  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
-        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
-        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
-      };
-      await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}/restore`, {
-        method: 'POST',
-        headers,
-      });
-    } catch (err) {
-      console.error('Bardo Planner: error restaurando sesión en servidor', err);
-    }
+  if (!sessionId) return {ok: true};
+  if (isPlannerRemoteEnabled()) {
+    await plannerRequest(`/api/planner/sessions/${encodeURIComponent(sessionId)}/restore`, {method: 'POST'});
   }
+  return {ok: true};
 }
 
 export async function deletePlannerSessionPermanentlyById(sessionId) {
-  if (!sessionId) return;
+  if (!sessionId) return {ok: true};
+  if (isPlannerRemoteEnabled()) {
+    await plannerRequest(`/api/planner/sessions/${encodeURIComponent(sessionId)}/permanent`, {method: 'DELETE'});
+  }
   if (typeof window !== 'undefined' && Array.isArray(window.__bardoChannelSessions)) {
     window.__bardoChannelSessions = window.__bardoChannelSessions.filter((s) => s.id !== sessionId);
   }
-
-  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
-        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
-        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
-      };
-      await fetch(`/api/planner/sessions/${encodeURIComponent(sessionId)}/permanent`, {
-        method: 'DELETE',
-        headers,
-      });
-    } catch (err) {
-      console.error('Bardo Planner: error eliminando permanentemente sesión en servidor', err);
-    }
-  }
+  return {ok: true};
 }
 
 export async function fetchArchivedPlannerSessions() {
-  if (typeof window !== 'undefined' && (window.__BARDO_PRODUCTION__ || window.__BARDO_SESSION_TOKEN__)) {
-    try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {}),
-        ...(window.__BARDO_CUSTOM_ID__ ? { 'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__ } : {}),
-        ...(window.__BARDO_INSTANCE_ID__ ? { 'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__ } : {}),
-      };
-      const res = await fetch('/api/planner/sessions?archived=1', {
-        headers,
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return (data.sessions || []).map((s) => ({
-          eventId: s.id,
-          id: s.id,
-          eventStatus: s.status,
-          title: s.title,
-          date: s.date,
-          startTime: s.startTime,
-          host: s.hostName || s.host || '',
-          description: s.description || '',
-          blocks: s.blocks || [],
-          archived: true,
-          archivedAt: s.archivedAt,
-        }));
-      }
-    } catch (err) {
-      console.error('Bardo Planner: error al obtener sesiones archivadas', err);
-    }
+  if (!isPlannerRemoteEnabled()) return [];
+  try {
+    const data = await plannerRequest('/api/planner/sessions?archived=1', {method: 'GET'});
+    return (data?.sessions || []).map((s) => ({
+      ...toPlannerEvent(s),
+      eventStatus: s.status,
+      archived: true,
+      archivedAt: s.archivedAt || s.updatedAt || null,
+    }));
+  } catch (err) {
+    console.error('Bardo Planner: error al obtener sesiones archivadas', err);
+    return [];
   }
-  return [];
 }
-
 
 export function generateDiscordAnnouncement(plannerState) {
   const computed = computePlannerTimes(plannerState);

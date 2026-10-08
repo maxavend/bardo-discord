@@ -1,6 +1,11 @@
 const DB_NAME = 'bardo-planner-recordings-v1';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'audio';
+// Incremental capture: every MediaRecorder timeslice is written as it arrives so
+// closing the Activity mid-recording keeps everything up to the last second.
+const CHUNKS_STORE = 'chunks';
+const IN_PROGRESS_STORE = 'inprogress';
+const ALL_STORES = [STORE_NAME, CHUNKS_STORE, IN_PROGRESS_STORE];
 
 export class RecordingStorageError extends Error {
   constructor(message, cause = null) {
@@ -29,18 +34,26 @@ function openDatabase(indexedDBImpl) {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, {keyPath: 'id'});
       }
+      if (!db.objectStoreNames.contains(CHUNKS_STORE)) {
+        db.createObjectStore(CHUNKS_STORE, {keyPath: 'key'});
+      }
+      if (!db.objectStoreNames.contains(IN_PROGRESS_STORE)) {
+        db.createObjectStore(IN_PROGRESS_STORE, {keyPath: 'id'});
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(new RecordingStorageError('No se pudo abrir el almacenamiento de audio.', request.error));
   });
 }
 
-function runTransaction(indexedDBImpl, mode, operation) {
+function runTransaction(indexedDBImpl, mode, operation, storeNames = STORE_NAME) {
   return openDatabase(indexedDBImpl).then((db) => new Promise((resolve, reject) => {
     let transaction;
     try {
-      transaction = db.transaction(STORE_NAME, mode);
-      const store = transaction.objectStore(STORE_NAME);
+      transaction = db.transaction(storeNames, mode);
+      const store = Array.isArray(storeNames)
+        ? Object.fromEntries(storeNames.map((name) => [name, transaction.objectStore(name)]))
+        : transaction.objectStore(storeNames);
       operation(store, resolve, reject);
     } catch (error) {
       db.close();
@@ -82,13 +95,154 @@ export function createRecordingStorage(indexedDBImpl = globalThis.indexedDB) {
 
     async delete(recordingId) {
       if (!recordingId) return;
-      return runTransaction(indexedDBImpl, 'readwrite', (store, resolve, reject) => {
-        const request = store.delete(recordingId);
+      return runTransaction(indexedDBImpl, 'readwrite', (stores, resolve, reject) => {
+        const request = stores[STORE_NAME].delete(recordingId);
+        stores[CHUNKS_STORE].delete(chunkRange(recordingId));
+        stores[IN_PROGRESS_STORE].delete(recordingId);
         request.onsuccess = () => resolve();
         request.onerror = () => reject(new RecordingStorageError('No se pudo eliminar el audio.', request.error));
-      });
+      }, ALL_STORES);
+    },
+
+    async beginInProgress(meta) {
+      if (!meta?.id) return;
+      return runTransaction(indexedDBImpl, 'readwrite', (store, resolve, reject) => {
+        const request = store.put({...meta, savedAt: Date.now()});
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(new RecordingStorageError('No se pudo registrar la grabación en curso.', request.error));
+      }, IN_PROGRESS_STORE);
+    },
+
+    async appendChunk(recordingId, seq, blob) {
+      if (!recordingId || !blob) return;
+      return runTransaction(indexedDBImpl, 'readwrite', (store, resolve, reject) => {
+        const request = store.put({key: chunkKey(recordingId, seq), recordingId, seq, blob});
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(new RecordingStorageError('No se pudo guardar un fragmento de audio.', request.error));
+      }, CHUNKS_STORE);
+    },
+
+    async getChunks(recordingId) {
+      if (!recordingId) return [];
+      return runTransaction(indexedDBImpl, 'readonly', (store, resolve, reject) => {
+        const request = store.getAll(chunkRange(recordingId));
+        request.onsuccess = () => resolve((request.result || []).sort((a, b) => a.seq - b.seq).map((row) => row.blob));
+        request.onerror = () => reject(new RecordingStorageError('No se pudieron leer los fragmentos de audio.', request.error));
+      }, CHUNKS_STORE);
+    },
+
+    async listInProgress() {
+      return runTransaction(indexedDBImpl, 'readonly', (store, resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(new RecordingStorageError('No se pudieron listar las grabaciones en curso.', request.error));
+      }, IN_PROGRESS_STORE);
+    },
+
+    async clearInProgress(recordingId) {
+      if (!recordingId) return;
+      return runTransaction(indexedDBImpl, 'readwrite', (stores, resolve) => {
+        stores[CHUNKS_STORE].delete(chunkRange(recordingId));
+        const request = stores[IN_PROGRESS_STORE].delete(recordingId);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
+      }, [CHUNKS_STORE, IN_PROGRESS_STORE]);
     },
   };
+}
+
+function chunkKey(recordingId, seq) {
+  return `${recordingId}:${String(seq).padStart(8, '0')}`;
+}
+
+function chunkRange(recordingId) {
+  return globalThis.IDBKeyRange.bound(`${recordingId}:`, `${recordingId}:\uffff`);
+}
+
+/**
+ * Chunk sink handed to RecordingController: writes metadata + every timeslice
+ * to IndexedDB. Failures are reported but never interrupt the capture.
+ */
+export function createChunkSink(storage = recordingStorage, onError = () => {}) {
+  const safe = (promise) => Promise.resolve(promise).catch((error) => onError(error));
+  return {
+    begin: (meta) => safe(storage.beginInProgress?.(meta)),
+    append: (recordingId, seq, blob) => safe(storage.appendChunk?.(recordingId, seq, blob)),
+  };
+}
+
+/**
+ * Rebuilds recordings that were still being captured when the page died
+ * (Activity closed, crash, reload). A capture is recovered when it belongs to
+ * the live run `sessionId` OR to the agenda `plannerSessionId` (the run id may
+ * change when the live state is reconciled with the server). Others stay
+ * stored until their agenda is opened.
+ *
+ * `options.existingRecordingIds`: ids already present in the session. If one
+ * of them already has its full audio stored, the leftover chunks are just
+ * cleared (no duplicate, no partial copy replacing the complete one).
+ * Returns persisted Recording metadata (status 'saved' or 'error').
+ */
+export async function recoverInProgressRecordings(sessionId, storage = recordingStorage, options = {}) {
+  const {plannerSessionId = null, existingRecordingIds = []} = options || {};
+  if ((!sessionId && !plannerSessionId) || typeof storage.listInProgress !== 'function') return [];
+  const existing = new Set(existingRecordingIds || []);
+  const metas = (await storage.listInProgress()).filter((meta) =>
+    (sessionId && meta.sessionId === sessionId) ||
+    (plannerSessionId && meta.plannerSessionId === plannerSessionId)
+  );
+  const recovered = [];
+  for (const meta of metas) {
+    if (existing.has(meta.id)) {
+      let fullAudio = null;
+      try {
+        fullAudio = await storage.get(meta.id);
+      } catch {
+        fullAudio = null;
+      }
+      if (fullAudio) {
+        await storage.clearInProgress(meta.id);
+        continue;
+      }
+    }
+    const chunks = await storage.getChunks(meta.id);
+    if (!chunks.length) {
+      await storage.clearInProgress(meta.id);
+      continue;
+    }
+    const mimeType = meta.mimeType || chunks[0]?.type || 'audio/webm';
+    const blob = new Blob(chunks, {type: mimeType});
+    const baseName = meta.pointTitle || meta.blockTitle || 'Grabación';
+    const durationMs = chunks.length * (meta.timesliceMs || 1000);
+    const persisted = await persistRecordingBinary({
+      id: meta.id,
+      sessionId: meta.sessionId,
+      plannerSessionId: meta.plannerSessionId || null,
+      blockId: meta.blockId,
+      blockTitle: meta.blockTitle,
+      pointId: meta.pointId,
+      pointTitle: meta.pointTitle,
+      name: `${baseName} (recuperada)`,
+      createdAt: meta.startedAt + durationMs,
+      startedAt: meta.startedAt,
+      endedAt: meta.startedAt + durationMs,
+      durationMs,
+      sources: meta.sources || ['microphone'],
+      sourcesLabel: meta.sourcesLabel || 'Micrófono',
+      segmentsCount: 1,
+      segments: [],
+      mimeType,
+      fileSize: blob.size,
+      storageKey: `sessions/${meta.sessionId}/blocks/${meta.blockId}/recordings/${meta.id}`,
+      recovered: true,
+      status: 'pending',
+      binaryStorage: null,
+      blob,
+    }, storage);
+    if (persisted.status === 'saved') await storage.clearInProgress(meta.id);
+    recovered.push(persisted);
+  }
+  return recovered;
 }
 
 export const recordingStorage = createRecordingStorage();

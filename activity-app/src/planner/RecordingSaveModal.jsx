@@ -13,6 +13,11 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { MicIcon, ClockIcon } from '@/components/ui/animated-icons';
 import { formatMsToClock } from './session-assistant-engine.js';
 
+/**
+ * Closing the dialog (Esc, click outside, X) SAVES the recording with the
+ * current name: audio is never discarded by accident. Discarding requires an
+ * explicit two-step confirmation.
+ */
 export function RecordingSaveModal({
   isOpen,
   recordingEntity,
@@ -21,11 +26,13 @@ export function RecordingSaveModal({
   onDiscard,
 }) {
   const [customName, setCustomName] = useState('');
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   useEffect(() => {
     if (recordingEntity) {
       setCustomName(recordingEntity.name || recordingEntity.pointTitle || recordingEntity.blockTitle || 'Grabación');
     }
+    setConfirmDiscard(false);
   }, [recordingEntity]);
 
   if (!recordingEntity) return null;
@@ -44,8 +51,13 @@ export function RecordingSaveModal({
     });
   };
 
+  const handleDismiss = () => {
+    const trimmed = customName.trim() || recordingEntity.name || 'Grabación';
+    (onClose || onSave)({...recordingEntity, name: trimmed});
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -55,7 +67,7 @@ export function RecordingSaveModal({
             <DialogTitle>Grabación finalizada</DialogTitle>
           </div>
           <DialogDescription>
-            Revisa el nombre de la grabación antes de guardarla.
+            Revisa el nombre de la grabación antes de guardarla. Si cierras esta ventana, se guardará igual.
           </DialogDescription>
         </DialogHeader>
 
@@ -97,10 +109,10 @@ export function RecordingSaveModal({
           <Button
             variant="destructive"
             size="sm"
-            onClick={onDiscard}
+            onClick={() => (confirmDiscard ? onDiscard() : setConfirmDiscard(true))}
             className="text-xs"
           >
-            Descartar
+            {confirmDiscard ? 'Confirmar descarte' : 'Descartar'}
           </Button>
 
           <Button

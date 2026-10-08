@@ -3,7 +3,6 @@ import {createRoot} from 'react-dom/client';
 import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
-import {installProductionImportNormalizer} from './production-import-normalizer.js';
 import '@fontsource-variable/inter';
 import './styles.css';
 import './editor-focus.css';
@@ -143,7 +142,12 @@ function ActivityRoot() {
       });
       // Wait one frame for Discord mobile to finish applying its host color
       // scheme, then resolve the Activity theme before rendering the app.
-      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      // rAF never fires while the page is hidden (Activity opened in the
+      // background), so cap the wait instead of stalling on the boot screen.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => resolve());
+        window.setTimeout(resolve, 100);
+      });
       applyDiscordTheme();
 
       if (auth.embedded && !auth.ready) {
@@ -160,7 +164,6 @@ function ActivityRoot() {
       }
 
       if (auth.embedded) {
-        installProductionImportNormalizer();
         setStage('docs_hydrated');
         logBreadcrumb('docs_hydrated');
         await prepareBardoProduction({

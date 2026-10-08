@@ -1,189 +1,20 @@
-const STORE_KEY = 'bardo.docs.heroui.v1';
+import {markdownToHtml} from './editor/bardo-markdown.js';
+import {
+  DOCS_STORE_KEY as STORE_KEY,
+  createApiRequest,
+  createDocsSync,
+  errorMessage,
+  fetchDocsLibrary,
+  serverDocToLocal,
+} from './production-docs-sync.js';
+import {normalizePendingImports} from './production-import-normalizer.js';
+
+export {markdownToHtml};
+
 const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
 const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
-
-function escapeHtml(value = '') {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function renderInline(value = '') {
-  let text = escapeHtml(value);
-  const codeTokens = [];
-  text = text.replace(/`([^`]+)`/g, (_, code) => {
-    const token = `%%BARDOCODE${codeTokens.length}%%`;
-    codeTokens.push(`<code>${code}</code>`);
-    return token;
-  });
-  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)/g, '<a href="$2">$1</a>');
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  text = text.replace(/~~([^~]+)~~/g, '<s>$1</s>');
-  text = text.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-  text = text.replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>');
-  codeTokens.forEach((html, index) => { text = text.replace(`%%BARDOCODE${index}%%`, html); });
-  return text;
-}
-
-function splitTableRow(line) {
-  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
-}
-
-function isTableSeparator(line = '') {
-  const cells = splitTableRow(line);
-  return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
-}
-
-function stripLeadingTitle(markdown, title) {
-  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
-  const index = lines.findIndex(line => line.trim());
-  if (index < 0) return '';
-  const match = lines[index].match(/^#\s+(.+?)\s*$/);
-  if (match && match[1].trim().toLocaleLowerCase('es') === String(title || '').trim().toLocaleLowerCase('es')) {
-    lines.splice(index, 1);
-  }
-  return lines.join('\n').trim();
-}
-
-export function markdownToHtml(markdown, title) {
-  const lines = stripLeadingTitle(markdown, title).replace(/\r\n?/g, '\n').split('\n');
-  const html = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    const trimmed = line.trim();
-    if (!trimmed) { index += 1; continue; }
-
-    if (trimmed.startsWith('```')) {
-      const code = [];
-      index += 1;
-      while (index < lines.length && !lines[index].trim().startsWith('```')) {
-        code.push(lines[index]); index += 1;
-      }
-      if (index < lines.length) index += 1;
-      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
-      continue;
-    }
-
-    if (line.includes('|') && isTableSeparator(lines[index + 1] || '')) {
-      const headers = splitTableRow(line);
-      index += 2;
-      const rows = [];
-      while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
-        rows.push(splitTableRow(lines[index])); index += 1;
-      }
-      html.push(`<table><thead><tr>${headers.map(cell => `<th>${renderInline(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, i) => `<td>${renderInline(row[i] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
-      continue;
-    }
-
-    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      const tag = heading[1].length <= 2 ? 'h2' : 'h3';
-      html.push(`<${tag}>${renderInline(heading[2])}</${tag}>`);
-      index += 1;
-      continue;
-    }
-
-    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      html.push('<hr>'); index += 1; continue;
-    }
-
-    if (/^>\s?/.test(trimmed)) {
-      const quote = [];
-      while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
-        quote.push(lines[index].trim().replace(/^>\s?/, '')); index += 1;
-      }
-      html.push(`<blockquote><p>${quote.map(renderInline).join('<br>')}</p></blockquote>`);
-      continue;
-    }
-
-    if (/^[-*+]\s+\[[ xX]\]\s+/.test(trimmed)) {
-      const items = [];
-      while (index < lines.length && /^[-*+]\s+\[[ xX]\]\s+/.test(lines[index].trim())) {
-        const item = lines[index].trim();
-        const done = /^[-*+]\s+\[[xX]\]/.test(item);
-        const text = item.replace(/^[-*+]\s+\[[ xX]\]\s+/, '');
-        items.push(`<li${done ? ' class="done"' : ''}>${renderInline(text)}</li>`);
-        index += 1;
-      }
-      html.push(`<ul class="checklist">${items.join('')}</ul>`);
-      continue;
-    }
-
-    if (/^[-*+]\s+/.test(trimmed)) {
-      const items = [];
-      while (index < lines.length && /^[-*+]\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^[-*+]\s+/, '')); index += 1;
-      }
-      html.push(`<ul>${items.map(item => `<li>${renderInline(item)}</li>`).join('')}</ul>`);
-      continue;
-    }
-
-    if (/^\d+[.)]\s+/.test(trimmed)) {
-      const items = [];
-      while (index < lines.length && /^\d+[.)]\s+/.test(lines[index].trim())) {
-        items.push(lines[index].trim().replace(/^\d+[.)]\s+/, '')); index += 1;
-      }
-      html.push(`<ol>${items.map(item => `<li>${renderInline(item)}</li>`).join('')}</ol>`);
-      continue;
-    }
-
-    const paragraph = [trimmed];
-    index += 1;
-    while (index < lines.length) {
-      const next = lines[index].trim();
-      if (!next || /^```/.test(next) || /^#{1,6}\s+/.test(next) || /^>\s?/.test(next) || /^[-*+]\s+/.test(next) || /^\d+[.)]\s+/.test(next) || /^(?:-{3,}|\*{3,}|_{3,})$/.test(next) || (lines[index].includes('|') && isTableSeparator(lines[index + 1] || ''))) break;
-      paragraph.push(next); index += 1;
-    }
-    html.push(`<p>${paragraph.map(renderInline).join('<br>')}</p>`);
-  }
-
-  return html.join('\n') || '<p><br></p>';
-}
-
-function htmlToMarkdown(html = '') {
-  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  const walk = node => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
-    if (node.nodeType !== Node.ELEMENT_NODE) return '';
-    const el = node;
-    const inner = [...el.childNodes].map(walk).join('');
-    switch (el.tagName) {
-      case 'H2': return `\n## ${inner.trim()}\n\n`;
-      case 'H3': return `\n### ${inner.trim()}\n\n`;
-      case 'P': return `${inner.trim()}\n\n`;
-      case 'STRONG': case 'B': return `**${inner}**`;
-      case 'EM': case 'I': return `*${inner}*`;
-      case 'U': return inner;
-      case 'S': case 'DEL': return `~~${inner}~~`;
-      case 'CODE': return el.parentElement?.tagName === 'PRE' ? inner : `\`${inner}\``;
-      case 'PRE': return `\n\`\`\`\n${el.textContent || ''}\n\`\`\`\n\n`;
-      case 'BLOCKQUOTE': return inner.split('\n').filter(Boolean).map(line => `> ${line}`).join('\n') + '\n\n';
-      case 'A': return `[${inner || el.getAttribute('href')}](${el.getAttribute('href') || ''})`;
-      case 'HR': return '\n---\n\n';
-      case 'BR': return '\n';
-      case 'LI': {
-        const checklist = el.parentElement?.classList.contains('checklist');
-        if (checklist) return `- [${el.classList.contains('done') ? 'x' : ' '}] ${inner.trim()}\n`;
-        return `${el.parentElement?.tagName === 'OL' ? '1.' : '-'} ${inner.trim()}\n`;
-      }
-      case 'UL': case 'OL': return `\n${inner}\n`;
-      case 'SUMMARY': return `**${inner.trim()}**\n\n`;
-      case 'DETAILS': return `\n${inner}\n`;
-      case 'DIV': return `\n${inner.trim()}\n\n`;
-      case 'TABLE': return `\n${el.textContent?.replace(/\s+/g, ' ').trim() || ''}\n\n`;
-      default: return inner;
-    }
-  };
-  return walk(doc.body).replace(/\n{3,}/g, '\n\n').trim();
-}
 
 function responseFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || '';
@@ -209,20 +40,13 @@ function triggerBlobDownload(blob, filename, {preview = false} = {}) {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
-function toRemotePayload(doc) {
-  const body = htmlToMarkdown(doc.body || '');
-  const title = String(doc.title || 'Sin título').trim() || 'Sin título';
-  return {
-    id: doc.id,
-    title,
-    description: String(doc.description || '').trim(),
-    markdown: `# ${title}\n\n${body}`.trim(),
-  };
-}
-
-function signature(doc) {
-  const payload = toRemotePayload(doc);
-  return JSON.stringify([payload.title, payload.description, payload.markdown]);
+function readCachedDocs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    return Array.isArray(parsed?.docs) ? parsed.docs.filter(doc => doc?.id) : [];
+  } catch {
+    return [];
+  }
 }
 
 function resolveClientId() {
@@ -245,6 +69,32 @@ async function initSdk() {
   }
 }
 
+const NEW_DOC_DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
+
+/**
+ * "/doc-new titulo:..." carries the title in the button's custom_id. Prefill
+ * it into the new-document draft, but never overwrite a draft that already
+ * has a title or content (that would lose unfinished work).
+ */
+export function prefillNewDocTitle(rawTitle, storage = globalThis.localStorage) {
+  const title = String(rawTitle || '').trim();
+  if (!title || !storage) return false;
+  try {
+    const draft = JSON.parse(storage.getItem(NEW_DOC_DRAFT_KEY) || 'null');
+    const body = String(draft?.body || '').replace(/<p>\s*(<br\s*\/?>)?\s*<\/p>/gi, '').trim();
+    if (draft?.title?.trim() || draft?.description?.trim() || body) return false;
+    storage.setItem(NEW_DOC_DRAFT_KEY, JSON.stringify({
+      title,
+      description: '',
+      body: '<p><br></p>',
+      updatedAt: new Date().toISOString(),
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function prepareBardoProduction(options = {}) {
   const instanceId = options.instanceId
     || window.__BARDO_INSTANCE_ID__
@@ -258,6 +108,8 @@ export async function prepareBardoProduction(options = {}) {
   if (sdk) window.__BARDO_DISCORD_SDK__ = sdk;
 
   window.__bardoExportDocument = async (documentId, format, options = {}) => {
+    // Exportar la última versión: primero se envían los cambios pendientes.
+    if (window.__bardoSettleDocument) await window.__bardoSettleDocument(documentId);
     const url = `${window.location.origin}/api/documents/${encodeURIComponent(documentId)}/export?format=${encodeURIComponent(format)}`;
     const headers = {'Accept': 'application/octet-stream'};
     if (window.__BARDO_SESSION_TOKEN__) headers['Authorization'] = `Bearer ${window.__BARDO_SESSION_TOKEN__}`;
@@ -278,14 +130,24 @@ export async function prepareBardoProduction(options = {}) {
   if (instanceId) headers['x-bardo-instance-id'] = instanceId;
 
   let payload = options.initialDocsPayload || {documents:[], contextDocumentId:null};
+  // Si la biblioteca no se puede cargar (503 de Discord, red), NO se borra la
+  // copia local: se arranca con ella y se reintenta en segundo plano.
+  let libraryLoaded = Boolean(options.initialDocsPayload);
   if (!options.initialDocsPayload) {
-    try {
-      const response = await fetch('/api/docs', {headers, cache:'no-store'});
-      if (response.ok) payload = await response.json();
-      else console.warn('Bardo Docs: library API unavailable', response.status);
-    } catch (error) {
-      console.warn('Bardo Docs: no se pudo hidratar la biblioteca', error);
+    const result = await fetchDocsLibrary({headers});
+    if (result.ok) {
+      payload = result.payload;
+      libraryLoaded = true;
+    } else {
+      console.warn('Bardo Docs: no se pudo hidratar la biblioteca', result.error);
     }
+  }
+
+  // Slash commands (/bardo) and some mobile clients launch without a
+  // custom_id; the server then returns the destination saved by the
+  // interaction. An explicit custom_id always wins.
+  if (!window.__BARDO_CUSTOM_ID__ && typeof payload?.launchTarget === 'string' && payload.launchTarget) {
+    window.__BARDO_CUSTOM_ID__ = `bardo:open:${payload.launchTarget}`;
   }
 
   try {
@@ -311,64 +173,184 @@ export async function prepareBardoProduction(options = {}) {
     } catch {}
   }
 
+  // Planner bootstrap: pick the session to open (live > last opened > latest),
+  // keep local unsynced edits, and reconcile the live state by `updatedAt`
+  // instead of blindly overwriting the local copy with the server's.
   try {
+    const plannerStore = await import('./planner/planner-store.js');
+    const {readPendingPlannerEdits, readPendingLiveStates} = await import('./planner/planner-sync.js');
+    const readLocalJson = (key) => {
+      try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+    };
     const plannerRes = await fetch('/api/planner/sessions', {headers, cache:'no-store'});
     if (plannerRes.ok) {
       const plannerPayload = await plannerRes.json();
-      window.__bardoChannelSessions = plannerPayload.sessions || [];
-      if (Array.isArray(plannerPayload.sessions) && plannerPayload.sessions.length > 0) {
-        const activeOrLatest = plannerPayload.sessions.find((s) => s.status === 'live') || plannerPayload.sessions[0];
-        localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(activeOrLatest));
+      const sessions = Array.isArray(plannerPayload?.sessions) ? plannerPayload.sessions : [];
+      window.__bardoChannelSessions = sessions;
+      const localPlanner = readLocalJson(PLANNER_STORE_KEY);
+      const pendingEdits = readPendingPlannerEdits(localStorage);
+      // Launch from a "planner-session:<id>" button: that agenda wins, with the
+      // same keep-local-edits rule as any other boot.
+      const launchCustomId = String(window.__BARDO_CUSTOM_ID__ || '').replace(/^bardo:open:/, '');
+      const preferredId = launchCustomId.startsWith('planner-session:') ? launchCustomId.slice('planner-session:'.length) : null;
+      const {session: chosen, keepLocal} = plannerStore.choosePlannerBootSession(sessions, localPlanner, pendingEdits, preferredId);
+      if (chosen) {
+        const plannerForLive = keepLocal ? localPlanner : plannerStore.normalizeServerSession(chosen);
+        if (!keepLocal) localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(plannerForLive));
         try {
-          const liveRes = await fetch(`/api/planner/sessions/${encodeURIComponent(activeOrLatest.id)}/live`, {headers, cache:'no-store'});
+          const liveRes = await fetch(`/api/planner/sessions/${encodeURIComponent(chosen.id)}/live`, {headers, cache:'no-store'});
           if (liveRes.ok) {
             const liveData = await liveRes.json();
-            if (liveData?.liveState) {
-              localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(liveData.liveState));
+            // Local candidates: the live slot (if it belongs to this agenda) and
+            // any unsent live state saved for this agenda; newest wins.
+            const slot = readLocalJson(LIVE_SESSION_STORE_KEY);
+            const slotForChosen = slot && (!slot.plannerSessionId || slot.plannerSessionId === chosen.id) ? slot : null;
+            const pendingLive = readPendingLiveStates(localStorage)[chosen.id] || null;
+            const timeOf = (value) => Date.parse(value?.updatedAt || '') || 0;
+            const localBase = pendingLive && timeOf(pendingLive) > timeOf(slotForChosen) ? pendingLive : slotForChosen;
+            const {state, source} = plannerStore.reconcileLiveState(
+              plannerForLive,
+              localBase,
+              liveData?.liveState || null,
+            );
+            // Overwrite the slot only with a newer server copy or this agenda's
+            // own unsent state (other agendas' unsent states stay in the
+            // per-agenda pending store).
+            if (source === 'remote' || (localBase && localBase !== slotForChosen)) {
+              localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(plannerStore.serializeLiveSessionState(state)));
             }
           }
-        } catch {}
-      } else {
-        try {
-          const rawLocal = localStorage.getItem(PLANNER_STORE_KEY);
-          if (rawLocal) {
-            const parsedLocal = JSON.parse(rawLocal);
-            if (parsedLocal?.id === 'demo-session-weekly-design' || parsedLocal?.title?.includes('Weekly') || (parsedLocal?.host === 'Camila' && parsedLocal?.mentions?.includes('@diseño'))) {
-              localStorage.removeItem(PLANNER_STORE_KEY);
-              localStorage.removeItem(LIVE_SESSION_STORE_KEY);
-            }
-          }
-        } catch {}
+        } catch (err) {
+          console.warn('Bardo: no se pudo cargar el estado en vivo del planner', err);
+        }
+      } else if (plannerStore.isDemoPlannerState(localPlanner)) {
+        localStorage.removeItem(PLANNER_STORE_KEY);
+        localStorage.removeItem(LIVE_SESSION_STORE_KEY);
       }
     }
   } catch (err) {
     console.warn('Bardo: no se pudieron cargar sesiones de D1', err);
   }
 
-  const remote = new Map();
-  const docs = (payload.documents || []).map(item => {
-    const doc = {
-      id:item.id,
-      title:item.title || 'Sin título',
-      description:item.description || '',
-      body:markdownToHtml(item.markdown || '', item.title || ''),
-      origin:item.sourceName ? 'Desde Discord' : 'Creado en Bardo',
-      createdAt:item.createdAt || new Date().toISOString(),
-      updatedAt:item.updatedAt || item.createdAt || new Date().toISOString(),
-      createdByName:item.createdByName || null,
-      updatedByName:item.updatedByName || item.createdByName || null,
-      builtin:false,
-      stress:false,
-      sourceName:item.sourceName || null,
-      sourceType:item.sourceType || 'markdown',
-      importStatus:item.importStatus || 'ready',
-      hasSource:Boolean(item.hasSource),
-    };
-    remote.set(doc.id, signature(doc));
-    return doc;
+  // ── Documentos: motor de sincronización con cola persistente ────────────
+  const docsHeaders = () => ({
+    Accept: 'application/json',
+    ...(window.__BARDO_SESSION_TOKEN__ ? {'Authorization': `Bearer ${window.__BARDO_SESSION_TOKEN__}`} : {}),
+    ...(window.__BARDO_CUSTOM_ID__ ? {'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__} : {}),
+    ...(instanceId ? {'x-bardo-instance-id': instanceId} : {}),
+  });
+  const docsRequest = createApiRequest({getHeaders: docsHeaders});
+  const remoteListeners = new Set();
+  const remoteBacklog = [];
+  const deliverRemote = event => {
+    if (!remoteListeners.size) {
+      remoteBacklog.push(event);
+      return;
+    }
+    remoteListeners.forEach(listener => {
+      try { listener(event); } catch (error) { console.error('Bardo Docs: error aplicando cambio remoto', error); }
+    });
+  };
+  const docsSync = createDocsSync({
+    request: docsRequest,
+    storage: {
+      getItem: key => localStorage.getItem(key),
+      setItem: (key, value) => Storage.prototype.setItem.call(localStorage, key, value),
+    },
+    emit: detail => window.dispatchEvent(new CustomEvent('bardo-sync-status', {detail})),
+    onRemote: deliverRemote,
+  });
+  window.__bardoDocsSync = docsSync;
+
+  const serverDocuments = Array.isArray(payload.documents) ? payload.documents : [];
+  let baseDocs;
+  if (libraryLoaded) {
+    docsSync.registerRemote(serverDocuments);
+    baseDocs = serverDocuments.map(item => serverDocToLocal(item));
+  } else {
+    baseDocs = readCachedDocs();
+    docsSync.registerCached(baseDocs);
+    deliverRemote({type: 'offline-boot'});
+  }
+  docsSync.loadPending();
+  // Las ediciones locales sin confirmar se superponen ANTES de que la copia del
+  // servidor reemplace el store, y se reenvían de inmediato.
+  const docs = docsSync.overlayPending(baseDocs);
+  const initialStore = {version:1, docs, deletedIds:[]};
+  window.__BARDO_INITIAL_STORE__ = initialStore;
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(initialStore));
+  } catch (error) {
+    console.warn('Bardo Docs: almacenamiento local lleno; la biblioteca queda en memoria', error);
+  }
+  docsSync.flush();
+
+  window.__bardoSyncDocs = store => docsSync.track(store);
+  window.__bardoDocSyncState = id => docsSync.stateFor(id);
+  window.__bardoSettleDocument = id => docsSync.settle(id);
+  window.__bardoResolveDocConflict = id => docsSync.resolveConflict(id);
+  window.__bardoSubscribeDocs = listener => {
+    remoteListeners.add(listener);
+    remoteBacklog.splice(0).forEach(event => listener(event));
+    return () => remoteListeners.delete(listener);
+  };
+
+  // Al cerrar/ocultar: el editor (listeners en captura) ya encoló su último
+  // snapshot; aquí se envía todo lo pendiente con keepalive, sin esperar la cola.
+  window.addEventListener('pagehide', () => { docsSync.flushKeepalive(); });
+  window.addEventListener('online', () => {
+    docsSync.retryNow();
+    if (!libraryLoaded) refreshLibrary();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') docsSync.flushKeepalive();
+    else docsSync.retryNow();
   });
 
-  localStorage.setItem(STORE_KEY, JSON.stringify({version:1, docs, deletedIds:[]}));
+  // Biblioteca no cargada al arrancar: reintentar en segundo plano y fusionar.
+  let refreshTimer = null;
+  let refreshing = false;
+  async function refreshLibrary() {
+    if (libraryLoaded || refreshing) return;
+    refreshing = true;
+    clearTimeout(refreshTimer);
+    try {
+      const result = await fetchDocsLibrary({headers: docsHeaders(), attempts: 2});
+      if (result.ok) {
+        libraryLoaded = true;
+        const items = Array.isArray(result.payload?.documents) ? result.payload.documents : [];
+        docsSync.registerRemote(items);
+        deliverRemote({
+          type: 'refresh',
+          docs: items.filter(item => !docsSync.pending.has(item.id)).map(item => serverDocToLocal(item)),
+        });
+        docsSync.retryNow();
+        return;
+      }
+    } finally {
+      refreshing = false;
+    }
+    refreshTimer = setTimeout(refreshLibrary, 15_000);
+  }
+  if (!libraryLoaded) refreshTimer = setTimeout(refreshLibrary, 5_000);
+
+  // Importaciones PDF/DOCX pendientes: normalizar en segundo plano y refrescar el store.
+  const pendingImports = serverDocuments.filter(item => item?.importStatus === 'pending' && item?.hasSource);
+  if (pendingImports.length) {
+    setTimeout(() => {
+      normalizePendingImports(pendingImports, {request: docsRequest}).then(normalized => {
+        if (!normalized.length) return;
+        docsSync.registerRemote(normalized);
+        deliverRemote({
+          type: 'replace',
+          docs: normalized
+            .filter(item => !docsSync.pending.has(item.id))
+            .map(item => serverDocToLocal(item)),
+        });
+        window.dispatchEvent(new CustomEvent('bardo-documents-normalized', {detail: {documents: normalized}}));
+      }).catch(error => console.error('Bardo Docs: no se pudieron normalizar importaciones', error));
+    }, 0);
+  }
 
   const explicitCustomId = window.__BARDO_CUSTOM_ID__?.startsWith('bardo:open:')
     ? window.__BARDO_CUSTOM_ID__.slice('bardo:open:'.length)
@@ -377,21 +359,20 @@ export async function prepareBardoProduction(options = {}) {
   // omit it, in which case the API returns the short-lived launch intent.
   const contextId = payload.contextDocumentId || explicitCustomId;
 
-  if (explicitCustomId === 'new-doc') {
+  if (explicitCustomId === 'new-doc' || explicitCustomId?.startsWith('new-doc:')) {
+    prefillNewDocTitle(explicitCustomId.slice('new-doc:'.length));
     history.replaceState(null, '', '#new');
   } else if (explicitCustomId === 'planner') {
     history.replaceState(null, '', '#planner');
   } else if (explicitCustomId?.startsWith('planner-session:')) {
-    const targetSessionId = explicitCustomId.slice('planner-session:'.length);
-    if (targetSessionId && Array.isArray(window.__bardoChannelSessions)) {
-      const match = window.__bardoChannelSessions.find((s) => s.id === targetSessionId);
-      if (match) {
-        localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(match));
-      }
-    }
+    // The planner bootstrap above already opened this agenda (preferredId),
+    // keeping unsynced local edits; writing the raw server row here would
+    // revert them.
     history.replaceState(null, '', '#planner');
   } else if (contextId && docs.some(doc => doc.id === contextId)) {
-    localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:contextId, offset:0, at:Date.now()}));
+    try {
+      localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:contextId, offset:0, at:Date.now()}));
+    } catch {}
     window.__BARDO_DOCUMENT_ID__ = contextId;
     history.replaceState(null, '', `#doc-${encodeURIComponent(contextId)}`);
   } else {
@@ -407,27 +388,13 @@ export async function prepareBardoProduction(options = {}) {
 
   const nativeSetItem = Storage.prototype.setItem;
   let syncChain = Promise.resolve();
-  let lastStoreJson = localStorage.getItem(STORE_KEY) || '';
 
-  const request = async (path, init = {}) => {
-    const reqHeaders = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      ...(window.__BARDO_SESSION_TOKEN__ ? {'Authorization': `Bearer ${window.__BARDO_SESSION_TOKEN__}`} : {}),
-      ...(window.__BARDO_CUSTOM_ID__ ? {'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__} : {}),
-      ...(instanceId ? {'x-bardo-instance-id': instanceId} : {}),
-      ...(init.headers || {}),
-    };
-    const response = await fetch(path, {
-      ...init,
-      headers: reqHeaders,
-      cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.status === 204 ? null : response.json();
-  };
+  const request = (path, init = {}) => docsRequest(path, init);
 
   window.__bardoPublishDocument = async documentId => {
+    // Publicar la versión guardada más reciente.
+    const settled = await docsSync.settle(documentId);
+    if (!settled) throw new Error('El documento tiene cambios sin guardar. Revisa tu conexión e intenta de nuevo.');
     return request(`/api/docs/${encodeURIComponent(documentId)}/message`, {method:'POST'});
   };
 
@@ -436,96 +403,50 @@ export async function prepareBardoProduction(options = {}) {
   };
 
   window.__bardoDeleteDocumentPermanent = async documentId => {
-    return request(`/api/docs/${encodeURIComponent(documentId)}/permanent`, {method:'DELETE'});
+    try {
+      await request(`/api/docs/${encodeURIComponent(documentId)}/permanent`, {method:'DELETE'});
+    } catch (error) {
+      if (error?.status === 404) {
+        docsSync.forget(documentId);
+        return null;
+      }
+      const code = error?.data?.error;
+      const message = error?.status === 403
+        ? 'Solo quien creó el documento o alguien con permisos de moderación puede eliminarlo definitivamente.'
+        : error?.status === 409 && code === 'not_archived'
+          ? 'Archiva el documento antes de eliminarlo definitivamente.'
+          : errorMessage(error);
+      const wrapped = new Error(message);
+      wrapped.status = error?.status;
+      throw wrapped;
+    }
+    docsSync.forget(documentId);
+    return null;
   };
 
   window.__bardoFetchArchivedDocs = async () => {
     const res = await request('/api/docs?archived=1');
-    return (res?.documents || []).map(item => ({
-      id: item.id,
-      title: item.title || 'Sin título',
-      description: item.description || '',
-      body: markdownToHtml(item.markdown || '', item.title || ''),
-      origin: item.sourceName ? 'Desde Discord' : 'Creado en Bardo',
-      createdAt: item.createdAt || new Date().toISOString(),
-      updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
-      archivedAt: item.archivedAt || null,
-      createdByName: item.createdByName || null,
-      updatedByName: item.updatedByName || item.createdByName || null,
-      builtin: false,
-      stress: false,
-      archived: true,
-    }));
+    const items = Array.isArray(res?.documents) ? res.documents : [];
+    // Registrar como confirmados por el servidor: así no se reenvían como nuevos (POST).
+    docsSync.registerRemote(items, {archived: true});
+    return items.map(item => serverDocToLocal(item, {archived: true}));
   };
 
-  async function syncStore(nextJson) {
-    if (nextJson === lastStoreJson) return;
-    lastStoreJson = nextJson;
-    let parsed;
-    try { parsed = JSON.parse(nextJson); } catch { return; }
-    if (!Array.isArray(parsed?.docs)) return;
+  // Planner persistence is owned by activity-app/src/planner/planner-sync.js,
+  // which PlannerModule drives explicitly: debounced PATCH with baseUpdatedAt,
+  // 409/404 handling, retries, and live pushes scoped by an explicit session
+  // id. Mirroring every localStorage write here caused per-keystroke PATCHes,
+  // phantom sessions and live state posted under the wrong session id, so the
+  // localStorage hooks for planner keys are intentionally no-ops.
+  async function syncPlannerStore(_nextJson) {}
 
-    const nextIds = new Set(parsed.docs.map(doc => doc.id));
-
-    for (const doc of parsed.docs) {
-      const nextSignature = signature(doc);
-      const previousSignature = remote.get(doc.id);
-      if (previousSignature === nextSignature) continue;
-
-      const payloadDoc = toRemotePayload(doc);
-      if (previousSignature == null) {
-        await request('/api/docs', {method:'POST', body:JSON.stringify(payloadDoc)});
-      } else {
-        await request(`/api/docs/${encodeURIComponent(doc.id)}`, {method:'PATCH', body:JSON.stringify(payloadDoc)});
-      }
-      remote.set(doc.id, nextSignature);
-    }
-
-    for (const id of [...remote.keys()]) {
-      if (!nextIds.has(id)) {
-        await request(`/api/docs/${encodeURIComponent(id)}`, {method:'DELETE'});
-        remote.delete(id);
-      }
-    }
-  }
-
-  async function syncPlannerStore(nextJson) {
-    let parsed;
-    try { parsed = JSON.parse(nextJson); } catch { return; }
-    if (!parsed || typeof parsed !== 'object') return;
-    const sessionId = parsed.id || `sess-${Date.now().toString(36)}`;
-    try {
-      await request(`/api/planner/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({...parsed, id: sessionId}),
-      });
-    } catch {
-      await request('/api/planner/sessions', {
-        method: 'POST',
-        body: JSON.stringify({...parsed, id: sessionId}),
-      }).catch(err => console.error('Bardo Planner: error guardando sesión en D1', err));
-    }
-  }
-
-  async function syncLiveSessionStore(nextJson) {
-    let parsed;
-    try { parsed = JSON.parse(nextJson); } catch { return; }
-    if (!parsed || typeof parsed !== 'object') return;
-    const currentPlanner = JSON.parse(localStorage.getItem(PLANNER_STORE_KEY) || '{}');
-    const sessionId = currentPlanner.id || parsed.sessionId;
-    if (!sessionId) return;
-    await request(`/api/planner/sessions/${encodeURIComponent(sessionId)}/live`, {
-      method: 'POST',
-      body: JSON.stringify({...parsed, sessionId}),
-    }).catch(err => console.error('Bardo Planner: error guardando live state en D1', err));
-  }
+  async function syncLiveSessionStore(_nextJson) {}
 
   Storage.prototype.setItem = function patchedSetItem(key, value) {
     nativeSetItem.call(this, key, value);
     if (this === localStorage && window.__BARDO_PRODUCTION__) {
-      if (key === STORE_KEY) {
-        syncChain = syncChain.then(() => syncStore(String(value))).catch(error => console.error('Bardo Docs: error sincronizando D1', error));
-      } else if (key === PLANNER_STORE_KEY) {
+      // Los documentos se sincronizan explícitamente vía window.__bardoSyncDocs.
+      if (key === PLANNER_STORE_KEY) {
         syncChain = syncChain.then(() => syncPlannerStore(String(value))).catch(error => console.error('Bardo Planner: error sincronizando D1', error));
       } else if (key === LIVE_SESSION_STORE_KEY) {
         syncChain = syncChain.then(() => syncLiveSessionStore(String(value))).catch(error => console.error('Bardo Live: error sincronizando D1', error));

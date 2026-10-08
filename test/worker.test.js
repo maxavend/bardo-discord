@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
 import { generateKeyPairSync, sign } from 'node:crypto';
+import {
+  CHANNEL,
+  GUILD,
+  USER,
+  authHeaders,
+  createDiscordFetch,
+  createEnv,
+  createTestDb,
+  insertDocument,
+  insertSession,
+} from './helpers/sqlite-d1.js';
 
 function getTestKeys() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -9,247 +20,32 @@ function getTestKeys() {
   return { publicKey: rawPublicKey, privateKey };
 }
 
-function signBody(privateKey, timestamp, body) {
+const KEYS = getTestKeys();
+
+function signedInteraction(payload) {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const body = JSON.stringify(payload);
   const message = Buffer.concat([Buffer.from(timestamp, 'utf8'), Buffer.from(body, 'utf8')]);
-  return sign(null, message, privateKey).toString('hex');
-}
-
-function discordFetch(input) {
-  const url = new URL(input);
-  if (url.pathname === '/api/v10/guilds/guild-123') {
-    return Promise.resolve(new Response(JSON.stringify({owner_id: 'owner-1'}), {status: 200}));
-  }
-  if (url.pathname === '/api/v10/guilds/guild-123/members/user-123') {
-    return Promise.resolve(new Response(JSON.stringify({roles: []}), {status: 200}));
-  }
-  if (url.pathname === '/api/v10/guilds/guild-123/roles') {
-    return Promise.resolve(new Response(JSON.stringify([{id: 'guild-123', permissions: '1024'}]), {status: 200}));
-  }
-  if (url.pathname === '/api/v10/channels/channel-123') {
-    return Promise.resolve(new Response(JSON.stringify({guild_id: 'guild-123', permission_overwrites: []}), {status: 200}));
-  }
-  return Promise.resolve(new Response('{}', {status: 404}));
-}
-
-function authenticatedActivityHeaders() {
-  return {
-    Authorization: 'Bearer valid-token',
-    'x-bardo-instance-id': 'inst-123',
-  };
-}
-
-function createWorkerEnv(db, extra = {}) {
-  return {
-    DB: db,
-    DISCORD_TOKEN: 'test-bot-token',
-    DISCORD_FETCH: discordFetch,
-    ...extra,
-  };
-}
-
-function createMockDb(initialDocs = []) {
-  const documents = new Map();
-  const guildAccess = new Map();
-  const channelAccess = new Map();
-  const launchIntents = new Map();
-  const sessions = new Map();
-  const plannerSessions = new Map();
-  const activityContexts = new Map([
-    ['inst-123', { instance_id: 'inst-123', document_id: 'doc-123', created_at: '2026-08-19T12:00:00.000Z' }],
-  ]);
-
-  for (const doc of initialDocs) {
-    documents.set(doc.id, doc);
-    guildAccess.set(`${doc.id}:guild-123`, {document_id: doc.id, guild_id: 'guild-123'});
-    channelAccess.set(`${doc.id}:channel-123`, {
-      document_id: doc.id,
-      guild_id: 'guild-123',
-      channel_id: 'channel-123',
-    });
-  }
-
-  sessions.set('397a2a9c5bf5e2ccec38c2596b682bb1bd05fe6e4ecea6c10cf42755ff225403', {
-    token_hash: '397a2a9c5bf5e2ccec38c2596b682bb1bd05fe6e4ecea6c10cf42755ff225403',
-    user_id: 'user-123',
-    guild_id: 'guild-123',
-    channel_id: 'channel-123',
-    username: 'TestUser',
-    avatar: null,
-    created_at: '2026-08-19T12:00:00.000Z',
-    expires_at: '2030-08-25T12:00:00.000Z',
-  });
-
-  return {
-    documents,
-    guildAccess,
-    channelAccess,
-    launchIntents,
-    sessions,
-    activityContexts,
-    prepare(query) {
-      return {
-        bind(...params) {
-          return {
-            async first() {
-              if (query.includes('FROM documents WHERE id = ?')) {
-                const [id] = params;
-                const doc = documents.get(id);
-                if (!doc) return null;
-                return {
-                  id: doc.id,
-                  title: doc.title,
-                  description: doc.description || '',
-                  original_markdown: doc.original_markdown || doc.originalMarkdown,
-                  pages: JSON.stringify(doc.pages || ['']),
-                  source_name: doc.source_name || doc.sourceName || null,
-                  created_at: doc.created_at || doc.createdAt || '2026-08-19T12:00:00.000Z',
-                  updated_at: doc.updated_at || doc.updatedAt || '2026-08-19T12:00:00.000Z',
-                  created_by: doc.created_by || doc.createdBy || 'user-1',
-                  source_mime: null,
-                  source_type: 'markdown',
-                  import_status: 'ready',
-                  has_source: 0,
-                };
-              }
-              if (query.includes('FROM activity_contexts')) {
-                const [instanceId] = params;
-                return activityContexts.get(instanceId) || null;
-              }
-              if (query.includes('FROM document_guild_access WHERE document_id = ? AND guild_id = ?')) {
-                const [docId, guildId] = params;
-                const key = `${docId}:${guildId}`;
-                return guildAccess.has(key) ? { allowed: 1 } : null;
-              }
-              if (query.includes('FROM document_channel_access') && query.includes('WHERE document_id = ? AND guild_id = ?')) {
-                const [docId, guildId] = params;
-                return [...channelAccess.values()].some(access => access.document_id === docId && access.guild_id === guildId)
-                  ? { allowed: 1 } : null;
-              }
-              if (query.includes('FROM docs_sessions WHERE token_hash = ?')) {
-                const [hash] = params;
-                return sessions.get(hash) || null;
-              }
-              if (query.includes('FROM docs_launch_intents')) {
-                const [userId, guildId] = params;
-                const key = `${userId}:${guildId}`;
-                return launchIntents.get(key) || null;
-              }
-              if (query.includes('COUNT(*) AS count FROM document_guild_access')) {
-                return { count: guildAccess.size };
-              }
-              return null;
-            },
-            async all() {
-              if (query.includes('FROM documents d') && query.includes('INNER JOIN document_guild_access a')) {
-                const [guildId] = params;
-                const results = [];
-                for (const [key, access] of guildAccess.entries()) {
-                  if (access.guild_id === guildId) {
-                    const doc = documents.get(access.document_id);
-                    if (doc && !doc.archived_at) {
-                      results.push({
-                        id: doc.id,
-                        title: doc.title,
-                        description: doc.description || '',
-                        original_markdown: doc.original_markdown || doc.originalMarkdown,
-                        pages: JSON.stringify(doc.pages || []),
-                        source_name: doc.source_name || doc.sourceName || null,
-                        created_at: doc.created_at || doc.createdAt,
-                        updated_at: doc.updated_at || doc.updatedAt,
-                        created_by: doc.created_by || doc.createdBy,
-                        source_mime: null,
-                        source_type: 'markdown',
-                        import_status: 'ready',
-                        has_source: 0,
-                      });
-                    }
-                  }
-                }
-                return { results };
-              }
-              if (query.includes('FROM document_channel_access') && query.includes('SELECT channel_id')) {
-                const [docId, guildId] = params;
-                return {results: [...channelAccess.values()]
-                  .filter(access => access.document_id === docId && access.guild_id === guildId)
-                  .map(access => ({channel_id: access.channel_id}))};
-              }
-              if (query.includes('FROM planner_sessions') && query.includes('WHERE guild_id = ?')) {
-                const [guildId, channelId] = params;
-                const filtered = [...plannerSessions.values()].filter(
-                  (s) => s.guild_id === guildId && s.channel_id === channelId && s.status !== 'archived'
-                );
-                return { results: filtered };
-              }
-              return { results: [] };
-            },
-            async run() {
-              if (query.includes('INSERT INTO planner_sessions')) {
-                const [id, guild_id, channel_id, title, host_id, host_name, date, start_time, target_duration, description, mentions, blocks_json, status, created_at, created_by, updated_at, updated_by] = params;
-                plannerSessions.set(id, {
-                  id,
-                  guild_id,
-                  channel_id,
-                  title,
-                  host_id,
-                  host_name,
-                  date,
-                  start_time,
-                  target_duration,
-                  description,
-                  mentions,
-                  blocks_json,
-                  status,
-                  created_at,
-                  created_by,
-                  updated_at,
-                  updated_by,
-                });
-                return { meta: { changes: 1 } };
-              }
-              if (query.includes('INSERT INTO documents')) {
-                const [id, title, original_markdown, pages, source_name, created_at, created_by] = params;
-                documents.set(id, { id, title, original_markdown, pages, source_name, created_at, created_by });
-                return { meta: { changes: 1 } };
-              }
-              if (query.includes('INSERT INTO document_guild_access')) {
-                if (query.includes('SELECT d.id, ?')) {
-                  const [guildId, addedAt, addedBy] = params;
-                  let count = 0;
-                  for (const [docId, doc] of documents.entries()) {
-                    const key = `${docId}:${guildId}`;
-                    if (!guildAccess.has(key)) {
-                      guildAccess.set(key, { document_id: docId, guild_id: guildId, added_at: addedAt, added_by: addedBy });
-                      count += 1;
-                    }
-                  }
-                  return { meta: { changes: count } };
-                }
-                const [document_id, guild_id, added_at, added_by] = params;
-                guildAccess.set(`${document_id}:${guild_id}`, { document_id, guild_id, added_at, added_by });
-                return { meta: { changes: 1 } };
-              }
-              if (query.includes('INSERT INTO document_channel_access')) {
-                const [document_id, guild_id, channel_id, added_at, added_by] = params;
-                channelAccess.set(`${document_id}:${channel_id}`, { document_id, guild_id, channel_id, added_at, added_by });
-                return { meta: { changes: 1 } };
-              }
-              if (query.includes('INSERT INTO docs_launch_intents')) {
-                const [user_id, guild_id, document_id, channel_id, created_at] = params;
-                launchIntents.set(`${user_id}:${guild_id}`, { user_id, guild_id, document_id, channel_id, created_at });
-                return { meta: { changes: 1 } };
-              }
-              if (query.includes('INSERT INTO docs_sessions')) {
-                const [token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at] = params;
-                sessions.set(token_hash, { token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at });
-                return { meta: { changes: 1 } };
-              }
-              return { meta: { changes: 1 } };
-            },
-          };
-        },
-      };
+  const signature = sign(null, message, KEYS.privateKey).toString('hex');
+  return new Request('http://localhost/', {
+    method: 'POST',
+    headers: {
+      'x-signature-ed25519': signature,
+      'x-signature-timestamp': timestamp,
+      'content-type': 'application/json',
     },
-  };
+    body,
+  });
+}
+
+async function setupDb() {
+  const db = createTestDb();
+  await insertSession(db);
+  return db;
+}
+
+function workerEnv(db, extra = {}) {
+  return { DISCORD_PUBLIC_KEY: KEYS.publicKey, ...createEnv(db), ...extra };
 }
 
 test('Worker mantiene 405 para métodos no soportados sin assets', async () => {
@@ -259,507 +55,389 @@ test('Worker mantiene 405 para métodos no soportados sin assets', async () => {
 });
 
 test('Worker rechaza requests POST sin firma', async () => {
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    body: JSON.stringify({ type: 1 }),
-  });
+  const req = new Request('http://localhost/', { method: 'POST', body: JSON.stringify({ type: 1 }) });
   const res = await worker.fetch(req, {});
   assert.equal(res.status, 401);
 });
 
 test('Worker responde a PING con PONG', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const body = JSON.stringify({ type: 1 });
-  const signature = signBody(privateKey, timestamp, body);
-
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const env = { DISCORD_PUBLIC_KEY: publicKey };
-  const res = await worker.fetch(req, env, { waitUntil: () => {} });
+  const res = await worker.fetch(signedInteraction({ type: 1 }), { DISCORD_PUBLIC_KEY: KEYS.publicKey }, { waitUntil: () => {} });
   assert.equal(res.status, 200);
-
-  const json = await res.json();
-  assert.equal(json.type, 1);
+  assert.equal((await res.json()).type, 1);
 });
 
-test('Worker responde inmediatamente con DEFERRED (type 5) para comando /upload-docs', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const interactionPayload = {
+test('Worker convierte excepciones no controladas en 500 JSON', async () => {
+  const db = await setupDb();
+  db.prepare = () => { throw new Error('D1 caído'); };
+  const req = new Request('http://localhost/api/documents/doc-1/export', { headers: authHeaders() });
+  const res = await worker.fetch(req, createEnv(db));
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).error, 'internal_error');
+});
+
+// ---------------------------------------------------------------------------
+// /upload-docs
+
+function uploadInteraction(attachment, extra = {}) {
+  return {
     type: 2,
     id: 'cmd-interaction-1',
     token: 'token-cmd-1',
     application_id: '1539704001535156254',
-    guild_id: 'guild-123',
-    member: { user: { id: 'user-123' } },
+    guild_id: GUILD,
+    channel_id: CHANNEL,
+    member: { user: { id: USER, username: 'maxi' } },
     data: {
       name: 'upload-docs',
       options: [{ name: 'archivo', value: 'att-1' }],
-      resolved: {
-        attachments: {
-          'att-1': {
-            id: 'att-1',
-            filename: 'documento.md',
-            size: 250,
-            url: 'https://example.com/test.md',
-          },
-        },
-      },
+      resolved: { attachments: { 'att-1': { id: 'att-1', url: 'https://cdn.example.com/file', ...attachment } } },
     },
+    ...extra,
   };
+}
 
-  const body = JSON.stringify(interactionPayload);
-  const signature = signBody(privateKey, timestamp, body);
-  let backgroundTask = null;
+function uploadFetch({ body, status = 200, patchStatus = 200, patches }) {
+  return async (input, init = {}) => {
+    const url = String(input);
+    if (url.startsWith('https://cdn.example.com/')) {
+      return new Response(body, { status });
+    }
+    if (url.includes('/webhooks/')) {
+      patches.push(JSON.parse(init.body));
+      return new Response('{}', { status: patchStatus });
+    }
+    return new Response('{}', { status: 404 });
+  };
+}
 
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
+async function runUpload(db, attachment, fetchOptions) {
+  const patches = [];
+  let background = null;
+  const env = workerEnv(db, { DISCORD_FETCH: uploadFetch({ ...fetchOptions, patches }) });
+  const res = await worker.fetch(signedInteraction(uploadInteraction(attachment)), env, {
+    waitUntil(promise) { background = promise; },
   });
-
-  const env = { DISCORD_PUBLIC_KEY: publicKey, ...createWorkerEnv(createMockDb()) };
-  const res = await worker.fetch(req, env, {
-    waitUntil(p) { backgroundTask = p; },
-  });
-
   assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.type, 5); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
-  assert.ok(backgroundTask instanceof Promise);
+  assert.equal((await res.json()).type, 5); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+  assert.ok(background instanceof Promise);
+  await background;
+  return { patches, text: JSON.stringify(patches) };
+}
+
+test('/upload-docs guarda un Markdown con su ACL y publica la tarjeta', async () => {
+  const db = await setupDb();
+  const { patches } = await runUpload(db, { filename: 'notas.md', size: 30 }, { body: '# Notas\n\nHola mundo' });
+  const doc = db.row('SELECT id, title, import_status FROM documents');
+  assert.equal(doc.title, 'Notas');
+  assert.equal(doc.import_status, 'ready');
+  assert.ok(db.row('SELECT 1 AS ok FROM document_channel_access WHERE document_id = ? AND channel_id = ?', doc.id, CHANNEL));
+  assert.match(JSON.stringify(patches[0]), new RegExp(`bardo:open:${doc.id}`));
+});
+
+test('/upload-docs guarda un PDF con su archivo original de forma atómica (pending)', async () => {
+  const db = await setupDb();
+  await runUpload(db, { filename: 'informe.pdf', size: 8, content_type: 'application/pdf' }, { body: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]) });
+  const doc = db.row('SELECT import_status, source_type, LENGTH(source_blob) AS bytes FROM documents');
+  assert.equal(doc.import_status, 'pending');
+  assert.equal(doc.source_type, 'pdf');
+  assert.equal(doc.bytes, 8);
+});
+
+test('/upload-docs mide los bytes descargados (no confía en attachment.size)', async () => {
+  const db = await setupDb();
+  const { text } = await runUpload(db, { filename: 'grande.md', size: 10 }, { body: 'x'.repeat(1_800_001) });
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM documents').n, 0);
+  assert.match(text, /supera 1,8 MB/);
+});
+
+test('/upload-docs avisa que el documento quedó guardado si Discord rechaza la tarjeta', async () => {
+  const db = await setupDb();
+  const { patches } = await runUpload(db, { filename: 'notas.md', size: 30 }, { body: '# Notas\n\nHola', patchStatus: 400 });
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM documents').n, 1);
+  assert.equal(patches.length, 2);
+  assert.match(JSON.stringify(patches[1]), /se guardó en Bardo/);
 });
 
 test('Worker responde con error ephemeral si /upload-docs no tiene archivo adjunto', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const interactionPayload = {
-    type: 2,
-    id: 'cmd-interaction-2',
-    token: 'token-cmd-2',
-    data: {
-      name: 'upload-docs',
-      options: [],
-    },
-  };
-
-  const body = JSON.stringify(interactionPayload);
-  const signature = signBody(privateKey, timestamp, body);
-
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const env = { DISCORD_PUBLIC_KEY: publicKey, ...createWorkerEnv(createMockDb()) };
-  const res = await worker.fetch(req, env);
-  assert.equal(res.status, 200);
+  const db = await setupDb();
+  const res = await worker.fetch(signedInteraction({ type: 2, id: 'x', token: 't', data: { name: 'upload-docs', options: [] } }), workerEnv(db));
   const json = await res.json();
-  assert.equal(json.type, 4); // CHANNEL_MESSAGE_WITH_SOURCE
+  assert.equal(json.type, 4);
   assert.match(json.data.content, /archivo/);
 });
 
-test('Worker expone el documento completo para el lector embebido', async () => {
-  const db = createMockDb([{
-    id: 'doc-123',
-    title: 'Documento Test',
-    original_markdown: '# Documento Test\n\nContenido completo',
-    pages: ['Contenido completo'],
-  }]);
-  const req = new Request('http://localhost/api/documents/doc-123', {
-    method: 'GET',
-    headers: authenticatedActivityHeaders(),
-  });
-  const env = createWorkerEnv(db);
+// ---------------------------------------------------------------------------
+// /api/documents/* (lector y exportación)
 
-  const res = await worker.fetch(req, env);
+test('Worker expone el documento completo con una sesión válida (sin instance id)', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-123', title: 'Documento Test', markdown: '# Documento Test\n\nContenido completo' });
+  const res = await worker.fetch(new Request('http://localhost/api/documents/doc-123', { headers: authHeaders() }), createEnv(db));
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('cache-control'), 'private, no-store');
-
   const json = await res.json();
   assert.equal(json.id, 'doc-123');
-  assert.equal(json.title, 'Documento Test');
   assert.equal(json.markdown, '# Documento Test\n\nContenido completo');
 });
 
 test('Worker normaliza bardo:open: también en la API de documentos', async () => {
-  const db = createMockDb([{
-    id: 'doc-123',
-    title: 'Documento Test',
-    original_markdown: '# Documento Test\n\nContenido completo',
-  }]);
-  const req = new Request('http://localhost/api/documents/bardo%3Aopen%3Adoc-123', {
-    method: 'GET',
-    headers: authenticatedActivityHeaders(),
-  });
-  const env = createWorkerEnv(db);
-
-  const res = await worker.fetch(req, env);
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-123' });
+  const res = await worker.fetch(new Request('http://localhost/api/documents/bardo%3Aopen%3Adoc-123', { headers: authHeaders() }), createEnv(db));
   assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.id, 'doc-123');
+  assert.equal((await res.json()).id, 'doc-123');
 });
 
-test('Worker exporta documento como markdown attachment', async () => {
-  const db = createMockDb([{
-    id: 'doc-123',
-    title: 'Documento Test',
-    original_markdown: '# Documento Test\n\nContenido completo',
-  }]);
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=markdown', {
-    method: 'GET',
-    headers: authenticatedActivityHeaders(),
+for (const [format, contentType, extension] of [
+  ['markdown', 'text/markdown; charset=utf-8', 'md'],
+  ['md', 'text/markdown; charset=utf-8', 'md'],
+  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
+  ['pdf', 'application/pdf', 'pdf'],
+]) {
+  test(`Worker exporta ${format} con una sesión válida (sin activity_contexts)`, async () => {
+    const db = await setupDb();
+    insertDocument(db, { id: 'doc-123', title: 'Documento Test', markdown: '# Documento Test\n\nContenido completo' });
+    const res = await worker.fetch(
+      new Request(`http://localhost/api/documents/doc-123/export?format=${format}`, { headers: authHeaders() }),
+      createEnv(db),
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), contentType);
+    assert.match(res.headers.get('content-disposition'), new RegExp(`attachment; filename=.*\\.${extension}`));
+    const buffer = await res.arrayBuffer();
+    if (extension === 'md') assert.equal(new TextDecoder().decode(buffer), '# Documento Test\n\nContenido completo');
+    else assert.ok(buffer.byteLength > 500);
   });
-  const env = createWorkerEnv(db);
+}
 
-  const res = await worker.fetch(req, env);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get('content-type'), 'text/markdown; charset=utf-8');
-  assert.match(res.headers.get('content-disposition'), /attachment; filename=/);
-  const text = await res.text();
-  assert.equal(text, '# Documento Test\n\nContenido completo');
-});
-
-test('Worker exporta documento como docx attachment', async () => {
-  const db = createMockDb([{
-    id: 'doc-123',
-    title: 'Documento Test',
-    original_markdown: '# Documento Test\n\nContenido completo',
-  }]);
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=docx', {
-    method: 'GET',
-    headers: authenticatedActivityHeaders(),
-  });
-  const env = createWorkerEnv(db);
-
-  const res = await worker.fetch(req, env);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  assert.match(res.headers.get('content-disposition'), /attachment; filename=.*\.docx/);
-  const buffer = await res.arrayBuffer();
-  assert.ok(buffer.byteLength > 500);
-});
-
-test('Worker exporta documento como pdf attachment', async () => {
-  const db = createMockDb([{
-    id: 'doc-123',
-    title: 'Documento Test',
-    original_markdown: '# Documento Test\n\nContenido completo',
-  }]);
-  const req = new Request('http://localhost/api/documents/doc-123/export?format=pdf', {
-    method: 'GET',
-    headers: authenticatedActivityHeaders(),
-  });
-  const env = createWorkerEnv(db);
-
-  const res = await worker.fetch(req, env);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get('content-type'), 'application/pdf');
-  assert.match(res.headers.get('content-disposition'), /attachment; filename=.*\.pdf/);
-  const buffer = await res.arrayBuffer();
-  assert.ok(buffer.byteLength > 500);
-});
-
-test('Worker no revela documentos inexistentes sin acceso verificable', async () => {
-  const req = new Request('http://localhost/api/documents/no-existe', {
-    method: 'GET',
-    headers: authenticatedActivityHeaders(),
-  });
-  const env = createWorkerEnv(createMockDb());
-
-  const res = await worker.fetch(req, env);
+test('Worker no exporta documentos no compartidos con el canal de la sesión', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-otro', channelIds: ['channel-999'] });
+  const res = await worker.fetch(new Request('http://localhost/api/documents/doc-otro/export?format=pdf', { headers: authHeaders() }), createEnv(db));
   assert.equal(res.status, 403);
 });
 
+test('Worker exige sesión para exportar', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-123' });
+  const res = await worker.fetch(new Request('http://localhost/api/documents/doc-123/export'), createEnv(db));
+  assert.equal(res.status, 401);
+});
+
+test('Worker no revela documentos inexistentes sin acceso verificable', async () => {
+  const db = await setupDb();
+  const res = await worker.fetch(new Request('http://localhost/api/documents/no-existe', { headers: authHeaders() }), createEnv(db));
+  assert.equal(res.status, 403);
+});
+
+test('POST /api/documents/:id/normalize respeta el estado pending', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'pdf-1', importStatus: 'pending', sourceBlob: new Uint8Array([1, 2]), sourceType: 'pdf' });
+  const post = () => worker.fetch(new Request('http://localhost/api/documents/pdf-1/normalize', {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ markdown: '# PDF\n\nTexto' }),
+  }), createEnv(db));
+  assert.equal((await post()).status, 200);
+  const again = await post();
+  assert.equal(again.status, 409);
+  assert.equal((await again.json()).error, 'already_normalized');
+});
+
 test('Worker expone el contexto de activity por instanceId', async () => {
-  const req = new Request('http://localhost/api/activity-context/inst-123', { method: 'GET' });
-  const env = { DB: createMockDb() };
-
-  const res = await worker.fetch(req, env);
+  const db = await setupDb();
+  db.run("INSERT INTO activity_contexts (instance_id, document_id, created_at) VALUES ('inst-123', 'doc-123', '2026-08-19T12:00:00.000Z')");
+  const res = await worker.fetch(new Request('http://localhost/api/activity-context/inst-123'), { DB: db });
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get('cache-control'), 'private, no-store');
-
   const json = await res.json();
   assert.equal(json.instanceId, 'inst-123');
   assert.equal(json.documentId, 'doc-123');
 });
 
 test('Worker responde 404 para contextos de activity inexistentes', async () => {
-  const req = new Request('http://localhost/api/activity-context/inst-no-existe', { method: 'GET' });
-  const env = { DB: createMockDb() };
-
-  const res = await worker.fetch(req, env);
+  const db = await setupDb();
+  const res = await worker.fetch(new Request('http://localhost/api/activity-context/inst-no-existe'), { DB: db });
   assert.equal(res.status, 404);
 });
 
-test('Worker responde LAUNCH_ACTIVITY inline y persiste el contexto fuera de la respuesta crítica', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const interactionPayload = {
+// ---------------------------------------------------------------------------
+// Botones (LAUNCH_ACTIVITY)
+
+async function clickDocument(db, documentId, { guildId = GUILD, channelId = CHANNEL } = {}) {
+  let background = null;
+  const res = await worker.fetch(signedInteraction({
     type: 3,
     id: 'interaction-987',
     token: 'token-abc',
-    guild_id: 'guild-123',
-    channel_id: 'channel-123',
-    member: { user: { id: 'user-123' } },
-    data: {
-      custom_id: 'bardo:open:doc-123',
-    },
-  };
-  const body = JSON.stringify(interactionPayload);
-  const signature = signBody(privateKey, timestamp, body);
-  const db = createMockDb([{
-    id: 'doc-123',
-    title: 'Doc 123',
-    original_markdown: 'Content',
-  }]);
-  let background = null;
-
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const env = { DISCORD_PUBLIC_KEY: publicKey, ...createWorkerEnv(db) };
-  const res = await worker.fetch(req, env, {
-    waitUntil(promise) {
-      background = promise;
-    },
-  });
-
+    guild_id: guildId,
+    channel_id: channelId,
+    member: { user: { id: USER } },
+    data: { custom_id: `bardo:open:${documentId}` },
+  }), workerEnv(db), { waitUntil(promise) { background = promise; } });
   assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.type, 12);
-  assert.ok(background instanceof Promise);
-  await background;
+  assert.equal((await res.json()).type, 12);
+  if (background) await background;
+}
 
-  // Verificamos que se guardó el launch intent en segundo plano
-  assert.equal(db.launchIntents.get('user-123:guild-123')?.document_id, 'doc-123');
+test('Botón de documento responde LAUNCH_ACTIVITY y guarda el launch intent en segundo plano', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-123' });
+  await clickDocument(db, 'doc-123');
+  assert.equal(db.row('SELECT document_id FROM docs_launch_intents WHERE user_id = ? AND guild_id = ?', USER, GUILD).document_id, 'doc-123');
+});
+
+test('Botón no amplía el ACL de un documento de otro servidor ni adopta documentos ajenos', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-ajeno', guildId: 'guild-otro', channelIds: ['chan-otro'] });
+  insertDocument(db, { id: 'legacy-suelto', guildId: null, channelIds: [] });
+  await clickDocument(db, 'doc-ajeno');
+  assert.equal(db.row("SELECT COUNT(*) AS n FROM document_guild_access WHERE document_id = 'doc-ajeno'").n, 1);
+  assert.equal(db.row("SELECT COUNT(*) AS n FROM document_channel_access WHERE document_id = 'doc-ajeno'").n, 1);
+  assert.equal(db.row("SELECT COUNT(*) AS n FROM document_guild_access WHERE document_id = 'legacy-suelto'").n, 0);
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM docs_launch_intents').n, 0);
+});
+
+test('Botón de un documento legado sin ACL lo asigna al servidor y canal de la tarjeta', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'legacy-1', guildId: null, channelIds: [] });
+  await clickDocument(db, 'legacy-1');
+  assert.ok(db.row("SELECT 1 AS ok FROM document_guild_access WHERE document_id = 'legacy-1' AND guild_id = ?", GUILD));
+  assert.ok(db.row("SELECT 1 AS ok FROM document_channel_access WHERE document_id = 'legacy-1' AND channel_id = ?", CHANNEL));
+});
+
+test('Botón de un documento ya compartido no lo abre a otro canal', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-123' });
+  await clickDocument(db, 'doc-123', { channelId: 'channel-otro' });
+  assert.equal(db.row("SELECT COUNT(*) AS n FROM document_channel_access WHERE document_id = 'doc-123'").n, 1);
 });
 
 test('Worker prioriza responder LAUNCH_ACTIVITY aunque el documento haya sido eliminado', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const body = JSON.stringify({
-    type: 3,
-    id: 'interaction-404',
-    token: 'token-404',
-    guild_id: 'guild-123',
-    member: { user: { id: 'user-123' } },
-    data: { custom_id: 'bardo:open:no-existe' },
-  });
-  const signature = signBody(privateKey, timestamp, body);
-  let background = null;
-
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const res = await worker.fetch(
-    req,
-    { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() },
-    { waitUntil(promise) { background = promise; } },
-  );
-
-  assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.type, 12);
-  if (background) await background;
-});
-
-test('Worker delega assets GET cuando existe el binding ASSETS', async () => {
-  const req = new Request('http://localhost/assets/index.js', { method: 'GET' });
-  const env = {
-    ASSETS: {
-      async fetch() {
-        return new Response('asset-ok', { status: 200 });
-      },
-    },
-  };
-
-  const res = await worker.fetch(req, env);
-  assert.equal(res.status, 200);
-  assert.equal(await res.text(), 'asset-ok');
-});
-
-test('Worker responde a /doc-new con Container V2 y botón para crear documento', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const interactionPayload = {
-    type: 2,
-    id: 'cmd-doc-new',
-    token: 'token-cmd-doc-new',
-    guild_id: 'guild-123',
-    channel_id: 'channel-123',
-    member: { user: { id: 'user-123' } },
-    data: {
-      name: 'doc-new',
-      options: [{ name: 'titulo', value: 'Borrador Sprint' }],
-    },
-  };
-
-  const body = JSON.stringify(interactionPayload);
-  const signature = signBody(privateKey, timestamp, body);
-
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() });
-  assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.type, 4); // CHANNEL_MESSAGE_WITH_SOURCE
-  assert.ok(json.data?.components?.length > 0);
-  const actionRow = json.data.components[0].components.at(-1);
-  assert.equal(actionRow.components[0].custom_id, 'bardo:open:new-doc');
-});
-
-test('Worker responde a /reu-new creando reunión en DB y enviando tarjeta Components V2', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const interactionPayload = {
-    type: 2,
-    id: 'cmd-reu-new',
-    token: 'token-cmd-reu-new',
-    guild_id: 'guild-123',
-    channel_id: 'channel-123',
-    member: { user: { id: 'user-123', username: 'Max' } },
-    data: {
-      name: 'reu-new',
-      options: [
-        { name: 'titulo', value: 'Sincronización Semanal' },
-        { name: 'fecha', value: '2026-09-15' },
-        { name: 'hora', value: '11:30' },
-        { name: 'duracion', value: 45 },
-      ],
-    },
-  };
-
-  const body = JSON.stringify(interactionPayload);
-  const signature = signBody(privateKey, timestamp, body);
-
-  const mockDb = createMockDb();
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: mockDb });
-  assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.type, 4);
-  assert.ok(json.data?.components?.length > 0);
-  const actionRow = json.data.components[0].components.at(-1);
-  assert.match(actionRow.components[0].custom_id, /^bardo:open:planner-session:/);
-});
-
-test('Worker responde a /reus listando reuniones del canal', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const interactionPayload = {
-    type: 2,
-    id: 'cmd-reus',
-    token: 'token-cmd-reus',
-    guild_id: 'guild-123',
-    channel_id: 'channel-123',
-    member: { user: { id: 'user-123' } },
-    data: {
-      name: 'reus',
-    },
-  };
-
-  const body = JSON.stringify(interactionPayload);
-  const signature = signBody(privateKey, timestamp, body);
-
-  const req = new Request('http://localhost/', {
-    method: 'POST',
-    headers: {
-      'x-signature-ed25519': signature,
-      'x-signature-timestamp': timestamp,
-      'content-type': 'application/json',
-    },
-    body,
-  });
-
-  const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() });
-  assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.type, 4);
-  assert.ok(json.data?.components?.length > 0);
-  const actionRow = json.data.components[0].components.at(-1);
-  assert.equal(actionRow.components[0].custom_id, 'bardo:open:planner');
+  const db = await setupDb();
+  await clickDocument(db, 'no-existe');
 });
 
 test('Worker responde con LAUNCH_ACTIVITY (type 12) a botones bardo:open:planner y bardo:open:new-doc', async () => {
-  const { publicKey, privateKey } = getTestKeys();
-  const timestamp = String(Math.floor(Date.now() / 1000));
-
+  const db = await setupDb();
   for (const customId of ['bardo:open:planner', 'bardo:open:new-doc', 'bardo:open:planner-session:xyz-123']) {
-    const interactionPayload = {
-      type: 3,
-      id: `btn-${customId}`,
-      guild_id: 'guild-123',
-      channel_id: 'channel-123',
-      member: { user: { id: 'user-123' } },
-      data: { custom_id: customId },
-    };
-
-    const body = JSON.stringify(interactionPayload);
-    const signature = signBody(privateKey, timestamp, body);
-
-    const req = new Request('http://localhost/', {
-      method: 'POST',
-      headers: {
-        'x-signature-ed25519': signature,
-        'x-signature-timestamp': timestamp,
-        'content-type': 'application/json',
-      },
-      body,
-    });
-
-    const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: publicKey, DB: createMockDb() });
-    assert.equal(res.status, 200);
-    const json = await res.json();
-    assert.equal(json.type, 12);
+    const res = await worker.fetch(signedInteraction({
+      type: 3, id: `btn-${customId}`, guild_id: GUILD, channel_id: CHANNEL,
+      member: { user: { id: USER } }, data: { custom_id: customId },
+    }), workerEnv(db));
+    assert.equal((await res.json()).type, 12);
   }
 });
 
+test('Worker delega assets GET cuando existe el binding ASSETS', async () => {
+  const env = { ASSETS: { async fetch() { return new Response('asset-ok', { status: 200 }); } } };
+  const res = await worker.fetch(new Request('http://localhost/assets/index.js'), env);
+  assert.equal(await res.text(), 'asset-ok');
+});
+
+// ---------------------------------------------------------------------------
+// Comandos de texto
+
+function textLength(components) {
+  let total = 0;
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.content === 'string') total += node.content.length;
+    for (const child of node.components || []) visit(child);
+  };
+  components.forEach(visit);
+  return total;
+}
+
+test('Worker responde a /doc-new con Container V2 y botón para crear documento', async () => {
+  const db = await setupDb();
+  const res = await worker.fetch(signedInteraction({
+    type: 2, id: 'cmd-doc-new', token: 't', guild_id: GUILD, channel_id: CHANNEL, member: { user: { id: USER } },
+    data: { name: 'doc-new', options: [{ name: 'titulo', value: 'Borrador Sprint' }] },
+  }), workerEnv(db));
+  const json = await res.json();
+  assert.equal(json.type, 4);
+  assert.equal(json.data.components[0].components.at(-1).components[0].custom_id, 'bardo:open:new-doc:Borrador Sprint');
+});
+
+test('/reu-new guarda la reunión y su tarjeta nunca supera el límite de Discord', async () => {
+  const db = await setupDb();
+  const res = await worker.fetch(signedInteraction({
+    type: 2, id: 'cmd-reu-new', token: 't', guild_id: GUILD, channel_id: CHANNEL,
+    member: { user: { id: USER, username: 'Max' } },
+    data: {
+      name: 'reu-new',
+      options: [
+        { name: 'titulo', value: 'T'.repeat(500) },
+        { name: 'fecha', value: '2026-09-15' },
+        { name: 'hora', value: '11:30' },
+        { name: 'duracion', value: 45 },
+        { name: 'descripcion', value: 'D'.repeat(6000) },
+      ],
+    },
+  }), workerEnv(db));
+  const json = await res.json();
+  assert.equal(json.type, 4);
+  assert.match(json.data.components[0].components.at(-1).components[0].custom_id, /^bardo:open:planner-session:/);
+  assert.ok(textLength(json.data.components) < 4000, `texto de la tarjeta: ${textLength(json.data.components)}`);
+  const saved = db.row('SELECT title, description, target_duration FROM planner_sessions');
+  assert.equal(saved.title.length, 200);
+  assert.equal(saved.description.length, 1500);
+  assert.equal(saved.target_duration, 45);
+});
+
+test('Worker responde a /reus listando reuniones del canal', async () => {
+  const db = await setupDb();
+  const res = await worker.fetch(signedInteraction({
+    type: 2, id: 'cmd-reus', token: 't', guild_id: GUILD, channel_id: CHANNEL, member: { user: { id: USER } },
+    data: { name: 'reus' },
+  }), workerEnv(db));
+  const json = await res.json();
+  assert.equal(json.data.components[0].components.at(-1).components[0].custom_id, 'bardo:open:planner');
+});
+
+// ---------------------------------------------------------------------------
+// Cron
+
+test('scheduled() limpia solo registros vencidos y nunca documentos ni reuniones', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-viejo', createdAt: '2020-01-01T00:00:00.000Z' });
+  await insertSession(db, { token: 'vencido', expiresAt: '2020-01-01T00:00:00.000Z' });
+  db.run("INSERT INTO docs_launch_intents (user_id, guild_id, document_id, created_at) VALUES ('u-old', 'g', 'doc-viejo', '2020-01-01T00:00:00.000Z')");
+  db.run("INSERT INTO docs_launch_intents (user_id, guild_id, document_id, created_at) VALUES ('u-new', 'g', 'doc-viejo', ?)", new Date().toISOString());
+  db.run("INSERT INTO activity_contexts (instance_id, document_id, created_at) VALUES ('i-old', 'doc-viejo', '2020-01-01T00:00:00.000Z')");
+  db.run(
+    `INSERT INTO planner_sessions (id, guild_id, channel_id, title, date, start_time, target_duration, blocks_json,
+       status, created_at, created_by, updated_at, updated_by)
+     VALUES ('reu-vieja', ?, ?, 'Vieja', '2020-01-01', '10:00', 60, '[]', 'completed', '2020-01-01', 'u', '2020-01-01', 'u')`,
+    GUILD, CHANNEL,
+  );
+
+  const waits = [];
+  await worker.scheduled({ cron: '0 3 * * *' }, { DB: db }, { waitUntil: promise => waits.push(promise) });
+  await Promise.all(waits);
+
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM docs_sessions').n, 1);
+  assert.deepEqual(db.rows('SELECT user_id FROM docs_launch_intents').map(row => row.user_id), ['u-new']);
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM activity_contexts').n, 0);
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM documents').n, 1);
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM planner_sessions').n, 1);
+});
+
+test('wrangler.jsonc solo declara crons con trabajo en scheduled()', async () => {
+  const { readFileSync } = await import('node:fs');
+  const config = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  const crons = JSON.parse(config.match(/"crons"\s*:\s*(\[[^\]]*\])/)[1]);
+  assert.deepEqual(crons, ['0 3 * * *']);
+  assert.equal(typeof worker.scheduled, 'function');
+});
+
+test('Discord caído al verificar permisos devuelve 503 también en /api/documents', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-123' });
+  const res = await worker.fetch(
+    new Request('http://localhost/api/documents/doc-123/export?format=md', { headers: authHeaders() }),
+    createEnv(db, { DISCORD_FETCH: createDiscordFetch({ fail: 503 }) }),
+  );
+  assert.equal(res.status, 503);
+  assert.equal((await res.json()).error, 'discord_unavailable');
+});

@@ -1,3 +1,4 @@
+import { PathApi } from 'platejs';
 import {
   createPlateEditor,
   createPlatePlugin,
@@ -17,6 +18,7 @@ import {
 } from '@platejs/basic-nodes/react';
 import { LinkPlugin } from '@platejs/link/react';
 import { ListPlugin } from '@platejs/list/react';
+import { indentList, outdentList } from '@platejs/list';
 import {
   TablePlugin,
   TableRowPlugin,
@@ -36,10 +38,6 @@ import {
   BardoCalloutElement,
   BardoChecklistElement,
   BardoSpoilerElement,
-  BardoUlElement,
-  BardoOlElement,
-  BardoLiElement,
-  BardoLicElement,
   BardoLinkElement,
   BardoTableElement,
   BardoTableRowElement,
@@ -81,6 +79,86 @@ export const BardoTogglePlugin = createPlatePlugin({
   key: 'toggle',
   node: { isElement: true },
   component: BardoSpoilerElement,
+});
+
+const MAX_LIST_INDENT = 6;
+
+function blockText(editor, path) {
+  try {
+    return editor.api.string(path);
+  } catch {
+    return '';
+  }
+}
+
+/** Inserta un salto suave; un Enter sobre una última línea vacía sale del bloque. */
+function softBreakOrExit(editor, path) {
+  const text = blockText(editor, path);
+  const atEnd = editor.api.isEnd(editor.selection?.focus, path);
+  if (atEnd && (text === '' || text.endsWith('\n'))) {
+    if (text.endsWith('\n')) editor.tf.deleteBackward('character');
+    editor.tf.insertNodes({ type: 'p', children: [{ text: '' }] }, { at: PathApi.next(path), select: true });
+    return;
+  }
+  editor.tf.insertText('\n');
+}
+
+/**
+ * Atajos de teclado propios de Bardo:
+ * - Tab / Shift+Tab indentan ítems de lista.
+ * - Enter en bloques de código y destacados inserta un salto de línea (doble Enter sale).
+ * - Enter en una tarea crea una tarea nueva sin marcar; en una tarea vacía, vuelve a párrafo.
+ */
+export const BardoKeyboardPlugin = createPlatePlugin({
+  key: 'bardo_keyboard',
+  handlers: {
+    onKeyDown: ({ editor, event }) => {
+      if (event.defaultPrevented || event.nativeEvent?.isComposing) return false;
+      if (event.key !== 'Tab' && event.key !== 'Enter') return false;
+      if (!editor.selection) return false;
+      const entry = editor.api.block();
+      if (!entry) return false;
+      const [node, path] = entry;
+
+      if (event.key === 'Tab') {
+        if (!node.listStyleType && node.type !== 'action_item') return false;
+        event.preventDefault();
+        if (node.type === 'action_item') {
+          const indent = Math.max(1, Number(node.indent) || 1);
+          const next = event.shiftKey ? indent - 1 : Math.min(MAX_LIST_INDENT, indent + 1);
+          if (next <= 1) editor.tf.unsetNodes('indent', { at: path });
+          else editor.tf.setNodes({ indent: next }, { at: path });
+        } else if (event.shiftKey) {
+          outdentList(editor);
+        } else if ((Number(node.indent) || 1) < MAX_LIST_INDENT) {
+          indentList(editor, { listStyleType: node.listStyleType });
+        }
+        return true;
+      }
+
+      if (event.shiftKey || editor.api.isExpanded()) return false;
+
+      if (node.type === 'code_block' || node.type === 'callout') {
+        event.preventDefault();
+        softBreakOrExit(editor, path);
+        return true;
+      }
+
+      if (node.type === 'action_item') {
+        event.preventDefault();
+        if (blockText(editor, path) === '') {
+          editor.tf.unsetNodes(['checked', 'indent'], { at: path });
+          editor.tf.setNodes({ type: 'p' }, { at: path });
+        } else {
+          editor.tf.insertBreak();
+          editor.tf.setNodes({ checked: false });
+        }
+        return true;
+      }
+
+      return false;
+    },
+  },
 });
 
 /**
@@ -135,18 +213,8 @@ export const bardoPlugins = [
     node: { component: BardoLinkElement },
   }),
 
-  // Listas estándar
-  ListPlugin.configure({
-    node: {
-      component: BardoUlElement,
-    },
-    options: {
-      ul: { component: BardoUlElement },
-      ol: { component: BardoOlElement },
-      li: { component: BardoLiElement },
-      lic: { component: BardoLicElement },
-    },
-  }),
+  // Listas planas (indent list): cada ítem es un párrafo con listStyleType + indent.
+  ListPlugin,
 
   // Tablas
   TablePlugin.configure({
@@ -167,6 +235,7 @@ export const bardoPlugins = [
   BardoCalloutPlugin,
   BardoActionItemPlugin,
   BardoTogglePlugin,
+  BardoKeyboardPlugin,
 ];
 
 /**

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { todayLocalIso } from "../../planner/date-utils.js"
 
 export function Calendar({
   selected,
@@ -55,7 +56,7 @@ export function Calendar({
 
   const handleToday = () => {
     const today = new Date()
-    const iso = today.toISOString().split("T")[0]
+    const iso = todayLocalIso(today)
     setCurrentMonth(today)
     onSelect?.(iso)
   }
@@ -112,8 +113,7 @@ export function Calendar({
           }
           const iso = formatIso(day)
           const isSelected = selected === iso
-          const isToday =
-            new Date().toISOString().split("T")[0] === iso
+          const isToday = todayLocalIso() === iso
 
           return (
             <button

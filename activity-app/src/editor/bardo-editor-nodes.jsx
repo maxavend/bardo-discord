@@ -38,7 +38,27 @@ export function BardoLeaf(props) {
 /**
  * Renderizado de Bloques Básicos
  */
+const LIST_INDENT_PX = 24;
+
+/**
+ * Párrafo. Los ítems de lista planos (listStyleType + indent) se renderizan como
+ * div: ListPlugin envuelve su contenido en <ul>/<ol><li>, que no puede ir dentro de <p>.
+ */
 export function BardoParagraphElement(props) {
+  const { element } = props;
+  if (element.listStyleType) {
+    const indent = Math.max(1, Number(element.indent) || 1);
+    return (
+      <PlateElement
+        as="div"
+        {...props}
+        className="bardo-list-item"
+        style={{ marginLeft: `${indent * LIST_INDENT_PX}px` }}
+      >
+        {props.children}
+      </PlateElement>
+    );
+  }
   return (
     <PlateElement as="p" {...props}>
       {props.children}
@@ -109,6 +129,7 @@ export function BardoCalloutElement(props) {
 export function BardoChecklistElement(props) {
   const { element, editor, children } = props;
   const checked = Boolean(element.checked);
+  const nestedIndent = Math.max(0, (Number(element.indent) || 1) - 1);
 
   const handleToggle = useCallback(
     (e) => {
@@ -129,6 +150,7 @@ export function BardoChecklistElement(props) {
       as="div"
       {...props}
       className={`relative min-h-[40px] py-2 pl-10 pr-0 my-0 checklist-item ${checked ? 'done text-muted-foreground line-through' : ''}`}
+      style={nestedIndent ? { marginLeft: `${nestedIndent * LIST_INDENT_PX}px` } : undefined}
     >
       <button
         type="button"
@@ -188,41 +210,6 @@ export function BardoSpoilerElement(props) {
         />
       </div>
       {isOpen && <div className="p-4">{children}</div>}
-    </PlateElement>
-  );
-}
-
-/**
- * Listas normales y elementos
- */
-export function BardoUlElement(props) {
-  return (
-    <PlateElement as="ul" {...props}>
-      {props.children}
-    </PlateElement>
-  );
-}
-
-export function BardoOlElement(props) {
-  return (
-    <PlateElement as="ol" {...props}>
-      {props.children}
-    </PlateElement>
-  );
-}
-
-export function BardoLiElement(props) {
-  return (
-    <PlateElement as="li" {...props}>
-      {props.children}
-    </PlateElement>
-  );
-}
-
-export function BardoLicElement(props) {
-  return (
-    <PlateElement as="div" {...props} className="inline">
-      {props.children}
     </PlateElement>
   );
 }

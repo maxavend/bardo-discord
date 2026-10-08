@@ -1,5 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useEditorRef } from 'platejs/react';
+import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEditorRef, useEditorSelector } from 'platejs/react';
+import {
+  insertBlock,
+  setBlockType,
+  toggleBardoList,
+  toggleChecklist,
+} from './bardo-editor-commands.js';
 import {
   Heading1,
   Heading2,
@@ -31,60 +37,123 @@ const SLASH_ITEMS = [
   { id: 'spoiler', label: 'Spoiler / Desplegable', icon: ChevronRight, description: 'Contenido colapsable oculto' },
 ];
 
+function normalizeSearch(value = '') {
+  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/**
+ * Detecta un disparador "/consulta" justo antes del cursor, al inicio del bloque
+ * o tras un espacio (así "y/o", fechas 07/10 o URLs no abren el menú).
+ */
+function findTrigger(editor) {
+  const { selection } = editor;
+  if (!selection || !editor.api.isCollapsed()) return null;
+  const entry = editor.api.block();
+  if (!entry || entry[0].type === 'code_block') return null;
+  const { path, offset } = selection.anchor;
+  let leaf;
+  try {
+    leaf = editor.api.node(path)?.[0];
+  } catch {
+    return null;
+  }
+  if (typeof leaf?.text !== 'string') return null;
+  const before = leaf.text.slice(0, offset);
+  const match = before.match(/(^|\s)\/([\p{L}\p{N}]{0,24})$/u);
+  if (!match) return null;
+  const start = offset - match[2].length - 1;
+  return { path, start, end: offset, query: match[2], key: `${path.join('.')}:${start}` };
+}
+
+function getEditable(editor) {
+  try {
+    return editor.api.toDOMNode(editor) || null;
+  } catch {
+    return null;
+  }
+}
+
 export function BardoSlashMenu() {
   const editor = useEditorRef();
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [, setFocusVersion] = useState(0);
+  const triggerKey = useEditorSelector(ed => {
+    const trigger = findTrigger(ed);
+    return trigger ? `${trigger.key}|${trigger.query}` : '';
+  }, []);
+  const [dismissedKey, setDismissedKey] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
 
-  const filteredItems = SLASH_ITEMS.filter(item =>
-    item.label.toLowerCase().includes(query.toLowerCase()) ||
-    item.description.toLowerCase().includes(query.toLowerCase())
-  );
+  // Foco real del editable (no depende de eventos de foco del documento, que
+  // no siempre llegan dentro del iframe de Discord).
+  const editable = getEditable(editor);
+  const focused = Boolean(editable && typeof document !== 'undefined' && editable.contains(document.activeElement));
+
+  useEffect(() => {
+    if (!editable) return undefined;
+    const bump = () => setFocusVersion(version => version + 1);
+    editable.addEventListener('focusin', bump);
+    editable.addEventListener('focusout', bump);
+    return () => {
+      editable.removeEventListener('focusin', bump);
+      editable.removeEventListener('focusout', bump);
+    };
+  }, [editable]);
+
+  const trigger = triggerKey ? findTrigger(editor) : null;
+  const query = trigger?.query || '';
+  const isOpen = Boolean(trigger) && focused && dismissedKey !== trigger.key;
+
+  const filteredItems = useMemo(() => {
+    const q = normalizeSearch(query);
+    if (!q) return SLASH_ITEMS;
+    return SLASH_ITEMS.filter(item =>
+      normalizeSearch(item.label).includes(q) || normalizeSearch(item.description).includes(q) || item.id.includes(q)
+    );
+  }, [query]);
+
+  // Reiniciar la selección cuando cambia la consulta.
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [query, triggerKey]);
 
   const closeMenu = useCallback(() => {
-    setIsOpen(false);
-    setQuery('');
-    setSelectedIndex(0);
-  }, []);
+    const current = findTrigger(editor);
+    setDismissedKey(current?.key || '');
+  }, [editor]);
 
   const handleSelect = useCallback((itemId) => {
     if (!editor) return;
+    const current = findTrigger(editor);
     editor.tf.focus();
+    if (current) {
+      // Borrar solo "/consulta" del disparador, nunca otro texto.
+      const range = {
+        anchor: { path: current.path, offset: current.start },
+        focus: { path: current.path, offset: current.end },
+      };
+      if (editor.api.string(range) === `/${current.query}`) {
+        editor.tf.delete({ at: range });
+      }
+    }
 
-    // Eliminar el caracter '/' escrito
-    editor.tf.delete({ unit: 'character', reverse: true });
-
-    if (itemId === 'p') {
-      editor.tf.setNodes({ type: 'p' });
-    } else if (itemId === 'h1') {
-      editor.tf.setNodes({ type: 'h1' });
-    } else if (itemId === 'h2') {
-      editor.tf.setNodes({ type: 'h2' });
-    } else if (itemId === 'h3') {
-      editor.tf.setNodes({ type: 'h3' });
+    if (itemId === 'p' || itemId === 'h1' || itemId === 'h2' || itemId === 'h3') {
+      setBlockType(editor, itemId);
     } else if (itemId === 'ul') {
-      editor.tf.setNodes({ type: 'p' });
-      editor.tf.wrapNodes({ type: 'ul', children: [] });
-      editor.tf.wrapNodes({ type: 'li', children: [] });
-      editor.tf.wrapNodes({ type: 'lic', children: [] });
+      toggleBardoList(editor, 'disc');
     } else if (itemId === 'ol') {
-      editor.tf.setNodes({ type: 'p' });
-      editor.tf.wrapNodes({ type: 'ol', children: [] });
-      editor.tf.wrapNodes({ type: 'li', children: [] });
-      editor.tf.wrapNodes({ type: 'lic', children: [] });
+      toggleBardoList(editor, 'decimal');
     } else if (itemId === 'checklist') {
-      editor.tf.setNodes({ type: 'action_item', checked: false });
+      toggleChecklist(editor);
     } else if (itemId === 'blockquote') {
-      editor.tf.setNodes({ type: 'blockquote' });
+      setBlockType(editor, 'blockquote');
     } else if (itemId === 'callout') {
-      editor.tf.insertNodes({ type: 'callout', children: [{ text: 'Escribe una nota…' }] });
+      insertBlock(editor, { type: 'callout', children: [{ text: 'Escribe una nota…' }] });
     } else if (itemId === 'code_block') {
-      editor.tf.insertNodes({ type: 'code_block', children: [{ text: '' }] });
+      setBlockType(editor, 'code_block');
     } else if (itemId === 'table') {
-      editor.tf.insertNodes({
+      insertBlock(editor, {
         type: 'table',
         children: [
           {
@@ -104,71 +173,59 @@ export function BardoSlashMenu() {
         ],
       });
     } else if (itemId === 'hr') {
-      editor.tf.insertNodes([{ type: 'hr', children: [{ text: '' }] }, { type: 'p', children: [{ text: '' }] }]);
+      editor.tf.insertNodes([{ type: 'hr', children: [{ text: '' }] }, { type: 'p', children: [{ text: '' }] }], { select: true });
     } else if (itemId === 'spoiler') {
-      editor.tf.insertNodes({
+      insertBlock(editor, {
         type: 'toggle',
         summary: 'Detalles',
         children: [{ type: 'p', children: [{ text: 'Escribe contenido oculto…' }] }],
       });
     }
+    setDismissedKey('');
+  }, [editor]);
 
-    closeMenu();
-  }, [closeMenu, editor]);
+  // Posicionar el menú bajo el cursor (position: fixed → coordenadas de viewport).
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const domSelection = window.getSelection();
+    if (!domSelection || domSelection.rangeCount === 0) return;
+    const rect = domSelection.getRangeAt(0).getBoundingClientRect();
+    const top = Math.min(rect.bottom + 8, window.innerHeight - 120);
+    setCoords({ top: Math.max(8, top), left: Math.max(8, rect.left) });
+  }, [isOpen, triggerKey]);
 
-  // Listener para detectar trigger '/' en el editor
+  // Teclado: solo mientras el menú está abierto y solo dentro del editable.
   useEffect(() => {
-    if (!editor) return;
+    if (!isOpen || !editor || !editable) return undefined;
 
     const handleKeyDown = (e) => {
-      if (isOpen) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSelectedIndex(prev => (prev + 1) % Math.max(1, filteredItems.length));
-          return;
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setSelectedIndex(prev => (prev - 1 + filteredItems.length) % Math.max(1, filteredItems.length));
-          return;
-        }
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          if (filteredItems[selectedIndex]) {
-            handleSelect(filteredItems[selectedIndex].id);
-          }
-          return;
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          closeMenu();
-          return;
-        }
-      }
-
-      if (e.key === '/' && !isOpen) {
-        const domSelection = window.getSelection();
-        if (domSelection && domSelection.rangeCount > 0) {
-          const range = domSelection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          setCoords({
-            top: rect.bottom + window.scrollY + 8,
-            left: rect.left + window.scrollX,
-          });
-          setIsOpen(true);
-          setQuery('');
-          setSelectedIndex(0);
-        }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedIndex(prev => (prev + 1) % Math.max(1, filteredItems.length));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedIndex(prev => (prev - 1 + filteredItems.length) % Math.max(1, filteredItems.length));
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (!filteredItems[selectedIndex]) return;
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelect(filteredItems[selectedIndex].id);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMenu();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown, true);
-    return () => document.removeEventListener('keydown', handleKeyDown, true);
-  }, [closeMenu, editor, filteredItems, handleSelect, isOpen, selectedIndex]);
+    editable.addEventListener('keydown', handleKeyDown, true);
+    return () => editable.removeEventListener('keydown', handleKeyDown, true);
+  }, [closeMenu, editable, editor, filteredItems, handleSelect, isOpen, selectedIndex]);
 
   // Cerrar al hacer clic fuera
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         closeMenu();
@@ -206,6 +263,7 @@ export function BardoSlashMenu() {
               className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left text-sm transition-colors ${
                 isSelected ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-muted text-foreground'
               }`}
+              onMouseDown={e => e.preventDefault()}
               onClick={() => handleSelect(item.id)}
               onMouseEnter={() => setSelectedIndex(index)}
             >

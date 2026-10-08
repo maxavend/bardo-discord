@@ -293,11 +293,16 @@ Bardo registra actualmente los siguientes comandos:
 
 | Comando | Función |
 | --- | --- |
-| `/doc-upload` | Importa un archivo a Docs y lo comparte con el canal |
+| `/bardo` | Abre Bardo en el canal. Opción `seccion`: Documentos (por defecto), Reuniones o Nuevo documento |
+| `/doc-new` | Crea un nuevo documento; el `titulo` opcional queda precargado en el editor |
+| `/doc-upload` | Importa un Markdown, TXT, PDF o Word y lo comparte con el canal |
+| `/docs` | Lista los documentos del canal con botones para abrir los cinco más recientes |
+| `/reu-new` | Agenda una reunión (`fecha` AAAA-MM-DD y `hora` HH:MM se validan; sin fecha, hoy en America/Santiago) |
+| `/reus` | Muestra las reuniones programadas, en curso y pasadas del canal |
+| `/ayuda` | Muestra todos los comandos (mensaje privado) |
 | `/upload-docs` | Alias legado de `/doc-upload` |
-| `/doc-new` | Crea un nuevo documento en Bardo |
-| `/reu-new` | Crea y agenda una nueva reunión |
-| `/reus` | Muestra las reuniones del canal |
+
+Los botones y `/bardo` guardan su destino durante 10 minutos, así la Activity abre la sección correcta aunque Discord móvil no envíe el `custom_id`. La zona horaria de `/reu-new` se puede cambiar con la variable `BARDO_TIME_ZONE`.
 
 Para registrar los comandos:
 
@@ -497,11 +502,14 @@ npm run register
 Esto registra:
 
 ```text
-/doc-upload
-/upload-docs
+/bardo
 /doc-new
+/doc-upload
+/docs
 /reu-new
 /reus
+/ayuda
+/upload-docs
 ```
 
 ---

@@ -20,6 +20,27 @@ import { BardoSlashMenu } from './BardoSlashMenu.jsx';
 import { BardoBlockDragHandle } from './BardoBlockDragHandle.jsx';
 
 const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
+const AUTOSAVE_DELAY_MS = 1500;
+// Copia local de seguridad mientras se escribe: no depende de que el navegador
+// alcance a disparar pagehide/visibilitychange (Discord puede matar el iframe).
+const JOURNAL_DELAY_MS = 250;
+
+const SYNC_LABELS = {
+  saving: 'Guardando…',
+  saved: 'Guardado',
+  offline: 'Sin conexión, reintentando',
+  error: 'No se pudo guardar',
+  conflict: 'Conflicto: se guardó una copia',
+};
+
+function initialSyncState(docId, remoteSync) {
+  if (!remoteSync || !docId) return {state: 'saved'};
+  try {
+    return window.__bardoDocSyncState?.(docId) || {state: 'saved'};
+  } catch {
+    return {state: 'saved'};
+  }
+}
 
 function singleLinePaste(e) {
   e.preventDefault();
@@ -66,7 +87,18 @@ function formatChangeTime(doc) {
   return `a las ${value('hour')}:${value('minute')} del ${value('day')}/${value('month')}/${value('year')}`;
 }
 
-export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLink, themeModeMenu: ThemeModeMenu }) {
+export function BardoEditor({
+  doc,
+  isNew,
+  readOnly = false,
+  remoteSync = false,
+  onBack,
+  onFinish,
+  onAutosave,
+  onJournal,
+  onOpenLink,
+  themeModeMenu: ThemeModeMenu,
+}) {
   const initialDraft = useMemo(() => {
     if (!isNew) return null;
     try {
@@ -78,24 +110,16 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
 
   const [title, setTitle] = useState(doc?.title ?? initialDraft?.title ?? '');
   const [description, setDescription] = useState(doc?.description ?? initialDraft?.description ?? '');
-  const [saveState, setSaveState] = useState(isNew ? 'Borrador guardado' : 'Guardado');
   const [isDirty, setIsDirty] = useState(false);
+  const [syncState, setSyncState] = useState(() => initialSyncState(doc?.id, remoteSync && !isNew));
+  const docId = doc?.id;
   const [isExiting, setIsExiting] = useState(false);
 
-  const initialHtml = useMemo(
-    () => doc?.body ?? initialDraft?.body ?? '<p><br></p>',
-    [doc?.body, initialDraft?.body]
-  );
-
-  const initialValue = useMemo(
-    () => htmlToPlateValue(initialHtml),
-    [initialHtml]
-  );
-
-  const editor = useMemo(
-    () => createBardoEditor(initialValue),
-    [doc?.id, isNew]
-  );
+  // El editor se crea una sola vez por montaje (App usa una key por documento y
+  // revisión), así los autosaves que cambian `doc.body` no reinician el contenido.
+  const [editor] = useState(() => createBardoEditor(
+    htmlToPlateValue(doc?.body ?? initialDraft?.body ?? '<p><br></p>')
+  ));
 
   const shellRef = useRef(null);
   const bodyRef = useRef(null);
@@ -103,7 +127,9 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
   const descriptionInputRef = useRef(null);
   const toolbarContainerRef = useRef(null);
   const saveTimer = useRef(null);
+  const journalTimer = useRef(null);
   const exitTimer = useRef(null);
+  const dirtyRef = useRef(false);
 
   const titleRef = useRef(title);
   const descriptionRef = useRef(description);
@@ -120,21 +146,102 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
     };
   }, [editor]);
 
+  const onAutosaveRef = useRef(onAutosave);
+  onAutosaveRef.current = onAutosave;
+  const onJournalRef = useRef(onJournal);
+  onJournalRef.current = onJournal;
+
   const flushSave = useCallback(() => {
     clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    clearTimeout(journalTimer.current);
+    journalTimer.current = null;
     const snap = currentSnapshot();
-    onAutosave(snap);
+    if (readOnly) return snap;
+    onAutosaveRef.current?.(snap);
+    dirtyRef.current = false;
     setIsDirty(false);
-    setSaveState(isNew ? 'Borrador guardado' : 'Guardado');
+    if (remoteSync && !isNew && docId) {
+      setSyncState(initialSyncState(docId, true));
+    }
     return snap;
-  }, [currentSnapshot, isNew, onAutosave]);
+  }, [currentSnapshot, docId, isNew, readOnly, remoteSync]);
+
+  const flushRef = useRef(flushSave);
+  flushRef.current = flushSave;
 
   const markDirty = useCallback(() => {
+    if (readOnly) return;
+    dirtyRef.current = true;
     setIsDirty(true);
-    setSaveState('Cambios sin guardar');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(flushSave, 30000);
-  }, [flushSave]);
+    saveTimer.current = setTimeout(() => flushRef.current(), AUTOSAVE_DELAY_MS);
+    if (!journalTimer.current) {
+      journalTimer.current = setTimeout(() => {
+        journalTimer.current = null;
+        if (!dirtyRef.current) return;
+        try {
+          onJournalRef.current?.(currentSnapshot());
+        } catch (error) {
+          console.warn('Bardo Docs: no se pudo guardar la copia local de seguridad', error);
+        }
+      }, JOURNAL_DELAY_MS);
+    }
+  }, [currentSnapshot, readOnly]);
+
+  // Guardar siempre antes de perder el editor: al ocultar/cerrar la página,
+  // al cambiar de ruta y al desmontar.
+  useEffect(() => {
+    const flushIfDirty = () => {
+      if (dirtyRef.current) flushRef.current();
+    };
+    // Al cerrar u ocultar: encolar el último snapshot y enviarlo de inmediato con
+    // keepalive. Los listeners van en fase de captura para correr ANTES que los
+    // del bridge (que se registraron antes y envían la cola con keepalive).
+    const flushForUnload = () => {
+      flushIfDirty();
+      try {
+        window.__bardoDocsSync?.flushKeepalive?.();
+      } catch {}
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushForUnload();
+    };
+    window.addEventListener('pagehide', flushForUnload, {capture: true});
+    window.addEventListener('beforeunload', flushForUnload, {capture: true});
+    window.addEventListener('hashchange', flushIfDirty);
+    document.addEventListener('visibilitychange', onVisibility, {capture: true});
+    return () => {
+      window.removeEventListener('pagehide', flushForUnload, {capture: true});
+      window.removeEventListener('beforeunload', flushForUnload, {capture: true});
+      window.removeEventListener('hashchange', flushIfDirty);
+      document.removeEventListener('visibilitychange', onVisibility, {capture: true});
+      flushIfDirty();
+    };
+  }, []);
+
+  // Estado real de sincronización con el servidor (modo Discord).
+  useEffect(() => {
+    if (!remoteSync || isNew || !docId) return undefined;
+    const onStatus = event => {
+      const detail = event.detail || {};
+      if (detail.scope !== 'docs' || detail.id !== docId) return;
+      setSyncState({state: detail.state, message: detail.message});
+    };
+    window.addEventListener('bardo-sync-status', onStatus);
+    return () => window.removeEventListener('bardo-sync-status', onStatus);
+  }, [docId, isNew, remoteSync]);
+
+  const saveState = readOnly
+    ? 'Procesando archivo…'
+    : isDirty
+      ? 'Cambios sin guardar'
+      : isNew
+        ? 'Borrador guardado'
+        : remoteSync
+          ? (SYNC_LABELS[syncState?.state] || 'Guardado')
+          : 'Guardado';
+  const saveStateTitle = !isDirty && remoteSync && syncState?.message ? syncState.message : undefined;
 
   const leaveEditor = useCallback((callback) => {
     if (exitTimer.current) return;
@@ -146,6 +253,10 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
   }, []);
 
   const finish = () => {
+    if (readOnly) {
+      leaveEditor(onBack);
+      return;
+    }
     const snap = flushSave();
     leaveEditor(() => onFinish(snap));
   };
@@ -160,6 +271,7 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
 
   useEffect(() => () => {
     clearTimeout(saveTimer.current);
+    clearTimeout(journalTimer.current);
     clearTimeout(exitTimer.current);
   }, []);
 
@@ -225,7 +337,7 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
   }, [editor]);
 
   const handleOpenLinkModal = useCallback(() => {
-    const isCollapsed = !editor.selection || editor.selection.anchor.offset === editor.selection.focus.offset;
+    const isCollapsed = !editor.selection || editor.api.isCollapsed();
     onOpenLink?.({
       isCollapsed,
       apply: (url) => {
@@ -272,6 +384,9 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
             variant="secondary"
             className="save-state text-xs"
             data-dirty={isDirty ? 'true' : 'false'}
+            data-sync-state={isDirty ? 'dirty' : syncState?.state || 'saved'}
+            title={saveStateTitle}
+            role="status"
           >
             <span key={saveState} className="save-state-label">{saveState}</span>
           </Badge>
@@ -288,7 +403,11 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
 
       <Plate
         editor={editor}
-        onChange={() => {
+        readOnly={readOnly}
+        onChange={({ editor: changed }) => {
+          // Ignorar cambios que solo mueven el cursor/selección.
+          const ops = changed?.operations || [];
+          if (ops.length && ops.every(op => op.type === 'set_selection')) return;
           markDirty();
         }}
       >
@@ -316,6 +435,7 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
                 aria-label="Título"
                 rows={1}
                 value={title}
+                readOnly={readOnly}
                 placeholder="Sin título"
                 onChange={e => {
                   const nextTitle = e.target.value;
@@ -332,6 +452,7 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
                 aria-label="Descripción"
                 rows={1}
                 value={description}
+                readOnly={readOnly}
                 placeholder="Agrega una descripción…"
                 onChange={e => {
                   const nextDescription = e.target.value;
@@ -344,18 +465,24 @@ export function BardoEditor({ doc, isNew, onBack, onFinish, onAutosave, onOpenLi
               />
             </header>
 
-            <div className="editor-toolbar-sticky">
-              <BardoToolbar
-                toolbarContainerRef={toolbarContainerRef}
-                onOpenLink={handleOpenLinkModal}
-                onCopyAll={handleCopyAll}
-                onRemoveFormat={handleRemoveFormat}
-              />
-            </div>
+            {readOnly ? (
+              <div className="import-pending-banner text-sm text-muted-foreground" role="status">
+                Procesando archivo… Bardo está convirtiendo el contenido. Podrás editarlo en cuanto termine.
+              </div>
+            ) : (
+              <div className="editor-toolbar-sticky">
+                <BardoToolbar
+                  toolbarContainerRef={toolbarContainerRef}
+                  onOpenLink={handleOpenLinkModal}
+                  onCopyAll={handleCopyAll}
+                  onRemoveFormat={handleRemoveFormat}
+                />
+              </div>
+            )}
 
-            <BardoEditorSurface ref={bodyRef} />
+            <BardoEditorSurface ref={bodyRef} readOnly={readOnly} />
 
-            <BardoSlashMenu />
+            {!readOnly && <BardoSlashMenu />}
           </article>
         </PlateContainer>
       </Plate>

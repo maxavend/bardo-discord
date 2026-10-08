@@ -1,5 +1,13 @@
 import { useMemo, useCallback, useLayoutEffect, useState } from 'react';
 import { useEditorSelection, useEditorRef } from 'platejs/react';
+import {
+  currentBlockKind,
+  insertBlock,
+  setBlockType,
+  toggleBardoList,
+  toggleBlockquote,
+  toggleChecklist,
+} from './bardo-editor-commands.js';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -301,24 +309,9 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
   }, [editor, selection]);
 
   const blockType = useMemo(() => {
-    if (!editor || !editor.selection) return 'p';
-    try {
-      const entry = editor.api.block();
-      if (!entry) return 'p';
-      const [node] = entry;
-      const type = node?.type || 'p';
-      if (['p', 'h1', 'h2', 'h3', 'blockquote', 'code_block', 'action_item', 'callout', 'toggle', 'ul', 'ol', 'li'].includes(type)) {
-        if (type === 'action_item') return 'checklist';
-        if (type === 'li') {
-          const parent = editor.api.parent(entry[1]);
-          return parent?.[0]?.type === 'ol' ? 'insertOrderedList' : 'insertUnorderedList';
-        }
-        return type;
-      }
-      return 'p';
-    } catch {
-      return 'p';
-    }
+    // `selection` fuerza el recálculo cuando se mueve el cursor.
+    void selection;
+    return currentBlockKind(editor);
   }, [editor, selection]);
 
   // Manejo de comandos del editor Plate
@@ -340,50 +333,28 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
       } else if (format === 'createLink') {
         onOpenLink?.();
       } else if (format === 'insertUnorderedList') {
-        if (blockType === 'insertUnorderedList') {
-          editor.tf.setNodes({ type: 'p' });
-        } else {
-          editor.tf.setNodes({ type: 'p' });
-          editor.tf.wrapNodes({ type: 'ul', children: [] });
-          editor.tf.wrapNodes({ type: 'li', children: [] });
-          editor.tf.wrapNodes({ type: 'lic', children: [] });
-        }
+        toggleBardoList(editor, 'disc');
       } else if (format === 'insertOrderedList') {
-        if (blockType === 'insertOrderedList') {
-          editor.tf.setNodes({ type: 'p' });
-        } else {
-          editor.tf.setNodes({ type: 'p' });
-          editor.tf.wrapNodes({ type: 'ol', children: [] });
-          editor.tf.wrapNodes({ type: 'li', children: [] });
-          editor.tf.wrapNodes({ type: 'lic', children: [] });
-        }
+        toggleBardoList(editor, 'decimal');
       } else if (format === 'checklist') {
-        if (blockType === 'checklist') {
-          editor.tf.setNodes({ type: 'p', checked: undefined });
-        } else {
-          editor.tf.setNodes({ type: 'action_item', checked: false });
-        }
+        toggleChecklist(editor);
       } else if (format === 'blockquote') {
-        if (blockType === 'blockquote') {
-          editor.tf.setNodes({ type: 'p' });
-        } else {
-          editor.tf.setNodes({ type: 'blockquote' });
-        }
+        toggleBlockquote(editor);
       } else if (format === 'callout') {
-        editor.tf.insertNodes({ type: 'callout', children: [{ text: 'Escribe una nota…' }] });
+        insertBlock(editor, { type: 'callout', children: [{ text: 'Escribe una nota…' }] });
       } else if (format === 'spoiler') {
-        editor.tf.insertNodes({
+        insertBlock(editor, {
           type: 'toggle',
           summary: 'Detalles',
           children: [{ type: 'p', children: [{ text: 'Escribe contenido oculto…' }] }],
         });
       } else if (format === 'hr') {
-        editor.tf.insertNodes([{ type: 'hr', children: [{ text: '' }] }, { type: 'p', children: [{ text: '' }] }]);
+        editor.tf.insertNodes([{ type: 'hr', children: [{ text: '' }] }, { type: 'p', children: [{ text: '' }] }], { select: true });
       } else if (format === 'insertPre' || format === 'code_block') {
-        editor.tf.insertNodes({ type: 'code_block', children: [{ text: '' }] });
+        setBlockType(editor, 'code_block');
       }
     },
-    [blockType, editor, onOpenLink]
+    [editor, onOpenLink]
   );
 
   const handleBlockSelect = useCallback(
@@ -392,7 +363,7 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
       editor.tf.focus();
 
       if (['p', 'h1', 'h2', 'h3', 'blockquote', 'code_block'].includes(key)) {
-        editor.tf.setNodes({ type: key });
+        setBlockType(editor, key);
       } else {
         runFormat(key);
       }

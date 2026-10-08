@@ -61,38 +61,76 @@ export function createSynthesizedAudioBlob(durationMs = 3000, sampleRate = 44100
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
-/**
- * Retrieve blob for a recording item, looking in IndexedDB, recording object,
- * or synthesizing a fallback WAV blob if none exists.
- */
-export async function getRecordingBlob(recording) {
-  if (!recording) return createSynthesizedAudioBlob(1000);
+export class RecordingUnavailableError extends Error {
+  constructor(recording, message = 'El audio de esta grabación no está disponible en este dispositivo.') {
+    super(message);
+    this.name = 'RecordingUnavailableError';
+    this.recordingId = recording?.id || null;
+  }
+}
 
-  if (recording.blob instanceof Blob) {
+const MIME_EXTENSIONS = [
+  ['audio/wav', 'wav'],
+  ['audio/x-wav', 'wav'],
+  ['audio/webm', 'webm'],
+  ['audio/mp4', 'm4a'],
+  ['audio/aac', 'aac'],
+  ['audio/mpeg', 'mp3'],
+  ['audio/ogg', 'ogg'],
+  ['video/webm', 'webm'],
+  ['video/mp4', 'm4a'],
+];
+
+/** File extension for an audio MIME type ("audio/mp4;codecs=…" → "m4a"). */
+export function extensionForMimeType(mimeType = '') {
+  const base = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  return MIME_EXTENSIONS.find(([type]) => type === base)?.[1] || 'webm';
+}
+
+export function sanitizeFileName(value, fallback) {
+  return (value || fallback).replace(/[/\\?%*:|"<>]/g, '-');
+}
+
+/**
+ * Retrieve the real audio Blob for a recording (in-memory Blob, object URL or
+ * IndexedDB). Throws RecordingUnavailableError when the audio does not exist
+ * on this device. A synthetic tone is only produced with `allowSynthetic`
+ * (explicit demo mode) — never as a silent substitute for lost audio.
+ */
+export async function getRecordingBlob(recording, {allowSynthetic = false, storage = null} = {}) {
+  if (!recording) {
+    if (allowSynthetic) return createSynthesizedAudioBlob(1000);
+    throw new RecordingUnavailableError(recording);
+  }
+
+  if (typeof Blob !== 'undefined' && recording.blob instanceof Blob && recording.blob.size > 0) {
     return recording.blob;
   }
 
-  if (recording.blobUrl) {
+  if (recording.blobUrl && typeof fetch === 'function') {
     try {
       const response = await fetch(recording.blobUrl);
-      if (response.ok) return await response.blob();
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size > 0) return blob;
+      }
     } catch {
-      // fallback
+      // fall through to IndexedDB
     }
   }
 
   if (recording.id) {
     try {
-      const storage = createRecordingStorage();
-      const storedBlob = await storage.get(recording.id);
-      if (storedBlob instanceof Blob) return storedBlob;
+      const store = storage || createRecordingStorage();
+      const storedBlob = await store.get(recording.id);
+      if (typeof Blob !== 'undefined' && storedBlob instanceof Blob && storedBlob.size > 0) return storedBlob;
     } catch {
-      // fallback
+      // fall through
     }
   }
 
-  const duration = recording.durationMs || 3000;
-  return createSynthesizedAudioBlob(duration);
+  if (allowSynthetic) return createSynthesizedAudioBlob(recording.durationMs || 3000);
+  throw new RecordingUnavailableError(recording);
 }
 
 /**
@@ -144,107 +182,137 @@ function audioBufferToWav(buffer) {
   return new Blob([arrayBuffer], { type: 'audio/wav' });
 }
 
+/** Above this total duration the combined WAV would need hundreds of MB. */
+export const MAX_COMBINED_EXPORT_MS = 45 * 60 * 1000;
+
+export function shouldExportAsZip(recordings = [], maxCombinedMs = MAX_COMBINED_EXPORT_MS) {
+  const total = (recordings || []).reduce((sum, recording) => sum + (Number(recording?.durationMs) || 0), 0);
+  return total > maxCombinedMs;
+}
+
 /**
- * Concatenate multiple audio blobs into a single AudioBuffer / WAV Blob
+ * Concatenate multiple audio blobs into a single WAV Blob.
+ * Returns {blob, failed}: `failed` counts blobs that could not be decoded; when
+ * it is > 0 callers must not present the result as complete.
  */
 export async function concatenateAudioBlobs(blobs) {
-  if (!blobs || blobs.length === 0) return null;
-  if (blobs.length === 1) return blobs[0];
+  if (!blobs || blobs.length === 0) return {blob: null, failed: 0};
+  if (blobs.length === 1) return {blob: blobs[0], failed: 0};
 
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) {
-    return new Blob(blobs, { type: blobs[0].type || 'audio/webm' });
-  }
+  const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!AudioContextClass || !OfflineContextClass) return {blob: null, failed: blobs.length};
 
   const audioContext = new AudioContextClass();
-  const audioBuffers = [];
+  try {
+    const audioBuffers = [];
+    let failed = 0;
+    for (const blob of blobs) {
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        audioBuffers.push(await audioContext.decodeAudioData(arrayBuffer));
+      } catch {
+        failed += 1;
+      }
+    }
+    if (failed > 0 || audioBuffers.length === 0) return {blob: null, failed: failed || blobs.length};
 
-  for (const blob of blobs) {
+    const sampleRate = audioBuffers[0].sampleRate;
+    const numChannels = Math.max(...audioBuffers.map((b) => b.numberOfChannels));
+    const totalLength = audioBuffers.reduce((sum, b) => sum + b.length, 0);
+    const offlineContext = new OfflineContextClass(numChannels, totalLength, sampleRate);
+    let currentOffset = 0;
+    for (const buffer of audioBuffers) {
+      const source = offlineContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(offlineContext.destination);
+      source.start(currentOffset / sampleRate);
+      currentOffset += buffer.length;
+    }
+    const renderedBuffer = await offlineContext.startRendering();
+    return {blob: audioBufferToWav(renderedBuffer), failed: 0};
+  } finally {
     try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const decoded = await audioContext.decodeAudioData(arrayBuffer);
-      audioBuffers.push(decoded);
+      audioContext.close();
     } catch {
-      // If decoding fails, skip
+      // ignore
     }
   }
-
-  if (audioBuffers.length === 0) {
-    audioContext.close();
-    return new Blob(blobs, { type: blobs[0].type || 'audio/webm' });
-  }
-
-  const sampleRate = audioBuffers[0].sampleRate;
-  const numChannels = Math.max(...audioBuffers.map((b) => b.numberOfChannels));
-  const totalLength = audioBuffers.reduce((sum, b) => sum + b.length, 0);
-
-  const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-  if (!OfflineContextClass) {
-    audioContext.close();
-    return new Blob(blobs, { type: 'audio/webm' });
-  }
-
-  const offlineContext = new OfflineContextClass(numChannels, totalLength, sampleRate);
-  let currentOffset = 0;
-
-  for (const buffer of audioBuffers) {
-    const source = offlineContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(offlineContext.destination);
-    source.start(currentOffset / sampleRate);
-    currentOffset += buffer.length;
-  }
-
-  const renderedBuffer = await offlineContext.startRendering();
-  audioContext.close();
-  return audioBufferToWav(renderedBuffer);
 }
 
 /**
- * Download individual audio for a subpoint
+ * Download individual audio for a subpoint. Throws RecordingUnavailableError
+ * when the audio is not on this device.
  */
-export async function downloadPointAudio(pointTitle, recording) {
-  const blob = await getRecordingBlob(recording);
-  const ext = blob.type.includes('wav') ? 'wav' : 'webm';
-  const cleanTitle = (pointTitle || 'Grabación').replace(/[/\\?%*:|"<>]/g, '-');
-  downloadBlob(blob, `${cleanTitle}.${ext}`);
+export async function downloadPointAudio(pointTitle, recording, options = {}) {
+  const blob = await getRecordingBlob(recording, options);
+  const cleanTitle = sanitizeFileName(pointTitle, 'Grabación');
+  downloadBlob(blob, `${cleanTitle}.${extensionForMimeType(blob.type || recording?.mimeType)}`);
 }
 
 /**
- * Export all block recordings combined into a single unified audio file
+ * Collects the real blobs of `recordings`. Missing audio is reported, never
+ * replaced by a synthetic file (unless allowSynthetic for demo mode).
  */
-export async function exportBlockRecordingsCombined(blockTitle, recordings) {
-  if (!recordings || recordings.length === 0) return;
-  const blobs = [];
-  for (const rec of recordings) {
-    const b = await getRecordingBlob(rec);
-    blobs.push(b);
+export async function collectRecordingBlobs(recordings = [], options = {}) {
+  const available = [];
+  const missing = [];
+  for (const recording of recordings || []) {
+    try {
+      available.push({recording, blob: await getRecordingBlob(recording, options)});
+    } catch (error) {
+      if (error instanceof RecordingUnavailableError) missing.push(recording);
+      else throw error;
+    }
   }
-  const mergedBlob = await concatenateAudioBlobs(blobs);
-  if (!mergedBlob) return;
-  const cleanTitle = (blockTitle || 'Bloque').replace(/[/\\?%*:|"<>]/g, '-');
-  const ext = mergedBlob.type.includes('wav') ? 'wav' : 'webm';
-  downloadBlob(mergedBlob, `${cleanTitle} - Bloque Completo.${ext}`);
+  return {available, missing};
 }
 
 /**
- * Export all block recordings separated per point inside a ZIP folder
+ * Export all block recordings combined into a single audio file.
+ * Falls back to a ZIP of the original files (no re-encoding, no data loss)
+ * when the block is too long to combine in memory or any file can't be
+ * decoded. Returns {mode: 'combined'|'zip', reason?, missing}.
  */
-export async function exportBlockRecordingsAsZip(blockTitle, recordings) {
-  if (!recordings || recordings.length === 0) return;
+export async function exportBlockRecordingsCombined(blockTitle, recordings, options = {}) {
+  const {maxCombinedMs = MAX_COMBINED_EXPORT_MS, ...blobOptions} = options;
+  if (!recordings || recordings.length === 0) throw new RecordingUnavailableError(null, 'Este bloque no tiene grabaciones.');
+  if (shouldExportAsZip(recordings, maxCombinedMs)) {
+    const result = await exportBlockRecordingsAsZip(blockTitle, recordings, blobOptions);
+    return {...result, mode: 'zip', reason: 'long'};
+  }
+  const {available, missing} = await collectRecordingBlobs(recordings, blobOptions);
+  if (available.length === 0) throw new RecordingUnavailableError(null, 'El audio de este bloque no está disponible en este dispositivo.');
+  const {blob: mergedBlob, failed} = await concatenateAudioBlobs(available.map((item) => item.blob));
+  if (!mergedBlob || failed > 0) {
+    const result = await exportBlockRecordingsAsZip(blockTitle, recordings, blobOptions);
+    return {...result, mode: 'zip', reason: 'decode'};
+  }
+  const cleanTitle = sanitizeFileName(blockTitle, 'Bloque');
+  downloadBlob(mergedBlob, `${cleanTitle} - Bloque Completo.${extensionForMimeType(mergedBlob.type)}`);
+  return {mode: 'combined', missing: missing.length};
+}
+
+/**
+ * Export all block recordings separated per point inside a ZIP folder.
+ * Returns {mode: 'zip', missing}. Throws when no audio is available.
+ */
+export async function exportBlockRecordingsAsZip(blockTitle, recordings, options = {}) {
+  if (!recordings || recordings.length === 0) throw new RecordingUnavailableError(null, 'Este bloque no tiene grabaciones.');
+  const {available, missing} = await collectRecordingBlobs(recordings, options);
+  if (available.length === 0) throw new RecordingUnavailableError(null, 'El audio de este bloque no está disponible en este dispositivo.');
   const zip = new JSZip();
-  const cleanBlockTitle = (blockTitle || 'Bloque').replace(/[/\\?%*:|"<>]/g, '-');
+  const cleanBlockTitle = sanitizeFileName(blockTitle, 'Bloque');
   const folder = zip.folder(cleanBlockTitle);
 
   let index = 1;
-  for (const rec of recordings) {
-    const blob = await getRecordingBlob(rec);
-    const title = (rec.pointTitle || rec.name || `Punto ${index}`).replace(/[/\\?%*:|"<>]/g, '-');
-    const ext = blob.type.includes('wav') ? 'wav' : 'webm';
-    folder.file(`${index}. ${title}.${ext}`, blob);
+  for (const {recording, blob} of available) {
+    const title = sanitizeFileName(recording.pointTitle || recording.name, `Punto ${index}`);
+    folder.file(`${index}. ${title}.${extensionForMimeType(blob.type || recording.mimeType)}`, blob);
     index++;
   }
 
-  const zipContent = await zip.generateAsync({ type: 'blob' });
+  const zipContent = await zip.generateAsync({type: 'blob'});
   downloadBlob(zipContent, `${cleanBlockTitle} - Grabaciones por punto.zip`);
+  return {mode: 'zip', missing: missing.length};
 }

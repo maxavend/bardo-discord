@@ -44,8 +44,17 @@ jobs:
           node --check src/discord-permissions.js
           node --check src/document-access.js
           node --check src/docs-api.js
+          node --check src/planner-api.js
+          node --check src/limits.js
           node --check scripts/register-commands.js
+          node --check scripts/command-definitions.js
           node --check scripts/build-activity.js
+
+      # Replays every D1 migration on a fresh SQLite (node:sqlite) and checks
+      # that all SQL in src/ compiles against the final schema. Catches
+      # migrations that reference columns no migration creates.
+      - name: Migrations replay (fresh database)
+        run: node --test test/schema.test.js
 
       - name: Test
         run: npm test

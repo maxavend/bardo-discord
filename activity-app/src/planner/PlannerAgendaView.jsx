@@ -53,6 +53,8 @@ import {
   getRecordingBlob,
 } from './audio-exporter.js';
 import { fieldValue } from './planner-field-value.js';
+import { toast } from '@/lib/toast';
+import { shouldLoadDemoFixture } from './planner-store.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
@@ -100,6 +102,30 @@ export function PlannerAgendaView({
   const blockStatuses = sessionState?.blockStatuses || {};
   const { members: discordMembers, roles: discordRoles } = getAllDiscordEntities();
 
+  // Synthetic placeholder audio exists only in the explicit demo mode.
+  const allowSyntheticAudio = shouldLoadDemoFixture();
+  const audioOptions = { allowSynthetic: allowSyntheticAudio };
+
+  const reportExportResult = (result) => {
+    if (!result) return;
+    if (result.mode === 'zip' && result.reason === 'long') {
+      toast('El bloque es muy largo para unirlo en un solo archivo: se descargó un ZIP con cada grabación original.');
+    } else if (result.mode === 'zip' && result.reason === 'decode') {
+      toast('Algunas grabaciones no se pudieron unir: se descargó un ZIP con los archivos originales completos.');
+    }
+    if (result.missing > 0) {
+      toast(`${result.missing} grabación(es) no están disponibles en este dispositivo y no se incluyeron.`);
+    }
+  };
+
+  const runAudioExport = async (operation) => {
+    try {
+      reportExportResult(await operation());
+    } catch (error) {
+      toast(error?.message || 'No se pudo exportar el audio.');
+    }
+  };
+
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioProgress, setAudioProgress] = useState({});
 
@@ -119,8 +145,13 @@ export function PlannerAgendaView({
     });
 
     if (!audioEl.src || audioEl.src === window.location.href) {
-      const blob = await getRecordingBlob(firstPointRecording || { pointTitle: point.title, durationMs });
-      audioEl.src = URL.createObjectURL(blob);
+      try {
+        const blob = await getRecordingBlob(firstPointRecording || { pointTitle: point.title, durationMs }, audioOptions);
+        audioEl.src = URL.createObjectURL(blob);
+      } catch (error) {
+        toast(error?.message || 'El audio de esta grabación no está disponible.');
+        return;
+      }
     }
 
     try {
@@ -436,6 +467,7 @@ export function PlannerAgendaView({
                 (r) => r.pointId === p.id || (r.pointTitle && r.pointTitle === p.title)
               );
               if (existing) return existing;
+              if (!allowSyntheticAudio) return null;
               return {
                 id: `rec-${block.id}-${p.id || pIdx}`,
                 blockId: block.id,
@@ -446,9 +478,10 @@ export function PlannerAgendaView({
               };
             });
 
-            const effectiveBlockRecordings = subpointRecordings.length > 0
-              ? subpointRecordings
-              : (blockRecordings.length > 0
+            const realSubpointRecordings = subpointRecordings.filter(Boolean);
+            const effectiveBlockRecordings = realSubpointRecordings.length > 0
+              ? realSubpointRecordings
+              : (blockRecordings.length > 0 || !allowSyntheticAudio
                   ? blockRecordings
                   : [{
                       id: `rec-block-${block.id}`,
@@ -700,7 +733,7 @@ export function PlannerAgendaView({
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      ) : isCompleted ? (
+                      ) : isCompleted && effectiveBlockRecordings.length > 0 ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             render={
@@ -719,18 +752,14 @@ export function PlannerAgendaView({
                               <DropdownMenuLabel>Grabaciones del bloque</DropdownMenuLabel>
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2"
-                                onClick={async () => {
-                                  await exportBlockRecordingsCombined(block.title, effectiveBlockRecordings);
-                                }}
+                                onClick={() => runAudioExport(() => exportBlockRecordingsCombined(block.title, effectiveBlockRecordings, audioOptions))}
                               >
                                 <DownloadIcon className="size-4 text-muted-foreground" />
                                 <span>Descargar bloque completo</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2"
-                                onClick={async () => {
-                                  await exportBlockRecordingsAsZip(block.title, effectiveBlockRecordings);
-                                }}
+                                onClick={() => runAudioExport(() => exportBlockRecordingsAsZip(block.title, effectiveBlockRecordings, audioOptions))}
                               >
                                 <DownloadIcon className="size-4 text-muted-foreground" />
                                 <span>Descargar grabaciones por punto</span>
@@ -1103,7 +1132,7 @@ export function PlannerAgendaView({
 
                           {/* Columna Derecha: Reproductor inline si isDone, o saltado */}
                           <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-                            {isDone ? (
+                            {isDone && (firstPointRecording || allowSyntheticAudio) ? (
                               <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                                 <audio
                                   id={`audio-element-${point.id}`}
@@ -1148,7 +1177,7 @@ export function PlannerAgendaView({
                                   type="button"
                                   onClick={async (e) => {
                                     e.stopPropagation();
-                                    await downloadPointAudio(point.title, firstPointRecording || { pointTitle: point.title, durationMs: pointRecordingDurationMs });
+                                    await runAudioExport(() => downloadPointAudio(point.title, firstPointRecording || { pointTitle: point.title, durationMs: pointRecordingDurationMs }, audioOptions));
                                   }}
                                   aria-label={`Descargar audio de ${point.title}`}
                                   title={`Descargar audio: ${point.title}`}

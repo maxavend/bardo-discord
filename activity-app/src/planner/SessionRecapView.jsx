@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/animated-icons';
 import { computeSessionRecap } from './session-assistant-engine.js';
 import { generateMinutesMarkdown } from './planner-store.js';
+import { todayLocalIso } from './date-utils.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
 
 export function SessionRecapView({
@@ -36,7 +37,7 @@ export function SessionRecapView({
     onSaveDocToLibrary({
       id: `minutes-${Date.now().toString(36)}`,
       title: `Acta: ${plannerState.title || 'Reunión'}`,
-      description: `Acta y acuerdos de la sesión del ${plannerState.date || new Date().toISOString().split('T')[0]}`,
+      description: `Acta y acuerdos de la sesión del ${plannerState.date || todayLocalIso()}`,
       body: md,
     });
   };

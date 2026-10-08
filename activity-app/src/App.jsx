@@ -69,7 +69,7 @@ import {
   Xmark,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
-import {markdownToHtml} from './production-bridge.js';
+import {htmlToMarkdown, markdownToHtml} from './editor/bardo-markdown.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
@@ -77,6 +77,8 @@ export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} 
 const STORE_KEY = 'bardo.docs.heroui.v1';
 const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
 const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
+// Copia de seguridad de la edición en curso (se escribe mientras se tipea).
+const JOURNAL_KEY = 'bardo.docs.editing.v1';
 const STORE_VERSION = 1;
 
 
@@ -127,7 +129,7 @@ function sanitizeRichHtml(html = '') {
       el.removeAttribute(attr.name);
     });
     if (el.hasAttribute('class')) {
-      const keep = [...el.classList].filter(c => classes.has(c));
+      const keep = [...el.classList].filter(c => classes.has(c) || (el.tagName === 'CODE' && /^language-[\w+#.-]+$/.test(c)));
       if (keep.length) el.className = keep.join(' ');
       else el.removeAttribute('class');
     }
@@ -203,40 +205,7 @@ function currentEditorName() {
 }
 
 function markdownFromHtml(html = '') {
-  const doc = new DOMParser().parseFromString(`<body>${sanitizeRichHtml(html)}</body>`, 'text/html');
-  const walk = node => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
-    if (node.nodeType !== Node.ELEMENT_NODE) return '';
-    const el = node;
-    const inner = [...el.childNodes].map(walk).join('');
-    switch (el.tagName) {
-      case 'H2': return `\n## ${inner.trim()}\n\n`;
-      case 'H3': return `\n### ${inner.trim()}\n\n`;
-      case 'P': return `${inner.trim()}\n\n`;
-      case 'STRONG': case 'B': return `**${inner}**`;
-      case 'EM': case 'I': return `*${inner}*`;
-      case 'U': return inner;
-      case 'S': case 'DEL': return `~~${inner}~~`;
-      case 'CODE': return el.parentElement?.tagName === 'PRE' ? inner : `\`${inner}\``;
-      case 'PRE': return `\n\`\`\`\n${el.textContent || ''}\n\`\`\`\n\n`;
-      case 'BLOCKQUOTE': return inner.split('\n').filter(Boolean).map(line => `> ${line}`).join('\n') + '\n\n';
-      case 'A': return `[${inner || el.getAttribute('href')}](${el.getAttribute('href') || ''})`;
-      case 'HR': return '\n---\n\n';
-      case 'BR': return '\n';
-      case 'LI': {
-        const checklist = el.parentElement?.classList.contains('checklist');
-        if (checklist) return `- [${el.classList.contains('done') ? 'x' : ' '}] ${inner.trim()}\n`;
-        return `${el.parentElement?.tagName === 'OL' ? '1.' : '-'} ${inner.trim()}\n`;
-      }
-      case 'UL': case 'OL': return `\n${inner}\n`;
-      case 'SUMMARY': return `**${inner.trim()}**\n\n`;
-      case 'DETAILS': return `\n${inner}\n`;
-      case 'DIV': return `\n${inner.trim()}\n\n`;
-      case 'TABLE': return `\n${el.textContent?.replace(/\s+/g, ' ').trim() || ''}\n\n`;
-      default: return inner;
-    }
-  };
-  return walk(doc.body).replace(/\n{3,}/g, '\n\n').trim();
+  return htmlToMarkdown(sanitizeRichHtml(html));
 }
 
 function downloadFile(filename, mime, content) {
@@ -293,7 +262,27 @@ async function copyText(text) {
   ta.remove();
 }
 
+function newLocalId() {
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function readDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    if (!draft) return null;
+    const hasContent = Boolean(String(draft.title || '').trim() || String(draft.description || '').trim()
+      || stripHtml(draft.body || ''));
+    return hasContent ? draft : null;
+  } catch {
+    return null;
+  }
+}
+
 function loadStore() {
+  const initial = window.__BARDO_INITIAL_STORE__;
+  if (initial && Array.isArray(initial.docs)) {
+    return {version: STORE_VERSION, docs: initial.docs, deletedIds: [...new Set(initial.deletedIds || [])]};
+  }
   try {
     const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (!parsed || parsed.version !== STORE_VERSION || !Array.isArray(parsed.docs)) {
@@ -309,10 +298,78 @@ function loadStore() {
   }
 }
 
+let storageWarningShown = false;
+
+function warnStorageFull() {
+  if (storageWarningShown) return;
+  storageWarningShown = true;
+  toast(window.__BARDO_PRODUCTION__
+    ? 'El almacenamiento local está lleno. Tus cambios se siguen guardando en Bardo, pero no queda copia sin conexión.'
+    : 'El almacenamiento local está lleno. Exporta o elimina documentos para no perder cambios.');
+}
+
 function saveStore(store) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    return true;
+  } catch (error) {
+    console.warn('Bardo Docs: no se pudo escribir en localStorage', error);
+    warnStorageFull();
+    return false;
+  }
+}
+
+function readJournal() {
+  try {
+    const journal = JSON.parse(localStorage.getItem(JOURNAL_KEY) || 'null');
+    return journal?.docId && journal.snapshot ? journal : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJournal(entry) {
+  try {
+    localStorage.setItem(JOURNAL_KEY, JSON.stringify(entry));
+  } catch (error) {
+    console.warn('Bardo Docs: no se pudo escribir la copia de seguridad', error);
+  }
+}
+
+function clearJournal(docId) {
+  try {
+    const journal = readJournal();
+    if (!journal || journal.docId === docId) localStorage.removeItem(JOURNAL_KEY);
   } catch {}
+}
+
+/** Aplica una edición que quedó en la copia de seguridad (p. ej. tras cerrar la Activity). */
+function applyJournal(store) {
+  const journal = readJournal();
+  if (!journal) return {store, journal: null};
+  const doc = store.docs.find(item => item.id === journal.docId);
+  if (!doc) return {store, journal: null};
+  const snap = journal.snapshot;
+  const same = (doc.title || '') === (snap.title || '')
+    && (doc.description || '') === (snap.description || '')
+    && (doc.body || '') === (snap.body || '');
+  if (same) {
+    clearJournal(journal.docId);
+    return {store, journal: null};
+  }
+  return {
+    store: {...store, docs: store.docs.map(item => (item.id === doc.id ? {...item, ...snap} : item))},
+    journal,
+  };
+}
+
+function saveDraft(snapshot) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn('Bardo Docs: no se pudo guardar el borrador', error);
+    warnStorageFull();
+  }
 }
 
 function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
@@ -406,16 +463,10 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
             </DropdownMenuItem>
           </>
         ) : (
-          <>
-            <DropdownMenuItem onClick={() => onAction('archive', doc)}>
-              <Archive width={15} height={15} className="text-muted-foreground" />
-              <span>Archivar documento</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={() => onAction('delete', doc)}>
-              <TrashBin width={15} height={15} className="text-destructive" />
-              <span>Eliminar documento</span>
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onClick={() => onAction('archive', doc)}>
+            <Archive width={15} height={15} className="text-muted-foreground" />
+            <span>Archivar documento</span>
+          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -629,6 +680,8 @@ function Library({
   setQuery,
   continueDoc,
   onContinue,
+  draft = null,
+  onContinueDraft,
   onOpen,
   onNew,
   onUpload,
@@ -679,6 +732,20 @@ function Library({
             </InputGroupAddon>
           )}
         </InputGroup>
+
+        {draft && !query && !isArchivedTab && (
+          <section className="library-section continue-section">
+            <h2 className="section-title">Borrador sin terminar</h2>
+            <button className="continue-row" type="button" onClick={onContinueDraft}>
+              <span className="continue-accent" aria-hidden="true" />
+              <span className="continue-copy">
+                <strong>{draft.title || 'Sin título'}</strong>
+                <span>Borrador privado · se guarda en este dispositivo</span>
+              </span>
+              <ChevronRight width={16} height={16} className="text-muted-foreground" />
+            </button>
+          </section>
+        )}
 
         {continueDoc && !query && !isArchivedTab && (
           <section className="library-section continue-section">
@@ -779,14 +846,19 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
           </div>
           <h1 className="doc-title">{doc.title || 'Sin título'}</h1>
           {doc.description && <p className="doc-description">{doc.description}</p>}
+          {doc.importStatus === 'pending' && (
+            <p className="import-pending-banner text-sm text-muted-foreground" role="status">
+              Procesando archivo… Bardo está convirtiendo el contenido y lo mostrará aquí en cuanto termine.
+            </p>
+          )}
         </header>
-        <RichBody html={doc.body} onChecklistChange={onChecklistChange} />
+        <RichBody html={doc.body} onChecklistChange={doc.importStatus === 'pending' ? undefined : onChecklistChange} />
       </article>
     </section>
   );
 }
 
-function DeleteAlertDialog({isOpen, doc, action = 'delete', onConfirm, onCancel}) {
+function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel}) {
   const isArchive = action === 'archive';
   const isPermanent = action === 'permanent-delete';
   return (
@@ -794,14 +866,12 @@ function DeleteAlertDialog({isOpen, doc, action = 'delete', onConfirm, onCancel}
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isArchive ? 'Archivar documento' : isPermanent ? 'Eliminar definitivamente' : 'Eliminar documento'}
+            {isArchive ? 'Archivar documento' : 'Eliminar definitivamente'}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isArchive
-              ? `“${doc?.title || 'Sin título'}” se archivará y saldrá de la vista de documentos activos.`
-              : isPermanent
-                ? `“${doc?.title || 'Sin título'}” se eliminará de forma permanente. Esta acción no se puede deshacer.`
-                : `“${doc?.title || 'Sin título'}” se eliminará de la biblioteca.`}
+              ? `“${doc?.title || 'Sin título'}” se archivará y saldrá de la vista de documentos activos. Podrás restaurarlo desde Archivados.`
+              : `“${doc?.title || 'Sin título'}” se eliminará de forma permanente para todo el canal. Esta acción no se puede deshacer.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -812,7 +882,7 @@ function DeleteAlertDialog({isOpen, doc, action = 'delete', onConfirm, onCancel}
             variant={isArchive ? 'default' : 'destructive'}
             onClick={() => onConfirm(doc?.id, action)}
           >
-            {isArchive ? 'Archivar' : isPermanent ? 'Eliminar definitivamente' : 'Eliminar'}
+            {isPermanent ? 'Eliminar definitivamente' : 'Archivar'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -937,7 +1007,15 @@ function PdfPreviewModal({isOpen, file, onCancel}) {
 }
 
 function App() {
-  const [store, setStore] = useState(loadStore);
+  const storeRef = useRef(null);
+  const recoveredJournalRef = useRef(null);
+  const lastPersistOkRef = useRef(true);
+  if (storeRef.current === null) {
+    const recovered = applyJournal(loadStore());
+    storeRef.current = recovered.store;
+    recoveredJournalRef.current = recovered.journal;
+  }
+  const [store, setStoreState] = useState(() => storeRef.current);
   const [route, setRoute] = useState(parseRoute);
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
@@ -949,13 +1027,58 @@ function App() {
       return null;
     }
   });
+  const [draft, setDraft] = useState(readDraft);
+  // Revisión por documento: cambia cuando se adopta una versión remota y obliga a
+  // remontar el editor con el contenido nuevo.
+  const [revisions, setRevisions] = useState({});
+  const revisionsRef = useRef({});
+  const conflictCopiesRef = useRef(new Map());
+  // Documentos recreados con un id nuevo (403): los guardados tardíos se redirigen.
+  const redirectsRef = useRef(new Map());
   const lastOpenedRef = useRef(lastOpened);
   const scrollMemory = useRef(new Map());
   const routeRef = useRef(route);
   const pendingRestore = useRef(null);
   const skipNextRouteAnimation = useRef(false);
+  const isProduction = Boolean(window.__BARDO_PRODUCTION__);
 
   const [libraryTab, setLibraryTab] = useState('active');
+
+  /**
+   * Única vía para modificar el store: escribe localStorage (si hay espacio) y
+   * encola la sincronización de forma síncrona, para que nada dependa de que
+   * React alcance a re-renderizar (p. ej. al cerrar la Activity).
+   */
+  const commitStore = useCallback(updater => {
+    const prev = storeRef.current;
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    if (!next || next === prev) return prev;
+    storeRef.current = next;
+    lastPersistOkRef.current = saveStore(next);
+    try {
+      window.__bardoSyncDocs?.(next);
+    } catch (error) {
+      console.error('Bardo Docs: no se pudo encolar la sincronización', error);
+    }
+    setStoreState(next);
+    return next;
+  }, []);
+
+  // Reenviar una edición recuperada de la copia de seguridad local.
+  useEffect(() => {
+    const journal = recoveredJournalRef.current;
+    if (!journal) return;
+    recoveredJournalRef.current = null;
+    const doc = storeRef.current.docs.find(item => item.id === journal.docId);
+    if (doc && window.__bardoDocsSync?.enqueue) {
+      window.__bardoDocsSync.enqueue(doc, {baseUpdatedAt: journal.baseUpdatedAt ?? undefined});
+    }
+    const persisted = saveStore(storeRef.current);
+    try {
+      window.__bardoSyncDocs?.(storeRef.current);
+    } catch {}
+    if (persisted) clearJournal(journal.docId);
+  }, []);
 
   const docs = store.docs;
   const activeDocs = useMemo(() => docs.filter(doc => !doc.archived), [docs]);
@@ -966,30 +1089,36 @@ function App() {
   const docsById = useMemo(() => new Map(docs.map(doc => [doc.id, doc])), [docs]);
   const currentDoc = route.id ? docsById.get(route.id) : null;
 
-  useEffect(() => saveStore(store), [store]);
-
-  // Load archived docs from backend when switching to archived tab in production
-  useEffect(() => {
-    if (libraryTab === 'archived' && window.__bardoFetchArchivedDocs) {
-      window.__bardoFetchArchivedDocs().then(archived => {
-        if (Array.isArray(archived) && archived.length > 0) {
-          setStore(prev => {
-            const existingIds = new Set(prev.docs.map(d => d.id));
-            const newArchived = archived.filter(d => !existingIds.has(d.id));
-            if (newArchived.length === 0) return prev;
-            return {
-              ...prev,
-              docs: [...prev.docs, ...newArchived],
-            };
-          });
-        }
-      }).catch(err => console.error('Bardo Docs: error fetching archived docs', err));
-    }
-  }, [libraryTab]);
-
   const showToast = useCallback(message => {
     toast(message);
   }, []);
+
+  const bumpRevision = useCallback(ids => {
+    const next = {...revisionsRef.current};
+    ids.forEach(id => { next[id] = (next[id] || 0) + 1; });
+    revisionsRef.current = next;
+    setRevisions(next);
+  }, []);
+
+  // Cargar archivados del servidor al abrir la pestaña (ya registrados como
+  // confirmados en el motor de sincronización, así que no se reenvían).
+  useEffect(() => {
+    if (libraryTab !== 'archived' || !window.__bardoFetchArchivedDocs) return;
+    let cancelled = false;
+    window.__bardoFetchArchivedDocs().then(archived => {
+      if (cancelled || !Array.isArray(archived) || archived.length === 0) return;
+      commitStore(prev => {
+        const existingIds = new Set(prev.docs.map(d => d.id));
+        const newArchived = archived.filter(d => !existingIds.has(d.id));
+        if (newArchived.length === 0) return prev;
+        return {...prev, docs: [...prev.docs, ...newArchived]};
+      });
+    }).catch(err => {
+      console.error('Bardo Docs: error fetching archived docs', err);
+      if (!cancelled) showToast('No se pudieron cargar los documentos archivados');
+    });
+    return () => { cancelled = true; };
+  }, [commitStore, libraryTab, showToast]);
 
   const captureBodyOffset = useCallback(() => {
     const body = document.querySelector('.route-active .doc-body');
@@ -1008,11 +1137,138 @@ function App() {
     else location.hash = hash;
   }, [captureBodyOffset]);
 
+  // Cambios que llegan del motor de sincronización (conflictos, normalizaciones…).
+  useEffect(() => {
+    if (!window.__bardoSubscribeDocs) return undefined;
+    return window.__bardoSubscribeDocs(event => {
+      if (event?.type === 'conflict') {
+        const copyId = newLocalId();
+        const now = new Date().toISOString();
+        let copyTitle = '';
+        commitStore(prev => {
+          const current = prev.docs.find(d => d.id === event.id) || event.localDoc;
+          if (!current) return prev;
+          copyTitle = `${current.title || 'Sin título'} (copia en conflicto)`;
+          const copy = {
+            ...current,
+            id: copyId,
+            title: copyTitle,
+            origin: 'Copia en conflicto',
+            archived: false,
+            archivedAt: null,
+            importStatus: 'ready',
+            hasSource: false,
+            createdAt: now,
+            updatedAt: now,
+          };
+          const docsNext = prev.docs.map(d => (d.id === event.id && event.serverDoc ? {...event.serverDoc} : d));
+          return {...prev, docs: [copy, ...docsNext]};
+        });
+        conflictCopiesRef.current.set(event.id, copyId);
+        bumpRevision([event.id]);
+        const editing = routeRef.current.type === 'edit' && routeRef.current.id === event.id;
+        showToast(`Otra persona editó este documento al mismo tiempo. Guardamos tu versión como “${copyTitle}”.`);
+        if (editing) go(`#edit-${copyId}`, {skipTransition: true});
+        return;
+      }
+      if (event?.type === 'saved' && event.document?.id) {
+        const saved = event.document;
+        commitStore(prev => {
+          let touched = false;
+          const docsNext = prev.docs.map(d => {
+            if (d.id !== event.id) return d;
+            touched = true;
+            return {
+              ...d,
+              updatedAt: saved.updatedAt || d.updatedAt,
+              serverUpdatedAt: saved.updatedAt || d.serverUpdatedAt || null,
+              updatedByName: saved.updatedByName || d.updatedByName,
+            };
+          });
+          return touched ? {...prev, docs: docsNext} : prev;
+        });
+        return;
+      }
+      if (event?.type === 'replace' && Array.isArray(event.docs) && event.docs.length) {
+        const incoming = new Map(event.docs.map(doc => [doc.id, doc]));
+        commitStore(prev => ({
+          ...prev,
+          docs: prev.docs.map(d => (incoming.has(d.id) ? {...incoming.get(d.id), archived: d.archived} : d)),
+        }));
+        bumpRevision([...incoming.keys()]);
+        return;
+      }
+      if (event?.type === 'refresh' && Array.isArray(event.docs)) {
+        // Biblioteca recuperada tras arrancar sin conexión.
+        const incoming = new Map(event.docs.map(doc => [doc.id, doc]));
+        const replaced = [];
+        commitStore(prev => {
+          const known = new Set(prev.docs.map(d => d.id));
+          const docsNext = prev.docs.map(d => {
+            if (!incoming.has(d.id)) return d;
+            replaced.push(d.id);
+            return {...incoming.get(d.id)};
+          });
+          const added = event.docs.filter(doc => !known.has(doc.id));
+          return {...prev, docs: [...added, ...docsNext]};
+        });
+        if (replaced.length) bumpRevision(replaced);
+        return;
+      }
+      if (event?.type === 'recreated' && event.oldId && event.newId) {
+        // Sin acceso al documento original (403): el trabajo se guarda como uno nuevo.
+        redirectsRef.current.set(event.oldId, event.newId);
+        commitStore(prev => {
+          const current = prev.docs.find(d => d.id === event.oldId);
+          const recreated = {
+            ...(current || event.doc),
+            ...event.doc,
+            id: event.newId,
+            origin: 'Recuperado en Bardo',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            serverUpdatedAt: null,
+          };
+          return {...prev, docs: [recreated, ...prev.docs.filter(d => d.id !== event.oldId)]};
+        });
+        showToast('No tenías acceso a ese documento; guardamos tus cambios como un documento nuevo.');
+        const viewing = routeRef.current.id === event.oldId;
+        if (viewing) go(`#${routeRef.current.type === 'edit' ? 'edit' : 'doc'}-${event.newId}`, {skipTransition: true});
+        return;
+      }
+      if (event?.type === 'offline-boot') {
+        showToast('Sin conexión con Bardo. Mostramos tu copia local y reintentaremos en segundo plano.');
+        return;
+      }
+      if (event?.type === 'storage-warning') warnStorageFull();
+    });
+  }, [bumpRevision, commitStore, go, showToast]);
+
+  // Errores de sincronización visibles fuera del editor (biblioteca, lector).
+  useEffect(() => {
+    let offlineNotified = false;
+    const onStatus = event => {
+      const detail = event.detail || {};
+      if (detail.scope !== 'docs') return;
+      if (detail.state === 'saved') offlineNotified = false;
+      if (detail.state === 'offline' && !offlineNotified) {
+        offlineNotified = true;
+        showToast('Sin conexión con Bardo. Tus cambios quedan guardados y se enviarán al reconectar.');
+      }
+      if (detail.state === 'error' && detail.message) showToast(detail.message);
+    };
+    window.addEventListener('bardo-sync-status', onStatus);
+    return () => window.removeEventListener('bardo-sync-status', onStatus);
+  }, [showToast]);
+
   useEffect(() => {
     const onHash = () => {
       scrollMemory.current.set(routeRef.current.key, window.scrollY);
       const nextRoute = parseRoute();
-      if (nextRoute.type === 'library' && lastOpenedRef.current) setLastOpened(lastOpenedRef.current);
+      if (nextRoute.type === 'library') {
+        if (lastOpenedRef.current) setLastOpened(lastOpenedRef.current);
+        setDraft(readDraft());
+      }
       const applyRoute = () => setRoute(nextRoute);
       const currentRoute = routeRef.current;
       const isDocumentModeSwitch = currentRoute.id
@@ -1026,7 +1282,12 @@ function App() {
         && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (shouldAnimateRoute) {
         try {
-          document.startViewTransition(applyRoute);
+          const transition = document.startViewTransition(applyRoute);
+          // Una transición interrumpida rechaza estas promesas ("Transition was
+          // aborted because of invalid state"); no es un error de la app.
+          transition?.ready?.catch?.(() => {});
+          transition?.finished?.catch?.(() => {});
+          transition?.updateCallbackDone?.catch?.(() => {});
         } catch {
           applyRoute();
         }
@@ -1076,7 +1337,7 @@ function App() {
 
   const updateDoc = useCallback((id, patch) => {
     const actorName = patch.updatedByName || currentEditorName();
-    setStore(prev => ({
+    commitStore(prev => ({
       ...prev,
       docs: prev.docs.map(doc => doc.id === id ? {
         ...doc,
@@ -1085,6 +1346,34 @@ function App() {
         ...(actorName ? {updatedByName: actorName} : {}),
       } : doc)
     }));
+  }, [commitStore]);
+
+  /** Guardado del editor. Un snapshot de una revisión antigua (tras un conflicto) va a la copia. */
+  const saveEditorSnapshot = useCallback((docId, revision, snapshot) => {
+    const redirected = redirectsRef.current.get(docId);
+    if (redirected) {
+      updateDoc(redirected, snapshot);
+      return;
+    }
+    const current = revisionsRef.current[docId] || 0;
+    if (revision !== current) {
+      const copyId = conflictCopiesRef.current.get(docId);
+      if (copyId) updateDoc(copyId, {...snapshot, title: `${snapshot.title || 'Sin título'} (copia en conflicto)`});
+      return;
+    }
+    updateDoc(docId, snapshot);
+    if (lastPersistOkRef.current) clearJournal(docId);
+  }, [updateDoc]);
+
+  const journalEditorSnapshot = useCallback((docId, revision, snapshot) => {
+    if (redirectsRef.current.has(docId)) return;
+    if ((revisionsRef.current[docId] || 0) !== revision) return;
+    writeJournal({
+      docId,
+      snapshot,
+      baseUpdatedAt: window.__bardoDocsSync?.baseFor?.(docId) ?? null,
+      at: Date.now(),
+    });
   }, []);
 
   const duplicateDoc = useCallback(id => {
@@ -1092,18 +1381,22 @@ function App() {
     if (!source) return;
     const copy = {
       ...source,
-      id: `local-${Date.now().toString(36)}`,
+      id: newLocalId(),
       title: `${source.title} · copia`,
       builtin: false,
       stress: false,
+      archived: false,
+      archivedAt: null,
+      importStatus: 'ready',
+      hasSource: false,
       origin: 'Duplicado en Bardo',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setStore(prev => ({...prev, docs: [copy, ...prev.docs]}));
+    commitStore(prev => ({...prev, docs: [copy, ...prev.docs]}));
     showToast('Documento duplicado');
     go(`#doc-${copy.id}`);
-  }, [docsById, go, showToast]);
+  }, [commitStore, docsById, go, showToast]);
 
   const uploadDocument = useCallback(async file => {
     try {
@@ -1111,7 +1404,7 @@ function App() {
       const imported = await convertDocumentFile(file);
       const now = new Date().toISOString();
       const doc = {
-        id: `local-${Date.now().toString(36)}`,
+        id: newLocalId(),
         title: imported.title,
         description: '',
         body: markdownToHtml(imported.markdown, imported.title),
@@ -1124,57 +1417,52 @@ function App() {
         builtin: false,
         stress: false,
       };
-      setStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
+      commitStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
       showToast('Documento listo');
       go(`#doc-${doc.id}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo subir el documento', error);
       showToast(error instanceof Error ? error.message : 'No se pudo subir el documento');
     }
-  }, [go, showToast]);
+  }, [commitStore, go, showToast]);
 
-  const deleteDoc = useCallback(async (id, action = 'delete') => {
+  const deleteDoc = useCallback(async (id, action = 'archive') => {
     setModal(null);
-    if (action === 'archive') {
-      setStore(prev => ({
-        ...prev,
-        docs: prev.docs.map(doc => doc.id === id ? {
-          ...doc,
-          archived: true,
-          archivedAt: new Date().toISOString(),
-        } : doc),
-      }));
-      showToast('Documento archivado');
-      go('#docs');
-      return;
-    }
-
     if (action === 'permanent-delete') {
-      setStore(prev => ({
+      if (window.__bardoDeleteDocumentPermanent) {
+        try {
+          await window.__bardoDeleteDocumentPermanent(id);
+        } catch (error) {
+          console.error('Bardo Docs: no se pudo eliminar definitivamente', error);
+          showToast(error?.message || 'No se pudo eliminar el documento');
+          return;
+        }
+      }
+      commitStore(prev => ({
         ...prev,
         docs: prev.docs.filter(doc => doc.id !== id),
         deletedIds: [...new Set([...(prev.deletedIds || []), id])],
       }));
-      if (window.__bardoDeleteDocumentPermanent) {
-        await window.__bardoDeleteDocumentPermanent(id).catch(err => console.error(err));
-      }
       showToast('Documento eliminado definitivamente');
-      go('#docs');
+      if (routeRef.current.id === id) go('#docs');
       return;
     }
 
-    // Default delete
-    setStore(prev => ({
+    // Archivar: el motor de sincronización envía DELETE /api/docs/:id (= archivar).
+    commitStore(prev => ({
       ...prev,
-      docs: prev.docs.filter(doc => doc.id !== id),
-      deletedIds: [...new Set([...(prev.deletedIds || []), id])],
+      docs: prev.docs.map(doc => doc.id === id ? {
+        ...doc,
+        archived: true,
+        archivedAt: new Date().toISOString(),
+      } : doc),
     }));
-    showToast('Documento eliminado');
-    go('#docs');
-  }, [go, showToast]);
+    showToast('Documento archivado');
+    if (routeRef.current.type !== 'library') go('#docs');
+  }, [commitStore, go, showToast]);
 
-  const restoreDoc = useCallback(async (id) => {
-    setStore(prev => ({
+  const restoreDoc = useCallback(id => {
+    commitStore(prev => ({
       ...prev,
       docs: prev.docs.map(doc => doc.id === id ? {
         ...doc,
@@ -1182,11 +1470,8 @@ function App() {
         archivedAt: null,
       } : doc),
     }));
-    if (window.__bardoRestoreDocument) {
-      await window.__bardoRestoreDocument(id).catch(err => console.error(err));
-    }
     showToast('Documento restaurado');
-  }, [showToast]);
+  }, [commitStore, showToast]);
 
   const openDoc = useCallback((id, fromContinue = false) => {
     const target = `#doc-${id}`;
@@ -1202,7 +1487,9 @@ function App() {
     return sortedDocs.filter(doc => `${doc.title} ${doc.description} ${doc.origin} ${stripHtml(doc.body)}`.toLocaleLowerCase('es').includes(q));
   }, [query, sortedDocs]);
 
-  const continueDoc = lastOpened?.id && docsById.has(lastOpened.id) ? docsById.get(lastOpened.id) : activeDocs[0];
+  const continueDoc = lastOpened?.id && docsById.has(lastOpened.id) && !docsById.get(lastOpened.id).archived
+    ? docsById.get(lastOpened.id)
+    : activeDocs[0];
 
   const docAction = useCallback(async (action, targetDoc) => {
     const doc = targetDoc?.id ? targetDoc : docsById.get(targetDoc);
@@ -1211,7 +1498,6 @@ function App() {
     if (action === 'edit') go(`#edit-${doc.id}`, {preserveBody: route.type === 'doc'});
     if (action === 'duplicate') duplicateDoc(doc.id);
     if (action === 'archive') setModal({type: 'delete', docId: doc.id, action: 'archive'});
-    if (action === 'delete') setModal({type: 'delete', docId: doc.id, action: 'delete'});
     if (action === 'restore') restoreDoc(doc.id);
     if (action === 'permanent-delete') setModal({type: 'delete', docId: doc.id, action: 'permanent-delete'});
 
@@ -1232,7 +1518,7 @@ function App() {
           showToast('Documento enviado al canal');
         } catch (error) {
           console.error('Bardo Docs: no se pudo enviar el documento al canal', error);
-          showToast('No se pudo enviar el documento al canal');
+          showToast(error?.message && !/^HTTP \d+$/.test(error.message) ? error.message : 'No se pudo enviar el documento al canal');
         }
       }
     }
@@ -1278,7 +1564,11 @@ function App() {
       }
     }
     if (action === 'print') window.print();
-  }, [docsById, duplicateDoc, go, openDoc, route.type, showToast]);
+  }, [docsById, duplicateDoc, go, openDoc, restoreDoc, route.type, showToast]);
+
+  const editorDocId = route.type === 'edit' ? currentDoc?.id : null;
+  const editorRevision = editorDocId ? (revisions[editorDocId] || 0) : 0;
+  const showEditor = route.type === 'new' || (route.type === 'edit' && Boolean(currentDoc));
 
   return (
     <main className="app-root">
@@ -1293,7 +1583,7 @@ function App() {
               go('#docs', {restore: scrollMemory.current.get('library') || 0});
             }
           }}
-          onEdit={() => go(`#edit-${currentDoc.id}`, {preserveBody: true})}
+          onEdit={() => currentDoc && go(`#edit-${currentDoc.id}`, {preserveBody: true})}
           onAction={docAction}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
@@ -1312,7 +1602,7 @@ function App() {
           onSaveDocToLibrary={(docData) => {
             const now = new Date().toISOString();
             const doc = {
-              id: docData.id || `local-${Date.now().toString(36)}`,
+              id: docData.id || newLocalId(),
               title: docData.title || 'Acta de sesión',
               description: docData.description || '',
               body: docData.body || '',
@@ -1324,7 +1614,7 @@ function App() {
               builtin: false,
               stress: false,
             };
-            setStore((prev) => ({...prev, docs: [doc, ...(prev.docs || []).filter((d) => d.id !== doc.id)]}));
+            commitStore((prev) => ({...prev, docs: [doc, ...(prev.docs || []).filter((d) => d.id !== doc.id)]}));
             showToast('Minuta guardada en Bardo Docs');
             go(`#doc-${doc.id}`);
           }}
@@ -1338,6 +1628,8 @@ function App() {
           setQuery={setQuery}
           continueDoc={continueDoc}
           onContinue={() => continueDoc && openDoc(continueDoc.id, true)}
+          draft={draft}
+          onContinueDraft={() => go('#new')}
           onOpen={openDoc}
           onNew={() => go('#new')}
           onUpload={uploadDocument}
@@ -1360,17 +1652,21 @@ function App() {
         />
       )}
 
-      {(route.type === 'edit' || route.type === 'new') && (
+      {showEditor && (
         <BardoEditor
-          key={route.type === 'new' ? 'new' : currentDoc?.id}
+          key={route.type === 'new' ? 'new' : `${editorDocId}:${editorRevision}`}
           doc={route.type === 'new' ? null : currentDoc}
           isNew={route.type === 'new'}
+          readOnly={route.type === 'edit' && currentDoc?.importStatus === 'pending'}
+          remoteSync={isProduction}
           themeModeMenu={ThemeModeMenu}
-          onBack={() => route.type === 'new' ? go('#docs') : go(`#doc-${currentDoc.id}`, {preserveBody: true, skipTransition: true})}
+          onBack={() => (route.type === 'new' || !editorDocId
+            ? go('#docs')
+            : go(`#doc-${editorDocId}`, {preserveBody: true, skipTransition: true}))}
           onFinish={(snapshot) => {
             if (route.type === 'new') {
               const doc = {
-                id: `local-${Date.now().toString(36)}`,
+                id: newLocalId(),
                 ...snapshot,
                 title: snapshot.title || 'Sin título',
                 origin: 'Creado en Bardo',
@@ -1381,23 +1677,26 @@ function App() {
                 builtin: false,
                 stress: false,
               };
-              setStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
+              commitStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
               try {
                 localStorage.removeItem(DRAFT_KEY);
               } catch {}
+              setDraft(null);
               showToast('Documento creado');
               go(`#doc-${doc.id}`);
-            } else {
-              updateDoc(currentDoc.id, snapshot);
-              go(`#doc-${currentDoc.id}`, {preserveBody: true, skipTransition: true});
+            } else if (editorDocId) {
+              saveEditorSnapshot(editorDocId, editorRevision, snapshot);
+              const targetId = redirectsRef.current.get(editorDocId) || editorDocId;
+              go(`#doc-${targetId}`, {preserveBody: true, skipTransition: true});
             }
           }}
           onAutosave={(snapshot) => {
-            if (route.type === 'new') {
-              try {
-                localStorage.setItem(DRAFT_KEY, JSON.stringify(snapshot));
-              } catch {}
-            } else updateDoc(currentDoc.id, snapshot);
+            if (route.type === 'new') saveDraft(snapshot);
+            else if (editorDocId) saveEditorSnapshot(editorDocId, editorRevision, snapshot);
+          }}
+          onJournal={(snapshot) => {
+            if (route.type === 'new') saveDraft(snapshot);
+            else if (editorDocId) journalEditorSnapshot(editorDocId, editorRevision, snapshot);
           }}
           onOpenLink={(api) => {
             setLinkValue('');
@@ -1418,7 +1717,7 @@ function App() {
       <DeleteAlertDialog
         isOpen={modal?.type === 'delete'}
         doc={modal?.type === 'delete' ? docsById.get(modal.docId) : null}
-        action={modal?.type === 'delete' ? modal.action : 'delete'}
+        action={modal?.type === 'delete' ? modal.action : 'archive'}
         onConfirm={deleteDoc}
         onCancel={() => setModal(null)}
       />

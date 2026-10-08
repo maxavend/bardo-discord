@@ -26,6 +26,11 @@ export const POINT_STATUS = {
 
 export const DEFAULT_LIVE_SESSION = {
   sessionId: null,
+  // Planner session (agenda) this live state belongs to. Used to scope sync and
+  // to reject a live state that was persisted for a different agenda.
+  plannerSessionId: null,
+  // ISO timestamp of the last local mutation; used to reconcile with the server.
+  updatedAt: null,
   status: SESSION_STATUS.IDLE,
   scheduledStartAt: null,
   sessionStartedAt: null,
@@ -134,8 +139,37 @@ function inferActiveBlock(plannerState, sessionState) {
   return blocks.find((block) => !completed.has(block.id) && !skipped.has(block.id))?.id || null;
 }
 
-export function migrateLiveSessionState(plannerState, persistedState) {
-  if (!persistedState || typeof persistedState !== 'object') return {...DEFAULT_LIVE_SESSION};
+/**
+ * Maps the legacy server column shape (activeBlockId, totalPausedMs, …) to the
+ * client live-state schema. Fields already present in client form win.
+ */
+export function normalizeLegacyLiveShape(state) {
+  if (!state || typeof state !== 'object') return state;
+  const next = {...state};
+  const alias = (legacyKey, clientKey) => {
+    if ((next[clientKey] === undefined || next[clientKey] === null) && next[legacyKey] !== undefined && next[legacyKey] !== null) {
+      next[clientKey] = next[legacyKey];
+    }
+  };
+  alias('activeBlockId', 'liveActiveBlockId');
+  alias('activePointId', 'liveActivePointId');
+  alias('blockStartedAt', 'activeBlockStartedAt');
+  alias('sessionPausedAt', 'pausedAt');
+  alias('totalPausedMs', 'accumulatedPausedMs');
+  if (!Array.isArray(next.recordings) && Array.isArray(next.recordingsMeta)) next.recordings = next.recordingsMeta;
+  delete next.activeBlockId;
+  delete next.activePointId;
+  delete next.blockStartedAt;
+  delete next.sessionPausedAt;
+  delete next.totalPausedMs;
+  delete next.recordingsMeta;
+  delete next.blockElapsedBeforePauseMs;
+  return next;
+}
+
+export function migrateLiveSessionState(plannerState, rawPersistedState) {
+  if (!rawPersistedState || typeof rawPersistedState !== 'object') return {...DEFAULT_LIVE_SESSION};
+  const persistedState = normalizeLegacyLiveShape(rawPersistedState);
 
   const merged = {
     ...DEFAULT_LIVE_SESSION,
@@ -186,6 +220,7 @@ export function createLiveSession(plannerState, now = Date.now()) {
   return {
     ...DEFAULT_LIVE_SESSION,
     sessionId,
+    plannerSessionId: plannerState?.id || null,
     status: SESSION_STATUS.RUNNING,
     scheduledStartAt: plannerState?.startTime || null,
     sessionStartedAt: now,
@@ -347,6 +382,22 @@ function allBlockPointsHandled(block, pointStatuses) {
   });
 }
 
+/**
+ * A running/paused session must always have an active Block. If the persisted
+ * pointer is missing or stale (e.g. lost in a sync round-trip), re-anchor to the
+ * first Block that is neither completed nor skipped instead of treating the
+ * session as finished. Returns null when there is no such Block (truly done).
+ */
+export function reanchorActiveBlock(plannerState, sessionState, now = Date.now()) {
+  const blocks = plannerState?.blocks || [];
+  const completed = new Set(sessionState?.completedBlockIds || []);
+  const skipped = new Set(sessionState?.skippedBlockIds || []);
+  const fallback = blocks.find((block) => !completed.has(block.id) && !skipped.has(block.id)) || null;
+  if (!fallback) return null;
+  const pointStatuses = {...(sessionState.pointStatuses || {})};
+  return moveToBlock(sessionState, fallback, now, pointStatuses);
+}
+
 export function advanceLiveSession(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState || sessionState.status === SESSION_STATUS.COMPLETED || sessionState.status === SESSION_STATUS.INTERRUPTED) {
     return sessionState;
@@ -354,7 +405,9 @@ export function advanceLiveSession(plannerState, sessionState, now = Date.now())
 
   const blocks = plannerState.blocks || [];
   const currentBlockIndex = blocks.findIndex((block) => block.id === sessionState.liveActiveBlockId);
-  if (currentBlockIndex < 0) return completeLiveSession(sessionState, now);
+  if (currentBlockIndex < 0) {
+    return reanchorActiveBlock(plannerState, sessionState, now) || completeLiveSession(sessionState, now);
+  }
 
   const currentBlock = blocks[currentBlockIndex];
   const pointStatuses = {...(sessionState.pointStatuses || {})};
@@ -401,7 +454,7 @@ export function skipActivePoint(plannerState, sessionState, now = Date.now()) {
 
   const blocks = plannerState.blocks || [];
   const currentBlockIndex = blocks.findIndex((block) => block.id === sessionState.liveActiveBlockId);
-  if (currentBlockIndex < 0) return sessionState;
+  if (currentBlockIndex < 0) return reanchorActiveBlock(plannerState, sessionState, now) || sessionState;
 
   const currentBlock = blocks[currentBlockIndex];
   const pointStatuses = {
@@ -431,8 +484,12 @@ export function skipActivePoint(plannerState, sessionState, now = Date.now()) {
 
 export function advanceToNextBlock(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState) return sessionState;
+  if (sessionState.status === SESSION_STATUS.COMPLETED || sessionState.status === SESSION_STATUS.INTERRUPTED) return sessionState;
   const blocks = plannerState.blocks || [];
   const currentIndex = blocks.findIndex((block) => block.id === sessionState.liveActiveBlockId);
+  if (currentIndex < 0) {
+    return reanchorActiveBlock(plannerState, sessionState, now) || completeLiveSession(sessionState, now);
+  }
   const currentBlock = blocks[currentIndex] || null;
   const completedBlockIds = currentBlock
     ? unique([...(sessionState.completedBlockIds || []), currentBlock.id])
@@ -445,8 +502,12 @@ export function advanceToNextBlock(plannerState, sessionState, now = Date.now())
 
 export function skipActiveBlock(plannerState, sessionState, now = Date.now()) {
   if (!sessionState || !plannerState) return sessionState;
+  if (sessionState.status === SESSION_STATUS.COMPLETED || sessionState.status === SESSION_STATUS.INTERRUPTED) return sessionState;
   const blocks = plannerState.blocks || [];
   const currentIndex = blocks.findIndex((block) => block.id === sessionState.liveActiveBlockId);
+  if (currentIndex < 0) {
+    return reanchorActiveBlock(plannerState, sessionState, now) || completeLiveSession(sessionState, now);
+  }
   const currentId = sessionState.liveActiveBlockId;
   const skippedBlockIds = currentId
     ? unique([...(sessionState.skippedBlockIds || []), currentId])

@@ -104,9 +104,10 @@ export function PlannerSessionHeader({
     (accumulator, b) => accumulator + (b.durationMinutes || 0),
     0
   ) || totalCalculatedDuration || 0;
+  // recalculateEstimatedEndTime(plannerState, sessionState): includes live block extensions.
   const estimatedEndTime = recalculateEstimatedEndTime(
-    startTime,
-    totalPlannedMinutes
+    {startTime, totalCalculatedDuration: totalPlannedMinutes},
+    sessionState
   );
 
   const status = sessionState?.status || SESSION_STATUS.IDLE;

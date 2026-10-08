@@ -78,7 +78,7 @@ export function PlannerHomeView({
   const isEmpty = isDefaultEmptySession(plannerState);
 
   const totalMinutes = (blocks || []).reduce((acc, b) => acc + (b.durationMinutes || 0), 0);
-  const estimatedEnd = recalculateEstimatedEndTime(startTime, totalMinutes);
+  const estimatedEnd = recalculateEstimatedEndTime({startTime, totalCalculatedDuration: totalMinutes}, sessionState);
 
   let formattedDate = date;
   try {

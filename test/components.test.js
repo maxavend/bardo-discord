@@ -130,6 +130,37 @@ test('buildDocNewPayload produce contenedor con botón para crear documento', ()
   const actionRow = payload.components[0].components.at(-1);
   const button = actionRow.components[0];
   assert.equal(button.label, 'Crear en Bardo');
-  assert.equal(button.custom_id, 'bardo:open:new-doc');
+  // The title travels in the custom_id so the editor can prefill it.
+  assert.equal(button.custom_id, 'bardo:open:new-doc:Especificación de API');
 });
 
+
+function totalText(payload) {
+  let total = '';
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.content === 'string') total += `${node.content}\n`;
+    for (const child of node.components || []) visit(child);
+  };
+  payload.components.forEach(visit);
+  return total;
+}
+
+test('buildReusListPayload lista reuniones completadas por el runner y respeta 4000 caracteres', () => {
+  const sessions = [
+    { id: 'c', title: 'Reu Completada', status: 'completed', date: '2026-09-01' },
+    ...Array.from({ length: 20 }, (_, index) => ({ id: `l${index}`, title: 'L'.repeat(200), status: 'live' })),
+  ];
+  const text = totalText(buildReusListPayload({ sessions }));
+  assert.ok(text.length < 4000, `texto: ${text.length}`);
+
+  const completed = totalText(buildReusListPayload({ sessions: [sessions[0]] }));
+  assert.match(completed, /Reu Completada/);
+});
+
+test('buildReuNewPayload y buildErrorPayload nunca superan el límite de Components V2', () => {
+  const reu = buildReuNewPayload({ session: { id: 's', title: 'T'.repeat(5000), description: 'D'.repeat(6000) } });
+  assert.ok(totalText(reu).length < 4000);
+  assert.ok(totalText(buildErrorPayload('E'.repeat(10_000))).length < 4000);
+  assert.ok(totalText(buildDocumentPayload({ title: 'X'.repeat(3000), pages: ['hola'] }, { documentId: 'd' })).length < 4000);
+});
