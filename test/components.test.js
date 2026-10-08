@@ -4,7 +4,10 @@ import {
   BARDO_OPEN_PREFIX,
   normalizeDocumentId,
   buildDocumentPayload,
+  buildDocNewPayload,
   buildErrorPayload,
+  buildReuNewPayload,
+  buildReusListPayload,
   createDocumentPreview,
 } from '../src/components.js';
 
@@ -58,7 +61,7 @@ test('buildDocumentPayload produce preview Components V2 con botón nativo de Ac
   const actionRow = payload.components[0].components.at(-1);
   const button = actionRow.components[0];
   assert.equal(button.style, 1); // ButtonStyle.Primary
-  assert.equal(button.label, '📖 Mostrar más');
+  assert.equal(button.label, 'Abrir documento');
   assert.equal(button.custom_id, 'bardo:open:doc-abc');
   assert.equal(button.url, undefined);
 });
@@ -67,4 +70,97 @@ test('buildErrorPayload produce contenedor con mensaje de error', () => {
   const payload = buildErrorPayload('Error de prueba');
   assert.ok(payload.flags !== undefined);
   assert.equal(payload.components.length, 1);
+});
+
+test('buildReuNewPayload produce contenedor Components V2 con botón para abrir sesión de reunión', () => {
+  const session = {
+    id: 'session-123',
+    title: 'Planificación Sprint 12',
+    date: '2026-09-15',
+    startTime: '11:00',
+    targetDuration: 45,
+    hostName: 'Max',
+    description: 'Revisión de historias de usuario',
+  };
+
+  const payload = buildReuNewPayload({ session });
+  assert.ok(payload.flags !== undefined);
+  assert.equal(payload.components.length, 1);
+  assert.equal(payload.components[0].type, 17);
+
+  const actionRow = payload.components[0].components.at(-1);
+  const button = actionRow.components[0];
+  assert.equal(button.label, 'Abrir reunión');
+  assert.equal(button.custom_id, 'bardo:open:planner-session:session-123');
+});
+
+test('buildReusListPayload muestra lista de reuniones y botón para abrir el planner', () => {
+  const sessions = [
+    { id: 's1', title: 'Reu Live', status: 'live', startTime: '10:00' },
+    { id: 's2', title: 'Reu Próxima', status: 'scheduled', date: '2026-09-16', startTime: '15:00' },
+    { id: 's3', title: 'Reu Pasada', status: 'finished', date: '2026-09-08' },
+  ];
+
+  const payload = buildReusListPayload({ sessions, channelName: 'general' });
+  assert.ok(payload.flags !== undefined);
+  assert.equal(payload.components.length, 1);
+
+  const actionRow = payload.components[0].components.at(-1);
+  const button = actionRow.components[0];
+  assert.equal(button.label, 'Abrir Reuniones');
+  assert.equal(button.custom_id, 'bardo:open:planner');
+});
+
+test('buildReusListPayload maneja canal sin reuniones con mensaje amigable', () => {
+  const payload = buildReusListPayload({ sessions: [] });
+  assert.ok(payload.flags !== undefined);
+  assert.equal(payload.components.length, 1);
+
+  const actionRow = payload.components[0].components.at(-1);
+  const button = actionRow.components[0];
+  assert.equal(button.label, 'Abrir Reuniones');
+  assert.equal(button.custom_id, 'bardo:open:planner');
+});
+
+test('buildDocNewPayload produce contenedor con botón para crear documento', () => {
+  const payload = buildDocNewPayload({ title: 'Especificación de API' });
+  assert.ok(payload.flags !== undefined);
+  assert.equal(payload.components.length, 1);
+
+  const actionRow = payload.components[0].components.at(-1);
+  const button = actionRow.components[0];
+  assert.equal(button.label, 'Crear en Bardo');
+  // The title travels in the custom_id so the editor can prefill it.
+  assert.equal(button.custom_id, 'bardo:open:new-doc:Especificación de API');
+});
+
+
+function totalText(payload) {
+  let total = '';
+  const visit = node => {
+    if (!node || typeof node !== 'object') return;
+    if (typeof node.content === 'string') total += `${node.content}\n`;
+    for (const child of node.components || []) visit(child);
+  };
+  payload.components.forEach(visit);
+  return total;
+}
+
+test('buildReusListPayload lista reuniones completadas por el runner y respeta 4000 caracteres', () => {
+  const sessions = [
+    { id: 'c', title: 'Reu Completada', status: 'completed', date: '2026-09-01' },
+    ...Array.from({ length: 20 }, (_, index) => ({ id: `l${index}`, title: 'L'.repeat(200), status: 'live' })),
+  ];
+  const text = totalText(buildReusListPayload({ sessions }));
+  assert.ok(text.length < 4000, `texto: ${text.length}`);
+
+  const completed = totalText(buildReusListPayload({ sessions: [sessions[0]] }));
+  assert.match(completed, /Reu Completada/);
+});
+
+test('buildReuNewPayload y buildErrorPayload nunca superan el límite de Components V2', () => {
+  const reu = buildReuNewPayload({ session: { id: 's', title: 'T'.repeat(5000), description: 'D'.repeat(6000) } });
+  assert.ok(totalText(reu).length < 4000);
+  assert.ok(totalText(buildErrorPayload('E'.repeat(10_000))).length < 4000);
+  assert.ok(totalText(buildDocumentPayload({ title: 'X'.repeat(3000), pages: ['hola'] }, { documentId: 'd' })).length < 4000);
 });

@@ -25,8 +25,36 @@ jobs:
           npm ci --no-audit --no-fund
           npm ci --prefix activity-app --no-audit --no-fund
 
-      - name: Syntax and build check
-        run: npm run check
+      - name: Lint
+        run: npm run lint
 
-      - name: Run test suite
+      - name: Build
+        run: npm run build
+
+      - name: Syntax check
+        run: |
+          node --check src/worker.js
+          node --check src/components.js
+          node --check src/document-id.js
+          node --check src/export-format.js
+          node --check src/import-format.js
+          node --check src/pagination.js
+          node --check src/db.js
+          node --check src/discord-auth.js
+          node --check src/discord-permissions.js
+          node --check src/document-access.js
+          node --check src/docs-api.js
+          node --check src/planner-api.js
+          node --check src/limits.js
+          node --check scripts/register-commands.js
+          node --check scripts/command-definitions.js
+          node --check scripts/build-activity.js
+
+      # Replays every D1 migration on a fresh SQLite (node:sqlite) and checks
+      # that all SQL in src/ compiles against the final schema. Catches
+      # migrations that reference columns no migration creates.
+      - name: Migrations replay (fresh database)
+        run: node --test test/schema.test.js
+
+      - name: Test
         run: npm test

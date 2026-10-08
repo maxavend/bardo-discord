@@ -10,8 +10,17 @@ export function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+// Characters XML 1.0 forbids (C0 controls except tab/LF/CR, lone surrogates,
+// U+FFFE/U+FFFF). Text extracted from PDFs often contains e.g. form feeds;
+// a single one makes Word reject the whole .docx.
+const INVALID_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+export function stripInvalidXmlChars(value) {
+  return String(value).replace(INVALID_XML_CHARS, '');
+}
+
 export function escapeXml(value) {
-  return String(value)
+  return stripInvalidXmlChars(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -55,6 +64,50 @@ function cleanMarkdownInline(text) {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 }
 
+// ASCII equivalents for common typographic characters outside Latin-1, so
+// the PDF (standard WinAnsi fonts) never silently drops them.
+const PDF_ASCII_EQUIVALENTS = new Map([
+  ['“', '"'], ['”', '"'], ['„', '"'], ['‟', '"'], ['″', '"'],
+  ['‘', "'"], ['’', "'"], ['‚', "'"], ['‛', "'"], ['′', "'"],
+  ['—', '-'], ['–', '-'], ['‒', '-'], ['‐', '-'], ['‑', '-'], ['−', '-'],
+  ['…', '...'],
+  ['•', '-'], ['●', '-'], ['◦', '-'], ['‣', '-'], ['⁃', '-'], ['▪', '-'],
+  ['€', 'EUR'], ['™', 'TM'], ['‰', 'o/oo'],
+  ['←', '<-'], ['→', '->'], ['↔', '<->'], ['⇒', '=>'],
+  ['≤', '<='], ['≥', '>='], ['≠', '!='], ['≈', '~'],
+  ['✓', 'v'], ['✔', 'v'], ['✗', 'x'], ['✘', 'x'],
+  ['‹', '<'], ['›', '>'],
+  [' ', ' '], [' ', ' '], [' ', ' '], [' ', ' '], [' ', ' '], [' ', ' '],
+  ['\t', '    '],
+]);
+const ZERO_WIDTH = new Set(['​', '‌', '‍', '⁠', '﻿', '­']);
+
+/**
+ * Makes text drawable with the standard PDF fonts: Latin-1 is kept as is
+ * (so Spanish accents survive), common typography is mapped to ASCII and any
+ * other glyph becomes '?' instead of vanishing.
+ */
+export function toPdfSafeText(value) {
+  let output = '';
+  for (const char of String(value ?? '')) {
+    if (ZERO_WIDTH.has(char)) continue;
+    const mapped = PDF_ASCII_EQUIVALENTS.get(char);
+    if (mapped !== undefined) {
+      output += mapped;
+      continue;
+    }
+    const code = char.codePointAt(0);
+    if ((code >= 0x20 && code <= 0x7E) || (code >= 0xA0 && code <= 0xFF)) {
+      output += char;
+    } else if (code < 0x20 || (code >= 0x7F && code < 0xA0)) {
+      output += ' ';
+    } else {
+      output += '?';
+    }
+  }
+  return output;
+}
+
 /**
  * Genera un archivo binario PDF real a partir del documento y su markdown.
  */
@@ -83,7 +136,7 @@ export async function generatePdfDocument(document) {
   }
 
   function wrapText(text, font, size, maxWidth) {
-    const words = String(text || '').split(' ');
+    const words = toPdfSafeText(text || '').split(' ');
     const lines = [];
     let currentLine = '';
 
@@ -93,9 +146,7 @@ export async function generatePdfDocument(document) {
       try {
         width = font.widthOfTextAtSize(testLine, size);
       } catch {
-        // En caso de caracteres especiales fuera de WinAnsi, limpiamos a ascii
-        const safe = testLine.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
-        width = font.widthOfTextAtSize(safe, size);
+        width = font.widthOfTextAtSize(testLine.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?'), size);
       }
 
       if (width <= maxWidth) {
@@ -111,7 +162,7 @@ export async function generatePdfDocument(document) {
 
   function drawTextLine(text, font, size, color, xOffset = 0) {
     ensureSpace(size * 1.35);
-    const safeText = String(text).replace(/[^\x20-\x7E\xA0-\xFF]/g, ' ');
+    const safeText = toPdfSafeText(text).replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
     try {
       currentPage.drawText(safeText, {
         x: marginX + xOffset,
@@ -244,7 +295,8 @@ export async function generatePdfDocument(document) {
     const listMatch = trimmed.match(/^([-*+]|\d+[.)])\s+(.+)$/);
     if (listMatch) {
       const isNumbered = /^\d/.test(listMatch[1]);
-      const bullet = isNumbered ? `${listMatch[1]} ` : '• ';
+      // '•' is outside Latin-1; use an ASCII bullet the standard font can draw.
+      const bullet = isNumbered ? `${listMatch[1]} ` : '- ';
       const itemText = cleanMarkdownInline(listMatch[2]);
       const itemLines = wrapText(itemText, fontRegular, 10, contentWidth - 20);
       
@@ -352,7 +404,7 @@ export async function generateDocxDocument(document) {
       </w:pPr>
       <w:r>
         <w:rPr><w:b/><w:sz w:val="44"/><w:color w:val="0F172A"/></w:rPr>
-        <w:t>${title}</w:t>
+        <w:t xml:space="preserve">${title}</w:t>
       </w:r>
     </w:p>`);
 
@@ -381,7 +433,7 @@ export async function generateDocxDocument(document) {
           <w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr>
           <w:r>
             <w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="19"/><w:color w:val="334155"/></w:rPr>
-            <w:t xml:space="preserve">${escapeXml(code.join('\n'))}</w:t>
+            ${code.map(codeLine => `<w:t xml:space="preserve">${escapeXml(codeLine.replace(/\t/g, '    '))}</w:t>`).join('<w:br/>')}
           </w:r>
         </w:p>`);
       continue;
@@ -392,7 +444,7 @@ export async function generateDocxDocument(document) {
       xmlParagraphs.push(`
         <w:p>
           <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
-          <w:r><w:t>${escapeXml(cleanMarkdownInline(h1[1]))}</w:t></w:r>
+          <w:r><w:t xml:space="preserve">${escapeXml(cleanMarkdownInline(h1[1]))}</w:t></w:r>
         </w:p>`);
       index += 1;
       continue;
@@ -403,7 +455,7 @@ export async function generateDocxDocument(document) {
       xmlParagraphs.push(`
         <w:p>
           <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
-          <w:r><w:t>${escapeXml(cleanMarkdownInline(h2[1]))}</w:t></w:r>
+          <w:r><w:t xml:space="preserve">${escapeXml(cleanMarkdownInline(h2[1]))}</w:t></w:r>
         </w:p>`);
       index += 1;
       continue;
@@ -414,7 +466,7 @@ export async function generateDocxDocument(document) {
       xmlParagraphs.push(`
         <w:p>
           <w:pPr><w:pStyle w:val="Heading3"/></w:pPr>
-          <w:r><w:t>${escapeXml(cleanMarkdownInline(h3[1]))}</w:t></w:r>
+          <w:r><w:t xml:space="preserve">${escapeXml(cleanMarkdownInline(h3[1]))}</w:t></w:r>
         </w:p>`);
       index += 1;
       continue;
@@ -425,7 +477,7 @@ export async function generateDocxDocument(document) {
       xmlParagraphs.push(`
         <w:p>
           <w:pPr><w:ind w:left="400"/><w:spacing w:before="100" w:after="100"/></w:pPr>
-          <w:r><w:rPr><w:i/><w:color w:val="475569"/></w:rPr><w:t>${escapeXml(cleanMarkdownInline(quote[1]))}</w:t></w:r>
+          <w:r><w:rPr><w:i/><w:color w:val="475569"/></w:rPr><w:t xml:space="preserve">${escapeXml(cleanMarkdownInline(quote[1]))}</w:t></w:r>
         </w:p>`);
       index += 1;
       continue;
@@ -447,7 +499,7 @@ export async function generateDocxDocument(document) {
       xmlParagraphs.push(`
         <w:p>
           <w:pPr><w:ind w:left="400"/><w:spacing w:before="40" w:after="40"/></w:pPr>
-          <w:r><w:t>${escapeXml(numbered[1])} ${escapeXml(cleanMarkdownInline(numbered[2]))}</w:t></w:r>
+          <w:r><w:t xml:space="preserve">${escapeXml(numbered[1])} ${escapeXml(cleanMarkdownInline(numbered[2]))}</w:t></w:r>
         </w:p>`);
       index += 1;
       continue;
@@ -456,7 +508,7 @@ export async function generateDocxDocument(document) {
     xmlParagraphs.push(`
       <w:p>
         <w:pPr><w:spacing w:before="60" w:after="120"/></w:pPr>
-        <w:r><w:t>${escapeXml(cleanMarkdownInline(trimmed))}</w:t></w:r>
+        <w:r><w:t xml:space="preserve">${escapeXml(cleanMarkdownInline(trimmed))}</w:t></w:r>
       </w:p>`);
     index += 1;
   }

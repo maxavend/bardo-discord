@@ -1,5 +1,4 @@
 const MAX_PDF_PAGES = 80;
-let installed = false;
 
 function ensureDocumentTitle(markdown, title) {
   const normalized = String(markdown || '').replace(/\r\n?/g, '\n').trim();
@@ -132,12 +131,20 @@ export async function convertDocumentFile(file) {
   throw new Error('Usa un archivo .md, .markdown, .txt, .pdf o .docx.');
 }
 
-async function normalizeDocument(doc, authenticatedFetch) {
-  if (doc?.importStatus !== 'pending' || !doc?.hasSource) return doc;
-  if (doc.sourceType !== 'pdf' && doc.sourceType !== 'docx') return doc;
+/**
+ * Descarga el archivo original de una importación PDF/DOCX pendiente, lo
+ * convierte a Markdown en el navegador y lo guarda con /normalize.
+ * @param {object} doc documento del API (`importStatus: 'pending'`)
+ * @param {(path: string, init?: object) => Promise<any>} request request JSON autenticado
+ * @param {typeof fetch} fetchImpl fetch para el binario
+ * @param {() => Record<string,string>} getHeaders
+ */
+async function normalizeDocument(doc, {request, fetchImpl, getHeaders}) {
+  if (doc?.importStatus !== 'pending' || !doc?.hasSource) return null;
+  if (doc.sourceType !== 'pdf' && doc.sourceType !== 'docx') return null;
 
-  const sourceResponse = await authenticatedFetch(`/api/docs/${encodeURIComponent(doc.id)}/source`, {
-    headers:{Accept:'application/octet-stream'},
+  const sourceResponse = await fetchImpl(`/api/docs/${encodeURIComponent(doc.id)}/source`, {
+    headers:{Accept:'application/octet-stream', ...getHeaders()},
     cache:'no-store',
   });
   if (!sourceResponse.ok) throw new Error(`Source HTTP ${sourceResponse.status}`);
@@ -147,55 +154,39 @@ async function normalizeDocument(doc, authenticatedFetch) {
     ? await importPdf(source, doc.title || 'Documento')
     : await importDocx(source, doc.title || 'Documento');
 
-  const saveResponse = await authenticatedFetch(`/api/docs/${encodeURIComponent(doc.id)}/normalize`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json', Accept:'application/json'},
-    body:JSON.stringify({markdown}),
-    cache:'no-store',
-  });
-  if (!saveResponse.ok) throw new Error(`Normalize HTTP ${saveResponse.status}`);
-  const saved = await saveResponse.json().catch(() => null);
-  return saved?.document || {...doc, markdown, importStatus:'ready', hasSource:false};
+  try {
+    const saved = await request(`/api/docs/${encodeURIComponent(doc.id)}/normalize`, {method:'POST', body:{markdown}});
+    return saved?.document || {...doc, markdown, importStatus:'ready', hasSource:false};
+  } catch (error) {
+    // Otra sesión ya lo normalizó: usar esa versión.
+    if (error?.status === 409 && error?.data?.document) return error.data.document;
+    throw error;
+  }
 }
 
-export function installProductionImportNormalizer() {
-  if (installed) return;
-  installed = true;
-  const authenticatedFetch = window.fetch.bind(window);
-
-  window.fetch = async function bardoImportFetch(input, init = {}) {
-    const response = await authenticatedFetch(input, init);
-    const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
-    const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || '';
-    let url;
-    try { url = new URL(raw, window.location.href); } catch { return response; }
-
-    if (method !== 'GET' || url.pathname !== '/api/docs' || !response.ok) return response;
-
-    try {
-      const payload = await response.clone().json();
-      if (!Array.isArray(payload?.documents)) return response;
-      const pending = payload.documents
-        .filter(doc => doc?.importStatus === 'pending' && doc?.hasSource);
-      if (!pending.length) return response;
-
-      // File conversion can download megabytes and consume significant CPU on
-      // mobile. Let the library render first and finish pending imports in the
-      // background instead of delaying every /api/docs response.
-      window.setTimeout(async () => {
-        for (const doc of pending) {
-          try {
-            await normalizeDocument(doc, authenticatedFetch);
-          } catch (error) {
-            console.error(`Bardo Docs: no se pudo normalizar ${doc.id}`, error);
-          }
-        }
-        window.dispatchEvent(new CustomEvent('bardo-documents-normalized'));
-      }, 0);
-      return response;
-    } catch (error) {
-      console.error('Bardo Docs: no se pudo normalizar el archivo real', error);
-      return response;
-    }
+function sessionHeaders() {
+  return {
+    ...(window.__BARDO_SESSION_TOKEN__ ? {Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}`} : {}),
+    ...(window.__BARDO_CUSTOM_ID__ ? {'x-bardo-custom-id': window.__BARDO_CUSTOM_ID__} : {}),
+    ...(window.__BARDO_INSTANCE_ID__ ? {'x-bardo-instance-id': window.__BARDO_INSTANCE_ID__} : {}),
   };
+}
+
+/**
+ * Normaliza en serie las importaciones pendientes y devuelve los documentos ya
+ * listos (formato del API). Se llama explícitamente desde el bridge con la
+ * lista inicial, sin depender del orden en que se envolvió `fetch`.
+ */
+export async function normalizePendingImports(documents, {request, fetchImpl, getHeaders = sessionHeaders} = {}) {
+  const ready = [];
+  const doFetch = fetchImpl || ((...args) => window.fetch(...args));
+  for (const doc of documents || []) {
+    try {
+      const normalized = await normalizeDocument(doc, {request, fetchImpl: doFetch, getHeaders});
+      if (normalized) ready.push(normalized);
+    } catch (error) {
+      console.error(`Bardo Docs: no se pudo normalizar ${doc?.id}`, error);
+    }
+  }
+  return ready;
 }

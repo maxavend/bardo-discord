@@ -2,63 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   cacheNormalizedDocument,
+  loadDocument,
   loadDocumentSource,
   saveDocumentSource,
 } from '../src/db.js';
+import { createTestDb, insertDocument } from './helpers/sqlite-d1.js';
 
-class ImportDb {
-  constructor() {
-    this.row = {
-      source_blob: null,
-      source_mime: null,
-      source_type: null,
-      import_status: 'ready',
-      original_markdown: '',
-      pages: '[]',
-    };
-  }
-
-  prepare(query) {
-    return {
-      bind: (...params) => ({
-        run: async () => {
-          if (query.includes("SET source_blob = ?")) {
-            const [sourceBlob, sourceMime, sourceType] = params;
-            this.row.source_blob = sourceBlob;
-            this.row.source_mime = sourceMime;
-            this.row.source_type = sourceType;
-            this.row.import_status = 'pending';
-          } else if (query.includes("SET original_markdown = ?")) {
-            const [markdown, pages] = params;
-            this.row.original_markdown = markdown;
-            this.row.pages = pages;
-            this.row.import_status = 'ready';
-            this.row.source_blob = null;
-          }
-          return { success: true };
-        },
-        first: async () => {
-          if (query.includes('SELECT source_blob')) return this.row;
-          return null;
-        },
-      }),
-    };
-  }
-}
-
-test('saveDocumentSource almacena bytes como ArrayBuffer y loadDocumentSource los recupera sin perder datos', async () => {
-  const db = new ImportDb();
+test('saveDocumentSource almacena bytes y loadDocumentSource los recupera sin perder datos', async () => {
+  const db = createTestDb();
+  insertDocument(db, { id: 'doc-pdf' });
   const input = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]);
 
-  await saveDocumentSource(db, 'doc-pdf', {
-    bytes: input,
-    mime: 'application/pdf',
-    type: 'pdf',
-  });
-
-  assert.ok(db.row.source_blob instanceof ArrayBuffer);
-  assert.deepEqual([...new Uint8Array(db.row.source_blob)], [...input]);
-  assert.equal(db.row.import_status, 'pending');
+  await saveDocumentSource(db, 'doc-pdf', { bytes: input, mime: 'application/pdf', type: 'pdf' });
+  assert.equal(db.row("SELECT import_status FROM documents WHERE id = 'doc-pdf'").import_status, 'pending');
 
   const loaded = await loadDocumentSource(db, 'doc-pdf');
   assert.deepEqual([...loaded.bytes], [...input]);
@@ -66,15 +22,30 @@ test('saveDocumentSource almacena bytes como ArrayBuffer y loadDocumentSource lo
   assert.equal(loaded.type, 'pdf');
 });
 
-test('cacheNormalizedDocument marca ready y elimina el binario temporal', async () => {
-  const db = new ImportDb();
-  db.row.source_blob = new Uint8Array([1, 2, 3]).buffer;
-  db.row.import_status = 'pending';
+test('cacheNormalizedDocument marca ready y conserva el original si cabe en la fila', async () => {
+  const db = createTestDb();
+  insertDocument(db, { id: 'doc-pdf', importStatus: 'pending', sourceBlob: new Uint8Array([1, 2, 3]), sourceType: 'pdf' });
 
-  await cacheNormalizedDocument(db, 'doc-pdf', '# Documento\n\nContenido', ['Contenido']);
+  assert.equal(await cacheNormalizedDocument(db, 'doc-pdf', '# Documento\n\nContenido', ['Contenido']), true);
+  const doc = await loadDocument(db, 'doc-pdf');
+  assert.equal(doc.originalMarkdown, '# Documento\n\nContenido');
+  assert.deepEqual(doc.pages, ['Contenido']);
+  assert.equal(doc.importStatus, 'ready');
+  assert.equal(doc.hasSource, true);
+});
 
-  assert.equal(db.row.original_markdown, '# Documento\n\nContenido');
-  assert.equal(db.row.pages, JSON.stringify(['Contenido']));
-  assert.equal(db.row.import_status, 'ready');
-  assert.equal(db.row.source_blob, null);
+test('cacheNormalizedDocument descarta el original cuando la fila superaría el límite de D1', async () => {
+  const db = createTestDb();
+  insertDocument(db, { id: 'doc-pdf', importStatus: 'pending', sourceBlob: new Uint8Array(1_500_000), sourceType: 'pdf' });
+  await cacheNormalizedDocument(db, 'doc-pdf', 'x'.repeat(600_000), ['x']);
+  const doc = await loadDocument(db, 'doc-pdf');
+  assert.equal(doc.importStatus, 'ready');
+  assert.equal(doc.hasSource, false);
+});
+
+test('cacheNormalizedDocument no pisa un documento que ya no está pendiente', async () => {
+  const db = createTestDb();
+  insertDocument(db, { id: 'doc-pdf', markdown: '# Editado por una persona' });
+  assert.equal(await cacheNormalizedDocument(db, 'doc-pdf', '# Reimportado', ['x']), false);
+  assert.equal((await loadDocument(db, 'doc-pdf')).originalMarkdown, '# Editado por una persona');
 });

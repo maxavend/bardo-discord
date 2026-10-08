@@ -75,3 +75,52 @@ Revisar el avance de los flujos.
   assert.equal(docxBytes[0], 0x50);
   assert.equal(docxBytes[1], 0x4b);
 });
+
+test('toPdfSafeText conserva Latin-1 y mapea tipografía común a ASCII en vez de borrarla', async () => {
+  const {toPdfSafeText} = await import('../src/export-format.js');
+  assert.equal(toPdfSafeText('“Hola” — ‘mundo’ – año… • 5€ ñandú'), '"Hola" - \'mundo\' - año... - 5EUR ñandú');
+  assert.equal(toPdfSafeText('emoji 🎉 y 漢字'), 'emoji ? y ??');
+  assert.equal(toPdfSafeText('a\tb​c'), 'a    bc');
+});
+
+test('generatePdfDocument dibuja comillas, rayas y viñetas (no espacios vacíos)', async () => {
+  const {PDFDocument, PDFPage} = await import('pdf-lib');
+  const drawn = [];
+  const originalDrawText = PDFPage.prototype.drawText;
+  PDFPage.prototype.drawText = function spyDrawText(text, options) {
+    drawn.push(text);
+    return originalDrawText.call(this, text, options);
+  };
+  let bytes;
+  try {
+    bytes = await generatePdfDocument({
+      title: 'Prueba “tipográfica”',
+      originalMarkdown: '# Prueba\n\n- Ítem con “comillas” — y raya…\n\nTexto 🎉 final',
+    });
+  } finally {
+    PDFPage.prototype.drawText = originalDrawText;
+  }
+  const pdf = await PDFDocument.load(bytes);
+  assert.equal(pdf.getPageCount(), 1);
+  const text = drawn.join('\n');
+  assert.match(text, /- Ítem con "comillas" - y raya\.\.\./);
+  assert.match(text, /Texto \? final/);
+  assert.match(text, /Prueba "tipográfica"/);
+});
+
+test('generateDocxDocument elimina caracteres inválidos en XML y respeta saltos en código', async () => {
+  const {default: JSZip} = await import('jszip');
+  const bytes = await generateDocxDocument({
+    title: 'Doc\u000C con form feed',
+    originalMarkdown: 'Texto\u0000 con\u000B controles  y espacios\n\n```\nlinea 1\n  linea 2\n```',
+  });
+  const zip = await JSZip.loadAsync(bytes);
+  const xml = await zip.file('word/document.xml').async('string');
+  assert.doesNotMatch(xml, /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
+  assert.match(xml, /Texto con controles  y espacios/);
+  assert.match(xml, /linea 1<\/w:t><w:br\/><w:t xml:space="preserve">  linea 2/);
+});
+
+test('escapeXml elimina caracteres prohibidos por XML 1.0', () => {
+  assert.equal(escapeXml('a\u0001b\u000Cc￾d'), 'abcd');
+});

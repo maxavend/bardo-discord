@@ -1,13 +1,10 @@
 import React, {lazy, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
-import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme, useThemeMode} from './discord-theme.js';
+import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
-import {installProductionImportNormalizer} from './production-import-normalizer.js';
 import '@fontsource-variable/inter';
 import './styles.css';
-import './theme.css';
-import './layout-audit.css';
 import './editor-focus.css';
 import './keyboard-sticky.css';
 import './production-document-only.css';
@@ -103,11 +100,11 @@ function ActivityErrorShell({message, onRetry}) {
 function DocumentOnlyUnavailable({message, onRetry}) {
   return (
     <main className="app-root min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
-      <div className="flex flex-col items-center gap-4 max-w-md text-center p-6 rounded-2xl bg-surface border border-border">
+      <div className="container-surface flex flex-col items-center gap-4 max-w-md text-center p-6 rounded-2xl bg-surface border border-border">
         <div className="w-12 h-12 rounded-2xl bg-warning/10 border border-warning/20 flex items-center justify-center text-warning text-xl">
           📄
         </div>
-        <p className="text-sm text-muted">{message}</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
         {onRetry && (
           <button className="boot-retry-button" type="button" onClick={onRetry}>
             Reintentar
@@ -119,7 +116,6 @@ function DocumentOnlyUnavailable({message, onRetry}) {
 }
 
 function ThemedApp({productionState, onRetry}) {
-  useThemeMode();
   if (productionState?.active && !productionState?.ready) {
     return <DocumentOnlyUnavailable message={productionState.message || 'No se pudo cargar el documento.'} onRetry={onRetry} />;
   }
@@ -146,7 +142,12 @@ function ActivityRoot() {
       });
       // Wait one frame for Discord mobile to finish applying its host color
       // scheme, then resolve the Activity theme before rendering the app.
-      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      // rAF never fires while the page is hidden (Activity opened in the
+      // background), so cap the wait instead of stalling on the boot screen.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => resolve());
+        window.setTimeout(resolve, 100);
+      });
       applyDiscordTheme();
 
       if (auth.embedded && !auth.ready) {
@@ -163,7 +164,6 @@ function ActivityRoot() {
       }
 
       if (auth.embedded) {
-        installProductionImportNormalizer();
         setStage('docs_hydrated');
         logBreadcrumb('docs_hydrated');
         await prepareBardoProduction({

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { allCommands } from './command-definitions.js';
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN?.trim();
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID?.trim();
@@ -7,21 +7,6 @@ if (!DISCORD_TOKEN || !DISCORD_GUILD_ID) {
   console.error('Faltan DISCORD_TOKEN o DISCORD_GUILD_ID en el archivo .env.');
   process.exit(1);
 }
-
-const documentCommand = new SlashCommandBuilder()
-  .setName('upload-docs')
-  .setDescription('Sube un documento al espacio de Docs de este canal.')
-  .addAttachmentOption((option) =>
-    option
-      .setName('archivo')
-      .setDescription('Markdown, TXT, PDF o Word (.docx)')
-      .setRequired(true),
-  )
-  .addStringOption((option) =>
-    option
-      .setName('titulo')
-      .setDescription('Título opcional para el documento.'),
-  );
 
 async function registerCommands() {
   console.log('Obteniendo información de la aplicación de Discord...');
@@ -37,7 +22,8 @@ async function registerCommands() {
   const app = await appRes.json();
   const applicationId = app.id;
 
-  console.log(`Registrando comando /upload-docs en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
+  const names = allCommands.map((cmd) => `/${cmd.name}`).join(', ');
+  console.log(`Registrando comandos (${names}) en el servidor ${DISCORD_GUILD_ID} (App ID: ${applicationId})...`);
 
   const regRes = await fetch(
     `https://discord.com/api/v10/applications/${applicationId}/guilds/${DISCORD_GUILD_ID}/commands`,
@@ -47,7 +33,7 @@ async function registerCommands() {
         Authorization: `Bot ${DISCORD_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify([documentCommand.toJSON()]),
+      body: JSON.stringify(allCommands.map((cmd) => cmd.toJSON())),
     },
   );
 
@@ -57,7 +43,7 @@ async function registerCommands() {
   }
 
   const registered = await regRes.json();
-  console.log(`✅ Comando /upload-docs registrado exitosamente (${registered.length} comandos activos en guild).`);
+  console.log(`✅ Comandos registrados exitosamente (${registered.length} comandos activos en guild): ${registered.map((c) => `/${c.name}`).join(', ')}.`);
 }
 
 registerCommands().catch((err) => {

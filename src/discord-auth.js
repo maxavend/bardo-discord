@@ -4,7 +4,11 @@ import {
   loadDocsSession,
   saveDocsSession,
 } from './db.js';
-import {canUserViewChannel} from './discord-permissions.js';
+import {
+  canUserViewChannel,
+  discordUnavailableResponse,
+  isDiscordUnavailableError,
+} from './discord-permissions.js';
 
 const AUTH_TOKEN_PATH = '/api/auth/token';
 const DISCORD_CLIENT_ID = '1539704001535156254';
@@ -206,6 +210,11 @@ export async function handleDiscordAuthApi(request, url, env) {
     }
     if (error?.code === 'channel_access_required') {
       return json({ error: 'You cannot view this Discord channel' }, 403);
+    }
+    if (isDiscordUnavailableError(error)) {
+      // Discord rate-limited or failed while checking channel access: this is
+      // retryable, not an authentication failure.
+      return discordUnavailableResponse(error);
     }
     return json({ error: 'Discord authentication failed' }, 401);
   }
