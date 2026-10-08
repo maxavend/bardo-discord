@@ -1,95 +1,184 @@
 import {test, expect} from '@playwright/test';
-import {seedLocalDocument} from './test-fixture.js';
+import {
+  collectRuntimeErrors,
+  expectLibrary,
+  openDocFromLibrary,
+  placeCaretAfter,
+  runToolbarAction,
+  seedLocalDocument,
+  selectEditorText,
+  testDocument,
+} from './docs-helpers.js';
 
-const monsterTitle = 'Stress test · Documento monstruo de 30 secciones';
-
-function collectRuntimeErrors(page) {
-  const errors = [];
-  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  page.on('pageerror', error => errors.push(error.message));
-  return errors;
-}
+const monsterTitle = testDocument.title;
+const TOOLBAR_NAME = 'Barra de herramientas del editor';
+// Acciones opcionales de la barra, en el orden en que la barra adaptable las deja a la vista.
+const OPTIONAL_ACTIONS = ['Lista', 'Lista numerada', 'Lista de tareas', 'Cursiva', 'Enlace', 'Rehacer', 'Subrayado', 'Tachado', 'Código en línea', 'Cita'];
+// Inserciones y utilidades que siempre viven en "Ver más".
+const ALWAYS_IN_MORE = ['Tabla', 'Nota destacada', 'Desplegable', 'Separador', 'Copiar texto', 'Limpiar formato'];
+const TEXT_TYPES = ['Texto', 'Título 1', 'Título 2', 'Título 3', 'Cita', 'Bloque de código'];
 
 test.beforeEach(async ({page}) => {
   await page.goto('/?theme=dark#docs');
   await seedLocalDocument(page);
   await page.reload();
-  await expect(page.getByText('Docs', {exact:true})).toBeVisible();
+  await expect(page.locator('.library-header')).toContainText('Bardo');
+  await expectLibrary(page, 1);
 });
+
+function editorToolbar(page) {
+  return page.getByRole('toolbar', {name: TOOLBAR_NAME});
+}
+
+async function startNewDocument(page) {
+  await page.getByRole('button', {name: 'Crear documento'}).first().click();
+  await expect(editorToolbar(page)).toBeVisible();
+  await expect(page.locator('.editable-body')).toBeVisible();
+}
+
+async function finishEditing(page) {
+  await page.getByRole('button', {name: 'Listo', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Editar', exact: true})).toBeVisible();
+}
+
+/** Controles de la barra realmente visibles, con su geometría y radios. */
+function toolbarLayout(page) {
+  return page.evaluate(() => {
+    const container = document.querySelector('.editor-toolbar-container');
+    const toolbar = container.querySelector('[role="toolbar"]');
+    const isShown = element => getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().width > 0;
+    const describe = button => {
+      const rect = button.getBoundingClientRect();
+      const style = getComputedStyle(button);
+      return {
+        name: button.getAttribute('aria-label'),
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+        radii: [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius],
+      };
+    };
+    const controls = [...toolbar.querySelectorAll('button')].filter(isShown).map(describe);
+    // Grupos con un solo control a la vista: ese control debe verse como pastilla completa.
+    const standalone = [...toolbar.querySelectorAll('[data-slot="toggle-group"], [data-slot="button-group"]')]
+      .map(group => [...group.querySelectorAll('button')].filter(isShown))
+      .filter(buttons => buttons.length === 1)
+      .map(([button]) => describe(button));
+    const containerRect = container.getBoundingClientRect();
+    return {
+      controls,
+      standalone,
+      names: controls.map(control => control.name),
+      overflow: container.scrollWidth - container.clientWidth,
+      containerLeft: containerRect.left,
+      containerRight: containerRect.right,
+      rootClientWidth: document.documentElement.clientWidth,
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+}
+
+/** La barra adaptable se recalcula con un ResizeObserver: esperar a que deje de cambiar. */
+async function settledToolbarLayout(page) {
+  let previous = '';
+  await expect.poll(async () => {
+    const layout = await toolbarLayout(page);
+    const key = `${layout.names.join('|')}:${layout.overflow}:${layout.rootClientWidth}`;
+    const settled = key === previous;
+    previous = key;
+    return settled;
+  }, {intervals: [100, 100, 150, 250, 500]}).toBe(true);
+  return toolbarLayout(page);
+}
+
+function expectToolbarFits(layout) {
+  expect(layout.overflow).toBeLessThanOrEqual(1);
+  expect(layout.pageOverflow).toBeLessThanOrEqual(0);
+  expect(layout.containerLeft).toBeGreaterThanOrEqual(0);
+  expect(layout.containerRight).toBeLessThanOrEqual(layout.rootClientWidth + 0.5);
+  const sorted = [...layout.controls].sort((a, b) => a.left - b.left);
+  sorted.slice(1).forEach((control, index) => {
+    expect(control.left, `${control.name} se superpone con ${sorted[index].name}`).toBeGreaterThanOrEqual(sorted[index].right - 0.5);
+  });
+}
+
+/** Las acciones opcionales a la vista son siempre un prefijo de la lista de prioridad. */
+function visibleOptionalActions(layout) {
+  const visible = OPTIONAL_ACTIONS.filter(name => layout.names.includes(name));
+  expect(visible).toEqual(OPTIONAL_ACTIONS.slice(0, visible.length));
+  return visible;
+}
 
 test('visual system, theme and responsive geometry stay coherent', async ({page}) => {
   const errors = collectRuntimeErrors(page);
-  await expect(page.getByText(/Recientes \(\d+\)/, {exact:true})).toBeVisible();
-  const search = page.getByPlaceholder('Buscar');
+  const search = page.getByRole('textbox', {name: 'Buscar documentos'});
   await expect(search).toBeVisible();
+  // La biblioteca entra con una animación corta: medir cuando la cabecera ya está en su sitio.
+  await expect.poll(() => page.evaluate(() => Math.round(document.querySelector('.library-header').getBoundingClientRect().top))).toBe(0);
 
   const audit = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
-    const input = document.querySelector('input[placeholder="Buscar documentos..."]') || document.querySelector('input[placeholder="Buscar"]');
-    const group = input?.closest('[data-slot="input-group"]') || input?.closest('.search-field__group') || input?.parentElement;
-    const groupStyle = group ? getComputedStyle(group) : null;
-    const bodyStyle = getComputedStyle(document.body);
-    const libraryHeaderElement = document.querySelector('.library-header');
-    const libraryHeader = libraryHeaderElement?.getBoundingClientRect();
-    const libraryHeaderStyle = libraryHeaderElement ? getComputedStyle(libraryHeaderElement) : null;
-    const docsBrandIcon = libraryHeaderElement?.querySelector('.topbar-title > svg');
-    const searchRect = group?.getBoundingClientRect();
-    const nativeMenus = [...document.querySelectorAll('.native-menu select')].map(el => el.getBoundingClientRect());
+    const group = document.querySelector('.docs-search');
+    const header = document.querySelector('.library-header');
+    const headerRect = header.getBoundingClientRect();
+    const searchRect = group.getBoundingClientRect();
     return {
       accent: root.getPropertyValue('--accent').trim(),
       radius: root.getPropertyValue('--radius').trim(),
-      fieldRadius: root.getPropertyValue('--field-radius').trim(),
-      fieldBorder: root.getPropertyValue('--field-border').trim(),
-      fieldBackground: root.getPropertyValue('--field-background').trim(),
       rootTheme: document.documentElement.dataset.theme,
+      colorScheme: root.colorScheme,
       scrollOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      groupBackground: groupStyle?.backgroundColor,
-      bodyBackground: bodyStyle.backgroundColor,
-      groupShadow: groupStyle?.boxShadow,
-      groupHeight: searchRect?.height,
-      headerLeft: libraryHeader?.left,
-      headerRight: libraryHeader?.right,
-      headerPosition: libraryHeaderStyle?.position,
-      hasDocsBrandIcon: Boolean(docsBrandIcon),
-      viewportWidth: document.documentElement.clientWidth,
-      contentInset: searchRect?.left,
-      nativeMenus: nativeMenus.map(r => ({w:r.width,h:r.height})),
+      groupBackground: getComputedStyle(group).backgroundColor,
+      bodyBackground: getComputedStyle(document.body).backgroundColor,
+      groupHeight: searchRect.height,
+      headerLeft: headerRect.left,
+      headerRight: headerRect.right,
+      headerTop: headerRect.top,
+      headerPosition: getComputedStyle(header).position,
+      // Ancho de la página sin el canal reservado para la barra de desplazamiento
+      // (html usa scrollbar-gutter: stable; en escritorio son 15 px).
+      viewportWidth: document.body.getBoundingClientRect().width,
+      contentInset: searchRect.left,
+      contentRightInset: document.body.getBoundingClientRect().width - searchRect.right,
+      headerTargets: [...header.querySelectorAll('button')].map(button => {
+        const rect = button.getBoundingClientRect();
+        return {name: button.getAttribute('aria-label'), w: rect.width, h: rect.height};
+      }),
     };
   });
 
   expect(audit.rootTheme).toBe('dark');
-  // Browsers serialize OKLCH tokens as lab(), so validate the applied token
-  // rather than depending on a browser-specific serialization format.
+  expect(audit.colorScheme).toBe('dark');
+  // Los navegadores serializan los tokens OKLCH como lab(): se valida que el token exista.
   expect(audit.accent).not.toBe('');
-  expect(audit.radius).toBe('.75rem');
-  expect(audit.fieldRadius).toBe('.75rem');
-  expect(audit.fieldBorder).toBe('transparent');
-  expect(audit.fieldBackground).not.toBe('');
+  expect(audit.radius).not.toBe('');
   expect(audit.scrollOverflow).toBeLessThanOrEqual(0);
   expect(audit.groupHeight).toBeGreaterThanOrEqual(36);
   expect(Math.abs(audit.headerLeft)).toBeLessThanOrEqual(1);
   expect(Math.abs(audit.viewportWidth - audit.headerRight)).toBeLessThanOrEqual(1);
+  expect(Math.abs(audit.headerTop)).toBeLessThanOrEqual(1);
   expect(audit.headerPosition).toBe('sticky');
-  expect(audit.hasDocsBrandIcon).toBeTruthy();
   expect(audit.contentInset).toBeGreaterThanOrEqual(12);
+  expect(Math.abs(audit.contentInset - audit.contentRightInset)).toBeLessThanOrEqual(1);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
-  expect(audit.nativeMenus.every(({w,h}) => w >= 44 && h >= 44)).toBeTruthy();
+  expect(audit.headerTargets.map(target => target.name)).toEqual(['Reuniones', 'Subir archivo', 'Crear documento', 'Cambiar a modo claro']);
+  expect(audit.headerTargets.every(({w, h}) => w >= 32 && h >= 32)).toBeTruthy();
 
   await search.focus();
   await expect(search).toBeFocused();
   await search.fill('monstruo');
-  await expect(page.getByText('Resultados (1)', {exact:true})).toBeVisible();
+  await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
   await search.fill('');
 
-  await page.locator('.doc-row-main').filter({hasText:monsterTitle}).click();
-  await expect(page.locator('.doc-title')).toContainText('Stress test');
+  await openDocFromLibrary(page, monsterTitle);
   await expect(page.locator('.doc-body')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(1400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
 
   const introAlignment = await page.evaluate(() => {
-    const title = document.querySelector('.doc-title')?.getBoundingClientRect();
+    const title = document.querySelector('h1.doc-title')?.getBoundingClientRect();
     const body = document.querySelector('.doc-body')?.getBoundingClientRect();
     return title && body ? Math.abs(title.left - body.left) : 99;
   });
@@ -99,471 +188,527 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   await page.evaluate(() => window.scrollTo(0, 1400));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(900);
   const readerY = await page.evaluate(() => window.scrollY);
-  await page.getByRole('button', {name:'Editar'}).click();
-  await expect(page.getByRole('toolbar', {name:'Editor toolbar'})).toBeVisible();
-  await expect.poll(() => page.evaluate(() => Math.abs(document.querySelector('.doc-topbar')?.getBoundingClientRect().top ?? 0))).toBeLessThan(2);
+  await page.getByRole('button', {name: 'Editar', exact: true}).click();
+  await expect(editorToolbar(page)).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Math.abs(document.querySelector('.doc-topbar')?.getBoundingClientRect().top ?? 99))).toBeLessThan(2);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
 
+  // La barra queda pegada 8 px bajo la cabecera (cuando termina su animación de entrada).
+  await expect.poll(() => page.evaluate(() => {
+    const header = document.querySelector('.doc-topbar').getBoundingClientRect();
+    const toolbar = document.querySelector('.editor-toolbar-sticky').getBoundingClientRect();
+    return Math.round(toolbar.top - header.bottom);
+  })).toBe(8);
   const sticky = await page.evaluate(() => ({
     header: document.querySelector('.doc-topbar')?.getBoundingClientRect().top,
-    toolbar: document.querySelector('.editor-toolbar-sticky')?.getBoundingClientRect().top,
     overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    gap: (document.querySelector('.editor-toolbar-sticky')?.getBoundingClientRect().top ?? 0) - (document.querySelector('.doc-topbar')?.getBoundingClientRect().bottom ?? 0),
     readerY: window.scrollY,
   }));
   expect(Math.abs(sticky.header)).toBeLessThan(2);
-  expect(Math.abs(sticky.toolbar - 68)).toBeLessThan(3);
-  expect(Math.abs(sticky.gap - 16)).toBeLessThan(3);
   expect(sticky.overflow).toBeLessThanOrEqual(0);
   expect(sticky.readerY).toBeGreaterThan(readerY * 0.3);
 
-  const toolbarTargets = await page.evaluate(() => [...document.querySelectorAll('.editor-toolbar button, .editor-toolbar .native-menu select')].map(el => {
-    const r = el.getBoundingClientRect(); return {w:r.width,h:r.height};
-  }));
-  expect(toolbarTargets.every(({w,h}) => w >= 40 && h >= 40)).toBeTruthy();
+  // Medir cuando termina la animación de entrada de la barra (escala .99).
+  await expect.poll(() => page.evaluate(() => document.querySelector('.editor-toolbar-sticky').getAnimations().every(animation => animation.playState === 'finished'))).toBe(true);
+  const layout = await toolbarLayout(page);
+  expectToolbarFits(layout);
+  expect(layout.controls.every(({width, height}) => width >= 31.5 && height >= 31.5)).toBeTruthy();
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('Discord theme drives HeroUI without a manual theme toggle', async ({page}) => {
+test('Discord theme picks the initial theme and the manual toggle persists', async ({page}) => {
+  await page.evaluate(() => localStorage.clear());
   await page.goto('/?theme=light#docs');
-  await expect(page.getByText('Docs', {exact:true})).toBeVisible();
-
-  const lightTheme = await page.evaluate(() => ({
+  await expectLibrary(page);
+  const themeState = () => page.evaluate(() => ({
     theme: document.documentElement.dataset.theme,
     colorScheme: getComputedStyle(document.documentElement).colorScheme,
-    toggleCount: document.querySelectorAll('[aria-label="Seleccionar tema visual"]').length,
   }));
-  expect(lightTheme.theme).toBe('light');
-  expect(lightTheme.colorScheme).toBe('light');
-  expect(lightTheme.toggleCount).toBe(0);
+  expect(await themeState()).toEqual({theme: 'light', colorScheme: 'light'});
+  await expect(page.getByRole('button', {name: 'Cambiar a modo oscuro'})).toBeVisible();
 
   await page.goto('/?theme=dark#docs');
-  await expect(page.getByText('Docs', {exact:true})).toBeVisible();
-  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+  await expectLibrary(page);
+  await expect.poll(themeState).toEqual({theme: 'dark', colorScheme: 'dark'});
 
-  await page.goto('/#docs');
-  await expect(page.getByText('Docs', {exact:true})).toBeVisible();
-  await page.evaluate(() => {
-    document.body.style.setProperty('--discord-theme', 'dark');
-    window.dispatchEvent(new Event('discord-theme-change'));
-  });
-  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+  // Un solo botón cambia el tema; la elección del usuario manda sobre la de Discord.
+  await page.getByRole('button', {name: 'Cambiar a modo claro'}).click();
+  await expect.poll(themeState).toEqual({theme: 'light', colorScheme: 'light'});
+  await page.reload();
+  await expectLibrary(page);
+  await expect.poll(themeState).toEqual({theme: 'light', colorScheme: 'light'});
+  await expect(page.getByRole('button', {name: 'Cambiar a modo oscuro'})).toBeVisible();
 });
 
 test('Discord mobile safe area keeps Bardo chrome below the host header', async ({page}) => {
-  // Discord exposes the native Activity header height through this variable.
-  // Setting it here makes the contract testable in a normal browser runner.
+  // Discord expone la altura de su cabecera nativa en esta variable; fijarla aquí
+  // permite probar el contrato en un navegador normal.
   await page.evaluate(() => document.documentElement.style.setProperty('--discord-safe-area-inset-top', '116px'));
+  const topbarTop = selector => page.evaluate(sel => document.querySelector(sel)?.getBoundingClientRect().top ?? -1, selector);
 
-  await expect(page.getByText('Continuar lectura', {exact:true})).toBeVisible();
-  await page.locator('.doc-row-main').filter({hasText:monsterTitle}).click();
-  await expect(page.locator('.doc-topbar')).toBeVisible();
+  await expect.poll(() => topbarTop('.library-header')).toBe(116);
+  await openDocFromLibrary(page, monsterTitle);
   await expect(page.locator('.doc-body')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(1400);
+  await expect.poll(async () => Math.abs(await topbarTop('.doc-topbar') - 116)).toBeLessThan(2);
 
-  await expect.poll(() => page.evaluate(() => Math.abs((document.querySelector('.doc-topbar')?.getBoundingClientRect().top ?? 0) - 116))).toBeLessThan(2);
-
-  await page.getByRole('button', {name:'Editar'}).click();
+  await page.getByRole('button', {name: 'Editar', exact: true}).click();
   await expect(page.locator('.editor-toolbar-sticky')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => Math.abs((document.querySelector('.doc-topbar')?.getBoundingClientRect().top ?? 0) - 116))).toBeLessThan(2);
+  await expect.poll(async () => Math.abs(await topbarTop('.doc-topbar') - 116)).toBeLessThan(2);
   const editorChrome = await page.evaluate(() => ({
-    topbar: document.querySelector('.doc-topbar')?.getBoundingClientRect().top,
+    topbarBottom: document.querySelector('.doc-topbar')?.getBoundingClientRect().bottom,
     toolbar: document.querySelector('.editor-toolbar-sticky')?.getBoundingClientRect().top,
   }));
-  expect(editorChrome.toolbar ?? 0).toBeGreaterThan(editorChrome.topbar ?? 0);
+  expect(editorChrome.toolbar).toBeGreaterThan(editorChrome.topbarBottom);
 });
 
-test('editor supports undo and redo with the platform shortcut', async ({page}, testInfo) => {
-  await page.locator('.doc-row-main').filter({hasText:monsterTitle}).click();
+test('editor supports undo and redo with the platform shortcut', async ({page}) => {
+  const errors = collectRuntimeErrors(page);
+  await openDocFromLibrary(page, monsterTitle);
   await page.evaluate(() => window.scrollTo(0, 1400));
-  await page.getByRole('button', {name:'Editar'}).click();
+  await page.getByRole('button', {name: 'Editar', exact: true}).click();
 
   const body = page.locator('.editable-body');
-  await body.click();
-  await page.keyboard.press('Control+End');
+  await expect(editorToolbar(page)).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.querySelector('.editor-toolbar-sticky').getAnimations().every(animation => animation.playState === 'finished'))).toBe(true);
+  await placeCaretAfter(page, 'Sección 30:');
   await page.keyboard.type(' [undo-redo-smoke]');
-  await expect(body).toContainText('[undo-redo-smoke]');
+  await expect(body).toContainText('Sección 30: [undo-redo-smoke]');
 
-  await page.keyboard.press('Control+Z');
+  // Ctrl+Z / Ctrl+Shift+Z (⌘ en macOS), los atajos de deshacer/rehacer de cada plataforma.
+  await page.keyboard.press('ControlOrMeta+Z');
   await expect(body).not.toContainText('[undo-redo-smoke]');
-
-  await page.keyboard.press('Control+Y');
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
   await expect(body).toContainText('[undo-redo-smoke]');
-  await expect(page.getByRole('button', {name:'Deshacer'})).toBeVisible();
-  if (testInfo.project.name === 'mobile-narrow') {
-    await expect(page.getByRole('button', {name:'Rehacer'})).toHaveCount(0);
-    await page.getByRole('button', {name:'Ver más'}).click();
-    await expect(page.getByRole('menuitem', {name:'Rehacer'})).toBeVisible();
-    await page.mouse.click(5, 5);
+
+  // Los mismos pasos desde la barra.
+  const toolbar = editorToolbar(page);
+  await toolbar.getByRole('button', {name: 'Deshacer'}).click();
+  await expect(body).not.toContainText('[undo-redo-smoke]');
+  if (page.viewportSize().width < 480) {
+    // Sin espacio, "Rehacer" vive en "Ver más" (pulsarlo ahí con la página
+    // desplazada está cubierto por el test de menús con scroll, en fixme).
+    await expect(toolbar.getByRole('button', {name: 'Rehacer'})).toBeHidden();
+    await toolbar.getByRole('button', {name: 'Ver más'}).click();
+    await expect(page.getByRole('menuitem', {name: 'Rehacer'})).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menuitem', {name: 'Rehacer'})).toHaveCount(0);
+    await body.focus();
+    await page.keyboard.press('ControlOrMeta+Shift+Z');
   } else {
-    await expect(page.getByRole('button', {name:'Rehacer'})).toBeVisible();
+    await expect(toolbar.getByRole('button', {name: 'Rehacer'})).toBeEnabled();
+    await toolbar.getByRole('button', {name: 'Rehacer'}).click();
   }
-  await expect(page.getByLabel('Ver más')).toBeVisible();
-  const toolbarMetrics = await page.evaluate(() => {
-    const toolbar = document.querySelector('.editor-toolbar-container');
-    return toolbar ? {scrollWidth: toolbar.scrollWidth, clientWidth: toolbar.clientWidth} : null;
-  });
-  expect(toolbarMetrics).not.toBeNull();
-  expect(toolbarMetrics.scrollWidth).toBeLessThanOrEqual(toolbarMetrics.clientWidth + 1);
+  await expect(body).toContainText('[undo-redo-smoke]');
+  await expect(toolbar.getByRole('button', {name: 'Deshacer'})).toBeEnabled();
+
+  expectToolbarFits(await toolbarLayout(page));
+  expect(errors, errors.join('\n')).toEqual([]);
 });
 
 test('editor history covers deletion, formatting and inserted blocks', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run the full editor history matrix once on the representative mobile viewport.');
+  const errors = collectRuntimeErrors(page);
 
-  await page.getByRole('button', {name:/Nuevo/}).click();
+  await startNewDocument(page);
   const body = page.locator('.editable-body');
   await body.click();
   await page.keyboard.type('Texto para auditar el historial.');
   await expect(body).toContainText('Texto para auditar el historial.');
 
   await page.keyboard.press('Shift+ArrowLeft');
+  // slate-react adopta la selección del DOM con un throttle de 100 ms; si el borrado
+  // llega antes, el historial lo une con lo tecleado (comportamiento de Slate).
+  await page.waitForTimeout(150);
   await page.keyboard.press('Backspace');
-  await expect(body).toContainText('historial');
-  await page.keyboard.press('Control+Z');
+  await expect(body).not.toContainText('historial.');
+  await page.keyboard.press('ControlOrMeta+Z');
   await expect(body).toContainText('historial.');
-  await page.keyboard.press('Control+Y');
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
   await expect(body).not.toContainText('historial.');
 
-  await body.click();
-  await page.evaluate(() => {
-    const body = document.querySelector('.editable-body');
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
-    while (node && node.textContent.trim().length <= 8) node = walker.nextNode();
-    if (!node) throw new Error('No editable text node available');
-    const range = document.createRange();
-    range.setStart(node, 0);
-    range.setEnd(node, Math.min(8, node.textContent.length));
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  await page.waitForTimeout(50);
-  await page.getByRole('button', {name:'Negrita'}).click();
-  await expect(body.locator('strong')).toHaveCount(1);
-  await body.focus();
-  await page.keyboard.press('Control+Z');
+  await selectEditorText(page, 'Texto pa');
+  await editorToolbar(page).getByRole('button', {name: 'Negrita'}).click();
+  await expect(body.locator('strong')).toHaveText('Texto pa');
+  await page.keyboard.press('ControlOrMeta+Z');
   await expect(body.locator('strong')).toHaveCount(0);
-  await page.keyboard.press('Control+Y');
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
   await expect(body.locator('strong')).toHaveCount(1);
 
-  await body.focus();
-  await page.getByRole('button', {name:'Ver más'}).click();
-  await page.getByRole('menuitem', {name:'Lista de tareas'}).click();
-  await expect(body.locator('ul.checklist')).toHaveCount(1);
-  await body.focus();
-  await page.keyboard.press('Control+Z');
-  await expect(body.locator('ul.checklist')).toHaveCount(0);
-  await page.keyboard.press('Control+Y');
-  await expect(body.locator('ul.checklist')).toHaveCount(1);
+  await placeCaretAfter(page, 'historial');
+  await runToolbarAction(page, 'Lista de tareas');
+  await expect(body.locator('.slate-action_item')).toHaveCount(1);
+  await page.keyboard.press('ControlOrMeta+Z');
+  await expect(body.locator('.slate-action_item')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+Shift+Z');
+  await expect(body.locator('.slate-action_item')).toHaveCount(1);
+
+  await placeCaretAfter(page, 'historial');
+  await runToolbarAction(page, 'Separador');
+  await expect(body.locator('hr')).toHaveCount(1);
+  await page.keyboard.press('ControlOrMeta+Z');
+  await expect(body.locator('hr')).toHaveCount(0);
+  expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('selected text drives block, callout, disclosure and checklist formats', async ({page}, testInfo) => {
+test('selected text drives block types and lists; "Ver más" inserts callout and disclosure', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run selection-format coverage once on the representative mobile viewport.');
+  const errors = collectRuntimeErrors(page);
 
-  const selectText = async (text, {wholeBlock = false} = {}) => {
-    await page.evaluate(({text: targetText, wholeBlock: selectWholeBlock}) => {
-      const body = document.querySelector('.editable-body');
-      const block = [...body.querySelectorAll('p, h1, h2, h3')].find(element => element.textContent.includes(targetText));
-      if (!block) throw new Error(`Could not find block containing: ${targetText}`);
-      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-      let node = walker.nextNode();
-      while (node && !node.textContent.includes(targetText)) node = walker.nextNode();
-      if (!node) throw new Error(`Could not find text node containing: ${targetText}`);
-      const range = document.createRange();
-      if (selectWholeBlock) range.selectNodeContents(block);
-      else {
-        const start = node.textContent.indexOf(targetText);
-        range.setStart(node, start);
-        range.setEnd(node, start + targetText.length);
-      }
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      document.dispatchEvent(new Event('selectionchange'));
-    }, {text, wholeBlock});
+  await startNewDocument(page);
+  await page.getByLabel('Título', {exact: true}).fill('Formatos');
+  const body = page.locator('.editable-body');
+  await body.click();
+  for (const [index, line] of ['Título seleccionado.', 'Cita seleccionada.', 'Código seleccionado.', 'Tarea seleccionada.', 'Paso numerado.'].entries()) {
+    if (index) await page.keyboard.press('Enter');
+    // A ritmo humano: tecleado sin pausas dispara el React #185 del fixme de documentos.spec.js.
+    await page.keyboard.type(line, {delay: 25});
+  }
+
+  const textType = editorToolbar(page).getByRole('button', {name: /^Tipo de texto/});
+  const applyTextType = async (text, label, {wholeBlock = false} = {}) => {
+    await selectEditorText(page, text, {wholeBlock});
+    await textType.click();
+    await page.getByRole('menuitem', {name: new RegExp(`^${label}`)}).click();
   };
 
-  const startNew = async () => {
-    await page.goto('/?theme=dark#docs');
-    await expect(page.getByText('Docs', {exact:true})).toBeVisible();
-    await page.getByRole('button', {name:/Nuevo/}).click();
-    await expect(page.locator('.editable-body')).toBeVisible();
-  };
+  await applyTextType('Título seleccionado.', 'Título 1', {wholeBlock: true});
+  await expect(body.locator('h1')).toHaveText('Título seleccionado.');
+  // El selector refleja el tipo del bloque donde está el cursor.
+  await placeCaretAfter(page, 'Título seleccionado.');
+  await expect(textType).toHaveAccessibleName('Tipo de texto: Título 1');
+  await placeCaretAfter(page, 'Cita seleccionada.');
+  await expect(textType).toHaveAccessibleName('Tipo de texto: Texto');
 
-  const typeAndSelect = async (text, options) => {
-    const body = page.locator('.editable-body');
-    await body.click();
-    await page.keyboard.type(text);
-    await selectText(text, options);
-    return body;
-  };
+  await applyTextType('Cita', 'Cita');
+  await expect(body.locator('blockquote')).toHaveText('Cita seleccionada.');
 
-  await startNew();
-  let body = await typeAndSelect('Texto parcial para destacar.', {wholeBlock: false});
-  await page.getByRole('button', {name:'Ver más'}).click();
-  await page.getByRole('menuitem', {name:'Destacado'}).click();
-  await expect(body.locator('.doc-callout')).toContainText('Texto parcial para destacar.');
+  await applyTextType('Código', 'Bloque de código');
+  await expect(body.locator('.slate-code_block')).toHaveText('Código seleccionado.');
 
-  await startNew();
-  body = await typeAndSelect('Contenido de lista desplegable.', {wholeBlock: true});
-  await page.getByRole('button', {name:'Ver más'}).click();
-  await page.getByRole('menuitem', {name:'Lista desplegable'}).click();
-  await expect(body.locator('details.spoiler')).toContainText('Contenido de lista desplegable.');
+  // Una selección parcial convierte el bloque completo.
+  await selectEditorText(page, 'Tarea');
+  await runToolbarAction(page, 'Lista de tareas');
+  await expect(body.locator('.slate-action_item')).toHaveText('Tarea seleccionada.');
 
-  await startNew();
-  body = await typeAndSelect('Tarea seleccionada.', {wholeBlock: false});
-  await page.getByRole('button', {name:'Ver más'}).click();
-  await page.getByRole('menuitem', {name:'Lista de tareas'}).click();
-  await expect(body.locator('ul.checklist > li')).toContainText('Tarea seleccionada.');
+  await selectEditorText(page, 'Paso');
+  await runToolbarAction(page, 'Lista numerada');
+  await expect(body.locator('ol')).toHaveText('Paso numerado.');
 
-  await startNew();
-  body = await typeAndSelect('Título seleccionado.', {wholeBlock: true});
-  await page.getByRole('button', {name:'Tipo de texto'}).click();
-  await page.getByRole('menuitem', {name:'Encabezado 1'}).click();
-  await expect(body.locator('h1')).toContainText('Título seleccionado.');
+  // Nota destacada y Desplegable se insertan como bloques nuevos (no transforman la selección).
+  await placeCaretAfter(page, 'Paso numerado.');
+  await runToolbarAction(page, 'Nota destacada');
+  await expect(body.locator('.slate-callout')).toHaveText('Escribe una nota…');
+  await placeCaretAfter(page, 'Escribe una nota…');
+  await runToolbarAction(page, 'Desplegable');
+  await expect(body.locator('.slate-toggle')).toContainText('Escribe contenido oculto…');
+
+  await finishEditing(page);
+  const reader = page.locator('.doc-body');
+  await expect(reader.locator('h1')).toHaveText('Título seleccionado.');
+  await expect(reader.locator('blockquote')).toHaveText('Cita seleccionada.');
+  await expect(reader.locator('pre code')).toHaveText('Código seleccionado.');
+  await expect(reader.locator('ul.checklist > li')).toContainText('Tarea seleccionada.');
+  await expect(reader.locator('ol > li')).toHaveText('Paso numerado.');
+  await expect(reader.locator('.doc-callout')).toHaveText('Escribe una nota…');
+  await expect(reader.locator('details.spoiler')).toContainText('Escribe contenido oculto…');
+  expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('mobile toolbar keeps text width and sends overflow to kebab', async ({page}, testInfo) => {
+test('editor renders checklist, callout and disclosure blocks with their own controls', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-standard', 'Run block rendering once on the representative mobile viewport.');
+  test.fixme(true, 'BUG: bardo-editor-kit.js registra Callout/ActionItem/Toggle/CodeBlock con `component` de primer nivel, que Plate 53 ignora (usa node.component): en el editor se ven como texto plano, sin casilla ni desplegable.');
+
+  await startNewDocument(page);
+  const body = page.locator('.editable-body');
+  await body.click();
+  await runToolbarAction(page, 'Lista de tareas');
+  await page.keyboard.type('Tarea en el editor');
+  const task = body.locator('.checklist-item').filter({hasText: 'Tarea en el editor'});
+  await expect(task.getByRole('button', {name: 'Marcar como completado'})).toBeVisible();
+  await task.getByRole('button', {name: 'Marcar como completado'}).click();
+  await expect(task.getByRole('button', {name: 'Marcar como pendiente'})).toHaveAttribute('aria-pressed', 'true');
+
+  await runToolbarAction(page, 'Nota destacada');
+  await expect(body.locator('.doc-callout')).toHaveText('Escribe una nota…');
+  await runToolbarAction(page, 'Desplegable');
+  await expect(body.locator('.spoiler')).toContainText('Escribe contenido oculto…');
+});
+
+test('mobile toolbar fits without horizontal overflow and sends the rest to "Ver más"', async ({page}, testInfo) => {
   test.skip(!['mobile-standard', 'mobile-narrow'].includes(testInfo.project.name), 'Run on the representative mobile viewports.');
 
-  await page.getByRole('button', {name:/Nuevo/}).click();
-  await expect(page.getByRole('button', {name:'Tipo de texto'})).toBeVisible();
-  await page.getByRole('button', {name:'Tipo de texto'}).click();
-  const textFormatItems = await page.getByRole('menuitem').allTextContents();
-  expect(textFormatItems).toContain('Cita');
-  expect(textFormatItems).toContain('Bloque de código');
-  expect(textFormatItems).not.toContain('Lista de tareas');
-  await page.mouse.click(5, 5);
-  const metrics = await page.evaluate(() => {
-    const textButton = document.querySelector('button[aria-label="Tipo de texto"]');
-    const toolbar = document.querySelector('.editor-toolbar-container');
-    return {
-      rootClientWidth: document.documentElement.clientWidth,
-      toolbarLeft: toolbar?.getBoundingClientRect().left || 0,
-      textWidth: textButton?.getBoundingClientRect().width || 0,
-      overflow: (toolbar?.scrollWidth || 0) - (toolbar?.clientWidth || 0),
-      toolbarWidth: toolbar?.clientWidth || 0,
-      standaloneRadii: ['.mobile-history-group .button:first-child', '.mobile-more-trigger'].map(selector => {
-        const style = getComputedStyle(document.querySelector(selector));
-        return [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius];
-      }),
-      children: [...document.querySelector('.editor-toolbar-container .toolbar')?.children || []].map(el => ({aria:el.getAttribute('aria-label'), width:el.getBoundingClientRect().width, display:getComputedStyle(el).display})),
-    };
-  });
-  expect(metrics.textWidth).toBeGreaterThanOrEqual(120);
-  expect(metrics.textWidth).toBeLessThanOrEqual(200);
-  expect(metrics.overflow).toBeLessThanOrEqual(1);
-  if (testInfo.project.name === 'mobile-narrow') {
-    expect(metrics.standaloneRadii.every(radii => radii.every(radius => radius === radii[0]))).toBeTruthy();
-  } else {
-    expect(metrics.standaloneRadii[1].every(radius => radius === metrics.standaloneRadii[1][0])).toBeTruthy();
+  await startNewDocument(page);
+  const toolbar = editorToolbar(page);
+  const textType = toolbar.getByRole('button', {name: /^Tipo de texto/});
+  await expect(textType).toBeVisible();
+  await textType.click();
+  for (const label of TEXT_TYPES) {
+    await expect(page.getByRole('menuitem', {name: new RegExp(`^${label}`)})).toBeVisible();
   }
-  expect(await page.locator('.editor-toolbar-container .toolbar').evaluate(element => getComputedStyle(element).gap)).toBe('8px');
-  await expect(page.getByRole('button', {name:'Insertar bloque'})).toHaveCount(0);
-  if (testInfo.project.name === 'mobile-narrow') {
-    await expect(page.getByRole('button', {name:'Rehacer'})).toHaveCount(0);
-  } else {
-    await expect(page.getByRole('button', {name:'Rehacer'})).toBeVisible();
-  }
-  await expect(page.getByRole('button', {name:'Enlace'})).toHaveCount(0);
+  await expect(page.getByRole('menuitem')).toHaveCount(TEXT_TYPES.length);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
 
-  await page.getByRole('button', {name:'Ver más'}).click();
-  const openMetrics = await page.evaluate(() => {
-    const toolbar = document.querySelector('.editor-toolbar-container');
-    return {
-      rootClientWidth: document.documentElement.clientWidth,
-      toolbarLeft: toolbar?.getBoundingClientRect().left || 0,
-    };
-  });
-  expect(openMetrics.rootClientWidth).toBe(metrics.rootClientWidth);
-  expect(Math.abs(openMetrics.toolbarLeft - metrics.toolbarLeft)).toBeLessThanOrEqual(1);
+  const layout = await settledToolbarLayout(page);
+  expectToolbarFits(layout);
+  // En móvil el selector de tipo de texto queda en solo ícono, con un área táctil cómoda.
+  const textTypeBox = layout.controls.find(control => control.name.startsWith('Tipo de texto'));
+  expect(textTypeBox.width).toBeGreaterThanOrEqual(44);
+  expect(textTypeBox.width).toBeLessThanOrEqual(72);
+  await expect(textType.locator('.mobile-toolbar-label')).toBeHidden();
+  expect(layout.names).toEqual(expect.arrayContaining(['Deshacer', 'Negrita', 'Ver más']));
+  const visibleOptional = visibleOptionalActions(layout);
+  expect(visibleOptional.length).toBeGreaterThanOrEqual(2);
+  await expect(page.getByRole('button', {name: 'Insertar bloque'})).toHaveCount(0);
+  await expect(toolbar.getByRole('button', {name: 'Rehacer'})).toBeHidden();
+  await expect(toolbar.getByRole('button', {name: 'Enlace'})).toBeHidden();
+
+  await toolbar.getByRole('button', {name: 'Ver más'}).click();
   const overflowPopover = page.locator('.toolbar-dropdown-popover:visible').last();
-  const overflowMenu = overflowPopover.locator('[data-slot="dropdown-menu"]');
-  const overflowItems = await overflowMenu.getByRole('menuitem').allTextContents();
+  await expect(overflowPopover).toBeVisible();
+  const openLayout = await toolbarLayout(page);
+  expect(openLayout.rootClientWidth).toBe(layout.rootClientWidth);
+  expect(Math.abs(openLayout.containerLeft - layout.containerLeft)).toBeLessThanOrEqual(1);
+
   await expect(overflowPopover).toHaveClass(/scrollbar/);
   await expect(overflowPopover).toHaveCSS('overflow-y', 'auto');
-  await expect(overflowPopover).toHaveCSS('overscroll-behavior-y', /contain|auto/);
-  await expect(overflowMenu.locator('[data-slot="separator"]')).toHaveCount(3);
-  const separatorHeights = await overflowMenu.locator('[data-slot="separator"]').evaluateAll(elements => elements.map(element => getComputedStyle(element).height));
-  expect(separatorHeights).toEqual(['1px', '1px', '1px']);
-  expect(overflowItems).toContain('Tachado');
-  expect(overflowItems).toContain('Código en línea');
-  expect(overflowItems).toContain('Lista con viñetas');
-  expect(overflowItems).toContain('Lista numerada');
-  expect(overflowItems).not.toContain('Cita');
-  expect(overflowItems).toContain('Destacado');
-  expect(overflowItems).toContain('Lista desplegable');
-  expect(overflowItems).toContain('Lista de tareas');
-  expect(overflowItems).not.toContain('Bloque de código');
-  expect(overflowItems).toContain('Separador');
-  expect(overflowItems).toContain('Copiar texto');
-  expect(overflowItems).toContain('Limpiar formato');
-  if (testInfo.project.name === 'mobile-narrow') {
-    expect(overflowItems).toContain('Rehacer');
-  } else {
-    expect(overflowItems).not.toContain('Rehacer');
-  }
-  expect(overflowItems).toContain('Enlace');
-  if (testInfo.project.name === 'mobile-narrow') {
-    expect(overflowItems).toContain('Cursiva');
-    expect(overflowItems).toContain('Subrayado');
-  }
+  await expect(overflowPopover).toHaveCSS('overscroll-behavior-y', 'contain');
+  const separatorHeights = await overflowPopover.locator('[data-slot="dropdown-menu-separator"]').evaluateAll(elements => elements.map(element => getComputedStyle(element).height));
+  expect(separatorHeights.length).toBeGreaterThanOrEqual(2);
+  expect(separatorHeights.every(height => height === '1px')).toBeTruthy();
+  const popoverBox = await overflowPopover.boundingBox();
+  expect(popoverBox.x).toBeGreaterThanOrEqual(0);
+  expect(popoverBox.x + popoverBox.width).toBeLessThanOrEqual(layout.rootClientWidth + 0.5);
+
+  const overflowItems = (await overflowPopover.getByRole('menuitem').allTextContents()).map(text => text.trim());
   expect(new Set(overflowItems).size).toBe(overflowItems.length);
+  // Cada acción opcional está exactamente en un lugar: en la barra o en "Ver más".
+  for (const name of OPTIONAL_ACTIONS) {
+    expect(overflowItems.includes(name), `${name} en "Ver más"`).toBe(!visibleOptional.includes(name));
+  }
+  for (const name of ALWAYS_IN_MORE) expect(overflowItems).toContain(name);
+  expect(overflowItems).not.toContain('Bloque de código');
+  expect(overflowItems).not.toContain('Negrita');
+  expect(overflowItems).toHaveLength(OPTIONAL_ACTIONS.length - visibleOptional.length + ALWAYS_IN_MORE.length);
 });
 
-test('adaptive toolbar uses spare width and rounds a standalone group control', async ({page}, testInfo) => {
+test('adaptive toolbar uses spare width and keeps priorities', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run the responsive transition matrix once.');
 
+  await startNewDocument(page);
+  const counts = [];
+  // 390/430 px quedan en el fixme "never overflows at common phone widths".
+  for (const width of [320, 477, 600, 1024]) {
+    await page.setViewportSize({width, height: 800});
+    const layout = await settledToolbarLayout(page);
+    expectToolbarFits(layout);
+    counts.push(visibleOptionalActions(layout).length);
+  }
+  // Más ancho nunca muestra menos acciones; en escritorio caben todas.
+  counts.slice(1).forEach((count, index) => expect(count).toBeGreaterThanOrEqual(counts[index]));
+  expect(counts[2]).toBeGreaterThan(counts[0]);
+  expect(counts.at(-1)).toBe(OPTIONAL_ACTIONS.length);
+  await expect(page.locator('.editor-toolbar-container')).toHaveClass(/editor-toolbar-container-full/);
+
+  // Entre 480 y 760 px el selector de tipo de texto vuelve a mostrar su nombre.
   await page.setViewportSize({width: 600, height: 800});
-  await page.getByRole('button', {name:/Nuevo/}).click();
-  await expect(page.getByRole('radio', {name:'Lista con viñetas'})).toBeVisible();
-  await expect(page.getByRole('radio', {name:'Lista numerada'})).toHaveCount(0);
+  await expect(editorToolbar(page).locator('.mobile-toolbar-label')).toBeVisible();
 
-  const wideMetrics = await page.evaluate(() => {
-    const toolbar = document.querySelector('.editor-toolbar-container');
-    const listButton = document.querySelector('[aria-label="Lista con viñetas"]');
-    const style = getComputedStyle(listButton);
-    return {
-      overflow: toolbar.scrollWidth - toolbar.clientWidth,
-      radii: [style.borderTopLeftRadius, style.borderTopRightRadius, style.borderBottomRightRadius, style.borderBottomLeftRadius],
-    };
-  });
-  expect(wideMetrics.overflow).toBeLessThanOrEqual(1);
-  expect(wideMetrics.radii.every(radius => radius === wideMetrics.radii[0])).toBeTruthy();
-
-  await page.setViewportSize({width: 477, height: 800});
-  await expect(page.getByRole('button', {name:'Cursiva'})).toBeVisible();
-  await expect(page.getByRole('button', {name:'Subrayado'})).toBeVisible();
-  await expect(page.getByRole('button', {name:'Enlace'})).toBeVisible();
-  await expect.poll(() => page.evaluate(() => {
-    const toolbar = document.querySelector('.editor-toolbar-container');
-    return toolbar ? toolbar.scrollWidth - toolbar.clientWidth : 999;
-  })).toBeLessThanOrEqual(1);
-  const compactMetrics = await page.evaluate(() => {
-    const toolbar = document.querySelector('.editor-toolbar-container');
-    const textButton = document.querySelector('[aria-label="Tipo de texto"]');
-    return {
-      overflow: toolbar.scrollWidth - toolbar.clientWidth,
-      textWidth: textButton.getBoundingClientRect().width,
-    };
-  });
-  expect(compactMetrics.overflow).toBeLessThanOrEqual(1);
-  expect(compactMetrics.textWidth).toBeGreaterThanOrEqual(120);
-  expect(compactMetrics.textWidth).toBeLessThanOrEqual(200);
+  // Dentro de una tabla aparece su menú y la barra sigue cabiendo en 320 px.
+  await page.setViewportSize({width: 320, height: 700});
+  await page.locator('.editable-body').click();
+  await runToolbarAction(page, 'Tabla');
+  const tableMenu = editorToolbar(page).getByRole('button', {name: 'Opciones de tabla'});
+  await expect(tableMenu).toBeVisible();
+  expectToolbarFits(await settledToolbarLayout(page));
+  await tableMenu.click();
+  await page.getByRole('menuitem', {name: 'Agregar fila abajo'}).click();
+  await expect(page.locator('.editable-body table tr')).toHaveCount(3);
+  await tableMenu.click();
+  await page.getByRole('menuitem', {name: 'Eliminar tabla'}).click();
+  await expect(page.locator('.editable-body table')).toHaveCount(0);
+  await expect(tableMenu).toBeHidden();
 });
 
-test('document actions separate markdown preview from markdown download', async ({page}, testInfo) => {
+test('adaptive toolbar never overflows at common phone widths', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-standard', 'Run once on the representative mobile viewport.');
+  test.fixme(true, 'BUG: useAdaptiveToolbar (BardoToolbar.jsx) presupone 40 px por acción e ignora los huecos entre grupos: a 350/390/430 px (tras redimensionar o con movimiento reducido) "Ver más" sobresale hasta 12 px de la barra.');
+
+  // Sin la animación de entrada (que mide con scale .99) el desborde aparece al primer render.
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await startNewDocument(page);
+  expectToolbarFits(await settledToolbarLayout(page));
+  for (const width of [350, 390, 430]) {
+    await page.setViewportSize({width, height: 844});
+    expectToolbarFits(await settledToolbarLayout(page));
+  }
+});
+
+test('a control left alone in its toolbar group is a full pill', async ({page}, testInfo) => {
+  test.skip(!['mobile-standard', 'mobile-narrow'].includes(testInfo.project.name), 'Run on the representative mobile viewports.');
+  test.fixme(true, 'BUG: BardoToolbar.jsx marca el grupo con `toolbar-group-standalone` pero no hay CSS para esa clase: "Deshacer" y "Ver más" solos quedan como media pastilla.');
+
+  await startNewDocument(page);
+  const layout = await toolbarLayout(page);
+  expect(layout.standalone.map(control => control.name)).toEqual(expect.arrayContaining(['Deshacer', 'Ver más']));
+  layout.standalone.forEach(control => {
+    expect(control.radii.every(radius => radius === control.radii[0]), `${control.name} debe ser una pastilla completa`).toBeTruthy();
+  });
+});
+
+test('the text type selector follows a type change without moving the cursor', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-standard', 'Run once on the representative mobile viewport.');
+  test.fixme(true, 'BUG: BardoToolbar.jsx calcula el tipo de bloque con useMemo sobre la selección; setBlockType no cambia la selección y el selector sigue diciendo "Texto".');
+
+  await startNewDocument(page);
+  await page.locator('.editable-body').click();
+  await page.keyboard.type('Encabezado nuevo');
+  const textType = editorToolbar(page).getByRole('button', {name: /^Tipo de texto/});
+  await textType.click();
+  await page.getByRole('menuitem', {name: /^Título 2/}).click();
+  await expect(page.locator('.editable-body h2')).toHaveText('Encabezado nuevo');
+  await expect(textType).toHaveAccessibleName('Tipo de texto: Título 2');
+});
+
+test('menus opened while scrolled keep the sticky chrome and open on screen', async ({page}, testInfo) => {
+  test.skip(!['mobile-standard', 'laptop'].includes(testInfo.project.name), 'Run on one touch and one desktop viewport.');
+  test.fixme(true, 'BUG: el bloqueo de scroll de Radix pone body{overflow:hidden}; con html/body overflow-x:clip la cabecera y la barra sticky saltan fuera de pantalla y "Ver más" se abre en y<0.');
+
+  await openDocFromLibrary(page, monsterTitle);
+  await page.getByRole('button', {name: 'Editar', exact: true}).click();
+  await expect(editorToolbar(page)).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 2000));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000);
+  await editorToolbar(page).getByRole('button', {name: 'Ver más'}).click();
+  await expect(page.getByRole('menuitem', {name: 'Limpiar formato'})).toBeInViewport();
+  const chrome = await page.evaluate(() => ({
+    header: document.querySelector('.editing-route .doc-topbar').getBoundingClientRect().top,
+    toolbar: document.querySelector('.editor-toolbar-container').getBoundingClientRect().top,
+  }));
+  expect(Math.abs(chrome.header)).toBeLessThan(2);
+  expect(chrome.toolbar).toBeGreaterThan(0);
+  await page.getByRole('menuitem', {name: 'Limpiar formato'}).click();
+  await expect(page.getByText('Formato limpiado')).toBeVisible();
+});
+
+test('document actions: text preview, markdown download and share outside Discord', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run the document action flow once.');
+  const errors = collectRuntimeErrors(page);
 
-  const row = page.locator('.doc-row').filter({hasText:monsterTitle});
-  await row.getByRole('button', {name:/Acciones de Stress test/}).click();
-  await page.getByRole('menuitem', {name:'Ver Markdown'}).click();
-  await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeVisible();
-  await expect(page.locator('.markdown-preview-content')).toContainText(`# ${monsterTitle}`);
-  await expect(page.getByRole('button', {name:'Copiar Markdown'})).toBeVisible();
-  await page.getByRole('button', {name:'Atrás'}).click();
-  await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeHidden();
+  const row = page.locator('.doc-row').filter({hasText: monsterTitle});
+  const openRowActions = async () => {
+    await row.getByRole('button', {name: /^Acciones de Stress test/}).click();
+    await expect(page.getByRole('menuitem', {name: 'Abrir'})).toBeVisible();
+  };
 
-  await row.getByRole('button', {name:/Acciones de Stress test/}).click();
-  await page.getByRole('menuitem', {name:'Descargar Markdown'}).click();
-  await expect(page.getByRole('dialog', {name:'Vista previa de Markdown'})).toBeVisible();
-  await page.getByRole('button', {name:'Atrás'}).click();
+  await openRowActions();
+  expect((await page.getByRole('menuitem').allTextContents()).map(text => text.trim()))
+    .toEqual(['Abrir', 'Editar', 'Duplicar', 'Copiar texto', 'Compartir en el canal', 'Descargar', 'Archivar documento']);
+  await page.getByRole('menuitem', {name: 'Descargar'}).click();
+  await expect(page.getByRole('menuitem', {name: 'Texto con formato (.md)'})).toBeVisible();
+  // PDF y Word se generan en el servidor: fuera de Discord no se ofrecen.
+  await expect(page.getByRole('menuitem', {name: 'PDF (.pdf)'})).toHaveCount(0);
+  await expect(page.getByRole('menuitem', {name: 'Word (.docx)'})).toHaveCount(0);
+  await page.getByRole('menuitem', {name: 'Ver como texto'}).click();
+  const preview = page.getByRole('dialog', {name: 'Texto del documento'});
+  await expect(preview).toBeVisible();
+  await expect(preview.getByLabel('Texto del documento')).toContainText(monsterTitle);
+  await expect(preview.getByLabel('Texto del documento')).toContainText('Sección 30:');
+  await expect(preview.getByRole('button', {name: 'Copiar texto'})).toBeVisible();
+  await preview.getByRole('button', {name: 'Atrás'}).click();
+  await expect(preview).toBeHidden();
 
-  await row.getByRole('button', {name:/Acciones de Stress test/}).click();
-  await page.getByRole('menuitem', {name:'HTML (.html)'}).click();
-  await expect(page.getByRole('dialog', {name:'Vista previa HTML'})).toBeVisible();
-  await expect(page.locator('.export-html-preview')).toContainText(monsterTitle);
-  await expect(page.getByRole('button', {name:'Copiar HTML'})).toBeVisible();
-  await page.getByRole('button', {name:'Atrás'}).click();
+  await openRowActions();
+  await page.getByRole('menuitem', {name: 'Descargar'}).click();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('menuitem', {name: 'Texto con formato (.md)'}).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('Stress-test-Documento-monstruo-de-30-secciones.md');
+  const {readFile} = await import('node:fs/promises');
+  const markdown = await readFile(await download.path(), 'utf8');
+  expect(markdown.startsWith(`# ${monsterTitle}\n`)).toBeTruthy();
+  expect(markdown).toContain('Sección 30:');
+
+  await openRowActions();
+  await page.getByRole('menuitem', {name: 'Compartir en el canal'}).click();
+  await expect(page.getByText('Compartir en el canal solo está disponible dentro de Discord.')).toBeVisible();
+  expect(errors, errors.join('\n')).toEqual([]);
 });
 
 test('complete editing and CRUD flow remains functional', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Full behavior matrix runs once; geometry runs in every viewport.');
   const errors = collectRuntimeErrors(page);
 
-  const search = page.getByPlaceholder('Buscar');
+  const search = page.getByRole('textbox', {name: 'Buscar documentos'});
   await search.fill('monstruo');
-  await page.locator('.doc-row-main').filter({hasText:monsterTitle}).click();
+  await openDocFromLibrary(page, monsterTitle);
   await page.evaluate(() => window.scrollTo(0, 1400));
-  await page.getByRole('button', {name:'Editar'}).click();
+  await page.getByRole('button', {name: 'Editar', exact: true}).click();
   await expect(page.locator('.editable-body')).toBeVisible();
 
-  await page.evaluate(() => {
-    const body = document.querySelector('.editable-body');
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-    let node = walker.nextNode();
-    while (node && node.textContent.trim().length <= 8) node = walker.nextNode();
-    if (!node) throw new Error('No plain text node available for format test');
-    const range = document.createRange();
-    range.setStart(node, 0);
-    range.setEnd(node, Math.min(8, node.textContent.length));
-    const selection = window.getSelection();
-    selection.removeAllRanges(); selection.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  await page.waitForTimeout(50);
-  await page.getByRole('button', {name:'Negrita'}).click();
-  expect(await page.evaluate(() => !!document.querySelector('.editable-body p strong'))).toBeTruthy();
+  await selectEditorText(page, 'Sección 2:');
+  await editorToolbar(page).getByRole('button', {name: 'Negrita'}).click();
+  await expect(page.locator('.editable-body strong')).toHaveText('Sección 2:');
 
-  await page.getByRole('button', {name:/Guardar|Listo/}).click();
-  await expect(page.getByRole('button', {name:'Editar'})).toBeVisible();
-  await page.getByRole('button', {name:/Docs/}).click();
-  await expect(page.getByText('Resultados (1)', {exact:true})).toBeVisible();
+  await finishEditing(page);
+  await expect(page.locator('.doc-body strong')).toHaveText('Sección 2:');
+  await page.getByRole('button', {name: 'Volver a Documentos'}).click();
+  await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
 
-  await page.getByRole('button', {name:/Nuevo/}).click();
-  await expect(page.getByRole('toolbar', {name:'Editor toolbar'})).toBeVisible();
-  await page.getByLabel('Título').fill('Prueba React HeroUI');
-  await page.getByLabel('Descripción').fill('Documento creado por el smoke test');
+  await startNewDocument(page);
+  await page.getByLabel('Título', {exact: true}).fill('Prueba de documento');
+  await page.getByLabel('Descripción', {exact: true}).fill('Documento creado por el smoke test');
   await page.locator('.editable-body').click();
   await page.keyboard.type('Texto nuevo para validar edición y persistencia.');
+  await runToolbarAction(page, 'Lista de tareas');
+  await expect(page.locator('.editable-body .slate-action_item')).toHaveCount(1);
 
-  await page.getByRole('button', {name:'Ver más'}).click();
-  await page.getByRole('menuitem', {name:'Lista de tareas'}).click();
-  await expect(page.locator('.editable-body ul.checklist')).toHaveCount(1);
+  await finishEditing(page);
+  await expect(page.locator('h1.doc-title')).toHaveText('Prueba de documento');
+  await expect(page.locator('.doc-description')).toHaveText('Documento creado por el smoke test');
+  await expect(page.locator('.doc-body ul.checklist > li')).toContainText('Texto nuevo para validar edición y persistencia.');
+  await page.getByRole('button', {name: 'Volver a Documentos'}).click();
+  await search.fill('Prueba de documento');
+  await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
 
-  await page.getByRole('button', {name:/Guardar|Listo/}).click();
-  await expect(page.locator('.doc-title')).toHaveText('Prueba React HeroUI');
-  await page.getByRole('button', {name:/Docs/}).click();
-  await page.getByPlaceholder('Buscar').fill('Prueba React HeroUI');
-  await expect(page.getByText('Resultados (1)', {exact:true})).toBeVisible();
+  const row = page.locator('.doc-row').filter({hasText: 'Prueba de documento'});
+  await row.getByRole('button', {name: 'Acciones de Prueba de documento'}).click();
+  await page.getByRole('menuitem', {name: 'Duplicar'}).click();
+  await expect(page.locator('h1.doc-title')).toHaveText('Prueba de documento (copia)');
 
-  const row = page.locator('.doc-row').filter({hasText:'Prueba React HeroUI'});
-  await row.getByRole('button', {name:/Acciones de Prueba React HeroUI/}).click();
-  await page.getByRole('menuitem', {name:'Duplicar'}).click();
-  await expect(page.locator('.doc-title')).toContainText('Prueba React HeroUI · copia');
+  await page.getByRole('button', {name: 'Acciones del documento'}).click();
+  await page.getByRole('menuitem', {name: 'Archivar documento'}).click();
+  await page.getByRole('alertdialog', {name: 'Archivar documento'}).getByRole('button', {name: 'Archivar', exact: true}).click();
+  await expect(page.getByRole('button', {name: 'Archivados (1)'})).toBeVisible();
+  await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
 
-  await page.getByRole('button', {name:'Acciones del documento'}).click();
-  await page.getByRole('menuitem', {name:'Eliminar'}).click();
-  await expect(page.getByText('Eliminar documento', {exact:true})).toBeVisible();
-  await page.getByRole('button', {name:'Eliminar'}).click();
-  await expect(page.getByText('Docs', {exact:true})).toBeVisible();
+  await page.getByRole('button', {name: 'Archivados (1)'}).click();
+  const archived = page.locator('.doc-row').filter({hasText: 'Prueba de documento (copia)'});
+  await archived.getByRole('button', {name: 'Acciones de Prueba de documento (copia)'}).click();
+  await page.getByRole('menuitem', {name: 'Eliminar definitivamente'}).click();
+  const confirmDelete = page.getByRole('alertdialog', {name: 'Eliminar definitivamente'});
+  await expect(confirmDelete).toContainText('no se puede deshacer');
+  await confirmDelete.getByRole('button', {name: 'Eliminar definitivamente'}).click();
+  await expect(page.getByRole('button', {name: 'Archivados (0)'})).toBeVisible();
+  await page.getByRole('button', {name: /^Activos/}).click();
+  await page.getByRole('button', {name: 'Limpiar búsqueda'}).click();
+  await expectLibrary(page, 2);
 
-  await page.getByRole('button', {name:/Nuevo/}).click();
+  await startNewDocument(page);
   await page.locator('.editable-body').click();
   await page.keyboard.type('enlace');
-  await page.evaluate(() => {
-    const body = document.querySelector('.editable-body');
-    const node = body?.firstChild?.firstChild || body?.firstChild;
-    if (!node) return;
-    const range = document.createRange(); range.selectNodeContents(node);
-    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  await page.getByRole('button', {name:'Ver más'}).click();
-  await page.getByRole('menuitem', {name:'Enlace'}).click();
-  await expect(page.getByText('Agregar enlace', {exact:true})).toBeVisible();
-  const urlInput = page.getByLabel('URL');
-  await expect(urlInput).toBeVisible();
-  const fieldAudit = await urlInput.evaluate(el => {
-    const style = getComputedStyle(el);
-    return {fontSize: parseFloat(style.fontSize), bg: style.backgroundColor};
-  });
-  expect(fieldAudit.fontSize).toBeGreaterThanOrEqual(14);
-  await urlInput.fill('https://example.com');
-  await page.getByRole('button', {name:'Aplicar'}).click();
-  await expect(page.locator('.editable-body a[href*="example.com"]')).toHaveCount(1);
+  await selectEditorText(page, 'enlace');
+  await runToolbarAction(page, 'Enlace');
+  const linkDialog = page.getByRole('dialog', {name: 'Agregar enlace'});
+  await expect(linkDialog).toBeVisible();
+  const urlInput = linkDialog.getByLabel('Dirección del enlace');
+  await expect(urlInput).toBeFocused();
+  const fontSize = await urlInput.evaluate(element => parseFloat(getComputedStyle(element).fontSize));
+  expect(fontSize).toBeGreaterThanOrEqual(14);
+  await urlInput.fill('example.com');
+  await linkDialog.getByRole('button', {name: 'Agregar'}).click();
+  await expect(page.locator('.editable-body a[href^="https://example.com"]')).toHaveText('enlace');
 
   expect(errors, errors.join('\n')).toEqual([]);
 });

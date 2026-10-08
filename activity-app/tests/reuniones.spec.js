@@ -80,7 +80,7 @@ test('hora de inicio, término y facilitador se guardan y sobreviven a recargar'
   await expect(page.getByRole('button', {name: 'Facilita', exact: true})).toContainText('Anderson');
   await page.getByRole('button', {name: 'Facilita', exact: true}).click();
   await expect(page.locator('[role="option"][data-checked="true"]')).toHaveCount(1);
-  await page.getByRole('option', {name: 'Quitar facilitador'}).click();
+  await page.getByRole('option', {name: 'Quitar a quien facilita'}).click();
   await expect(page.getByRole('button', {name: 'Facilita', exact: true})).toContainText('Elegir persona');
   await page.getByRole('button', {name: 'Facilita', exact: true}).click();
   await page.getByRole('option', {name: /Paula Molina/}).click();
