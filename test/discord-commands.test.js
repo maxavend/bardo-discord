@@ -107,12 +107,24 @@ test('botones especiales guardan su destino: "Abrir Reuniones" gana a un documen
   assert.equal(await launchTargetFromLibrary(env), 'planner');
 });
 
-test('el botón de una reunión lleva a esa reunión y el de /doc-new conserva el título', async () => {
+test('el botón de una reunión lleva a esa reunión y las tarjetas antiguas de /doc-new conservan el título', async () => {
   const { env, send } = await setup();
   await send(button('bardo:open:planner-session:sess-42'));
   assert.equal(await launchTargetFromLibrary(env), 'planner-session:sess-42');
+  // Cards posted before /doc-new created the document still open a blank editor.
   await send(button(newDocCustomId('Plan Q4')));
   assert.equal(await launchTargetFromLibrary(env), 'new-doc:Plan Q4');
+});
+
+test('/doc-new crea el documento y su botón lleva al editor de ese documento', async () => {
+  const { db, env, send } = await setup();
+  const res = await send(command('doc-new', [{ name: 'titulo', value: 'Plan Q4' }]));
+  assert.equal(res.type, 4);
+  const { id } = db.row("SELECT id FROM documents WHERE title = 'Plan Q4'");
+  const customId = res.data.components[0].components.at(-1).components[0].custom_id;
+  assert.equal(customId, `bardo:open:edit:${id}`);
+  assert.equal((await send(button(customId))).type, 12);
+  assert.equal(await launchTargetFromLibrary(env), `edit:${id}`);
 });
 
 test('newDocCustomId respeta el límite de 100 caracteres de Discord, también con tildes y emoji', () => {

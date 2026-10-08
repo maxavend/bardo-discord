@@ -67,15 +67,28 @@ export function minutesToClock(total) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+const LEGACY_BREAK_TITLES = new Set(['break', 'descanso', 'pausa']);
+
+/**
+ * A block is a Descanso only when it says so explicitly (`type: 'break'`).
+ * The title never turns a typed block into a break: typing "Pausa activa"
+ * must not wipe its temas. The title heuristic survives only for legacy blocks
+ * saved before blocks carried a `type`.
+ */
 export function isBreakBlock(block) {
   if (!block) return false;
-  return Boolean(
-    block.isBreak ||
-    block.type === 'break' ||
-    block.title?.trim().toLowerCase() === 'break' ||
-    block.title?.trim().toLowerCase() === 'descanso' ||
-    block.title?.trim().toLowerCase() === 'pausa'
-  );
+  if (typeof block.type === 'string' && block.type) return block.type === 'break';
+  if (block.isBreak === true) return true;
+  return LEGACY_BREAK_TITLES.has(String(block.title || '').trim().toLowerCase());
+}
+
+/** Custom block duration ("Otra…"): whole minutes between 1 and 480, else null. */
+export const CUSTOM_DURATION_MAX_MINUTES = 480;
+export function parseCustomDurationMinutes(value) {
+  const text = String(value ?? '').trim();
+  if (!/^\d+$/.test(text)) return null;
+  const minutes = Number(text);
+  return minutes >= 1 && minutes <= CUSTOM_DURATION_MAX_MINUTES ? minutes : null;
 }
 
 export function computePlannerTimes(plannerState) {

@@ -143,22 +143,37 @@ async function createAuthenticatedSession(code, guildId, channelId, env) {
   };
 }
 
+/** API error for the Docs/Planner APIs: `{error: <código>, message: <español>}`. */
+function apiError(status, code, message) {
+  return json({ error: code, message }, status);
+}
+
+/**
+ * Error of the token endpoint. The Activity shows `error` to the person as-is,
+ * so here it carries the Spanish message (the stable code is in `code`).
+ */
+function authError(status, code, message) {
+  return json({ error: message, code, message }, status);
+}
+
+const SESSION_EXPIRED_MESSAGE = 'Tu sesión de Bardo expiró. Cierra y vuelve a abrir la actividad para continuar.';
+
 export async function requireDocsSession(request, env) {
-  if (!env.DB) return { error: json({ error: 'Database unavailable' }, 503) };
+  if (!env.DB) return { error: apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible. Inténtalo de nuevo en unos minutos.') };
   const authorization = request.headers.get('authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (!match) return { error: json({ error: 'Discord authentication required' }, 401) };
+  if (!match) return { error: apiError(401, 'auth_required', 'Abre Bardo desde Discord para iniciar sesión.') };
 
   const rawToken = match[1].trim();
-  if (!rawToken) return { error: json({ error: 'Discord authentication required' }, 401) };
+  if (!rawToken) return { error: apiError(401, 'auth_required', 'Abre Bardo desde Discord para iniciar sesión.') };
 
   const tokenHash = await hashToken(rawToken);
   const session = await loadDocsSession(env.DB, tokenHash);
-  if (!session) return { error: json({ error: 'Session not recognized' }, 401) };
+  if (!session) return { error: apiError(401, 'session_not_found', SESSION_EXPIRED_MESSAGE) };
 
   if (Date.parse(session.expiresAt) <= Date.now()) {
     await deleteDocsSession(env.DB, tokenHash);
-    return { error: json({ error: 'Session expired' }, 401) };
+    return { error: apiError(401, 'session_expired', SESSION_EXPIRED_MESSAGE) };
   }
 
   return { session, tokenHash };
@@ -166,21 +181,21 @@ export async function requireDocsSession(request, env) {
 
 export async function handleDiscordAuthApi(request, url, env) {
   if (url.pathname !== AUTH_TOKEN_PATH) return null;
-  if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (request.method !== 'POST') return authError(405, 'method_not_allowed', 'Método no permitido.');
 
   let payload;
   try {
     payload = await request.json();
   } catch {
-    return json({ error: 'Invalid JSON payload' }, 400);
+    return authError(400, 'invalid_json', 'La solicitud de inicio de sesión no es válida. Vuelve a abrir Bardo.');
   }
 
   const code = typeof payload?.code === 'string' ? payload.code.trim() : '';
   const guildId = typeof payload?.guildId === 'string' ? payload.guildId.trim() : '';
   const channelId = typeof payload?.channelId === 'string' ? payload.channelId.trim() : '';
-  if (!code) return json({ error: 'Discord authorization code required' }, 400);
-  if (!guildId) return json({ error: 'Discord guild required' }, 400);
-  if (!channelId) return json({ error: 'Discord channel required' }, 400);
+  if (!code) return authError(400, 'code_required', 'Discord no entregó la autorización. Vuelve a abrir Bardo y acepta el permiso.');
+  if (!guildId) return authError(400, 'guild_required', 'Abre Bardo dentro de un servidor de Discord.');
+  if (!channelId) return authError(400, 'channel_required', 'Abre Bardo desde un canal de Discord.');
 
   try {
     const auth = await createAuthenticatedSession(code, guildId, channelId, env);
@@ -200,23 +215,23 @@ export async function handleDiscordAuthApi(request, url, env) {
   } catch (error) {
     console.error('Bardo Docs Discord auth failed:', error?.code || error?.message || error);
     if (error?.code === 'missing_client_secret') {
-      return json({ error: 'Discord OAuth is not configured on Bardo' }, 503);
+      return authError(503, 'oauth_not_configured', 'El inicio de sesión con Discord no está configurado en Bardo. Avisa a quien administra el bot.');
     }
     if (error?.code === 'guild_membership_required') {
-      return json({ error: 'You are not a member of this Discord server' }, 403);
+      return authError(403, 'not_member', 'No eres miembro de este servidor de Discord.');
     }
     if (error?.code === 'guild_required') {
-      return json({ error: 'Open Bardo Docs from a Discord server' }, 400);
+      return authError(400, 'guild_required', 'Abre Bardo dentro de un servidor de Discord.');
     }
     if (error?.code === 'channel_access_required') {
-      return json({ error: 'You cannot view this Discord channel' }, 403);
+      return authError(403, 'channel_forbidden', 'No tienes acceso a este canal de Discord.');
     }
     if (isDiscordUnavailableError(error)) {
       // Discord rate-limited or failed while checking channel access: this is
       // retryable, not an authentication failure.
       return discordUnavailableResponse(error);
     }
-    return json({ error: 'Discord authentication failed' }, 401);
+    return authError(401, 'auth_failed', 'No pudimos iniciar sesión con Discord. Cierra y vuelve a abrir Bardo.');
   }
 }
 

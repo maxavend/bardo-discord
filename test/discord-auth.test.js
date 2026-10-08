@@ -58,7 +58,8 @@ test('handleDiscordAuthApi devuelve 400 si falta el código de autorización', a
   const res = await handleDiscordAuthApi(req, url, { DB: createAuthMockDb() });
   assert.equal(res.status, 400);
   const data = await res.json();
-  assert.match(data.error, /code/i);
+  assert.equal(data.code, 'code_required');
+  assert.match(data.error, /autorización/);
 });
 
 test('handleDiscordAuthApi devuelve 400 si falta el guildId', async () => {
@@ -71,7 +72,8 @@ test('handleDiscordAuthApi devuelve 400 si falta el guildId', async () => {
   const res = await handleDiscordAuthApi(req, url, { DB: createAuthMockDb() });
   assert.equal(res.status, 400);
   const data = await res.json();
-  assert.match(data.error, /guild/i);
+  assert.equal(data.code, 'guild_required');
+  assert.match(data.error, /servidor de Discord/);
 });
 
 test('handleDiscordAuthApi devuelve 503 si falta DISCORD_CLIENT_SECRET', async () => {
@@ -84,7 +86,8 @@ test('handleDiscordAuthApi devuelve 503 si falta DISCORD_CLIENT_SECRET', async (
   const res = await handleDiscordAuthApi(req, url, { DB: createAuthMockDb() });
   assert.equal(res.status, 503);
   const data = await res.json();
-  assert.match(data.error, /not configured/i);
+  assert.equal(data.code, 'oauth_not_configured');
+  assert.match(data.error, /no está configurado/);
 });
 
 test('requireDocsSession rechaza requests sin token de autorización', async () => {
@@ -92,4 +95,13 @@ test('requireDocsSession rechaza requests sin token de autorización', async () 
   const res = await requireDocsSession(req, { DB: createAuthMockDb() });
   assert.ok(res.error);
   assert.equal(res.error.status, 401);
+});
+
+test('requireDocsSession responde en español con código estable', async () => {
+  const req = new Request('http://localhost/api/docs', { headers: { Authorization: 'Bearer desconocido' } });
+  const res = await requireDocsSession(req, { DB: createAuthMockDb() });
+  assert.equal(res.error.status, 401);
+  const data = await res.error.json();
+  assert.equal(data.error, 'session_not_found');
+  assert.match(data.message, /Tu sesión de Bardo expiró/);
 });

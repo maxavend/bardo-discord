@@ -39,6 +39,36 @@ function createRecordingId(now = Date.now()) {
 }
 
 const TIMESLICE_MS = 1000;
+
+/**
+ * Plain-Spanish explanation of a microphone/recorder error for non-technical
+ * users, with how to allow the microphone in Discord. Never shows the raw
+ * browser message (e.g. "NotAllowedError: Permission denied").
+ */
+export function describeMicrophoneError(error, {isMobile = false} = {}) {
+  const name = String(error?.name || '');
+  const message = String(error?.message || '');
+  const howToAllow = isMobile
+    ? 'En tu teléfono abre Ajustes → Aplicaciones → Discord → Permisos y activa el Micrófono. Luego vuelve a abrir la actividad.'
+    : 'En Discord abre Ajustes de usuario → Voz y video y revisa que tu micrófono esté elegido. Si usas Discord en el navegador, permite el micrófono desde el ícono del candado junto a la dirección y vuelve a intentarlo.';
+  if (name === 'NotAllowedError' || name === 'SecurityError' || /denied|permission|not allowed/i.test(message)) {
+    return `Bardo no tiene permiso para usar tu micrófono. ${howToAllow}`;
+  }
+  if (name === 'NotFoundError' || name === 'OverconstrainedError' || /not found|no device/i.test(message)) {
+    return 'No encontramos un micrófono conectado. Conecta uno (o elige otro en Discord: Ajustes de usuario → Voz y video) y vuelve a intentarlo.';
+  }
+  if (name === 'NotReadableError' || name === 'AbortError' || /in use|could not start|not readable/i.test(message)) {
+    return 'Tu micrófono está ocupado por otra aplicación o no responde. Ciérrala o desconecta y vuelve a conectar el micrófono, y vuelve a intentarlo.';
+  }
+  if (/no soporta/i.test(message)) {
+    return 'Este dispositivo no permite grabar audio desde la actividad. Prueba desde Discord en el computador.';
+  }
+  return `No se pudo usar el micrófono. ${howToAllow}`;
+}
+
+export function isMobileUserAgent(userAgent = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(String(userAgent || ''));
+}
 const STOP_TIMEOUT_MS = 4000;
 
 export class RecordingController {
@@ -169,46 +199,7 @@ export class RecordingController {
 
       const mimeType = getSupportedMimeType();
       this.mimeType = mimeType;
-      const recorder = new MediaRecorder(this.stream, mimeType ? {mimeType} : {});
-      this.mediaRecorder = recorder;
-      const recordingId = this.currentRecordingId;
-      recorder.ondataavailable = (event) => {
-        if (!event.data || event.data.size <= 0) return;
-        if (this.mediaRecorder !== recorder) return;
-        this.audioChunks.push(event.data);
-        this.sink('append', recordingId, this.chunkSeq, event.data);
-        this.chunkSeq += 1;
-      };
-      recorder.onstop = () => this.handleRecorderStop(recorder);
-      recorder.onerror = (event) => {
-        const error = event?.error || new Error('El grabador de audio falló.');
-        this.lastRecorderError = error;
-        this.onError(error);
-        try {
-          if (recorder.state !== 'inactive') recorder.stop();
-        } catch {
-          this.handleRecorderStop(recorder);
-        }
-      };
-      this.watchTracks(recorder);
-
-      recorder.start(TIMESLICE_MS);
-      const now = Date.now();
-      this.startTime = now;
-      this.activeSegmentStartedAt = now;
-      this.sink('begin', {
-        id: recordingId,
-        sessionId,
-        plannerSessionId: this.currentPlannerSessionId,
-        blockId,
-        blockTitle,
-        pointId,
-        pointTitle,
-        sources: this.currentSources,
-        startedAt: now,
-        mimeType: mimeType || 'audio/webm',
-        timesliceMs: TIMESLICE_MS,
-      });
+      this.attachNewRecorder();
       this.setStatus(RECORDING_STATUS.RECORDING);
       return this.currentRecordingId;
     } catch (error) {
@@ -217,6 +208,126 @@ export class RecordingController {
       this.onError(error);
       throw error;
     }
+  }
+
+  /** Creates a MediaRecorder on the current stream for the current context and starts it. */
+  attachNewRecorder() {
+    const mimeType = this.mimeType;
+    const recorder = new MediaRecorder(this.stream, mimeType ? {mimeType} : {});
+    this.mediaRecorder = recorder;
+    const recordingId = this.currentRecordingId;
+    recorder.ondataavailable = (event) => {
+      if (!event.data || event.data.size <= 0) return;
+      if (this.mediaRecorder !== recorder) return;
+      this.audioChunks.push(event.data);
+      this.sink('append', recordingId, this.chunkSeq, event.data);
+      this.chunkSeq += 1;
+    };
+    recorder.onstop = () => this.handleRecorderStop(recorder);
+    recorder.onerror = (event) => {
+      const error = event?.error || new Error('El grabador de audio falló.');
+      this.lastRecorderError = error;
+      this.onError(error);
+      try {
+        if (recorder.state !== 'inactive') recorder.stop();
+      } catch {
+        this.handleRecorderStop(recorder);
+      }
+    };
+    this.watchTracks(recorder);
+
+    recorder.start(TIMESLICE_MS);
+    const now = Date.now();
+    this.startTime = now;
+    this.activeSegmentStartedAt = now;
+    this.sink('begin', {
+      id: recordingId,
+      sessionId: this.currentSessionId,
+      plannerSessionId: this.currentPlannerSessionId,
+      blockId: this.currentBlockId,
+      blockTitle: this.currentBlockTitle,
+      pointId: this.currentPointId,
+      pointTitle: this.currentPointTitle,
+      sources: this.currentSources,
+      startedAt: now,
+      mimeType: mimeType || 'audio/webm',
+      timesliceMs: TIMESLICE_MS,
+    });
+    return recorder;
+  }
+
+  /**
+   * Closes the current recording as its own file and immediately continues
+   * recording on the SAME microphone stream for a new tema/bloque (no new
+   * permission prompt, minimal gap). Resolves with the finalized entity of
+   * the previous segment. If nothing is being recorded it resolves null.
+   */
+  async rolloverRecording({sessionId, blockId, blockTitle = 'Bloque', pointId = null, pointTitle = null, plannerSessionId} = {}) {
+    if (!this.isActive() || !this.stream || !this.mediaRecorder || this.status === RECORDING_STATUS.FINALIZING) {
+      return null;
+    }
+    const oldRecorder = this.mediaRecorder;
+    const meta = this.snapshotMeta(Date.now());
+    const oldChunks = this.audioChunks;
+    let oldSeq = this.chunkSeq;
+    const oldId = meta.recordingId;
+
+    const finalized = new Promise((resolve) => {
+      let done = false;
+      let timeout = null;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+        try {
+          resolve(this.buildEntity(meta, {continuedFromRollover: true}, oldChunks));
+        } catch (error) {
+          this.onError(error);
+          resolve(null);
+        }
+      };
+      oldRecorder.ondataavailable = (event) => {
+        if (!event.data || event.data.size <= 0) return;
+        oldChunks.push(event.data);
+        this.sink('append', oldId, oldSeq, event.data);
+        oldSeq += 1;
+      };
+      oldRecorder.onstop = finish;
+      oldRecorder.onerror = finish;
+      timeout = setTimeout(finish, STOP_TIMEOUT_MS);
+      try {
+        if (oldRecorder.state === 'paused') oldRecorder.resume();
+        if (oldRecorder.state !== 'inactive') oldRecorder.stop();
+        else finish();
+      } catch {
+        finish();
+      }
+    });
+
+    // New recording context on the same stream.
+    this.currentRecordingId = createRecordingId();
+    this.currentSessionId = sessionId ?? this.currentSessionId;
+    if (plannerSessionId !== undefined) this.currentPlannerSessionId = plannerSessionId;
+    this.currentBlockId = blockId;
+    this.currentBlockTitle = blockTitle;
+    this.currentPointId = pointId;
+    this.currentPointTitle = pointTitle;
+    this.audioChunks = [];
+    this.chunkSeq = 0;
+    this.accumulatedPausedMs = 0;
+    this.pauseStartTime = null;
+    this.segments = [];
+    this.lastRecorderError = null;
+    try {
+      this.attachNewRecorder();
+      this.setStatus(RECORDING_STATUS.RECORDING);
+    } catch (error) {
+      this.lastRecorderError = error;
+      this.onError(error);
+      this.cleanup({clearContext: true});
+      this.setStatus(RECORDING_STATUS.ERROR);
+    }
+    return finalized;
   }
 
   watchTracks(recorder) {
@@ -302,8 +413,8 @@ export class RecordingController {
     };
   }
 
-  buildEntity(meta, extra = {}) {
-    const blob = new Blob(this.audioChunks, {type: meta.mimeType});
+  buildEntity(meta, extra = {}, chunks = this.audioChunks) {
+    const blob = new Blob(chunks, {type: meta.mimeType});
     const blobUrl = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' ? URL.createObjectURL(blob) : '';
     return {
       id: meta.recordingId,

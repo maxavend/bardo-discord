@@ -34,7 +34,7 @@ import {
   PlusIcon,
   DeleteIcon as TrashIcon,
 } from '@/components/ui/animated-icons';
-import { clockToMinutes, minutesToClock, isBreakBlock } from './time-engine.js';
+import { clockToMinutes, minutesToClock, isBreakBlock, parseCustomDurationMinutes, CUSTOM_DURATION_MAX_MINUTES } from './time-engine.js';
 import {
   POINT_STATUS,
   SESSION_STATUS,
@@ -42,7 +42,7 @@ import {
   getElapsedActivePointMs,
   getBlockPlannedMs,
 } from './session-runner.js';
-import { formatMsToClock } from './session-assistant-engine.js';
+import { formatMsToClock, getLivePrimaryAction } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialWavyProgress } from './MaterialWavyProgress.jsx';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
@@ -63,6 +63,116 @@ import {
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
+const BLOCK_DURATION_PRESETS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
+const BREAK_DURATION_PRESETS = [5, 10, 15, 20, 25, 30, 45, 60];
+
+// Edit-mode controls (move/delete tema, delete acuerdo): revealed on hover with
+// a mouse, always visible (subtle) on touch screens and small widths.
+const EDIT_ACTIONS_REVEAL = 'opacity-70 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [@media(hover:none)]:opacity-70 transition-opacity';
+
+/**
+ * Duration of a bloque/descanso in edit mode: preset list plus "Otra…"
+ * (whole minutes, 1–480) typed inline. Enter saves, Esc cancels.
+ */
+function BlockDurationControl({ minutes, presets, onChange, label = 'Duración del bloque' }) {
+  const [isCustom, setIsCustom] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [invalid, setInvalid] = useState(false);
+
+  const close = () => {
+    setIsCustom(false);
+    setInvalid(false);
+  };
+  const commit = () => {
+    const parsed = parseCustomDurationMinutes(draft);
+    if (parsed == null) {
+      setInvalid(true);
+      return;
+    }
+    onChange?.(parsed);
+    close();
+  };
+
+  if (isCustom) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={CUSTOM_DURATION_MAX_MINUTES}
+          step={1}
+          autoFocus
+          onFocus={(e) => e.target.select()}
+          value={draft}
+          aria-label={`${label} en minutos (1 a ${CUSTOM_DURATION_MAX_MINUTES})`}
+          aria-invalid={invalid || undefined}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setInvalid(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              close();
+            }
+          }}
+          onBlur={() => (parseCustomDurationMinutes(draft) != null ? commit() : close())}
+          className={`w-16 h-7 rounded-lg border bg-background px-2 text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/40 ${invalid ? 'border-destructive' : 'border-border'}`}
+        />
+        <span className="text-xs text-muted-foreground">min</span>
+        {invalid && (
+          <span role="alert" className="text-[11px] text-destructive">Entre 1 y {CUSTOM_DURATION_MAX_MINUTES}</span>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`${label}: ${minutes} min`}
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+          >
+            {minutes} min
+          </button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-36 p-1">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Duración</DropdownMenuLabel>
+          <div
+            className="max-h-52 overflow-y-auto overscroll-contain pr-0.5"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            {presets.map((mins) => (
+              <DropdownMenuItem key={mins} onClick={() => onChange?.(mins)}>
+                {mins} min{mins === minutes ? ' ✓' : ''}
+              </DropdownMenuItem>
+            ))}
+          </div>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
+            setDraft(String(minutes || ''));
+            setIsCustom(true);
+          }}
+        >
+          Otra…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function PlannerAgendaView({
   state,
   sessionState,
@@ -72,11 +182,13 @@ export function PlannerAgendaView({
   isEditing = false,
   dockSlot = null,
   onAdvance,
-  onAdvanceBlock,
-  onSkipBlock,
+  onAdvanceBlock: _onAdvanceBlock,
+  onSkipBlock: _onSkipBlock,
+  onPrimaryAction,
   isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
+  onAddFirstBlock,
   onAddBreak,
   onDeleteBlock,
   onMoveBlock,
@@ -93,6 +205,11 @@ export function PlannerAgendaView({
   const isRunning = sessionStatus === SESSION_STATUS.RUNNING;
   const isPaused = sessionStatus === SESSION_STATUS.PAUSED;
   const isSessionActive = isRunning || isPaused;
+  // Live controls: one adaptive primary action (Siguiente tema / Siguiente
+  // bloque / Terminar reunión); "Terminar reunión" always asks to confirm.
+  const livePrimary = isSessionActive ? getLivePrimaryAction(state, sessionState) : null;
+  const runLivePrimary = () => (onPrimaryAction ? onPrimaryAction() : onAdvance?.());
+  const canToggleTemas = isSessionActive && !isEditing && Boolean(onToggleSubpointStatus);
 
   const isRecording = recordingStatus === RECORDING_STATUS.RECORDING;
   const isRecordingPaused = recordingStatus === RECORDING_STATUS.PAUSED;
@@ -402,11 +519,17 @@ export function PlannerAgendaView({
       {dockSlot}
 
       {blocks.length === 0 ? (
-        <Card className="p-8 text-center flex flex-col items-center gap-3 rounded-2xl bg-card border-border">
-          <p className="text-sm text-muted-foreground">No hay bloques en la agenda.</p>
-          {isEditing && (
-            <Button variant="default" size="sm" onClick={() => onAddBlock?.()} className="mt-2">
-              <PlusIcon className="size-3.5" /> Agregar primer bloque
+        <Card className="p-8 text-center flex flex-col items-center gap-2 rounded-2xl bg-card border-border">
+          <p className="text-sm font-semibold text-foreground">Esta reunión todavía no tiene bloques</p>
+          <p className="text-xs text-muted-foreground">Agrega al menos un bloque para poder iniciarla.</p>
+          {(onAddBlock || onAddFirstBlock) && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => (isEditing || !onAddFirstBlock ? onAddBlock?.() : onAddFirstBlock())}
+              className="mt-2"
+            >
+              <PlusIcon className="size-3.5" /> Agregar bloque
             </Button>
           )}
         </Card>
@@ -459,7 +582,7 @@ export function PlannerAgendaView({
                 blockId: block.id,
                 blockTitle: block.title,
                 pointId: p.id,
-                pointTitle: p.title || `Punto ${pIdx + 1}`,
+                pointTitle: p.title || `Tema ${pIdx + 1}`,
                 durationMs: p.recordingDurationMs || p.durationMs || 15000,
               };
             });
@@ -490,43 +613,19 @@ export function PlannerAgendaView({
                         type="text"
                         value={block.title}
                         onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
-                        placeholder="Break / Descanso"
+                        placeholder="Descanso"
+                        aria-label="Nombre del descanso"
                         className="text-xs sm:text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0 placeholder:text-muted-foreground/40 font-inherit"
                       />
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <button
-                              type="button"
-                              className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
-                            >
-                              {blockDuration} min
-                            </button>
-                          }
-                        />
-                        <DropdownMenuContent align="end" className="w-36 p-1">
-                          <DropdownMenuGroup>
-                            <DropdownMenuLabel>Duración</DropdownMenuLabel>
-                            <div
-                              className="max-h-52 overflow-y-auto overscroll-contain pr-0.5"
-                              onWheel={(e) => e.stopPropagation()}
-                              onTouchMove={(e) => e.stopPropagation()}
-                            >
-                              {[5, 10, 15, 20, 25, 30, 45, 60].map((mins) => (
-                                <DropdownMenuItem
-                                  key={mins}
-                                  onClick={() => onUpdateBlock?.(block.id, { durationMinutes: mins })}
-                                >
-                                  {mins} min
-                                </DropdownMenuItem>
-                              ))}
-                            </div>
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <BlockDurationControl
+                        minutes={blockDuration}
+                        presets={BREAK_DURATION_PRESETS}
+                        label="Duración del descanso"
+                        onChange={(mins) => onUpdateBlock?.(block.id, { durationMinutes: mins })}
+                      />
 
                       <div className="flex items-center gap-0.5">
                         <button
@@ -535,6 +634,7 @@ export function PlannerAgendaView({
                           disabled={index === 0}
                           className="p-1 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
                           title="Mover arriba"
+                          aria-label="Mover descanso arriba"
                         >
                           <ChevronUp className="size-3.5" />
                         </button>
@@ -544,6 +644,7 @@ export function PlannerAgendaView({
                           disabled={isLast}
                           className="p-1 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
                           title="Mover abajo"
+                          aria-label="Mover descanso abajo"
                         >
                           <ChevronDown className="size-3.5" />
                         </button>
@@ -551,7 +652,8 @@ export function PlannerAgendaView({
                           type="button"
                           onClick={() => onDeleteBlock?.(block.id)}
                           className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer ml-0.5"
-                          title="Eliminar break"
+                          title="Eliminar descanso"
+                          aria-label="Eliminar descanso"
                         >
                           <TrashIcon className="size-3.5" />
                         </button>
@@ -594,7 +696,7 @@ export function PlannerAgendaView({
                         }`}
                       />
                       <span className={`text-xs font-medium truncate select-none ${isLive ? 'text-primary font-semibold' : ''}`}>
-                        {block.title || 'Break'}
+                        {block.title || 'Descanso'}
                       </span>
                       <span className={`text-[10px] font-mono select-none ${isLive ? 'text-primary/70 font-semibold' : 'text-muted-foreground/50'}`}>
                         ({blockDuration} min)
@@ -605,11 +707,11 @@ export function PlannerAgendaView({
                       {isLive ? (
                         <button
                           type="button"
-                          onClick={() => (onAdvanceBlock ? onAdvanceBlock() : onSkipBlock ? onSkipBlock(block.id) : onAdvance?.())}
-                          disabled={isTransitioning}
+                          onClick={runLivePrimary}
+                          disabled={isTransitioning || isPaused}
                           className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-2xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                         >
-                          <span>Terminar break</span>
+                          <span>{livePrimary?.label || 'Terminar descanso'}</span>
                           <ChevronRight className="size-3 stroke-[2]" />
                         </button>
                       ) : isCompleted ? (
@@ -645,6 +747,7 @@ export function PlannerAgendaView({
                         value={block.title}
                         onChange={(e) => onUpdateBlock?.(block.id, { title: fieldValue(e.target.value) })}
                         placeholder="Título del bloque"
+                        aria-label="Título del bloque"
                         className="text-base font-bold tracking-tight text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-0 focus:ring-0 placeholder:font-bold placeholder:text-muted-foreground/40 font-inherit leading-normal"
                         style={{ fontWeight: 700 }}
                       />
@@ -654,37 +757,11 @@ export function PlannerAgendaView({
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {isEditing ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <button
-                                type="button"
-                                className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
-                              >
-                                {block.durationMinutes || 30} min
-                              </button>
-                            }
-                          />
-                          <DropdownMenuContent align="end" className="w-36 p-1">
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel>Duración</DropdownMenuLabel>
-                              <div
-                                className="max-h-52 overflow-y-auto overscroll-contain pr-0.5"
-                                onWheel={(e) => e.stopPropagation()}
-                                onTouchMove={(e) => e.stopPropagation()}
-                              >
-                                {[5, 10, 15, 20, 25, 30, 45, 60, 90, 120].map((mins) => (
-                                  <DropdownMenuItem
-                                    key={mins}
-                                    onClick={() => onUpdateBlock?.(block.id, { durationMinutes: mins })}
-                                  >
-                                    {mins} min
-                                  </DropdownMenuItem>
-                                ))}
-                              </div>
-                            </DropdownMenuGroup>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <BlockDurationControl
+                          minutes={block.durationMinutes || 30}
+                          presets={BLOCK_DURATION_PRESETS}
+                          onChange={(mins) => onUpdateBlock?.(block.id, { durationMinutes: mins })}
+                        />
                       ) : (
                         <span className="text-xs text-muted-foreground font-medium">{block.durationMinutes || 30} min</span>
                       )}
@@ -701,11 +778,11 @@ export function PlannerAgendaView({
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuGroup>
                               <DropdownMenuLabel>Bloque</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => onMoveBlock?.(block.id, -1)}>
+                              <DropdownMenuItem disabled={index === 0} onClick={() => onMoveBlock?.(block.id, -1)}>
                                 <ChevronUp className="size-4 text-muted-foreground" />
                                 <span>Mover arriba</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => onMoveBlock?.(block.id, 1)}>
+                              <DropdownMenuItem disabled={isLast} onClick={() => onMoveBlock?.(block.id, 1)}>
                                 <ChevronDown className="size-4 text-muted-foreground" />
                                 <span>Mover abajo</span>
                               </DropdownMenuItem>
@@ -748,7 +825,7 @@ export function PlannerAgendaView({
                                 onClick={() => runAudioExport(() => exportBlockRecordingsAsZip(block.title, effectiveBlockRecordings, audioOptions))}
                               >
                                 <DownloadIcon className="size-4 text-muted-foreground" />
-                                <span>Descargar grabaciones por punto</span>
+                                <span>Descargar grabaciones por tema</span>
                               </DropdownMenuItem>
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
@@ -763,6 +840,7 @@ export function PlannerAgendaView({
                       value={block.introDesc || ''}
                       onChange={(e) => onUpdateBlock?.(block.id, { introDesc: fieldValue(e.target.value) })}
                       placeholder="Contexto o descripción del bloque..."
+                      aria-label="Descripción del bloque"
                       className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 field-sizing-content max-h-[9rem] overflow-y-hidden"
                     />
                   ) : (
@@ -778,11 +856,15 @@ export function PlannerAgendaView({
                     )
                   )}
 
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap pt-0.5">
-                    {renderBlockLeader(block)}
-                    <span className="text-muted-foreground/40">·</span>
-                    {renderBlockParticipants(block)}
-                  </div>
+                  {(isEditing || block.leader || block.participants) && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap pt-0.5">
+                      {renderBlockLeader(block)}
+                      {(isEditing || (block.leader && block.participants)) && (
+                        <span className="text-muted-foreground/40" aria-hidden="true">·</span>
+                      )}
+                      {renderBlockParticipants(block)}
+                    </div>
+                  )}
                 </div>
 
                 {((block.subpoints || []).length > 0 || isEditing) && (
@@ -831,16 +913,17 @@ export function PlannerAgendaView({
                                 type="text"
                                 value={point.title}
                                 onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { title: fieldValue(e.target.value) })}
-                                placeholder="Título del punto..."
+                                placeholder="Título del tema..."
+                                aria-label="Título del tema"
                                 className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0 rounded px-1 -mx-1 transition-all leading-normal placeholder:font-semibold placeholder:text-muted-foreground/40 font-inherit"
                                 style={{ fontWeight: 600 }}
                               />
-                              <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0 ml-auto">
+                              <div className={`${EDIT_ACTIONS_REVEAL} flex items-center gap-0.5 shrink-0 ml-auto`}>
                                 <button
                                   type="button"
                                   onClick={() => onMoveSubpoint?.(block.id, point.id, -1)}
                                   disabled={pointIndex === 0}
-                                  aria-label="Mover punto arriba"
+                                  aria-label="Mover tema arriba"
                                   className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
                                 >
                                   <ChevronUp className="size-3.5" />
@@ -849,7 +932,7 @@ export function PlannerAgendaView({
                                   type="button"
                                   onClick={() => onMoveSubpoint?.(block.id, point.id, 1)}
                                   disabled={pointIndex === (block.subpoints || []).length - 1}
-                                  aria-label="Mover punto abajo"
+                                  aria-label="Mover tema abajo"
                                   className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
                                 >
                                   <ChevronDown className="size-3.5" />
@@ -857,7 +940,7 @@ export function PlannerAgendaView({
                                 <button
                                   type="button"
                                   onClick={() => onDeleteSubpoint?.(block.id, point.id)}
-                                  aria-label="Eliminar punto"
+                                  aria-label="Eliminar tema"
                                   className="p-1 text-muted-foreground hover:text-destructive cursor-pointer ml-0.5"
                                 >
                                   <TrashIcon className="size-3.5" />
@@ -871,6 +954,7 @@ export function PlannerAgendaView({
                               value={point.description || ''}
                               onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { description: fieldValue(e.target.value) })}
                               placeholder="Agregar descripción o detalle..."
+                              aria-label="Descripción del tema"
                               className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 field-sizing-content max-h-[9rem] overflow-y-hidden"
                             />
 
@@ -947,12 +1031,7 @@ export function PlannerAgendaView({
                       }
 
                       if (isPointActive) {
-                        const isLastPointInBlock = pointIndex === (block.subpoints || []).length - 1;
-                        const nextActionLabel = isLast && isLastPointInBlock
-                          ? 'Finalizar sesión'
-                          : isLastPointInBlock
-                            ? 'Siguiente bloque'
-                            : 'Siguiente subpunto';
+                        const nextActionLabel = livePrimary?.label || 'Siguiente tema';
 
                         return (
                           <div
@@ -962,7 +1041,7 @@ export function PlannerAgendaView({
                             {/* Fila 1: Título activo (púrpura bold) y Estado de tiempo (rojo sin fondo de píldora) */}
                             <div className="flex items-center justify-between gap-3 min-w-0">
                               <span className="text-sm font-bold text-primary truncate leading-normal">
-                                {point.title || '(Punto sin título)'}
+                                {point.title || '(Tema sin título)'}
                               </span>
 
                               {isRecordingActive && (
@@ -1017,14 +1096,15 @@ export function PlannerAgendaView({
                                 )}
                               </div>
 
-                              {onAdvance && (
+                              {(onPrimaryAction || onAdvance) && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onAdvance();
+                                    runLivePrimary();
                                   }}
-                                  disabled={isTransitioning}
+                                  disabled={isTransitioning || isPaused}
+                                  title={isPaused ? 'Reanuda la reunión para continuar' : undefined}
                                   className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-background hover:bg-background/90 text-primary font-medium text-xs shadow-xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                                 >
                                   <span className="font-medium">{nextActionLabel}</span>
@@ -1048,24 +1128,40 @@ export function PlannerAgendaView({
                           {/* Columna Izquierda: Checkbox/Título, Descripción y Responsable */}
                           <div className="flex flex-col gap-1 min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
-                              {isDone && (
-                                <CheckCircle2
-                                  onClick={() => onToggleSubpointStatus?.(block.id, point.id, false)}
-                                  className="size-4 text-emerald-500 shrink-0 cursor-pointer"
-                                />
-                              )}
+                              {canToggleTemas ? (
+                                // Decision 4: explicit checkbox, only during a live meeting.
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={isDone}
+                                  aria-label={isDone ? `Marcar “${point.title || 'tema'}” como pendiente` : `Marcar “${point.title || 'tema'}” como tratado`}
+                                  title={isDone ? 'Marcar como pendiente' : 'Marcar como tratado'}
+                                  onClick={() => onToggleSubpointStatus(block.id, point.id, !isDone)}
+                                  className={`size-4.5 shrink-0 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
+                                    isDone
+                                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                                      : 'border-muted-foreground/40 bg-background hover:border-primary'
+                                  }`}
+                                >
+                                  {isDone && <Check className="size-3 stroke-[3]" />}
+                                </button>
+                              ) : isDone ? (
+                                <CheckCircle2 aria-label="Tratado" className="size-4 text-emerald-500 shrink-0" />
+                              ) : null}
                               <span
-                                onClick={() => onToggleSubpointStatus?.(block.id, point.id, !isDone)}
                                 className={`text-sm leading-normal truncate ${
                                   isDone
-                                    ? 'text-foreground/90 font-medium cursor-pointer'
+                                    ? 'text-foreground/90 font-medium'
                                     : isPointSkipped
-                                      ? 'text-muted-foreground font-normal cursor-pointer'
-                                      : 'font-semibold text-foreground cursor-pointer hover:text-primary'
+                                      ? 'text-muted-foreground font-normal'
+                                      : 'font-semibold text-foreground'
                                 }`}
                               >
-                                {point.title || '(Punto sin título)'}
+                                {point.title || '(Tema sin título)'}
                               </span>
+                              {isPointSkipped && !isDone && (
+                                <span className="text-[11px] text-muted-foreground shrink-0">· saltado</span>
+                              )}
                             </div>
 
                             {point.description && (
@@ -1252,7 +1348,7 @@ export function PlannerAgendaView({
                                 variant="ghost"
                                 size="icon-xs"
                                 aria-label="Eliminar acuerdo"
-                                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
+                                className={`${EDIT_ACTIONS_REVEAL} focus-visible:opacity-100 text-muted-foreground hover:text-destructive shrink-0`}
                                 onClick={() => onDeleteDecision?.(block.id, decision.id)}
                               >
                                 <TrashIcon className="size-3" />
@@ -1266,7 +1362,7 @@ export function PlannerAgendaView({
                 )}
 
                 {!isEditing && (
-                  <div className="flex items-center justify-between pt-2.5 mt-1 border-t border-border/40 text-xs text-muted-foreground gap-2">
+                  <div className="flex flex-wrap items-center justify-between pt-2.5 mt-1 border-t border-border/40 text-xs text-muted-foreground gap-2">
                     <button
                       type="button"
                       onClick={() => onOpenCapture('decision', block.id)}
@@ -1276,15 +1372,18 @@ export function PlannerAgendaView({
                       <span>Acuerdo</span>
                     </button>
 
-                    {isLive && (onAdvanceBlock || onAdvance) && (
+                    {/* Only when the bloque has no active tema: otherwise the tema's
+                        own button is the primary action (no silent skipping). */}
+                    {isLive && !liveActivePointId && (onPrimaryAction || onAdvance) && (
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={onAdvanceBlock || onAdvance}
-                        disabled={isTransitioning}
-                        className="h-8 px-3.5 text-xs font-semibold rounded-full gap-1.5 cursor-pointer shadow-xs ml-auto"
+                        onClick={runLivePrimary}
+                        disabled={isTransitioning || isPaused}
+                        title={isPaused ? 'Reanuda la reunión para continuar' : undefined}
+                        className="h-8 min-w-0 max-w-full px-3.5 text-xs font-semibold rounded-full gap-1.5 cursor-pointer shadow-xs ml-auto"
                       >
-                        <span>{isLast ? 'Finalizar sesión' : 'Siguiente bloque'}</span>
+                        <span className="truncate">{livePrimary?.label || 'Siguiente bloque'}</span>
                         <ChevronRight className="size-3.5" />
                       </Button>
                     )}

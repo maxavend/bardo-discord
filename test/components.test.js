@@ -122,18 +122,51 @@ test('buildReusListPayload maneja canal sin reuniones con mensaje amigable', () 
   assert.equal(button.custom_id, 'bardo:open:planner');
 });
 
-test('buildDocNewPayload produce contenedor con botón para crear documento', () => {
-  const payload = buildDocNewPayload({ title: 'Especificación de API' });
+test('buildDocNewPayload: tarjeta del documento ya creado con botón para editarlo', () => {
+  const payload = buildDocNewPayload({ documentId: 'doc-42', title: 'Especificación de API', createdByName: 'Ana_B' });
   assert.ok(payload.flags !== undefined);
   assert.equal(payload.components.length, 1);
 
   const actionRow = payload.components[0].components.at(-1);
   const button = actionRow.components[0];
-  assert.equal(button.label, 'Crear en Bardo');
-  // The title travels in the custom_id so the editor can prefill it.
-  assert.equal(button.custom_id, 'bardo:open:new-doc:Especificación de API');
+  assert.equal(button.label, 'Abrir documento');
+  // The button opens the already-created document straight in the editor.
+  assert.equal(button.custom_id, 'bardo:open:edit:doc-42');
+  const text = JSON.stringify(payload);
+  assert.match(text, /Especificación de API/);
+  assert.match(text, /Ana\\\\_B/, 'el nombre se escapa para el markdown de Discord');
+  // The copy names the real button.
+  assert.match(text, /Pulsa \*\*Abrir documento\*\*/);
 });
 
+test('buildDocNewPayload sin título usa "Sin título"', () => {
+  const text = JSON.stringify(buildDocNewPayload({ documentId: 'doc-1' }));
+  assert.match(text, /Sin título/);
+});
+
+test('buildDocumentPayload nombra el botón real y muestra quién compartió', () => {
+  const payload = buildDocumentPayload({ title: 'Plan', pages: ['Hola'] }, { documentId: 'doc-1', attribution: 'Compartido por Ana' });
+  const text = JSON.stringify(payload);
+  assert.match(text, /Compartido por Ana/);
+  assert.match(text, /Pulsa \*\*Abrir documento\*\*/);
+  assert.doesNotMatch(text, /Mostrar más|Abre Bardo para ver/);
+  assert.equal(payload.components[0].components.at(-1).components[0].label, 'Abrir documento');
+});
+
+test('vocabulario de Reuniones: Facilita, Programadas, En curso y Terminadas', () => {
+  const card = JSON.stringify(buildReuNewPayload({ session: { id: 's', title: 'Daily', hostName: 'Pau' } }));
+  assert.match(card, /Facilita: Pau/);
+  assert.doesNotMatch(card, /Organiza/);
+  const list = JSON.stringify(buildReusListPayload({ sessions: [
+    { id: 'a', title: 'A', status: 'live' },
+    { id: 'b', title: 'B', status: 'scheduled' },
+    { id: 'c', title: 'C', status: 'completed' },
+  ] }));
+  assert.match(list, /En curso/);
+  assert.match(list, /Programadas/);
+  assert.match(list, /Terminadas/);
+  assert.doesNotMatch(list, /Pasadas|Concluidas|sesión|evento/i);
+});
 
 function totalText(payload) {
   let total = '';

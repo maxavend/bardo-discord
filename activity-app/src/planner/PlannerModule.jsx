@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {PlannerUpcomingBanner} from './PlannerUpcomingBanner.jsx';
 import {RecordingSaveModal} from './RecordingSaveModal.jsx';
-import {SessionInterruptModal} from './SessionInterruptModal.jsx';
+import {FinishMeetingDialog} from './SessionInterruptModal.jsx';
 import {
   loadPlannerState,
   savePlannerState,
@@ -47,6 +47,7 @@ import {
   reconcileLiveState,
   normalizeServerSession,
   toPlannerEvent,
+  isDefaultEmptySession,
 } from './planner-store.js';
 import {
   createPlannerSyncEngine,
@@ -54,6 +55,17 @@ import {
   describeSyncError,
 } from './planner-sync.js';
 import {computePlannerTimes} from './time-engine.js';
+import {
+  removeBlock,
+  removeTopic,
+  removeAgreement,
+  restoreRemoved,
+  restoreSessionAgreement,
+  createAgendaBlock,
+  createBreakBlock,
+} from './agenda-edits.js';
+import {copyTextToClipboard} from './clipboard.js';
+import {PlannerUndoToast} from './PlannerUndoToast.jsx';
 import {
   SESSION_STATUS,
   POINT_STATUS,
@@ -67,8 +79,9 @@ import {
   extendActiveBlock,
   setUnlimitedActiveBlock,
   completeLiveSession,
-  interruptLiveSession,
   resumeInterruptedSession,
+  reopenLiveSession,
+  getPointCounts,
   saveFinalizedRecording,
   renameRecordingInSession,
   deleteRecordingFromSession,
@@ -82,8 +95,14 @@ import {
   evaluateSessionAssistant,
   ASSISTANT_EVENT,
   formatMsToClock,
+  getLivePrimaryAction,
 } from './session-assistant-engine.js';
-import {RecordingController, RECORDING_STATUS} from './recording-controller.js';
+import {
+  RecordingController,
+  RECORDING_STATUS,
+  describeMicrophoneError,
+  isMobileUserAgent,
+} from './recording-controller.js';
 import {
   recordingStorage,
   persistRecordingBinary,
@@ -382,13 +401,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!persisted) return;
     recordingPausedBySessionRef.current = false;
     commitSessionState(saveFinalizedRecording(sessionStateRef.current, persisted));
-    toast(`La grabación se detuvo (${entity.interruptionReason || 'micrófono desconectado'}). Se guardó lo capturado: ${formatMsToClock(persisted.durationMs || 0)}.`);
+    toast(`La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo grabado: ${formatMsToClock(persisted.durationMs || 0)}.`);
   };
 
   useEffect(() => {
     const controller = new RecordingController({
       onStatusChange: setRecordingStatus,
-      onError: (error) => toast(`Error en el micrófono: ${error?.message || 'Permiso no otorgado'}`),
+      onError: (error) => toast(describeMicrophoneError(error, {isMobile: isMobileUserAgent()})),
       onAutoFinalized: (entity) => {
         void autoFinalizedHandlerRef.current?.(entity);
       },
@@ -519,7 +538,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     transitionLockRef.current = true;
     setIsTransitioning(true);
     try {
-      await operation();
+      return await operation();
     } finally {
       transitionLockRef.current = false;
       setIsTransitioning(false);
@@ -545,10 +564,16 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   }, [commitSessionState, finalizeActiveRecording]);
 
   const handleStartSession = useCallback(() => {
-    const next = createLiveSession(plannerStateRef.current);
+    const planner = plannerStateRef.current;
+    // A meeting needs at least one bloque to run (decision 8).
+    if (!(planner?.blocks || []).length) {
+      toast('Agrega al menos un bloque antes de iniciar la reunión.');
+      return;
+    }
+    const next = createLiveSession(planner);
     commitSessionState(next);
     handleTabChange('agenda');
-    toast('Sesión en vivo iniciada');
+    toast('Reunión iniciada');
   }, [commitSessionState, handleTabChange]);
 
   const handlePauseSession = useCallback(() => {
@@ -557,8 +582,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (recordingControllerRef.current?.isRecording()) {
       recordingControllerRef.current.pauseRecording();
       recordingPausedBySessionRef.current = true;
+      toast('Reunión en pausa · grabación en pausa');
+    } else {
+      toast('Reunión en pausa');
     }
-    toast('Sesión en pausa');
   }, [commitSessionState]);
 
   const handleResumeSession = useCallback(() => {
@@ -570,115 +597,146 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     // Resume the recording only if it was paused together with the session.
     if (recordingPausedBySessionRef.current && recordingControllerRef.current?.isPaused()) {
       recordingControllerRef.current.resumeRecording();
-      toast('Sesión reanudada · grabación reanudada');
+      toast('Reunión reanudada · grabación reanudada');
     } else {
-      toast('Sesión reanudada');
+      toast('Reunión reanudada');
     }
     recordingPausedBySessionRef.current = false;
     handleTabChange('agenda');
   }, [commitSessionState, handleTabChange]);
 
-  const handleAdvance = useCallback(() => runAtomicTransition(async () => {
+  /**
+   * Runs a live transition. If audio is being recorded it keeps recording
+   * into the new tema/bloque (decision 2): the previous part is saved as its
+   * own file and a new one starts on the same microphone without a gap.
+   */
+  const runLiveTransition = useCallback((transition) => runAtomicTransition(async () => {
+    const controller = recordingControllerRef.current;
     const outgoing = sessionStateRef.current;
-    const activeBlock = getActiveBlock(plannerStateRef.current, outgoing);
-    const recording = await finalizeActiveRecording();
-    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
-    const next = advanceLiveSession(plannerStateRef.current, withRecording);
-    commitSessionState(next);
+    const planner = plannerStateRef.current;
+    let next = transition(planner, outgoing);
+    const nextBlock = getActiveBlock(planner, next);
+    const nextPoint = getActivePoint(planner, next);
+    const stillLive = next.status === SESSION_STATUS.RUNNING || next.status === SESSION_STATUS.PAUSED;
+    const continueMode = controller?.isRecording()
+      ? 'recording'
+      : controller?.isPaused() && recordingPausedBySessionRef.current
+        ? 'paused-by-session'
+        : null;
 
-    if (recording) {
-      toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
-    }
-    if (next.status === SESSION_STATUS.COMPLETED) {
-      setActiveTab('recap');
-      toast('Sesión finalizada. Mostrando resumen.');
-      return;
-    }
-
-    if (next.liveActiveBlockId === outgoing.liveActiveBlockId) {
-      const nextPoint = getActivePoint(plannerStateRef.current, next);
-      toast(`Siguiente punto: ${nextPoint?.title || 'Punto'}`);
+    let recording = null;
+    let continued = false;
+    if (continueMode && stillLive && nextBlock) {
+      const previous = await controller.rolloverRecording({
+        sessionId: next.sessionId || outgoing.sessionId,
+        plannerSessionId: next.plannerSessionId || planner.id || null,
+        blockId: nextBlock.id,
+        blockTitle: nextBlock.title,
+        pointId: nextPoint?.id || null,
+        pointTitle: nextPoint?.title || null,
+      });
+      continued = controller.isActive();
+      if (continued && continueMode === 'paused-by-session') controller.pauseRecording();
+      setRecordingElapsedMs(0);
+      recording = previous ? await persistCapturedRecording(previous) : null;
     } else {
-      const nextBlock = getActiveBlock(plannerStateRef.current, next);
-      toast(`Siguiente bloque: ${nextBlock?.title || activeBlock?.title || 'Bloque'}`);
+      recording = await finalizeActiveRecording();
     }
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
-
-  const handleAdvanceBlock = useCallback(() => runAtomicTransition(async () => {
-    const outgoing = sessionStateRef.current;
-    const activeBlock = getActiveBlock(plannerStateRef.current, outgoing);
-    const recording = await finalizeActiveRecording();
-    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
-    const next = advanceToNextBlock(plannerStateRef.current, withRecording);
+    if (recording) next = saveFinalizedRecording(next, recording);
     commitSessionState(next);
 
-    if (recording) {
-      toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
-    }
     if (next.status === SESSION_STATUS.COMPLETED) {
       setActiveTab('recap');
-      toast('Sesión finalizada. Mostrando resumen.');
-      return;
+      toast(recording ? `Reunión terminada. Se guardó la grabación “${recording.name}”.` : 'Reunión terminada. Este es el resumen.');
+      return next;
     }
+    const target = nextPoint?.title || nextBlock?.title || 'la reunión';
+    if (continued) {
+      toast(`Se guardó “${recording?.name || 'la grabación'}” · sigue grabando en “${target}”`);
+    } else if (recording) {
+      toast(`Se guardó la grabación “${recording.name}” (${formatMsToClock(recording.durationMs)})`);
+    }
+    return next;
+  }), [commitSessionState, finalizeActiveRecording, persistCapturedRecording, runAtomicTransition]);
 
-    const nextBlock = getActiveBlock(plannerStateRef.current, next);
-    toast(`Siguiente bloque: ${nextBlock?.title || activeBlock?.title || 'Bloque'}`);
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  const handleAdvance = useCallback(async () => {
+    const before = sessionStateRef.current;
+    const next = await runLiveTransition((planner, state) => advanceLiveSession(planner, state));
+    if (!next || next.status === SESSION_STATUS.COMPLETED) return;
+    if (next.liveActiveBlockId === before.liveActiveBlockId) {
+      toast(`Siguiente tema: ${getActivePoint(plannerStateRef.current, next)?.title || 'Tema'}`);
+    } else {
+      toast(`Siguiente bloque: ${getActiveBlock(plannerStateRef.current, next)?.title || 'Bloque'}`);
+    }
+  }, [runLiveTransition]);
 
-  const handleSkipPoint = useCallback(() => runAtomicTransition(async () => {
-    const outgoing = sessionStateRef.current;
-    const recording = await finalizeActiveRecording();
-    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
-    const next = skipActivePoint(plannerStateRef.current, withRecording);
-    commitSessionState(next);
-    if (next.status === SESSION_STATUS.COMPLETED) setActiveTab('recap');
-    toast('Punto saltado');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  const handleAdvanceBlock = useCallback(async () => {
+    const next = await runLiveTransition((planner, state) => advanceToNextBlock(planner, state));
+    if (!next || next.status === SESSION_STATUS.COMPLETED) return;
+    toast(`Siguiente bloque: ${getActiveBlock(plannerStateRef.current, next)?.title || 'Bloque'}`);
+  }, [runLiveTransition]);
 
-  const handleSkipBlock = useCallback(() => runAtomicTransition(async () => {
-    const outgoing = sessionStateRef.current;
-    const recording = await finalizeActiveRecording();
-    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
-    const next = skipActiveBlock(plannerStateRef.current, withRecording);
-    commitSessionState(next);
-    if (next.status === SESSION_STATUS.COMPLETED) setActiveTab('recap');
-    toast('Bloque saltado');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  const handleSkipPoint = useCallback(async () => {
+    const next = await runLiveTransition((planner, state) => skipActivePoint(planner, state));
+    if (next && next.status !== SESSION_STATUS.COMPLETED) toast('Tema saltado');
+  }, [runLiveTransition]);
+
+  const handleSkipBlock = useCallback(async () => {
+    const next = await runLiveTransition((planner, state) => skipActiveBlock(planner, state));
+    if (next && next.status !== SESSION_STATUS.COMPLETED) toast('Bloque saltado');
+  }, [runLiveTransition]);
 
   const handleExtendBlock = useCallback((blockId, minutes = 5) => {
     const next = extendActiveBlock(sessionStateRef.current, blockId, minutes);
     commitSessionState(next);
-    toast(`Bloque extendido +${minutes} min`);
+    toast(`+${minutes} min para este bloque`);
   }, [commitSessionState]);
 
   const handleSetUnlimited = useCallback((blockId) => {
     const next = setUnlimitedActiveBlock(sessionStateRef.current, blockId);
     commitSessionState(next);
-    toast('Tiempo del bloque sin límite');
+    toast('Este bloque ahora no tiene límite de tiempo');
   }, [commitSessionState]);
 
-  const handleFinishSession = useCallback(() => runAtomicTransition(async () => {
-    const outgoing = sessionStateRef.current;
-    const recording = await finalizeActiveRecording();
-    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
-    const next = completeLiveSession(withRecording);
-    commitSessionState(next);
-    setActiveTab('recap');
-    toast('Sesión finalizada. Mostrando resumen.');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+  // Ending always goes through a confirmation (decision 1).
+  // mode 'advance': the primary button on the last tema/bloque (marks it as
+  // tratado and ends); mode 'finish': "Terminar reunión" from the menu.
+  const handleRequestFinish = useCallback((mode = 'finish') => {
+    setInterruptModal({isOpen: true, mode});
+  }, []);
 
-  const handleOpenInterrupt = useCallback(() => setInterruptModal({isOpen: true}), []);
+  const handleFinishSession = useCallback(() => handleRequestFinish('finish'), [handleRequestFinish]);
+  const handleOpenInterrupt = handleFinishSession;
 
-  const handleConfirmInterrupt = useCallback(() => runAtomicTransition(async () => {
+  const handleConfirmFinish = useCallback(async () => {
+    const mode = interruptModal.mode || 'finish';
     setInterruptModal({isOpen: false});
-    const outgoing = sessionStateRef.current;
-    const recording = await finalizeActiveRecording();
-    const withRecording = recording ? saveFinalizedRecording(outgoing, recording) : outgoing;
-    const next = interruptLiveSession(withRecording);
-    commitSessionState(next);
-    setActiveTab('recap');
-    toast(recording ? `${recording.name} y sesión conservadas` : 'Sesión interrumpida. Todo el trabajo fue conservado.');
-  }), [commitSessionState, finalizeActiveRecording, runAtomicTransition]);
+    await runLiveTransition((planner, state) => {
+      if (mode === 'advance') {
+        const advanced = advanceLiveSession(planner, state);
+        if (advanced.status === SESSION_STATUS.COMPLETED) return advanced;
+      }
+      return completeLiveSession(state);
+    });
+  }, [interruptModal.mode, runLiveTransition]);
+
+  /** Adaptive primary live button: Siguiente tema / Siguiente bloque / Terminar reunión. */
+  const handleLivePrimary = useCallback(() => {
+    const action = getLivePrimaryAction(plannerStateRef.current, sessionStateRef.current);
+    if (action.key === 'finish') {
+      handleRequestFinish('advance');
+      return;
+    }
+    void handleAdvance();
+  }, [handleAdvance, handleRequestFinish]);
+
+  const handleReopenSession = useCallback(() => {
+    const reopened = reopenLiveSession(plannerStateRef.current, sessionStateRef.current);
+    if (reopened === sessionStateRef.current) return;
+    commitSessionState(reopened);
+    handleTabChange('agenda');
+    toast('Reunión reabierta. El tiempo que estuvo cerrada no se cuenta.');
+  }, [commitSessionState, handleTabChange]);
 
   // Recording context is always resolved from the runner. The user never has to
   // pick a Point that Bardo already knows is active.
@@ -721,7 +779,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!persisted) return;
     const next = saveFinalizedRecording(sessionStateRef.current, persisted);
     commitSessionState(next);
-    toast(persisted.status === 'saved' ? 'Grabación guardada en la sesión' : 'Grabación finalizada con error de persistencia');
+    toast(persisted.status === 'saved' ? 'Grabación guardada en la reunión' : 'La grabación terminó, pero no se pudo guardar en este dispositivo');
   }, [commitSessionState, persistCapturedRecording]);
 
   const handleDiscardRecording = useCallback(() => {
@@ -758,7 +816,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     try {
       await recordingStorage.delete(recordingId);
     } catch {
-      toast('No se pudo borrar el binario local, pero se retirará de esta sesión.');
+      toast('No se pudo borrar el audio de este dispositivo, pero se quitó de la reunión.');
     }
     if (recording?.blobUrl && typeof URL !== 'undefined') URL.revokeObjectURL(recording.blobUrl);
     const next = deleteRecordingFromSession(sessionStateRef.current, recordingId);
@@ -766,29 +824,19 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     toast('Grabación eliminada');
   }, [commitSessionState]);
 
+  // Decision 4: a tema is marked as tratado only with the explicit checkbox
+  // during a live meeting; it never edits the agenda and does nothing outside
+  // a live meeting.
   const handleToggleSubpointStatus = useCallback((blockId, pointId, checked) => {
-    updatePlanner((previous) => ({
-      ...previous,
-      blocks: previous.blocks.map((block) => {
-        if (block.id !== blockId) return block;
-        return {
-          ...block,
-          subpoints: (block.subpoints || []).map((point) =>
-            point.id === pointId ? {...point, status: checked ? POINT_STATUS.DONE : POINT_STATUS.PENDING} : point
-          ),
-        };
-      }),
-    }));
-
-    if (sessionStateRef.current.status !== SESSION_STATUS.IDLE) {
-      const nextSession = setPointStatus(
-        sessionStateRef.current,
-        pointId,
-        checked ? POINT_STATUS.DONE : POINT_STATUS.PENDING
-      );
-      commitSessionState(nextSession);
-    }
-  }, [commitSessionState, updatePlanner]);
+    const status = sessionStateRef.current.status;
+    if (status !== SESSION_STATUS.RUNNING && status !== SESSION_STATUS.PAUSED) return;
+    const nextSession = setPointStatus(
+      sessionStateRef.current,
+      pointId,
+      checked ? POINT_STATUS.DONE : POINT_STATUS.PENDING
+    );
+    commitSessionState(nextSession);
+  }, [commitSessionState]);
 
   const handleOpenDecisionCapture = useCallback((targetBlockId = null) => {
     const selectedBlockId = targetBlockId || sessionStateRef.current.liveActiveBlockId || plannerStateRef.current.blocks[0]?.id;
@@ -832,38 +880,69 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     toast(`Acuerdo agregado al bloque "${targetBlock?.title || 'seleccionado'}"`);
   }, [commitSessionState, updatePlanner]);
 
+  // ── Undo for deletions of bloque / tema / acuerdo (no confirm dialog) ──────
+  const [undoToast, setUndoToast] = useState(null);
+  const undoActionsRef = useRef(new Map());
+
+  /** Shows "<message> · Deshacer" for a few seconds; only the latest can be undone. */
+  const offerUndo = useCallback((message, undo) => {
+    const id = `undo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const plannerId = plannerStateRef.current?.id || null;
+    undoActionsRef.current = new Map([[id, {undo, plannerId}]]);
+    setUndoToast({id, message});
+  }, []);
+
+  const handleUndo = useCallback((id) => {
+    const entry = undoActionsRef.current.get(id);
+    undoActionsRef.current.delete(id);
+    setUndoToast((current) => (current?.id === id ? null : current));
+    if (!entry) return;
+    // Never restore into a different meeting than the one it was deleted from.
+    if (entry.plannerId !== (plannerStateRef.current?.id || null)) return;
+    entry.undo();
+  }, []);
+
+  const handleDismissUndo = useCallback((id) => {
+    undoActionsRef.current.delete(id);
+    setUndoToast((current) => (current?.id === id ? null : current));
+  }, []);
+
+  const clearUndo = useCallback(() => {
+    undoActionsRef.current = new Map();
+    setUndoToast(null);
+  }, []);
+
   const handleDeleteDecision = useCallback((blockId, decisionId) => {
-    updatePlanner((previous) => ({
-      ...previous,
-      blocks: previous.blocks.map((block) =>
-        block.id === blockId
-          ? {...block, decisions: (block.decisions || []).filter((decision) => decision.id !== decisionId)}
-          : block
-      ),
-    }));
-    commitSessionState({
-      ...sessionStateRef.current,
-      decisions: (sessionStateRef.current.decisions || []).filter((decision) => decision.id !== decisionId),
+    let removed = null;
+    updatePlanner((previous) => {
+      const result = removeAgreement(previous, blockId, decisionId);
+      removed = result.removed;
+      return result.state;
     });
-    toast('Acuerdo eliminado');
-  }, [commitSessionState, updatePlanner]);
+    const liveDecision = (sessionStateRef.current.decisions || []).find((decision) => decision.id === decisionId) || null;
+    if (liveDecision) {
+      commitSessionState({
+        ...sessionStateRef.current,
+        decisions: (sessionStateRef.current.decisions || []).filter((decision) => decision.id !== decisionId),
+      });
+    }
+    if (!removed && !liveDecision) return;
+    offerUndo('Acuerdo eliminado', () => {
+      if (removed) updatePlanner((previous) => restoreRemoved(previous, removed));
+      if (liveDecision) commitSessionState(restoreSessionAgreement(sessionStateRef.current, liveDecision));
+    });
+  }, [commitSessionState, offerUndo, updatePlanner]);
 
   const handleCopyAnnouncement = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(generateDiscordAnnouncement(plannerStateRef.current));
-      toast('Anuncio copiado al portapapeles');
-    } catch {
-      toast('No se pudo copiar el anuncio');
-    }
+    const copied = await copyTextToClipboard(generateDiscordAnnouncement(plannerStateRef.current));
+    toast(copied
+      ? 'Anuncio copiado. Pégalo en el canal de Discord.'
+      : 'No se pudo copiar el anuncio en este dispositivo. Intenta de nuevo.');
   }, []);
 
   const _handleCopyMinutes = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(generateMinutesMarkdown(plannerStateRef.current, sessionStateRef.current));
-      toast('Markdown de la minuta copiado al portapapeles');
-    } catch {
-      toast('No se pudo copiar la minuta');
-    }
+    const copied = await copyTextToClipboard(generateMinutesMarkdown(plannerStateRef.current, sessionStateRef.current));
+    toast(copied ? 'Acta copiada' : 'No se pudo copiar el acta en este dispositivo. Intenta de nuevo.');
   }, []);
 
   const handleLoadDemo = useCallback(() => {
@@ -899,9 +978,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       if (pendingLive) live = reconcileLiveState(next, live, pendingLive).state;
     }
     commitSessionState(live, {push: false, stamp: false});
+    clearUndo();
+    setIsEditing(false);
     handleTabChange('agenda');
-    toast(`Evento abierto: ${event.title}`);
-  }), [commitSessionState, finalizeIntoCurrentSession, handleTabChange, replacePlannerLocally, runAtomicTransition, upsertPlannerEvent]);
+    toast(`Reunión abierta: ${event.title || 'Reunión sin título'}`);
+  }), [clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange, replacePlannerLocally, runAtomicTransition, upsertPlannerEvent]);
 
   const [archivedPlannerEvents, setArchivedPlannerEvents] = useState([]);
 
@@ -919,23 +1000,34 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
 
   const handleCleanSession = useCallback(() => runAtomicTransition(async () => {
     await finalizeIntoCurrentSession();
-    // Local draft only: it reaches the server on the first real edit.
+    const leaving = plannerStateRef.current;
+    // Keep the list entry of the meeting being left up to date (never list an
+    // untouched placeholder that was never saved).
+    if (leaving?.id && !isDefaultEmptySession(leaving)) upsertPlannerEvent(leaving);
     const clean = resetToCleanSession();
     plannerStateRef.current = clean;
     setPlannerState(clean);
     commitSessionState(createEmptyLiveSession(clean), {push: false, stamp: false});
+    // Saved right away (not only on the first edit): the new meeting is in the
+    // list for everyone even if its defaults are kept as they are.
+    syncEngineRef.current?.schedulePlannerSave(clean, {immediate: true});
+    upsertPlannerEvent(clean);
+    setSelectedEventId(clean.id);
+    clearUndo();
     handleTabChange('agenda');
     setIsEditing(true);
-    toast('Nueva reunión creada — edita los campos directamente');
-  }), [commitSessionState, finalizeIntoCurrentSession, handleTabChange, runAtomicTransition]);
+    toast('Reunión creada. Los cambios se guardan solos mientras editas.');
+  }), [clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange, runAtomicTransition, upsertPlannerEvent]);
 
-  const handleDeleteSessionPrompt = useCallback((sessionToDelete = null, action = 'delete') => {
+  // Open meetings are only archived (restorable); "Eliminar definitivamente"
+  // exists only for archived ones, so no two menu items do the same thing.
+  const handleDeleteSessionPrompt = useCallback((sessionToDelete = null, action = 'archive') => {
     const target = sessionToDelete || plannerStateRef.current;
     if (!target) return;
     setDeleteSessionModal({
       isOpen: true,
       session: target,
-      action: action === 'archive' ? 'archive' : action === 'permanent-delete' ? 'permanent-delete' : 'delete',
+      action: action === 'permanent-delete' ? 'permanent-delete' : 'archive',
     });
   }, []);
 
@@ -964,7 +1056,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const handleConfirmDeleteSession = useCallback(async () => {
     const target = deleteSessionModal.session;
     const action = deleteSessionModal.action;
-    setDeleteSessionModal({isOpen: false, session: null, action: 'delete'});
+    setDeleteSessionModal({isOpen: false, session: null, action: 'archive'});
     if (!target) return;
 
     const targetId = target.id || target.eventId || target.sessionId;
@@ -985,7 +1077,6 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       return;
     }
 
-    const isArchive = action === 'archive';
     const previousEvent = targetId ? plannerEvents.find((ev) => eventIdOf(ev) === targetId) || target : target;
 
     if (targetId) {
@@ -1004,7 +1095,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       } catch (error) {
         setArchivedPlannerEvents((prev) => prev.filter((ev) => eventIdOf(ev) !== targetId));
         setPlannerEvents((prev) => [previousEvent, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
-        toast(`No se pudo ${isArchive ? 'archivar' : 'eliminar'} la reunión: ${describeSyncError(error)}`);
+        toast(`No se pudo archivar la reunión: ${describeSyncError(error)}`);
         return;
       }
     }
@@ -1018,11 +1109,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       setPlannerState(clean);
       commitSessionState(createEmptyLiveSession(clean), {push: false, stamp: false});
       setSelectedEventId(null);
+      setIsEditing(false);
+      clearUndo();
       handleTabChange('home');
     }
 
-    toast(isArchive ? 'Reunión archivada' : 'Reunión eliminada');
-  }, [deleteSessionModal.session, deleteSessionModal.action, plannerEvents, commitSessionState, finalizeIntoCurrentSession, handleTabChange]);
+    toast('Reunión archivada. Puedes restaurarla desde “Archivadas”.');
+  }, [deleteSessionModal.session, deleteSessionModal.action, plannerEvents, clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange]);
 
   const handledInitialTabRef = useRef(null);
   useEffect(() => {
@@ -1038,16 +1131,31 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     }
   }, [initialTab, handleCleanSession, handleLoadDemo, handleTabChange]);
 
-  const handleToggleEditMode = useCallback(() => {
-    setIsEditing((previous) => {
-      const next = !previous;
-      if (!next) {
-        const id = plannerStateRef.current?.id;
-        if (id && syncEngineRef.current?.hasPendingPlanner(id)) syncEngineRef.current.flushPlanner(id);
-        toast('Cambios guardados en la agenda');
-      }
-      return next;
-    });
+  const isEditingRef = useRef(isEditing);
+  isEditingRef.current = isEditing;
+
+  /**
+   * "Editar" ↔ "Listo". Edits are saved continuously; "Listo" sends whatever
+   * is still pending and only says "guardados" once the server confirmed it.
+   */
+  const handleToggleEditMode = useCallback(async () => {
+    if (!isEditingRef.current) {
+      setIsEditing(true);
+      return;
+    }
+    setIsEditing(false);
+    const engine = syncEngineRef.current;
+    const id = plannerStateRef.current?.id;
+    if (!engine) {
+      // Outside Discord (preview): there is no server, only this device.
+      toast('Cambios guardados en este dispositivo');
+      return;
+    }
+    if (!id || !engine.hasPendingPlanner(id)) return;
+    await engine.flushPlanner(id);
+    toast(engine.hasPendingPlanner(id)
+      ? 'Todavía no se pudieron guardar los cambios. Reintentaremos automáticamente.'
+      : 'Cambios guardados');
   }, []);
 
   const handleUpdateHeaderField = useCallback((field, value) => {
@@ -1062,58 +1170,48 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   }, [updatePlanner]);
 
   const handleAddBlock = useCallback((atIndex = null) => {
-    const newId = `b-${Date.now()}`;
-    const newBlock = {
-      id: newId,
-      title: 'Nuevo bloque',
-      durationMinutes: 30,
-      leader: '',
-      participants: '',
-      subpoints: [
-        {
-          id: `p-${Date.now()}`,
-          title: 'Punto de partida',
-          presenter: '',
-          status: 'pending',
-        },
-      ],
-      decisions: [],
-    };
+    const newId = `b-${Date.now().toString(36)}`;
+    // Explicit type: a bloque never becomes a descanso because of its title.
+    const newBlock = createAgendaBlock({id: newId, topicId: `p-${Date.now().toString(36)}`});
     updatePlanner((previous) => {
-      const blocks = [...previous.blocks];
+      const blocks = [...(previous.blocks || [])];
       if (typeof atIndex === 'number' && atIndex >= 0) blocks.splice(atIndex, 0, newBlock);
       else blocks.push(newBlock);
       return {...previous, blocks};
     });
-    toast('Bloque añadido a la agenda');
+    toast('Bloque agregado');
   }, [updatePlanner]);
 
+  /** Empty agenda in view mode: add the first bloque and switch to editing it. */
+  const handleAddFirstBlock = useCallback(() => {
+    handleAddBlock();
+    setIsEditing(true);
+  }, [handleAddBlock]);
+
   const handleAddBreak = useCallback((atIndex = null) => {
-    const newId = `b-${Date.now()}`;
-    const breakBlock = {
-      id: newId,
-      title: 'Break',
-      type: 'break',
-      durationMinutes: 10,
-      isBreak: true,
-      leader: '',
-      participants: '',
-      subpoints: [],
-      decisions: [],
-    };
+    const breakBlock = createBreakBlock({id: `b-${Date.now().toString(36)}`});
     updatePlanner((previous) => {
-      const blocks = [...previous.blocks];
+      const blocks = [...(previous.blocks || [])];
       if (typeof atIndex === 'number' && atIndex >= 0) blocks.splice(atIndex, 0, breakBlock);
       else blocks.push(breakBlock);
       return {...previous, blocks};
     });
-    toast('Break añadido a la agenda');
+    toast('Descanso agregado');
   }, [updatePlanner]);
 
   const handleDeleteBlock = useCallback((blockId) => {
-    updatePlanner((previous) => ({...previous, blocks: previous.blocks.filter((block) => block.id !== blockId)}));
-    toast('Bloque eliminado');
-  }, [updatePlanner]);
+    let removed = null;
+    updatePlanner((previous) => {
+      const result = removeBlock(previous, blockId);
+      removed = result.removed;
+      return result.state;
+    });
+    if (!removed) return;
+    const isBreak = removed.block?.type === 'break' || removed.block?.isBreak;
+    offerUndo(isBreak ? 'Descanso eliminado' : 'Bloque eliminado', () => {
+      updatePlanner((previous) => restoreRemoved(previous, removed));
+    });
+  }, [offerUndo, updatePlanner]);
 
   const handleMoveBlock = useCallback((blockId, direction) => {
     updatePlanner((previous) => {
@@ -1158,14 +1256,17 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   }, [updatePlanner]);
 
   const handleDeleteSubpoint = useCallback((blockId, pointId) => {
-    updatePlanner((previous) => ({
-      ...previous,
-      blocks: previous.blocks.map((block) => {
-        if (block.id !== blockId) return block;
-        return {...block, subpoints: (block.subpoints || []).filter((point) => point.id !== pointId)};
-      }),
-    }));
-  }, [updatePlanner]);
+    let removed = null;
+    updatePlanner((previous) => {
+      const result = removeTopic(previous, blockId, pointId);
+      removed = result.removed;
+      return result.state;
+    });
+    if (!removed) return;
+    offerUndo('Tema eliminado', () => {
+      updatePlanner((previous) => restoreRemoved(previous, removed));
+    });
+  }, [offerUndo, updatePlanner]);
 
   const handleMoveSubpoint = useCallback((blockId, pointId, direction) => {
     updatePlanner((previous) => {
@@ -1186,7 +1287,15 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   }, [updatePlanner]);
 
   const isLive = sessionState.status === SESSION_STATUS.RUNNING || sessionState.status === SESSION_STATUS.PAUSED;
+  // Not while editing: starting from the banner would leave the meeting live
+  // but still in edit mode (no live controls).
+  // Only announce a meeting that exists in the list: the blank placeholder
+  // agenda (no meetings yet) must not say "empieza en 16 min".
+  const openMeetingId = plannerState?.id || plannerState?.eventId || plannerState?.sessionId;
+  const openMeetingIsSaved = Boolean(openMeetingId) && plannerEvents.some((ev) => eventIdOf(ev) === openMeetingId);
   const showUpcomingBanner = !isLive &&
+    openMeetingIsSaved &&
+    !isEditing &&
     sessionState.status === SESSION_STATUS.IDLE &&
     !dismissedUpcomingBanner &&
     assistantEvaluation.event === ASSISTANT_EVENT.SESSION_UPCOMING;
@@ -1196,6 +1305,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const elapsedMinutes = Math.round(getElapsedSessionMs(sessionState, nowTimestamp) / (60 * 1000));
   const recordingsCount = (sessionState.recordings || []).length;
   const decisionsCount = (sessionState.decisions || []).length;
+  const pendingTemasCount = (() => {
+    const counts = getPointCounts(plannerState, sessionState);
+    // The active tema counts as pending unless the confirm comes from the
+    // primary button (which marks it as tratado).
+    const activeCountsAsPending = interruptModal.mode !== 'advance' && sessionState.liveActivePointId ? 1 : 0;
+    return Math.max(0, counts.pending + activeCountsAsPending);
+  })();
 
   return (
     <div className="planner-module-root w-full px-4 pt-[calc(var(--bardo-topbar,52px)+12px)] relative min-h-screen">
@@ -1274,9 +1390,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           onAdvance={handleAdvance}
           onAdvanceBlock={handleAdvanceBlock}
           onSkipBlock={handleSkipBlock}
+          onPrimaryAction={handleLivePrimary}
           isTransitioning={isTransitioning}
           onUpdateBlock={handleUpdateBlock}
           onAddBlock={handleAddBlock}
+          onAddFirstBlock={handleAddFirstBlock}
           onAddBreak={handleAddBreak}
           onDeleteBlock={handleDeleteBlock}
           onMoveBlock={handleMoveBlock}
@@ -1294,7 +1412,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
               isTransitioning={isTransitioning}
               onPauseSession={handlePauseSession}
               onResumeSession={handleResumeSession}
-              onAdvance={handleAdvance}
+              onPrimaryAction={handleLivePrimary}
               onSkipPoint={handleSkipPoint}
               onSkipBlock={handleSkipBlock}
               onExtendBlock={handleExtendBlock}
@@ -1305,8 +1423,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
               onResumeRecording={handleResumeRecording}
               onDismissRecordingPrompt={handleDismissRecordingPrompt}
               onOpenDecisionCapture={() => handleOpenDecisionCapture()}
-              onInterruptSession={handleOpenInterrupt}
-              onFinishSession={handleFinishSession}
+              onRequestFinish={() => handleRequestFinish('finish')}
             />
           ) : null}
           onToggleSubpointStatus={handleToggleSubpointStatus}
@@ -1320,6 +1437,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           plannerState={plannerState}
           sessionState={sessionState}
           onResumeSession={handleResumeSession}
+          onReopenSession={handleReopenSession}
           onNewSession={handleCleanSession}
           onRenameRecording={handleRenameRecording}
           onDeleteRecording={handleDeleteRecording}
@@ -1343,70 +1461,74 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         onDiscard={handleDiscardRecording}
       />
 
-      <SessionInterruptModal
+      <FinishMeetingDialog
         isOpen={interruptModal.isOpen}
         hasActiveRecording={recordingControllerRef.current?.isActive()}
         activeRecordingName={recordingContext?.recordingName}
         elapsedMinutes={elapsedMinutes}
         recordingsCount={recordingsCount}
         decisionsCount={decisionsCount}
+        pendingTemasCount={pendingTemasCount}
         onClose={() => setInterruptModal({isOpen: false})}
-        onConfirmInterrupt={handleConfirmInterrupt}
+        onConfirm={handleConfirmFinish}
       />
 
       <AlertDialog
         open={deleteSessionModal.isOpen}
-        onOpenChange={(open) => !open && setDeleteSessionModal({isOpen: false, session: null, action: 'delete'})}
+        onOpenChange={(open) => !open && setDeleteSessionModal({isOpen: false, session: null, action: 'archive'})}
       >
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {deleteSessionModal.action === 'archive'
-                ? 'Archivar reunión'
-                : deleteSessionModal.action === 'permanent-delete'
-                  ? 'Eliminar reunión definitivamente'
-                  : 'Eliminar reunión'}
+              {deleteSessionModal.action === 'permanent-delete'
+                ? 'Eliminar reunión definitivamente'
+                : 'Archivar reunión'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteSessionModal.action === 'archive'
-                ? `“${deleteSessionModal.session?.title || 'Esta reunión'}” se archivará y dejará de mostrarse en la lista de reuniones activas.`
-                : deleteSessionModal.action === 'permanent-delete'
-                  ? `¿Estás seguro de que deseas eliminar definitivamente “${deleteSessionModal.session?.title || 'esta reunión'}”? Esta acción no se puede deshacer.`
-                  : `¿Estás seguro de que deseas eliminar “${deleteSessionModal.session?.title || 'esta reunión'}”?`}
+              {deleteSessionModal.action === 'permanent-delete'
+                ? `“${deleteSessionModal.session?.title || 'Esta reunión'}” se eliminará para todos, con su agenda y sus acuerdos. Esta acción no se puede deshacer.`
+                : `“${deleteSessionModal.session?.title || 'Esta reunión'}” se moverá a “Archivadas”. Desde ahí puedes restaurarla o eliminarla definitivamente.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteSessionModal({isOpen: false, session: null, action: 'delete'})}>
+            <AlertDialogCancel onClick={() => setDeleteSessionModal({isOpen: false, session: null, action: 'archive'})}>
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
-              variant={deleteSessionModal.action === 'archive' ? 'default' : 'destructive'}
+              variant={deleteSessionModal.action === 'permanent-delete' ? 'destructive' : 'default'}
               onClick={handleConfirmDeleteSession}
             >
-              {deleteSessionModal.action === 'archive' ? 'Archivar' : 'Eliminar'}
+              {deleteSessionModal.action === 'permanent-delete' ? 'Eliminar definitivamente' : 'Archivar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      <PlannerUndoToast toast={undoToast} onUndo={handleUndo} onDismiss={handleDismissUndo} />
+
       {/* FAB móvil persistente y sin glow al inicio/edición/reanudación */}
       {activeTab === 'agenda' && !isLive && (() => {
-        let fabLabel = 'Iniciar sesión';
+        const hasBlocks = (plannerState.blocks || []).length > 0;
+        let fabLabel = hasBlocks ? 'Iniciar reunión' : 'Agrega al menos un bloque';
         let fabIcon = <Play width={13} height={13} />;
         let fabAction = handleStartSession;
+        let fabDisabled = !hasBlocks;
 
         if (isEditing) {
           fabLabel = 'Listo';
           fabIcon = <Check width={14} height={14} />;
           fabAction = handleToggleEditMode;
+          fabDisabled = false;
         } else if (sessionState.status === SESSION_STATUS.INTERRUPTED) {
-          fabLabel = 'Reanudar sesión';
+          fabLabel = 'Reanudar';
           fabIcon = <Play width={13} height={13} />;
           fabAction = handleResumeSession;
+          fabDisabled = false;
         } else if (sessionState.status === SESSION_STATUS.COMPLETED) {
           fabLabel = 'Ver resumen';
           fabIcon = <FileText width={13} height={13} />;
           fabAction = () => handleTabChange('recap');
+          fabDisabled = false;
         }
 
         return (
@@ -1420,6 +1542,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
               variant="default"
               size="default"
               onClick={fabAction}
+              disabled={fabDisabled}
+              title={fabDisabled ? 'Agrega al menos un bloque para poder iniciar la reunión' : undefined}
               className="font-semibold text-xs rounded-full h-11 px-5 flex items-center gap-2 transition-all shadow-lg border border-white/10"
             >
               {fabIcon}

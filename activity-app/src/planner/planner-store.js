@@ -7,14 +7,16 @@ import {
   migrateLiveSessionState,
   normalizeLegacyLiveShape,
 } from './session-runner.js';
-import {todayLocalIso} from './date-utils.js';
+import {todayLocalIso, toLocalDateIso, parseLocalDateIso} from './date-utils.js';
 import {plannerRequest, isPlannerRemoteEnabled} from './planner-sync.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 export const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 
+export const DEFAULT_MEETING_TITLE = 'Nueva reunión';
+
 export const DEFAULT_EMPTY_SESSION = {
-  title: 'Nueva sesión de trabajo',
+  title: DEFAULT_MEETING_TITLE,
   host: '',
   date: todayLocalIso(),
   startTime: '10:00',
@@ -25,6 +27,7 @@ export const DEFAULT_EMPTY_SESSION = {
   blocks: [
     {
       id: 'b-default-1',
+      type: 'block',
       title: 'Apertura y objetivos',
       durationMinutes: 15,
       manualDuration: 15,
@@ -83,7 +86,7 @@ export const DEMO_PLANNER_FIXTURE = {
     },
     {
       id: 'b-3',
-      title: 'Break',
+      title: 'Descanso',
       type: 'break',
       isBreak: true,
       durationMinutes: 10,
@@ -231,6 +234,30 @@ export const DEMO_PLANNER_EVENTS = [
   }),
 ];
 
+/** An untouched meeting: default title and only the default bloque. */
+export function isDefaultEmptySession(plannerState) {
+  if (!plannerState) return true;
+  const {title, blocks = []} = plannerState;
+  const hasDefaultTitle = !title || title === DEFAULT_MEETING_TITLE || title === 'Nueva sesión de trabajo';
+  const hasOnlyDefaultBlock = blocks.length === 1 && blocks[0]?.id === 'b-default-1';
+  return hasDefaultTitle && hasOnlyDefaultBlock;
+}
+
+/**
+ * What the top of the meetings Home shows:
+ * - 'empty': no meetings at all → "Todavía no hay reuniones" + "Nueva reunión".
+ * - 'current': the meeting currently open (anything the user created or opened).
+ * - 'none': only the list (the open agenda is an untouched placeholder that was
+ *   never saved, e.g. after archiving the open meeting).
+ */
+export function getHomeTopSection({plannerState, sessionStatus = SESSION_STATUS.IDLE, events = []} = {}) {
+  const id = plannerState?.id || null;
+  const isListed = Boolean(id) && (events || []).some((event) => (event?.eventId || event?.id) === id);
+  const isPlaceholder = isDefaultEmptySession(plannerState) && !isListed && (!sessionStatus || sessionStatus === SESSION_STATUS.IDLE);
+  if (!isPlaceholder) return 'current';
+  return (events || []).length === 0 ? 'empty' : 'none';
+}
+
 export function isProductionActivity() {
   if (typeof window === 'undefined') return false;
   if (window.__BARDO_PRODUCTION__) return true;
@@ -305,6 +332,44 @@ export function loadPlannerEvents() {
   return DEMO_PLANNER_EVENTS.map(clonePlannerState);
 }
 
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function currentUserName() {
+  const user = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
+  return user?.global_name || user?.username || '';
+}
+
+/**
+ * Start of the next half hour after `now`, in local time: 10:07 → 10:30,
+ * 10:30 → 11:00, 23:45 → 00:00 of the next day (the date follows).
+ */
+export function nextHalfHourSlot(now = new Date()) {
+  const value = new Date(now instanceof Date ? now.getTime() : now);
+  value.setSeconds(0, 0);
+  value.setMinutes(value.getMinutes() < 30 ? 30 : 60);
+  return {date: toLocalDateIso(value), startTime: `${pad2(value.getHours())}:${pad2(value.getMinutes())}`};
+}
+
+/**
+ * A new, untouched meeting: next half hour today, 60 min booked, one bloque.
+ * Pure (no storage); callers decide whether to persist it.
+ */
+export function createCleanPlannerSession({now = new Date(), host = ''} = {}) {
+  const slot = nextHalfHourSlot(now);
+  const time = new Date(now instanceof Date ? now.getTime() : now).getTime();
+  return computePlannerTimes({
+    ...DEFAULT_EMPTY_SESSION,
+    blocks: DEFAULT_EMPTY_SESSION.blocks.map((block) => ({...block, subpoints: [], decisions: []})),
+    id: `sess-${time.toString(36)}`,
+    host: host || DEFAULT_EMPTY_SESSION.host,
+    date: slot.date,
+    startTime: slot.startTime,
+    targetDuration: 60,
+  });
+}
+
 export function loadPlannerState() {
   try {
     const raw = localStorage.getItem(PLANNER_STORE_KEY);
@@ -312,28 +377,14 @@ export function loadPlannerState() {
       if (shouldLoadDemoFixture()) {
         return computePlannerTimes(DEMO_PLANNER_FIXTURE);
       }
-      const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
-      const host = u?.global_name || u?.username || '';
-      return computePlannerTimes({
-        ...DEFAULT_EMPTY_SESSION,
-        id: `sess-${Date.now().toString(36)}`,
-        host,
-        date: todayLocalIso(),
-      });
+      return createCleanPlannerSession({host: currentUserName()});
     }
     const parsed = JSON.parse(raw);
     if (!shouldLoadDemoFixture() && isDemoPlannerState(parsed)) {
       try {
         localStorage.removeItem(PLANNER_STORE_KEY);
       } catch {}
-      const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
-      const host = u?.global_name || u?.username || '';
-      const clean = computePlannerTimes({
-        ...DEFAULT_EMPTY_SESSION,
-        id: `sess-${Date.now().toString(36)}`,
-        host,
-        date: todayLocalIso(),
-      });
+      const clean = createCleanPlannerSession({host: currentUserName()});
       savePlannerState(clean);
       return clean;
     }
@@ -342,14 +393,7 @@ export function loadPlannerState() {
     if (shouldLoadDemoFixture()) {
       return computePlannerTimes(DEMO_PLANNER_FIXTURE);
     }
-    const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
-    const host = u?.global_name || u?.username || '';
-    return computePlannerTimes({
-      ...DEFAULT_EMPTY_SESSION,
-      id: `sess-${Date.now().toString(36)}`,
-      host,
-      date: todayLocalIso(),
-    });
+    return createCleanPlannerSession({host: currentUserName()});
   }
 }
 
@@ -400,7 +444,7 @@ export function createDemoLiveSession(_plannerState = DEMO_PLANNER_FIXTURE, now 
     recordings: [
       {
         id: 'rec-demo-p-1',
-        name: 'Punto: Novedades del equipo y de proyectos',
+        name: 'Tema: Novedades del equipo y de proyectos',
         blockId: 'b-1',
         blockTitle: 'Check-in, contexto y novedades',
         pointId: 'p-1',
@@ -411,7 +455,7 @@ export function createDemoLiveSession(_plannerState = DEMO_PLANNER_FIXTURE, now 
       },
       {
         id: 'rec-demo-p-2',
-        name: 'Punto: Coordinación sobre Minuta Weekly',
+        name: 'Tema: Coordinación sobre Minuta Weekly',
         blockId: 'b-1',
         blockTitle: 'Check-in, contexto y novedades',
         pointId: 'p-2',
@@ -422,7 +466,7 @@ export function createDemoLiveSession(_plannerState = DEMO_PLANNER_FIXTURE, now 
       },
       {
         id: 'rec-demo-p-3',
-        name: 'Punto: Agenda de la sesión',
+        name: 'Tema: Agenda de la sesión',
         blockId: 'b-1',
         blockTitle: 'Check-in, contexto y novedades',
         pointId: 'p-3',
@@ -638,15 +682,7 @@ export function resetToDemoFixture() {
 }
 
 export function resetToCleanSession() {
-  const u = typeof window !== 'undefined' ? window.__BARDO_USER__ : null;
-  const host = u?.global_name || u?.username || '';
-  const cleanSession = {
-    ...DEFAULT_EMPTY_SESSION,
-    id: `sess-${Date.now().toString(36)}`,
-    host: host || DEFAULT_EMPTY_SESSION.host,
-    date: todayLocalIso(),
-  };
-  const computed = computePlannerTimes(cleanSession);
+  const computed = createCleanPlannerSession({host: currentUserName()});
   savePlannerState(computed);
   clearLiveSessionState();
   return computed;
@@ -703,112 +739,133 @@ export async function fetchArchivedPlannerSessions() {
   }
 }
 
+/** "2026-10-08" → "jueves 8 de octubre" (es-CL); unknown values pass through. */
+export function formatMeetingDateLong(iso) {
+  const date = parseLocalDateIso(iso);
+  if (!date) return iso || '';
+  try {
+    return new Intl.DateTimeFormat('es-CL', {weekday: 'long', day: 'numeric', month: 'long'}).format(date);
+  } catch {
+    return iso;
+  }
+}
+
 export function generateDiscordAnnouncement(plannerState) {
   const computed = computePlannerTimes(plannerState);
   const mentions = (computed.mentions || '').trim();
-  const dateStr = computed.date || 'Fecha por confirmar';
+  const dateStr = computed.date ? formatMeetingDateLong(computed.date) : 'Fecha por confirmar';
   const startStr = computed.startTime || '10:00';
   const totalMin = getPlannedSchedule(computed).plannedMinutes;
 
   let text = `📢 **Convocatoria: ${computed.title}**\n`;
   if (mentions) text += `👥 ${mentions}\n`;
   text += `📅 **Fecha:** ${dateStr} · ⏰ **Hora:** ${startStr} (${totalMin} min)\n`;
-  if (computed.host) text += `👤 **Modera:** ${computed.host}\n`;
+  if (computed.host) text += `👤 **Facilita:** ${computed.host}\n`;
   if (computed.description) text += `\n> ${computed.description}\n`;
 
-  text += `\n**📋 Agenda de la sesión:**\n`;
-  (computed.blocks || []).forEach((block, index) => {
+  text += `\n**📋 Agenda de la reunión:**\n`;
+  let blockNumber = 0;
+  for (const block of computed.blocks || []) {
     if (block.isBreak) {
-      text += `☕ *${block.title || 'Break'} (${block.durationMinutes}m)*\n`;
-      return;
+      text += `☕ *${block.title || 'Descanso'} (${block.durationMinutes} min)*\n`;
+      continue;
     }
-    text += `${index + 1}. **${block.title}** (${block.durationMinutes}m)`;
-    if (block.leader) text += ` — *Lidera: ${block.leader}*`;
+    blockNumber += 1;
+    text += `${blockNumber}. **${block.title || 'Bloque sin título'}** (${block.durationMinutes} min)`;
+    if (block.leader) text += ` — *Facilita: ${block.leader}*`;
     text += '\n';
     for (const point of block.subpoints || []) {
       const presenter = point.presenter ? ` · ${point.presenter}` : '';
       text += `   • ${point.title}${presenter}\n`;
     }
-  });
+  }
   return text;
+}
+
+/**
+ * Acuerdos of a meeting, each once. The agenda (block.decisions) and the live
+ * state (sessionState.decisions) hold the same acuerdo under the same id, so
+ * they are merged by id (legacy entries without id: by bloque + text). Every
+ * acuerdo keeps the id of its own bloque — never matched by title.
+ */
+export function collectMeetingAgreements(plannerState, sessionState = null) {
+  const blocks = plannerState?.blocks || [];
+  const byKey = new Map();
+  const keyOf = (decision, blockId) => decision.id || `${blockId || ''}|${decision.content}`;
+  const add = (decision, blockId) => {
+    if (!decision?.content) return;
+    const block = blocks.find((candidate) => candidate.id === blockId) || null;
+    const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId) || null;
+    const key = keyOf(decision, block?.id || null);
+    const previous = byKey.get(key);
+    byKey.set(key, {
+      id: decision.id || previous?.id || null,
+      content: decision.content,
+      owner: decision.owner || previous?.owner || null,
+      blockId: block?.id || previous?.blockId || null,
+      blockTitle: block?.title || previous?.blockTitle || 'Reunión',
+      pointTitle: point?.title || previous?.pointTitle || null,
+    });
+  };
+  for (const block of blocks) {
+    for (const decision of block.decisions || []) add(decision, block.id);
+  }
+  for (const decision of sessionState?.decisions || []) add(decision, decision.blockId);
+  return [...byKey.values()].map((agreement) => ({
+    ...agreement,
+    origin: agreement.pointTitle ? `${agreement.blockTitle} → ${agreement.pointTitle}` : agreement.blockTitle,
+  }));
 }
 
 export function generateMinutesMarkdown(plannerState, sessionState = null) {
   const computed = computePlannerTimes(plannerState);
-  
-  // Recopilar todas las decisiones
-  const allDecisions = [];
-  for (const block of computed.blocks || []) {
-    for (const decision of block.decisions || []) {
-      allDecisions.push({
-        id: decision.id,
-        content: decision.content,
-        owner: decision.owner || null,
-        blockId: block.id,
-        blockTitle: block.title,
-        origin: block.title,
-      });
-    }
-  }
-  for (const decision of sessionState?.decisions || []) {
-    const block = (computed.blocks || []).find((candidate) => candidate.id === decision.blockId);
-    const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
-    if (!allDecisions.some((existing) => existing.content === decision.content)) {
-      allDecisions.push({
-        id: decision.id,
-        content: decision.content,
-        owner: decision.owner || null,
-        blockId: block?.id || null,
-        blockTitle: block?.title || 'Reunión',
-        origin: point ? `${block?.title} → ${point.title}` : (block?.title || 'Reunión'),
-      });
-    }
-  }
+  const agreements = collectMeetingAgreements(computed, sessionState);
+  const ownerTag = (owner) => `@${String(owner).replace(/^@/, '')}`;
 
   let markdown = `# Acta: ${computed.title}\n\n`;
-  markdown += `> **Fecha:** ${computed.date || 'Sin fecha'} | **Organiza:** ${computed.host || 'Sin asignar'} | **Duración Total:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${allDecisions.length}\n\n`;
+  markdown += `> **Fecha:** ${computed.date ? formatMeetingDateLong(computed.date) : 'Sin fecha'} | **Facilita:** ${computed.host || 'Sin asignar'} | **Duración total:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${agreements.length}\n\n`;
   markdown += `---\n\n`;
 
-  markdown += '## 📋 Resumen de Acuerdos Principales\n\n';
-  if (allDecisions.length > 0) {
-    for (const decision of allDecisions) {
-      const ownerStr = decision.owner ? ` | 👤 **Responsable:** @${decision.owner.replace(/^@/, '')}` : '';
-      markdown += `- ✅ **${decision.content}**\n  *📌 Origen: ${decision.origin}${ownerStr}*\n\n`;
+  markdown += '## 📋 Resumen de acuerdos\n\n';
+  if (agreements.length > 0) {
+    for (const agreement of agreements) {
+      const ownerStr = agreement.owner ? ` | 👤 **Responsable:** ${ownerTag(agreement.owner)}` : '';
+      markdown += `- ✅ **${agreement.content}**\n  *📌 Origen: ${agreement.origin}${ownerStr}*\n\n`;
     }
   } else {
-    markdown += '*No se registraron decisiones en esta reunión.*\n\n';
+    markdown += '*No se registraron acuerdos en esta reunión.*\n\n';
   }
 
   markdown += `---\n\n`;
-  markdown += '## ⏱️ Desglose de Agenda por Bloques\n\n';
+  markdown += '## ⏱️ Agenda por bloques\n\n';
 
   if ((computed.blocks || []).length === 0) {
-    markdown += '*Sin bloques registrados en la reunión.*\n';
+    markdown += '*La reunión no tenía bloques.*\n';
   } else {
     for (const [idx, block] of computed.blocks.entries()) {
-      markdown += `### ${idx + 1}. ${block.title} (${block.durationMinutes} min)\n`;
-      if (block.leader) markdown += `* **Conduce:** ${block.leader}\n`;
+      markdown += `### ${idx + 1}. ${block.title || (block.isBreak ? 'Descanso' : 'Bloque sin título')} (${block.durationMinutes} min)\n`;
+      if (block.leader) markdown += `* **Facilita:** ${block.leader}\n`;
       if (block.introDesc) markdown += `* **Objetivo:** ${block.introDesc}\n`;
       markdown += '\n';
 
-      const blockDecisions = allDecisions.filter((d) => d.blockId === block.id || d.origin.startsWith(block.title));
-      if (blockDecisions.length > 0) {
+      const blockAgreements = agreements.filter((agreement) => agreement.blockId === block.id);
+      if (blockAgreements.length > 0) {
         markdown += `**Acuerdos de este bloque:**\n`;
-        for (const decision of blockDecisions) {
-          const ownerStr = decision.owner ? ` (@${decision.owner.replace(/^@/, '')})` : '';
-          markdown += `- ✅ ${decision.content}${ownerStr}\n`;
+        for (const agreement of blockAgreements) {
+          const ownerStr = agreement.owner ? ` (${ownerTag(agreement.owner)})` : '';
+          markdown += `- ✅ ${agreement.content}${ownerStr}\n`;
         }
         markdown += '\n';
       }
 
       if ((block.subpoints || []).length > 0) {
-        markdown += `**Temas de la agenda:**\n`;
+        markdown += `**Temas:**\n`;
         for (const point of block.subpoints) {
           const status = sessionState ? getPointStatus(sessionState, point.id) : point.status;
           const marker = status === POINT_STATUS.DONE ? '[x]' : status === POINT_STATUS.SKIPPED ? '[-]' : '[ ]';
           const presenter = point.presenter ? ` · *${point.presenter}*` : '';
           const statusText = status === POINT_STATUS.DONE ? ' *(Tratado)*' : status === POINT_STATUS.SKIPPED ? ' *(Saltado)*' : '';
-          markdown += `- ${marker} ${point.title}${presenter}${statusText}\n`;
+          markdown += `- ${marker} ${point.title || 'Tema sin título'}${presenter}${statusText}\n`;
         }
         markdown += '\n';
       }

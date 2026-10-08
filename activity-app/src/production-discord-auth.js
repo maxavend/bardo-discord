@@ -38,11 +38,35 @@ export function isEmbeddedActivity() {
     || /\.discordsays\.com$/i.test(window.location.hostname || '');
 }
 
+/**
+ * Mensaje en español para la pantalla de error de inicio. Nunca muestra el
+ * texto técnico del SDK (queda en consola y breadcrumbs).
+ */
+export function friendlyAuthError(error) {
+  const code = error?.code;
+  const message = String(error?.message || '');
+  if (code === 'timeout') {
+    return 'Discord tardó demasiado en responder. Revisa tu conexión e intenta de nuevo.';
+  }
+  if (code === 5000 || code === 4002 || /cancel|denied|reject/i.test(message)) {
+    return 'Bardo necesita tu permiso de Discord para abrirse. Vuelve a intentarlo y pulsa "Autorizar".';
+  }
+  if (code === 'token_exchange') {
+    return `${message} Intenta de nuevo en unos segundos.`;
+  }
+  // Mensajes propios (en español) se muestran tal cual; los del SDK, no.
+  if (/^(Discord no|La identidad|Bardo )/.test(message)) return `${message} Intenta de nuevo.`;
+  return 'No pudimos conectar tu sesión de Discord con Bardo. Intenta de nuevo.';
+}
+
 function withTimeout(promise, ms, label) {
   let timeoutHandle;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutHandle = setTimeout(() => {
-      reject(new Error(`Tiempo de espera agotado: ${label} (${ms}ms)`));
+      const timeout = new Error('Discord tardó demasiado en responder.');
+      timeout.code = 'timeout';
+      timeout.detail = `${label} (${ms}ms)`;
+      reject(timeout);
     }, ms);
   });
   return Promise.race([promise, timeoutPromise]).finally(() => {
@@ -219,7 +243,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
         guildId: null,
         channelId: null,
         user: null,
-        message: 'Bardo Docs debe abrirse desde un servidor de Discord para consultar los documentos de ese servidor.',
+        message: 'Bardo debe abrirse desde un canal de un servidor de Discord para ver los documentos de ese canal.',
       };
     }
     logBreadcrumb('guild_context_ready', {guildId});
@@ -295,8 +319,12 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
 
     const tokenPayload = await tokenResponse.json().catch(() => null);
     if (!tokenResponse.ok || !tokenPayload?.access_token || !tokenPayload?.bardo_token) {
-      const message = tokenPayload?.error || `Error en servidor Bardo (HTTP ${tokenResponse.status})`;
-      throw new Error(message);
+      const failure = new Error(typeof tokenPayload?.message === 'string' && tokenPayload.message.trim()
+        ? tokenPayload.message
+        : 'Bardo no pudo validar tu sesión de Discord.');
+      failure.code = 'token_exchange';
+      failure.detail = `${tokenPayload?.error || 'error'} (HTTP ${tokenResponse.status})`;
+      throw failure;
     }
     logBreadcrumb('token_exchange_success');
 
@@ -344,7 +372,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logBreadcrumb('bootstrap_error', {error: errorMsg});
+    logBreadcrumb('bootstrap_error', {error: errorMsg, detail: error?.detail || null});
     console.error('Bardo Docs: autenticación Discord falló', error);
     clearSessionCache(activeGuildId, activeChannelId);
     return {
@@ -353,7 +381,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
       sdk: null,
       guildId: null,
       user: null,
-      message: `No pudimos autenticar tu sesión en este servidor: ${errorMsg}`,
+      message: friendlyAuthError(error),
       error,
     };
   }

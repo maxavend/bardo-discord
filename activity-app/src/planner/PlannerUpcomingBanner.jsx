@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { ClockIcon, PlayIcon, XIcon } from '@/components/ui/animated-icons';
+import { clockToMinutes } from './time-engine.js';
+import { MEETING_COPY, upcomingStartLabel } from './copy-tokens.js';
 
 export function PlannerUpcomingBanner({
   plannerState,
@@ -7,6 +9,9 @@ export function PlannerUpcomingBanner({
   onDismiss,
 }) {
   const firstBlock = (plannerState?.blocks || [])[0];
+  const hasBlocks = Boolean(firstBlock);
+  const now = new Date();
+  const minutesUntilStart = clockToMinutes(plannerState?.startTime || '10:00') - (now.getHours() * 60 + now.getMinutes());
 
   return (
     <div className="w-full max-w-4xl mx-auto mb-2 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -15,7 +20,7 @@ export function PlannerUpcomingBanner({
           <ClockIcon className="size-4 text-primary shrink-0" />
           <div className="flex items-center gap-1.5 flex-wrap text-xs sm:text-sm">
             <span className="font-semibold">{plannerState.title || 'La reunión programada'}</span>
-            <span className="text-muted-foreground">comienza ahora.</span>
+            <span className="text-muted-foreground">{upcomingStartLabel(minutesUntilStart)}.</span>
             {firstBlock && (
               <span className="text-muted-foreground/80 hidden sm:inline">
                 · Primer bloque: <strong className="text-foreground">{firstBlock.title}</strong> ({firstBlock.durationMinutes} min)
@@ -29,10 +34,12 @@ export function PlannerUpcomingBanner({
             variant="default"
             size="sm"
             onClick={onStartSession}
+            disabled={!hasBlocks}
+            title={hasBlocks ? undefined : MEETING_COPY.needsBlock}
             className="text-xs h-7 px-2.5 font-medium"
           >
             <PlayIcon className="size-3" />
-            <span>Iniciar reunión</span>
+            <span>{MEETING_COPY.startMeeting}</span>
           </Button>
           <Button
             variant="ghost"

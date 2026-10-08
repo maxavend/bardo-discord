@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useEditorRef, useEditorSelector } from 'platejs/react';
 import {
+  BLOCK_LABELS,
   insertBlock,
+  insertDefaultTable,
   setBlockType,
   toggleBardoList,
   toggleChecklist,
@@ -15,26 +17,28 @@ import {
   ListOl,
   SquareCheck,
   QuoteOpen,
+  CircleInfo,
   Code,
   Minus,
   ChevronRight,
   LayoutCells,
 } from '@gravity-ui/icons';
 
+// Mismos nombres que la barra de herramientas (BLOCK_LABELS).
 const SLASH_ITEMS = [
-  { id: 'p', label: 'Texto', icon: Text, description: 'Párrafo de texto plano' },
-  { id: 'h1', label: 'Título 1', icon: Heading1, description: 'Encabezado de sección grande' },
-  { id: 'h2', label: 'Título 2', icon: Heading2, description: 'Encabezado de sección mediano' },
-  { id: 'h3', label: 'Título 3', icon: Heading3, description: 'Encabezado de sección pequeño' },
-  { id: 'ul', label: 'Lista con viñetas', icon: ListUl, description: 'Lista no ordenada simple' },
-  { id: 'ol', label: 'Lista numerada', icon: ListOl, description: 'Lista ordenada con números' },
-  { id: 'checklist', label: 'Lista de tareas', icon: SquareCheck, description: 'Lista de pendientes interactiva' },
-  { id: 'blockquote', label: 'Cita', icon: QuoteOpen, description: 'Bloque destacado de cita' },
-  { id: 'callout', label: 'Destacado', icon: QuoteOpen, description: 'Caja con fondo para notas importantes' },
-  { id: 'code_block', label: 'Código', icon: Code, description: 'Bloque de código formateado' },
-  { id: 'table', label: 'Tabla', icon: LayoutCells, description: 'Tabla con filas y columnas' },
-  { id: 'hr', label: 'Separador', icon: Minus, description: 'Línea horizontal divisoria' },
-  { id: 'spoiler', label: 'Spoiler / Desplegable', icon: ChevronRight, description: 'Contenido colapsable oculto' },
+  { id: 'p', label: BLOCK_LABELS.p, icon: Text, description: 'Párrafo normal', keywords: 'parrafo' },
+  { id: 'h1', label: BLOCK_LABELS.h1, icon: Heading1, description: 'Título de sección grande', keywords: 'encabezado' },
+  { id: 'h2', label: BLOCK_LABELS.h2, icon: Heading2, description: 'Título de sección mediano', keywords: 'encabezado subtitulo' },
+  { id: 'h3', label: BLOCK_LABELS.h3, icon: Heading3, description: 'Título de sección pequeño', keywords: 'encabezado subtitulo' },
+  { id: 'ul', label: BLOCK_LABELS.ul, icon: ListUl, description: 'Lista con viñetas', keywords: 'vinetas puntos' },
+  { id: 'ol', label: BLOCK_LABELS.ol, icon: ListOl, description: 'Lista con números', keywords: 'pasos' },
+  { id: 'checklist', label: BLOCK_LABELS.checklist, icon: SquareCheck, description: 'Pendientes que se pueden marcar', keywords: 'checklist pendientes' },
+  { id: 'blockquote', label: BLOCK_LABELS.blockquote, icon: QuoteOpen, description: 'Texto citado', keywords: 'quote' },
+  { id: 'callout', label: BLOCK_LABELS.callout, icon: CircleInfo, description: 'Caja con fondo para avisos importantes', keywords: 'aviso destacado nota' },
+  { id: 'code_block', label: BLOCK_LABELS.code_block, icon: Code, description: 'Texto con letra de ancho fijo', keywords: 'codigo' },
+  { id: 'table', label: BLOCK_LABELS.table, icon: LayoutCells, description: 'Filas y columnas', keywords: 'tabla' },
+  { id: 'hr', label: BLOCK_LABELS.hr, icon: Minus, description: 'Línea horizontal', keywords: 'linea divisor' },
+  { id: 'spoiler', label: BLOCK_LABELS.spoiler, icon: ChevronRight, description: 'Contenido que se abre y se cierra', keywords: 'spoiler acordeon oculto' },
 ];
 
 function normalizeSearch(value = '') {
@@ -109,7 +113,10 @@ export function BardoSlashMenu() {
     const q = normalizeSearch(query);
     if (!q) return SLASH_ITEMS;
     return SLASH_ITEMS.filter(item =>
-      normalizeSearch(item.label).includes(q) || normalizeSearch(item.description).includes(q) || item.id.includes(q)
+      normalizeSearch(item.label).includes(q)
+        || normalizeSearch(item.description).includes(q)
+        || normalizeSearch(item.keywords).includes(q)
+        || item.id.includes(q)
     );
   }, [query]);
 
@@ -153,25 +160,7 @@ export function BardoSlashMenu() {
     } else if (itemId === 'code_block') {
       setBlockType(editor, 'code_block');
     } else if (itemId === 'table') {
-      insertBlock(editor, {
-        type: 'table',
-        children: [
-          {
-            type: 'tr',
-            children: [
-              { type: 'th', children: [{ type: 'p', children: [{ text: 'Encabezado 1' }] }] },
-              { type: 'th', children: [{ type: 'p', children: [{ text: 'Encabezado 2' }] }] },
-            ],
-          },
-          {
-            type: 'tr',
-            children: [
-              { type: 'td', children: [{ type: 'p', children: [{ text: 'Celda 1' }] }] },
-              { type: 'td', children: [{ type: 'p', children: [{ text: 'Celda 2' }] }] },
-            ],
-          },
-        ],
-      });
+      insertDefaultTable(editor);
     } else if (itemId === 'hr') {
       editor.tf.insertNodes([{ type: 'hr', children: [{ text: '' }] }, { type: 'p', children: [{ text: '' }] }], { select: true });
     } else if (itemId === 'spoiler') {

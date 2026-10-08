@@ -128,6 +128,9 @@ function elementChildren(el) {
 function deserializeList(listEl, level, out) {
   const isChecklist = listEl.classList?.contains('checklist');
   const ordered = listEl.tagName === 'OL';
+  // <ol start="N">: el primer ítem reinicia la numeración en N (Plate: listRestart).
+  const startAttr = ordered && listEl.hasAttribute?.('start') ? Number(listEl.getAttribute('start')) : null;
+  let pendingRestart = Number.isInteger(startAttr) && startAttr >= 0 ? startAttr : null;
 
   elementChildren(listEl).forEach(child => {
     if (child.tagName === 'UL' || child.tagName === 'OL') {
@@ -151,12 +154,15 @@ function deserializeList(listEl, level, out) {
       if (level > 0) item.indent = level + 1;
       out.push(item);
     } else {
-      out.push({
+      const item = {
         type: 'p',
         listStyleType: ordered ? 'decimal' : 'disc',
         indent: level + 1,
         children,
-      });
+      };
+      if (ordered && pendingRestart !== null) item.listRestart = pendingRestart;
+      pendingRestart = null;
+      out.push(item);
     }
     nested.forEach(list => deserializeList(list, level + 1, out));
   });
@@ -336,13 +342,22 @@ function isListBlock(node) {
   return Boolean(node?.listStyleType) || node?.type === 'action_item';
 }
 
+function listNumber(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : null;
+}
+
 function listItemFor(node) {
   const level = Math.max(1, Number(node.indent) || 1) - 1;
   const html = serializeInlineChildren(node.children);
   if (node.type === 'action_item' || node.listStyleType === 'todo') {
     return {level, kind: 'task', done: Boolean(node.checked), html};
   }
-  return {level, kind: isOrderedListStyle(node.listStyleType) ? 'ol' : 'ul', html};
+  if (!isOrderedListStyle(node.listStyleType)) return {level, kind: 'ul', html};
+  // Número visible del ítem: reinicio explícito o el que calculó Plate.
+  const restart = listNumber(node.listRestart);
+  const start = restart ?? listNumber(node.listStart) ?? listNumber(node.listRestartPolite) ?? undefined;
+  return {level, kind: 'ol', html, start, restart: restart !== null};
 }
 
 function serializeNodeToHtml(node) {

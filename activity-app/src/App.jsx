@@ -49,6 +49,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { useTheme } from '@/lib/theme';
 import {
   Archive,
+  ArrowDownToLine,
+  ArrowUpRightFromSquare,
   ArrowUturnCwRight,
   Calendar,
   ChevronLeft,
@@ -59,27 +61,35 @@ import {
   File,
   FileArrowUp,
   FileText,
+  LinkSlash,
   Magnifier,
   Moon,
   Pencil,
   Plus,
-  Printer,
   Sun,
   TrashBin,
+  TriangleExclamation,
   Xmark,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {htmlToMarkdown, markdownToHtml} from './editor/bardo-markdown.js';
+import {DOCS_KEYS, getDocsStorageScope, scopedDocsKey} from './docs-storage.js';
+import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSnapshot} from './docs-text.js';
+import {copyTextToClipboard} from './docs-clipboard.js';
+import {openExternalUrl} from './discord-links.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
+import {buildMinutesDoc} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
-const STORE_KEY = 'bardo.docs.heroui.v1';
-const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
-const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
+// Claves por servidor + canal (ver docs-storage.js): nada de un canal aparece en otro.
+const storeKey = () => scopedDocsKey(DOCS_KEYS.store);
+const draftKey = () => scopedDocsKey(DOCS_KEYS.draft);
+const lastOpenedKey = () => scopedDocsKey(DOCS_KEYS.lastOpened);
 // Copia de seguridad de la edición en curso (se escribe mientras se tipea).
-const JOURNAL_KEY = 'bardo.docs.editing.v1';
+const journalKey = () => scopedDocsKey(DOCS_KEYS.journal);
 const STORE_VERSION = 1;
+const SHARE_CARD_HINT = 'Se publicará una tarjeta con una vista previa y un botón para abrirlo.';
 
 
 function parseRoute() {
@@ -125,6 +135,7 @@ function sanitizeRichHtml(html = '') {
     }
     [...el.attributes].forEach(attr => {
       if (attr.name === 'href' && el.tagName === 'A') return;
+      if (attr.name === 'start' && el.tagName === 'OL' && /^\d{1,9}$/.test(attr.value)) return;
       if (attr.name === 'class') return;
       el.removeAttribute(attr.name);
     });
@@ -208,6 +219,7 @@ function markdownFromHtml(html = '') {
   return htmlToMarkdown(sanitizeRichHtml(html));
 }
 
+/** Descarga local (solo fuera de Discord, donde no hay enlace firmado del servidor). */
 function downloadFile(filename, mime, content) {
   const blob = new Blob([content], {type: mime});
   const url = URL.createObjectURL(blob);
@@ -228,38 +240,15 @@ function documentFileStem(doc) {
   return doc?.title?.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-|-$/g, '') || 'documento';
 }
 
-function escapeHtmlText(value = '') {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+const EXPORT_FORMAT_LABELS = {md: 'el archivo de texto', docx: 'el archivo Word', pdf: 'el PDF'};
+
+function channelLabel() {
+  const name = window.__bardoChannelContext?.channelName;
+  return name ? `#${name}` : 'este canal';
 }
 
-function documentHtml(doc) {
-  const title = escapeHtmlText(doc?.title || 'Sin título');
-  const description = doc?.description ? `<p>${escapeHtmlText(doc.description)}</p>` : '';
-  return `<!doctype html><meta charset="utf-8"><title>${title}</title><article><h1>${title}</h1>${description}${sanitizeRichHtml(doc?.body || '')}</article>`;
-}
-
-function isMobileViewport() {
-  return window.matchMedia?.('(max-width: 759px)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
-}
-
-async function copyText(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  ta.remove();
+function isImportBlocked(doc) {
+  return doc?.importStatus === 'pending' || doc?.importStatus === 'failed';
 }
 
 function newLocalId() {
@@ -268,7 +257,7 @@ function newLocalId() {
 
 function readDraft() {
   try {
-    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    const draft = JSON.parse(localStorage.getItem(draftKey()) || 'null');
     if (!draft) return null;
     const hasContent = Boolean(String(draft.title || '').trim() || String(draft.description || '').trim()
       || stripHtml(draft.body || ''));
@@ -284,7 +273,7 @@ function loadStore() {
     return {version: STORE_VERSION, docs: initial.docs, deletedIds: [...new Set(initial.deletedIds || [])]};
   }
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    const parsed = JSON.parse(localStorage.getItem(storeKey()) || 'null');
     if (!parsed || parsed.version !== STORE_VERSION || !Array.isArray(parsed.docs)) {
       return {version: STORE_VERSION, docs: [], deletedIds: []};
     }
@@ -310,7 +299,7 @@ function warnStorageFull() {
 
 function saveStore(store) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    localStorage.setItem(storeKey(), JSON.stringify(store));
     return true;
   } catch (error) {
     console.warn('Bardo Docs: no se pudo escribir en localStorage', error);
@@ -319,18 +308,26 @@ function saveStore(store) {
   }
 }
 
+/**
+ * Copia de seguridad de la edición en curso. Primero la de este canal; una
+ * copia antigua sin ámbito solo se aplica si su documento existe en este canal
+ * (applyJournal lo comprueba), así que nunca trae contenido de otro canal.
+ */
 function readJournal() {
-  try {
-    const journal = JSON.parse(localStorage.getItem(JOURNAL_KEY) || 'null');
-    return journal?.docId && journal.snapshot ? journal : null;
-  } catch {
-    return null;
+  const keys = [journalKey()];
+  if (getDocsStorageScope()) keys.push(DOCS_KEYS.journal);
+  for (const key of keys) {
+    try {
+      const journal = JSON.parse(localStorage.getItem(key) || 'null');
+      if (journal?.docId && journal.snapshot) return {...journal, storageKey: key};
+    } catch {}
   }
+  return null;
 }
 
 function writeJournal(entry) {
   try {
-    localStorage.setItem(JOURNAL_KEY, JSON.stringify(entry));
+    localStorage.setItem(journalKey(), JSON.stringify(entry));
   } catch (error) {
     console.warn('Bardo Docs: no se pudo escribir la copia de seguridad', error);
   }
@@ -339,7 +336,7 @@ function writeJournal(entry) {
 function clearJournal(docId) {
   try {
     const journal = readJournal();
-    if (!journal || journal.docId === docId) localStorage.removeItem(JOURNAL_KEY);
+    if (!journal || journal.docId === docId) localStorage.removeItem(journal?.storageKey || journalKey());
   } catch {}
 }
 
@@ -365,7 +362,7 @@ function applyJournal(store) {
 
 function saveDraft(snapshot) {
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(draftKey(), JSON.stringify(snapshot));
   } catch (error) {
     console.warn('Bardo Docs: no se pudo guardar el borrador', error);
     warnStorageFull();
@@ -373,6 +370,8 @@ function saveDraft(snapshot) {
 }
 
 function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
+  const blocked = isImportBlocked(doc);
+  const isProduction = Boolean(window.__BARDO_PRODUCTION__);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -387,67 +386,63 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onClick={() => onAction('open', doc)}>
           <Eye width={15} height={15} className="text-muted-foreground" />
           <span>Abrir</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction('edit', doc)}>
-          <Pencil width={15} height={15} className="text-muted-foreground" />
-          <span>Editar</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction('duplicate', doc)}>
-          <Copy width={15} height={15} className="text-muted-foreground" />
-          <span>Duplicar</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction('copy', doc)}>
-          <FileText width={15} height={15} className="text-muted-foreground" />
-          <span>Copiar texto</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction('publish', doc)}>
-          <ArrowUturnCwRight width={15} height={15} className="text-muted-foreground" />
-          <span>Compartir en el canal</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <FileArrowUp width={15} height={15} className="text-muted-foreground" />
-            <span>Descargar y exportar</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-52">
-            <DropdownMenuItem onClick={() => onAction('markdown-preview', doc)}>
-              <Eye width={15} height={15} className="text-muted-foreground" />
-              <span>Ver Markdown</span>
+        {!blocked && (
+          <>
+            <DropdownMenuItem onClick={() => onAction('edit', doc)}>
+              <Pencil width={15} height={15} className="text-muted-foreground" />
+              <span>Editar</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAction('markdown', doc)}>
+            <DropdownMenuItem onClick={() => onAction('duplicate', doc)}>
+              <Copy width={15} height={15} className="text-muted-foreground" />
+              <span>Duplicar</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction('copy', doc)}>
               <FileText width={15} height={15} className="text-muted-foreground" />
-              <span>Markdown (.md)</span>
+              <span>Copiar texto</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAction('html', doc)}>
-              <FileText width={15} height={15} className="text-muted-foreground" />
-              <span>HTML (.html)</span>
+            <DropdownMenuItem onClick={() => onAction('publish', doc)}>
+              <ArrowUturnCwRight width={15} height={15} className="text-muted-foreground" />
+              <span>Compartir en el canal</span>
             </DropdownMenuItem>
-            {window.__BARDO_PRODUCTION__ && (
-              <>
-                <DropdownMenuItem onClick={() => onAction('pdf', doc)}>
-                  <FileText width={15} height={15} className="text-muted-foreground" />
-                  <span>PDF (.pdf)</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onAction('docx', doc)}>
-                  <FileText width={15} height={15} className="text-muted-foreground" />
-                  <span>Word (.docx)</span>
-                </DropdownMenuItem>
-              </>
-            )}
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onAction('print', doc)}>
-              <Printer width={15} height={15} className="text-muted-foreground" />
-              <span>Imprimir / PDF</span>
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <FileArrowUp width={15} height={15} className="text-muted-foreground" />
+                <span>Descargar</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                {isProduction && (
+                  <>
+                    <DropdownMenuItem onClick={() => onAction('pdf', doc)}>
+                      <FileText width={15} height={15} className="text-muted-foreground" />
+                      <span>PDF (.pdf)</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onAction('docx', doc)}>
+                      <FileText width={15} height={15} className="text-muted-foreground" />
+                      <span>Word (.docx)</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem onClick={() => onAction('markdown', doc)}>
+                  <FileText width={15} height={15} className="text-muted-foreground" />
+                  <span>Texto con formato (.md)</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onAction('text-preview', doc)}>
+                  <Eye width={15} height={15} className="text-muted-foreground" />
+                  <span>Ver como texto</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        )}
 
         <DropdownMenuSeparator />
 
@@ -482,20 +477,31 @@ function RichBody({html, onChecklistChange, className = ''}) {
       className={`doc-body ${className}`}
       dangerouslySetInnerHTML={{__html: rendered}}
       onClick={e => {
+        // Enlaces: dentro de Discord se abren con openExternalLink.
+        const link = e.target.closest?.('a[href]');
+        if (link && ref.current?.contains(link)) {
+          e.preventDefault();
+          void openExternalUrl(link.getAttribute('href')).then(opened => {
+            if (!opened) toast('No se pudo abrir el enlace.');
+          });
+          return;
+        }
         const control = e.target.closest?.('.check-control');
-        if (!control || !ref.current?.contains(control)) return;
+        if (!control || !ref.current?.contains(control) || !onChecklistChange) return;
         e.preventDefault();
         const li = control.closest('li');
+        const index = checklistItems(ref.current).indexOf(li);
         li.classList.toggle('done');
-        control.setAttribute('aria-pressed', li.classList.contains('done') ? 'true' : 'false');
-        control.setAttribute('aria-label', li.classList.contains('done') ? 'Marcar como pendiente' : 'Marcar como completado');
-        onChecklistChange?.(cleanEditorHtml(ref.current));
+        const done = li.classList.contains('done');
+        control.setAttribute('aria-pressed', done ? 'true' : 'false');
+        control.setAttribute('aria-label', done ? 'Marcar como pendiente' : 'Marcar como completado');
+        onChecklistChange(cleanEditorHtml(ref.current), {index, done});
       }}
     />
   );
 }
 
-function EmptyState({query, onClearSearch, onNewDoc, onUpload, isArchived = false}) {
+function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, archivedCount = 0, isArchived = false}) {
   return (
     <Empty className="my-8">
       <EmptyMedia variant="icon">
@@ -515,17 +521,24 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, isArchived = fals
         </EmptyTitle>
         <EmptyDescription>
           {query
-            ? `No encontramos documentos con “${query}”.`
+            ? `No encontramos documentos con “${query}”${!isArchived && archivedCount > 0 ? ' entre los activos' : ''}.`
             : isArchived
-              ? 'Los documentos que archives en Bardo aparecerán en este lugar.'
-              : 'Crea un documento o sube un archivo para empezar.'}
+              ? 'Los documentos que archives aparecerán aquí. Puedes restaurarlos cuando quieras.'
+              : 'Crea un documento o sube un archivo (Word, PDF o texto) para empezar.'}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         {query ? (
-          <Button variant="secondary" size="sm" onClick={onClearSearch}>
-            Limpiar búsqueda
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="secondary" size="sm" onClick={onClearSearch}>
+              Limpiar búsqueda
+            </Button>
+            {!isArchived && archivedCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={onShowArchived}>
+                Buscar en Archivados
+              </Button>
+            )}
+          </div>
         ) : !isArchived ? (
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button variant="default" size="sm" onClick={onNewDoc}>
@@ -576,7 +589,9 @@ function ThemeModeMenu() {
   );
 }
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew}) {
+const UPLOAD_ACCEPT = '.md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, uploading = false}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
@@ -611,15 +626,16 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             variant="secondary"
             size="sm"
             onClick={() => onNavigateModule?.('planner')}
-            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+            aria-label="Reuniones"
+            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <Calendar width={14} height={14} /> Reuniones
+            <Calendar width={14} height={14} aria-hidden="true" /> <span className="header-label">Reuniones</span>
           </Button>
           <input
             ref={fileInputRef}
             className="library-file-input"
             type="file"
-            accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept={UPLOAD_ACCEPT}
             aria-label="Seleccionar documento para subir"
             onChange={event => {
               const file = event.target.files?.[0];
@@ -627,18 +643,27 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               if (file) onUpload(file);
             }}
           />
-          <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} className="h-8 px-3 font-medium text-xs flex items-center gap-1.5">
-            <FileArrowUp width={14} height={14} /> Subir archivo
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            aria-label={uploading ? 'Subiendo archivo…' : 'Subir archivo'}
+            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+          >
+            <FileArrowUp width={14} height={14} aria-hidden="true" /> <span className="header-label">{uploading ? 'Subiendo…' : 'Subir archivo'}</span>
           </Button>
-          <Button variant="default" size="icon-sm" onClick={onNew} aria-label="Crear documento" className="icon-button-circle h-8 w-8">
-            <Plus width={16} height={16} />
+          <Button variant="default" size="sm" onClick={onNew} aria-label="Crear documento" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+            <Plus width={15} height={15} aria-hidden="true" /> <span className="header-label">Nuevo</span>
           </Button>
         </div>
       ) : doc ? (
         <div key="document-actions" className="header-slot-enter flex items-center gap-2">
-          <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
-            <Pencil width={14} height={14} /> Editar
-          </Button>
+          {!isImportBlocked(doc) && (
+            <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
+              <Pencil width={14} height={14} /> Editar
+            </Button>
+          )}
           <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
         </div>
       ) : null}
@@ -665,8 +690,8 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <span>Bardo</span>
         </span>
       ) : (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
-          <ChevronLeft width={15} height={15} /> Documentos
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label="Volver a Documentos" className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
+          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">Documentos</span>
         </Button>
       )}
     </DocsHeader>
@@ -675,7 +700,6 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
 
 function Library({
   docs,
-  total: _total,
   query,
   setQuery,
   continueDoc,
@@ -693,6 +717,9 @@ function Library({
 }) {
   const fileInputRef = useRef(null);
   const isArchivedTab = activeTab === 'archived';
+  const tabClass = selected => `px-3 py-1 rounded-md font-medium transition-all ${
+    selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+  }`;
 
   return (
     <section className="library route-active">
@@ -701,7 +728,7 @@ function Library({
           ref={fileInputRef}
           className="library-file-input"
           type="file"
-          accept=".md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept={UPLOAD_ACCEPT}
           aria-label="Seleccionar documento para subir"
           onChange={event => {
             const file = event.target.files?.[0];
@@ -714,7 +741,7 @@ function Library({
             <Magnifier width={15} height={15} className="text-muted-foreground" />
           </InputGroupAddon>
           <InputGroupInput
-            placeholder="Buscar documentos..."
+            placeholder={isArchivedTab ? 'Buscar en archivados…' : 'Buscar documentos…'}
             value={query}
             onChange={e => setQuery(e.target.value)}
             aria-label="Buscar documentos"
@@ -740,7 +767,7 @@ function Library({
               <span className="continue-accent" aria-hidden="true" />
               <span className="continue-copy">
                 <strong>{draft.title || 'Sin título'}</strong>
-                <span>Borrador privado · se guarda en este dispositivo</span>
+                <span>Solo tú lo ves, en este dispositivo · Pulsa Listo para crearlo</span>
               </span>
               <ChevronRight width={16} height={16} className="text-muted-foreground" />
             </button>
@@ -763,32 +790,26 @@ function Library({
 
         <section className="library-section recent-section">
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs">
+            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs" role="group" aria-label="Mostrar documentos">
               <button
                 type="button"
+                aria-pressed={activeTab === 'active'}
                 onClick={() => onTabChange?.('active')}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
-                  activeTab === 'active'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={tabClass(activeTab === 'active')}
               >
                 Activos ({activeCount})
               </button>
               <button
                 type="button"
+                aria-pressed={activeTab === 'archived'}
                 onClick={() => onTabChange?.('archived')}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
-                  activeTab === 'archived'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={tabClass(activeTab === 'archived')}
               >
                 Archivados ({archivedCount})
               </button>
             </div>
             {query && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground" role="status">
                 {docs.length} {docs.length === 1 ? 'resultado' : 'resultados'}
               </span>
             )}
@@ -798,7 +819,7 @@ function Library({
               {docs.map(doc => (
                 <article className={`doc-row ${doc.archived ? 'opacity-85' : ''}`} key={doc.id}>
                   <span className="doc-symbol">
-                    {doc.archived ? <Archive width={18} height={18} /> : <File width={18} height={18} />}
+                    {doc.archived ? <Archive width={18} height={18} /> : doc.importStatus === 'failed' ? <TriangleExclamation width={18} height={18} /> : <File width={18} height={18} />}
                   </span>
                   <button
                     className="doc-row-main"
@@ -807,7 +828,13 @@ function Library({
                   >
                     <strong>{doc.title || 'Sin título'}</strong>
                     <span>
-                      {doc.archived ? 'Archivado' : (doc.origin || 'Creado en Bardo')} · {changeActorName(doc)} · {formatChangeTime(doc)}
+                      {doc.archived
+                        ? 'Archivado'
+                        : doc.importStatus === 'failed'
+                          ? 'No pudimos leer este archivo'
+                          : doc.importStatus === 'pending'
+                            ? 'Procesando archivo…'
+                            : (doc.origin || 'Creado en Bardo')} · {changeActorName(doc)} · {formatChangeTime(doc)}
                     </span>
                   </button>
                   <DocActionMenu
@@ -822,7 +849,9 @@ function Library({
             <EmptyState
               query={query}
               isArchived={isArchivedTab}
+              archivedCount={archivedCount}
               onClearSearch={() => setQuery('')}
+              onShowArchived={() => onTabChange?.('archived')}
               onNewDoc={onNew}
               onUpload={() => fileInputRef.current?.click()}
             />
@@ -833,8 +862,45 @@ function Library({
   );
 }
 
+function ImportFailedState({doc, onRemove, onDownloadOriginal}) {
+  return (
+    <div className="import-failed-state" role="alert">
+      <div className="flex items-start gap-3">
+        <TriangleExclamation width={20} height={20} className="text-destructive shrink-0 mt-0.5" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground">No pudimos leer este archivo</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {doc.importError || 'El archivo puede estar dañado, protegido con contraseña o ser un escaneo sin texto.'}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-4">
+        {doc.hasSource !== false && (
+          <Button variant="secondary" size="sm" onClick={onDownloadOriginal}>
+            <ArrowDownToLine width={15} height={15} /> Descargar original
+          </Button>
+        )}
+        <Button variant="destructive" size="sm" onClick={onRemove}>
+          <TrashBin width={15} height={15} /> Eliminar
+        </Button>
+      </div>
+    </div>
+  );
+}
 
-function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onChecklistChange, skipTransition = false}) {
+function Reader({
+  doc,
+  onChecklistChange,
+  skipTransition = false,
+  showSharePrompt = false,
+  onShare,
+  onDismissShare,
+  onRestore,
+  onRemoveFailedImport,
+  onDownloadOriginal,
+}) {
+  const failed = doc.importStatus === 'failed';
+  const pending = doc.importStatus === 'pending';
   return (
     <section className={`doc-route route-active ${skipTransition ? 'route-no-transition' : ''}`.trim()}>
       <article className="document-shell">
@@ -846,13 +912,32 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
           </div>
           <h1 className="doc-title">{doc.title || 'Sin título'}</h1>
           {doc.description && <p className="doc-description">{doc.description}</p>}
-          {doc.importStatus === 'pending' && (
+          {doc.archived && (
+            <div className="doc-inline-notice" role="status">
+              <span>Este documento está archivado. Solo aparece en la pestaña Archivados.</span>
+              <Button variant="secondary" size="sm" onClick={onRestore}>Restaurar</Button>
+            </div>
+          )}
+          {showSharePrompt && !doc.archived && (
+            <div className="doc-inline-notice" role="status">
+              <span>Documento creado. ¿Quieres avisar en {channelLabel()}? {SHARE_CARD_HINT}</span>
+              <div className="flex gap-2">
+                <Button variant="default" size="sm" onClick={onShare}>Compartir en el canal</Button>
+                <Button variant="ghost" size="sm" onClick={onDismissShare}>Ahora no</Button>
+              </div>
+            </div>
+          )}
+          {pending && (
             <p className="import-pending-banner text-sm text-muted-foreground" role="status">
               Procesando archivo… Bardo está convirtiendo el contenido y lo mostrará aquí en cuanto termine.
             </p>
           )}
         </header>
-        <RichBody html={doc.body} onChecklistChange={doc.importStatus === 'pending' ? undefined : onChecklistChange} />
+        {failed ? (
+          <ImportFailedState doc={doc} onRemove={onRemoveFailedImport} onDownloadOriginal={onDownloadOriginal} />
+        ) : (
+          <RichBody html={pending ? '' : doc.body} onChecklistChange={pending ? undefined : onChecklistChange} />
+        )}
       </article>
     </section>
   );
@@ -860,18 +945,18 @@ function Reader({doc, onBack: _onBack, onEdit: _onEdit, onAction: _onAction, onC
 
 function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel}) {
   const isArchive = action === 'archive';
-  const isPermanent = action === 'permanent-delete';
+  const isFailedImport = action === 'remove-failed-import';
   return (
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isArchive ? 'Archivar documento' : 'Eliminar definitivamente'}
+            {isArchive ? 'Archivar documento' : isFailedImport ? 'Eliminar documento' : 'Eliminar definitivamente'}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isArchive
-              ? `“${doc?.title || 'Sin título'}” se archivará y saldrá de la vista de documentos activos. Podrás restaurarlo desde Archivados.`
-              : `“${doc?.title || 'Sin título'}” se eliminará de forma permanente para todo el canal. Esta acción no se puede deshacer.`}
+              ? `“${doc?.title || 'Sin título'}” dejará de aparecer en Activos para todo el canal. Podrás restaurarlo desde Archivados.`
+              : `“${doc?.title || 'Sin título'}” se eliminará para todo el canal. Esta acción no se puede deshacer.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -882,7 +967,7 @@ function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel
             variant={isArchive ? 'default' : 'destructive'}
             onClick={() => onConfirm(doc?.id, action)}
           >
-            {isPermanent ? 'Eliminar definitivamente' : 'Archivar'}
+            {isArchive ? 'Archivar' : isFailedImport ? 'Eliminar' : 'Eliminar definitivamente'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -890,17 +975,85 @@ function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel
   );
 }
 
-function InsertLinkModal({isOpen, linkValue, setLinkValue, onApply, onCancel}) {
+function ShareConfirmDialog({isOpen, doc, onConfirm, onCancel}) {
+  return (
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Compartir en el canal</AlertDialogTitle>
+          <AlertDialogDescription>
+            Se publicará una tarjeta de “{doc?.title || 'Sin título'}” en {channelLabel()} para que todos puedan abrirlo.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={() => onConfirm(doc?.id)}>Publicar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function NewDocChoiceDialog({isOpen, draft, onContinue, onStartNew, onCancel}) {
+  return (
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Tienes un borrador sin terminar</AlertDialogTitle>
+          <AlertDialogDescription>
+            “{draft?.title || 'Sin título'}” todavía no se ha creado. Si empiezas uno nuevo, ese borrador se descartará.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onStartNew}>Empezar uno nuevo</AlertDialogCancel>
+          <AlertDialogAction onClick={onContinue}>Continuar borrador</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function LaunchNoticeDialog({notice, onRestore, onClose}) {
+  const archived = notice?.kind === 'archived';
+  return (
+    <AlertDialog open={Boolean(notice)} onOpenChange={open => !open && onClose()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{archived ? 'Este documento fue archivado' : 'Este documento ya no existe'}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {archived
+              ? `“${notice?.title || 'Sin título'}” está en Archivados. Puedes restaurarlo para que vuelva a aparecer en Activos.`
+              : 'Pudo haber sido eliminado o no está compartido en este canal. Te mostramos los documentos de este canal.'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          {archived ? (
+            <>
+              <AlertDialogCancel onClick={onClose}>Cerrar</AlertDialogCancel>
+              <AlertDialogAction onClick={onRestore}>Restaurar y abrir</AlertDialogAction>
+            </>
+          ) : (
+            <AlertDialogAction onClick={onClose}>Entendido</AlertDialogAction>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function InsertLinkModal({isOpen, isEditing = false, linkValue, setLinkValue, onApply, onRemove, onOpenLink, onCancel}) {
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Agregar enlace</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar enlace' : 'Agregar enlace'}</DialogTitle>
         </DialogHeader>
         <Field className="w-full">
-          <FieldLabel>URL o Enlace</FieldLabel>
+          <FieldLabel htmlFor="bardo-link-url">Dirección del enlace</FieldLabel>
           <Input
+            id="bardo-link-url"
             autoFocus
+            inputMode="url"
             placeholder="https://ejemplo.com"
             value={linkValue}
             onChange={e => setLinkValue(e.target.value)}
@@ -912,12 +1065,22 @@ function InsertLinkModal({isOpen, linkValue, setLinkValue, onApply, onCancel}) {
             }}
           />
         </Field>
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2">
+          {isEditing && (
+            <>
+              <Button variant="ghost" size="sm" onClick={onOpenLink} disabled={!linkValue.trim()}>
+                <ArrowUpRightFromSquare width={14} height={14} /> Abrir
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onRemove}>
+                <LinkSlash width={14} height={14} /> Quitar enlace
+              </Button>
+            </>
+          )}
           <Button variant="ghost" size="sm" onClick={onCancel}>
             Cancelar
           </Button>
           <Button variant="default" size="sm" disabled={!linkValue.trim()} onClick={onApply}>
-            Aplicar
+            {isEditing ? 'Guardar' : 'Agregar'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -925,80 +1088,25 @@ function InsertLinkModal({isOpen, linkValue, setLinkValue, onApply, onCancel}) {
   );
 }
 
-function MarkdownPreviewModal({isOpen, doc, onCopy, onCancel}) {
-  const markdown = doc ? documentMarkdown(doc) : '';
+function TextPreviewModal({isOpen, doc, onCopy, onCancel}) {
+  const text = doc ? documentPlainText(doc) : '';
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Vista previa de Markdown</DialogTitle>
+          <DialogTitle>Texto del documento</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto min-h-0 py-2">
-          <pre className="markdown-preview-content" tabIndex="0">{markdown}</pre>
+          <pre className="markdown-preview-content" tabIndex="0" aria-label="Texto del documento">{text}</pre>
         </div>
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <ChevronLeft width={15} height={15} /> Atrás
           </Button>
-          <Button variant="default" size="sm" onClick={() => onCopy(markdown)}>
-            <Copy width={15} height={15} /> Copiar Markdown
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function HtmlPreviewModal({isOpen, doc, onCopy, onCancel}) {
-  return (
-    <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Vista previa HTML</DialogTitle>
-          <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
-        </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 py-2">
-          <div className="export-html-preview">
-            <h1>{doc?.title || 'Sin título'}</h1>
-            {doc?.description && <p className="text-muted-foreground">{doc.description}</p>}
-            <RichBody html={doc?.body || ''} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <ChevronLeft width={15} height={15} /> Atrás
-          </Button>
-          <Button variant="default" size="sm" onClick={() => onCopy(documentHtml(doc))}>
-            <Copy width={15} height={15} /> Copiar HTML
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PdfPreviewModal({isOpen, file, onCancel}) {
-  return (
-    <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Vista previa de PDF</DialogTitle>
-          <DialogDescription className="truncate">{file?.filename || 'documento.pdf'}</DialogDescription>
-        </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 py-2">
-          {file?.url && (
-            <iframe
-              className="export-pdf-preview"
-              src={file.url}
-              title={file.filename || 'Vista previa de PDF'}
-            />
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <ChevronLeft width={15} height={15} /> Atrás
+          <Button variant="default" size="sm" onClick={() => onCopy(text)}>
+            <Copy width={15} height={15} /> Copiar texto
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1022,12 +1130,21 @@ function App() {
   const [linkValue, setLinkValue] = useState('');
   const [lastOpened, setLastOpened] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem(LAST_OPENED_KEY) || 'null');
+      return JSON.parse(localStorage.getItem(lastOpenedKey()) || 'null');
     } catch {
       return null;
     }
   });
   const [draft, setDraft] = useState(readDraft);
+  // Cambia para remontar el editor de documento nuevo con una hoja en blanco.
+  const [newDocNonce, setNewDocNonce] = useState(0);
+  // Documento recién creado: el lector ofrece compartirlo en el canal.
+  const [sharePromptDocId, setSharePromptDocId] = useState(null);
+  // Ids de archivados en el servidor (sin contenido) para el contador de la pestaña.
+  const [archivedSummaryIds, setArchivedSummaryIds] = useState(() => new Set());
+  // Tarjeta de un documento archivado o eliminado (ver production-bridge).
+  const [launchNotice, setLaunchNotice] = useState(null);
+  const [uploading, setUploading] = useState(false);
   // Revisión por documento: cambia cuando se adopta una versión remota y obliga a
   // remontar el editor con el contenido nuevo.
   const [revisions, setRevisions] = useState({});
@@ -1083,6 +1200,19 @@ function App() {
   const docs = store.docs;
   const activeDocs = useMemo(() => docs.filter(doc => !doc.archived), [docs]);
   const archivedDocs = useMemo(() => docs.filter(doc => Boolean(doc.archived)), [docs]);
+  // Archivados reales sin abrir la pestaña: los del servidor (resumen) que no
+  // estén activos o eliminados aquí, más los archivados en esta sesión.
+  const archivedCount = useMemo(() => {
+    const deleted = new Set(store.deletedIds || []);
+    const ids = new Set(archivedDocs.map(doc => doc.id));
+    const byId = new Map(docs.map(doc => [doc.id, doc]));
+    archivedSummaryIds.forEach(id => {
+      if (deleted.has(id)) return;
+      const local = byId.get(id);
+      if (!local || local.archived) ids.add(id);
+    });
+    return ids.size;
+  }, [archivedDocs, archivedSummaryIds, docs, store.deletedIds]);
 
   const displayedDocs = libraryTab === 'archived' ? archivedDocs : activeDocs;
   const sortedDocs = useMemo(() => [...displayedDocs].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)), [displayedDocs]);
@@ -1098,6 +1228,50 @@ function App() {
     ids.forEach(id => { next[id] = (next[id] || 0) + 1; });
     revisionsRef.current = next;
     setRevisions(next);
+  }, []);
+
+  // Contador de archivados al abrir la biblioteca (sin descargar su contenido).
+  useEffect(() => {
+    if (!window.__bardoFetchArchivedSummary) return undefined;
+    let cancelled = false;
+    window.__bardoFetchArchivedSummary().then(ids => {
+      if (!cancelled && Array.isArray(ids)) setArchivedSummaryIds(new Set(ids));
+    }).catch(error => console.warn('Bardo Docs: no se pudo contar los archivados', error));
+    return () => { cancelled = true; };
+  }, []);
+
+  // Se abrió la tarjeta de un documento que ya no está entre los activos.
+  useEffect(() => {
+    const missingId = window.__BARDO_LAUNCH_MISSING_DOC__;
+    if (!missingId) return undefined;
+    window.__BARDO_LAUNCH_MISSING_DOC__ = null;
+    let cancelled = false;
+    Promise.resolve(window.__bardoFetchDocument?.(missingId) ?? null).then(serverDoc => {
+      if (cancelled) return;
+      if (serverDoc?.archived) {
+        setLaunchNotice({kind: 'archived', id: serverDoc.id, title: serverDoc.title, doc: serverDoc});
+      } else if (serverDoc) {
+        // Existe pero no venía en la lista (p. ej. más de 150 documentos): abrirlo.
+        commitStore(prev => (prev.docs.some(doc => doc.id === serverDoc.id)
+          ? prev
+          : {...prev, docs: [...prev.docs, serverDoc]}));
+        location.hash = `#doc-${serverDoc.id}`;
+      } else {
+        setLaunchNotice({kind: 'missing', id: missingId});
+      }
+    }).catch(() => {
+      if (!cancelled) setLaunchNotice({kind: 'missing', id: missingId});
+    });
+    return () => { cancelled = true; };
+  }, [commitStore]);
+
+  // Tarjeta antigua de /doc-new con título y un borrador sin terminar: preguntar.
+  useEffect(() => {
+    const pendingTitle = window.__BARDO_PENDING_NEW_TITLE__;
+    if (!pendingTitle) return;
+    window.__BARDO_PENDING_NEW_TITLE__ = null;
+    const existing = readDraft();
+    if (existing) setModal({type: 'new-doc-choice', draft: existing, title: pendingTitle});
   }, []);
 
   // Cargar archivados del servidor al abrir la pestaña (ya registrados como
@@ -1236,6 +1410,26 @@ function App() {
         if (viewing) go(`#${routeRef.current.type === 'edit' ? 'edit' : 'doc'}-${event.newId}`, {skipTransition: true});
         return;
       }
+      if (event?.type === 'import-failed' && event.id) {
+        // El archivo no se pudo leer: mostrar el error con salida, no "Procesando…".
+        commitStore(prev => ({
+          ...prev,
+          docs: prev.docs.map(d => (d.id === event.id && d.importStatus === 'pending'
+            ? {...d, importStatus: 'failed', importError: event.message || ''}
+            : d)),
+        }));
+        return;
+      }
+      if (event?.type === 'archive-failed' && event.id) {
+        // Sin permiso para archivar/restaurar: volver al estado del servidor.
+        commitStore(prev => ({
+          ...prev,
+          docs: prev.docs.map(d => (d.id === event.id
+            ? {...d, archived: Boolean(event.archived), archivedAt: event.archived ? d.archivedAt : null}
+            : d)),
+        }));
+        return;
+      }
       if (event?.type === 'offline-boot') {
         showToast('Sin conexión con Bardo. Mostramos tu copia local y reintentaremos en segundo plano.');
         return;
@@ -1327,7 +1521,7 @@ function App() {
       const next = {id: currentDoc.id, offset, at: Date.now()};
       lastOpenedRef.current = next;
       try {
-        localStorage.setItem(LAST_OPENED_KEY, JSON.stringify(next));
+        localStorage.setItem(lastOpenedKey(), JSON.stringify(next));
       } catch {}
     };
     onScroll();
@@ -1382,7 +1576,9 @@ function App() {
     const copy = {
       ...source,
       id: newLocalId(),
-      title: `${source.title} · copia`,
+      title: `${source.title || 'Sin título'} (copia)`,
+      createdByName: currentEditorName() || source.createdByName,
+      updatedByName: currentEditorName() || source.updatedByName,
       builtin: false,
       stress: false,
       archived: false,
@@ -1398,9 +1594,16 @@ function App() {
     go(`#doc-${copy.id}`);
   }, [commitStore, docsById, go, showToast]);
 
+  const uploadingRef = useRef(false);
   const uploadDocument = useCallback(async file => {
+    if (uploadingRef.current) {
+      showToast('Ya estamos convirtiendo un archivo. Espera a que termine.');
+      return;
+    }
+    uploadingRef.current = true;
+    setUploading(true);
     try {
-      showToast('Preparando documento…');
+      showToast(`Convirtiendo “${file?.name || 'archivo'}”… puede tardar unos segundos.`);
       const imported = await convertDocumentFile(file);
       const now = new Date().toISOString();
       const doc = {
@@ -1418,16 +1621,50 @@ function App() {
         stress: false,
       };
       commitStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
-      showToast('Documento listo');
+      showToast('Documento creado a partir del archivo');
+      setSharePromptDocId(doc.id);
       go(`#doc-${doc.id}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo subir el documento', error);
-      showToast(error instanceof Error ? error.message : 'No se pudo subir el documento');
+      // Solo mensajes propios en español (ImportError); nunca el texto de pdf.js.
+      showToast(error?.userMessage || 'No pudimos leer este archivo. Puede estar dañado o en un formato que Bardo no reconoce.');
+    } finally {
+      uploadingRef.current = false;
+      setUploading(false);
     }
   }, [commitStore, go, showToast]);
 
   const deleteDoc = useCallback(async (id, action = 'archive') => {
     setModal(null);
+    if (action === 'remove-failed-import') {
+      // Importación que no se pudo leer: archivar y luego eliminar definitivamente.
+      commitStore(prev => ({
+        ...prev,
+        docs: prev.docs.map(doc => doc.id === id ? {...doc, archived: true, archivedAt: new Date().toISOString()} : doc),
+      }));
+      if (routeRef.current.id === id) go('#docs');
+      if (!window.__bardoDeleteDocumentPermanent) {
+        commitStore(prev => ({...prev, docs: prev.docs.filter(doc => doc.id !== id)}));
+        showToast('Documento eliminado');
+        return;
+      }
+      try {
+        const settled = await window.__bardoSettleDocument?.(id);
+        if (settled === false) throw new Error('No pudimos conectar con Bardo. El documento quedó archivado; vuelve a intentarlo desde Archivados.');
+        await window.__bardoDeleteDocumentPermanent(id);
+        commitStore(prev => ({
+          ...prev,
+          docs: prev.docs.filter(doc => doc.id !== id),
+          deletedIds: [...new Set([...(prev.deletedIds || []), id])],
+        }));
+        showToast('Documento eliminado');
+      } catch (error) {
+        showToast(error?.status === 403
+          ? 'Lo archivamos, pero solo quien subió el archivo o quien modera el canal puede eliminarlo definitivamente.'
+          : (error?.message || 'No se pudo eliminar el documento.'));
+      }
+      return;
+    }
     if (action === 'permanent-delete') {
       if (window.__bardoDeleteDocumentPermanent) {
         try {
@@ -1443,6 +1680,12 @@ function App() {
         docs: prev.docs.filter(doc => doc.id !== id),
         deletedIds: [...new Set([...(prev.deletedIds || []), id])],
       }));
+      setArchivedSummaryIds(prev => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       showToast('Documento eliminado definitivamente');
       if (routeRef.current.id === id) go('#docs');
       return;
@@ -1470,8 +1713,129 @@ function App() {
         archivedAt: null,
       } : doc),
     }));
+    setArchivedSummaryIds(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     showToast('Documento restaurado');
   }, [commitStore, showToast]);
+
+  /** Documento nuevo: hoja en blanco, salvo que el usuario elija seguir su borrador. */
+  const startNewDoc = useCallback(() => {
+    const existing = readDraft();
+    if (existing) {
+      setModal({type: 'new-doc-choice', draft: existing});
+      return;
+    }
+    try { localStorage.removeItem(draftKey()); } catch {}
+    setDraft(null);
+    setNewDocNonce(n => n + 1);
+    go('#new');
+  }, [go]);
+
+  const continueDraft = useCallback(() => {
+    setModal(null);
+    go('#new');
+  }, [go]);
+
+  const discardDraftAndStart = useCallback(title => {
+    setModal(null);
+    try {
+      if (title) {
+        localStorage.setItem(draftKey(), JSON.stringify({title, description: '', body: '<p><br></p>', updatedAt: new Date().toISOString()}));
+      } else {
+        localStorage.removeItem(draftKey());
+      }
+    } catch {}
+    setDraft(null);
+    setNewDocNonce(n => n + 1);
+    showToast('Borrador descartado. Empezaste un documento nuevo.');
+    go('#new');
+  }, [go, showToast]);
+
+  /** Marcar una tarea en el lector (se reaplica sola si otra persona editó a la vez). */
+  const toggleChecklistInReader = useCallback((id, body, op) => {
+    const prevDoc = storeRef.current.docs.find(doc => doc.id === id);
+    updateDoc(id, {body});
+    if (op && Number.isInteger(op.index) && op.index >= 0) {
+      try {
+        window.__bardoNoteChecklistToggle?.(id, op, prevDoc);
+      } catch {}
+    }
+  }, [updateDoc]);
+
+  const publishDoc = useCallback(async id => {
+    setModal(null);
+    if (!window.__bardoPublishDocument) {
+      showToast('Compartir en el canal solo está disponible dentro de Discord.');
+      return;
+    }
+    try {
+      await window.__bardoPublishDocument(id);
+      setSharePromptDocId(current => (current === id ? null : current));
+      showToast(`Documento compartido en ${channelLabel()}`);
+    } catch (error) {
+      console.error('Bardo Docs: no se pudo enviar el documento al canal', error);
+      showToast(error?.message || 'No se pudo compartir el documento en el canal.');
+    }
+  }, [showToast]);
+
+  const exportDoc = useCallback(async (doc, format) => {
+    const label = EXPORT_FORMAT_LABELS[format] || 'el archivo';
+    if (!window.__bardoExportLink) {
+      // Fuera de Discord (desarrollo): solo el texto con formato, generado aquí.
+      if (format === 'md') {
+        downloadFile(`${documentFileStem(doc)}.md`, 'text/markdown;charset=utf-8', documentMarkdown(doc));
+        showToast('Se generó el archivo .md');
+      } else {
+        showToast('Las descargas en PDF y Word están disponibles dentro de Discord.');
+      }
+      return;
+    }
+    showToast(`Preparando ${label}…`);
+    try {
+      const {url} = await window.__bardoExportLink(doc.id, format);
+      const opened = await openExternalUrl(url);
+      showToast(opened
+        ? 'Abriendo la descarga en tu navegador…'
+        : 'Discord no abrió el navegador. Vuelve a intentarlo y acepta el aviso de enlace externo.');
+    } catch (error) {
+      console.error(`Bardo Docs: no se pudo exportar ${format}`, error);
+      showToast(error?.message || `No pudimos preparar ${label}.`);
+    }
+  }, [showToast]);
+
+  const downloadOriginal = useCallback(async id => {
+    if (!window.__bardoDownloadOriginal) {
+      showToast('La descarga del archivo original está disponible dentro de Discord.');
+      return;
+    }
+    try {
+      const result = await window.__bardoDownloadOriginal(id);
+      if (result?.url) {
+        const opened = await openExternalUrl(result.url);
+        showToast(opened ? 'Abriendo el archivo original en tu navegador…' : 'Discord no abrió el navegador. Vuelve a intentarlo.');
+      } else {
+        showToast('Iniciamos la descarga del archivo original.');
+      }
+    } catch (error) {
+      showToast(error?.message || 'No pudimos descargar el archivo original.');
+    }
+  }, [showToast]);
+
+  const restoreFromNotice = useCallback(() => {
+    const notice = launchNotice;
+    setLaunchNotice(null);
+    if (!notice?.doc) return;
+    const local = notice.doc;
+    commitStore(prev => (prev.docs.some(doc => doc.id === local.id)
+      ? prev
+      : {...prev, docs: [...prev.docs, local]}));
+    restoreDoc(local.id);
+    go(`#doc-${local.id}`);
+  }, [commitStore, go, launchNotice, restoreDoc]);
 
   const openDoc = useCallback((id, fromContinue = false) => {
     const target = `#doc-${id}`;
@@ -1481,15 +1845,12 @@ function App() {
     } else go(target);
   }, [go, lastOpened]);
 
-  const filteredDocs = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase('es');
-    if (!q) return sortedDocs;
-    return sortedDocs.filter(doc => `${doc.title} ${doc.description} ${doc.origin} ${stripHtml(doc.body)}`.toLocaleLowerCase('es').includes(q));
-  }, [query, sortedDocs]);
+  const filteredDocs = useMemo(() => filterDocumentsByQuery(sortedDocs, query), [query, sortedDocs]);
 
+  // "Continuar lectura" solo para un documento que de verdad se abrió antes.
   const continueDoc = lastOpened?.id && docsById.has(lastOpened.id) && !docsById.get(lastOpened.id).archived
     ? docsById.get(lastOpened.id)
-    : activeDocs[0];
+    : null;
 
   const docAction = useCallback(async (action, targetDoc) => {
     const doc = targetDoc?.id ? targetDoc : docsById.get(targetDoc);
@@ -1500,75 +1861,32 @@ function App() {
     if (action === 'archive') setModal({type: 'delete', docId: doc.id, action: 'archive'});
     if (action === 'restore') restoreDoc(doc.id);
     if (action === 'permanent-delete') setModal({type: 'delete', docId: doc.id, action: 'permanent-delete'});
+    if (action === 'remove-failed-import') setModal({type: 'delete', docId: doc.id, action: 'remove-failed-import'});
 
     if (action === 'copy') {
-      try {
-        await copyText(`${doc.title}\n\n${doc.description}\n\n${stripHtml(doc.body)}`);
-        showToast('Texto copiado al portapapeles');
-      } catch {
-        showToast('No se pudo copiar');
+      const copied = await copyTextToClipboard(documentPlainText(doc));
+      if (copied) {
+        showToast('Texto copiado');
+      } else {
+        showToast('No se pudo copiar automáticamente. Selecciona el texto y cópialo desde aquí.');
+        setModal({type: 'text-preview', docId: doc.id});
       }
     }
     if (action === 'publish') {
-      if (!window.__bardoPublishDocument) {
-        showToast('Esta acción está disponible dentro de Discord');
-      } else {
-        try {
-          await window.__bardoPublishDocument(doc.id);
-          showToast('Documento enviado al canal');
-        } catch (error) {
-          console.error('Bardo Docs: no se pudo enviar el documento al canal', error);
-          showToast(error?.message && !/^HTTP \d+$/.test(error.message) ? error.message : 'No se pudo enviar el documento al canal');
-        }
-      }
+      if (!window.__bardoPublishDocument) showToast('Compartir en el canal solo está disponible dentro de Discord.');
+      else setModal({type: 'share', docId: doc.id});
     }
-    if (action === 'markdown-preview') {
-      setModal({type: 'markdown-preview', docId: doc.id});
-    }
-    if (action === 'markdown') {
-      if (isMobileViewport()) {
-        setModal({type: 'markdown-preview', docId: doc.id});
-      } else {
-        downloadFile(
-          `${documentFileStem(doc)}.md`,
-          'text/markdown;charset=utf-8',
-          documentMarkdown(doc)
-        );
-        showToast('Markdown descargado');
-      }
-    }
-    if (action === 'html') {
-      if (isMobileViewport()) {
-        setModal({type: 'html-preview', docId: doc.id});
-      } else {
-        downloadFile(
-          `${documentFileStem(doc)}.html`,
-          'text/html;charset=utf-8',
-          documentHtml(doc)
-        );
-        showToast('HTML descargado');
-      }
-    }
-    if ((action === 'pdf' || action === 'docx') && window.__bardoExportDocument) {
-      try {
-        const shouldPreviewPdf = action === 'pdf' && isMobileViewport();
-        const file = await window.__bardoExportDocument(doc.id, action, {preview: shouldPreviewPdf});
-        if (shouldPreviewPdf && file?.url) {
-          setModal({type: 'pdf-preview', file});
-        } else {
-          showToast(action === 'pdf' ? 'PDF descargado' : 'Word descargado');
-        }
-      } catch (error) {
-        console.error(`Bardo Docs: no se pudo descargar ${action}`, error);
-        showToast(`No se pudo descargar ${action === 'pdf' ? 'el PDF' : 'el archivo Word'}`);
-      }
-    }
-    if (action === 'print') window.print();
-  }, [docsById, duplicateDoc, go, openDoc, restoreDoc, route.type, showToast]);
+    if (action === 'text-preview') setModal({type: 'text-preview', docId: doc.id});
+    if (action === 'markdown') await exportDoc(doc, 'md');
+    if (action === 'pdf' || action === 'docx') await exportDoc(doc, action);
+  }, [docsById, duplicateDoc, exportDoc, go, openDoc, restoreDoc, route.type, showToast]);
 
   const editorDocId = route.type === 'edit' ? currentDoc?.id : null;
   const editorRevision = editorDocId ? (revisions[editorDocId] || 0) : 0;
   const showEditor = route.type === 'new' || (route.type === 'edit' && Boolean(currentDoc));
+  const editorReadOnlyMessage = route.type === 'edit' && currentDoc?.importStatus === 'failed'
+    ? 'No pudimos leer este archivo, así que no se puede editar. Ábrelo para descargar el original o eliminarlo.'
+    : '';
 
   return (
     <main className="app-root">
@@ -1585,8 +1903,9 @@ function App() {
           }}
           onEdit={() => currentDoc && go(`#edit-${currentDoc.id}`, {preserveBody: true})}
           onAction={docAction}
-          onNew={() => go('#new')}
+          onNew={startNewDoc}
           onUpload={uploadDocument}
+          uploading={uploading}
           onPlannerNew={() => go('#planner-new')}
           onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
         />
@@ -1600,22 +1919,12 @@ function App() {
             else go(`#planner-${tab}`, {skipTransition: true});
           }}
           onSaveDocToLibrary={(docData) => {
-            const now = new Date().toISOString();
-            const doc = {
-              id: docData.id || newLocalId(),
-              title: docData.title || 'Acta de sesión',
-              description: docData.description || '',
-              body: docData.body || '',
-              origin: 'Acta de Bardo Planner',
-              createdAt: now,
-              updatedAt: now,
-              createdByName: docData.createdByName || currentEditorName(),
-              updatedByName: docData.updatedByName || currentEditorName(),
-              builtin: false,
-              stress: false,
-            };
+            // The acta id is stable per meeting run: saving again updates it.
+            const id = docData.id || newLocalId();
+            const existing = (storeRef.current?.docs || []).find((d) => d.id === id) || null;
+            const doc = buildMinutesDoc({...docData, id}, {existing, editorName: currentEditorName()});
             commitStore((prev) => ({...prev, docs: [doc, ...(prev.docs || []).filter((d) => d.id !== doc.id)]}));
-            showToast('Minuta guardada en Bardo Docs');
+            showToast(existing ? 'Acta actualizada en Documentos' : 'Acta guardada en Documentos');
             go(`#doc-${doc.id}`);
           }}
         />
@@ -1623,7 +1932,6 @@ function App() {
       {route.type === 'library' && (
         <Library
           docs={filteredDocs}
-          total={displayedDocs.length}
           query={query}
           setQuery={setQuery}
           continueDoc={continueDoc}
@@ -1631,13 +1939,13 @@ function App() {
           draft={draft}
           onContinueDraft={() => go('#new')}
           onOpen={openDoc}
-          onNew={() => go('#new')}
+          onNew={startNewDoc}
           onUpload={uploadDocument}
           onDocAction={docAction}
           activeTab={libraryTab}
           onTabChange={setLibraryTab}
           activeCount={activeDocs.length}
-          archivedCount={archivedDocs.length}
+          archivedCount={archivedCount}
         />
       )}
 
@@ -1645,25 +1953,38 @@ function App() {
         <Reader
           doc={currentDoc}
           skipTransition={skipNextRouteAnimation.current}
-          onBack={() => go('#docs', {restore: scrollMemory.current.get('library') || 0})}
-          onEdit={() => go(`#edit-${currentDoc.id}`, {preserveBody: true})}
-          onAction={docAction}
-          onChecklistChange={body => updateDoc(currentDoc.id, {body})}
+          onChecklistChange={(body, op) => toggleChecklistInReader(currentDoc.id, body, op)}
+          showSharePrompt={sharePromptDocId === currentDoc.id && Boolean(window.__bardoPublishDocument)}
+          onShare={() => publishDoc(currentDoc.id)}
+          onDismissShare={() => setSharePromptDocId(null)}
+          onRestore={() => restoreDoc(currentDoc.id)}
+          onRemoveFailedImport={() => docAction('remove-failed-import', currentDoc)}
+          onDownloadOriginal={() => downloadOriginal(currentDoc.id)}
         />
       )}
 
       {showEditor && (
         <BardoEditor
-          key={route.type === 'new' ? 'new' : `${editorDocId}:${editorRevision}`}
+          key={route.type === 'new' ? `new:${newDocNonce}` : `${editorDocId}:${editorRevision}`}
           doc={route.type === 'new' ? null : currentDoc}
           isNew={route.type === 'new'}
-          readOnly={route.type === 'edit' && currentDoc?.importStatus === 'pending'}
+          readOnly={route.type === 'edit' && isImportBlocked(currentDoc)}
+          readOnlyMessage={editorReadOnlyMessage}
           remoteSync={isProduction}
           themeModeMenu={ThemeModeMenu}
           onBack={() => (route.type === 'new' || !editorDocId
             ? go('#docs')
             : go(`#doc-${editorDocId}`, {preserveBody: true, skipTransition: true}))}
           onFinish={(snapshot) => {
+            if (route.type === 'new' && isEmptyDocSnapshot(snapshot)) {
+              // Nada escrito: no se crea un documento vacío "Sin título".
+              try {
+                localStorage.removeItem(draftKey());
+              } catch {}
+              setDraft(null);
+              go('#docs');
+              return;
+            }
             if (route.type === 'new') {
               const doc = {
                 id: newLocalId(),
@@ -1679,10 +2000,11 @@ function App() {
               };
               commitStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
               try {
-                localStorage.removeItem(DRAFT_KEY);
+                localStorage.removeItem(draftKey());
               } catch {}
               setDraft(null);
               showToast('Documento creado');
+              setSharePromptDocId(doc.id);
               go(`#doc-${doc.id}`);
             } else if (editorDocId) {
               saveEditorSnapshot(editorDocId, editorRevision, snapshot);
@@ -1699,7 +2021,7 @@ function App() {
             else if (editorDocId) journalEditorSnapshot(editorDocId, editorRevision, snapshot);
           }}
           onOpenLink={(api) => {
-            setLinkValue('');
+            setLinkValue(api?.initialUrl || '');
             setModal({type: 'link', api});
           }}
         />
@@ -1707,9 +2029,11 @@ function App() {
 
       {route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
         <div className="missing-state flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-base text-muted-foreground mb-4">Este documento ya no existe.</p>
+          <p className="text-base text-muted-foreground mb-4">
+            Este documento ya no existe o no está compartido en este canal.
+          </p>
           <Button variant="secondary" onClick={() => go('#docs')}>
-            Volver a Docs
+            Volver a Documentos
           </Button>
         </div>
       )}
@@ -1724,11 +2048,22 @@ function App() {
 
       <InsertLinkModal
         isOpen={modal?.type === 'link'}
+        isEditing={Boolean(modal?.type === 'link' && modal.api?.isEditing)}
         linkValue={linkValue}
         setLinkValue={setLinkValue}
         onApply={() => {
           modal?.api?.apply?.(linkValue);
           setModal(null);
+        }}
+        onRemove={() => {
+          modal?.api?.remove?.();
+          setModal(null);
+        }}
+        onOpenLink={() => {
+          const raw = linkValue.trim();
+          void openExternalUrl(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).then(opened => {
+            if (!opened) showToast('No se pudo abrir el enlace.');
+          });
         }}
         onCancel={() => {
           modal?.api?.cancel?.();
@@ -1736,41 +2071,35 @@ function App() {
         }}
       />
 
-      <MarkdownPreviewModal
-        isOpen={modal?.type === 'markdown-preview'}
-        doc={modal?.type === 'markdown-preview' ? docsById.get(modal.docId) : null}
-        onCopy={async markdown => {
-          try {
-            await copyText(markdown);
-            showToast('Markdown copiado al portapapeles');
-          } catch {
-            showToast('No se pudo copiar el Markdown');
-          }
+      <TextPreviewModal
+        isOpen={modal?.type === 'text-preview'}
+        doc={modal?.type === 'text-preview' ? docsById.get(modal.docId) : null}
+        onCopy={async text => {
+          const copied = await copyTextToClipboard(text);
+          showToast(copied ? 'Texto copiado' : 'No se pudo copiar. Mantén presionado el texto para seleccionarlo y copiarlo.');
         }}
         onCancel={() => setModal(null)}
       />
 
-      <HtmlPreviewModal
-        isOpen={modal?.type === 'html-preview'}
-        doc={modal?.type === 'html-preview' ? docsById.get(modal.docId) : null}
-        onCopy={async html => {
-          try {
-            await copyText(html);
-            showToast('HTML copiado al portapapeles');
-          } catch {
-            showToast('No se pudo copiar el HTML');
-          }
-        }}
+      <ShareConfirmDialog
+        isOpen={modal?.type === 'share'}
+        doc={modal?.type === 'share' ? docsById.get(modal.docId) : null}
+        onConfirm={publishDoc}
         onCancel={() => setModal(null)}
       />
 
-      <PdfPreviewModal
-        isOpen={modal?.type === 'pdf-preview'}
-        file={modal?.type === 'pdf-preview' ? modal.file : null}
-        onCancel={() => {
-          if (modal?.type === 'pdf-preview') URL.revokeObjectURL(modal.file?.url);
-          setModal(null);
-        }}
+      <NewDocChoiceDialog
+        isOpen={modal?.type === 'new-doc-choice'}
+        draft={modal?.type === 'new-doc-choice' ? modal.draft : null}
+        onContinue={continueDraft}
+        onStartNew={() => discardDraftAndStart(modal?.title || '')}
+        onCancel={() => setModal(null)}
+      />
+
+      <LaunchNoticeDialog
+        notice={launchNotice}
+        onRestore={restoreFromNotice}
+        onClose={() => setLaunchNotice(null)}
       />
 
       <Toaster />

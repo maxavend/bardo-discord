@@ -7,7 +7,6 @@ import '@fontsource-variable/inter';
 import './styles.css';
 import './editor-focus.css';
 import './keyboard-sticky.css';
-import './production-document-only.css';
 import './keyboard-sticky.js';
 
 const BOOT_PERSONALITY_MESSAGES = [

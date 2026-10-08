@@ -114,12 +114,21 @@ export function Calendar({
           const iso = formatIso(day)
           const isSelected = selected === iso
           const isToday = todayLocalIso() === iso
+          const dayLabel = new Date(year, month, day).toLocaleDateString("es-CL", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
 
           return (
             <button
               key={iso}
               type="button"
               onClick={() => onSelect?.(iso)}
+              aria-label={dayLabel}
+              aria-pressed={isSelected}
+              aria-current={isToday ? "date" : undefined}
               className={cn(
                 "size-7 rounded-md flex items-center justify-center text-xs transition-colors cursor-pointer font-medium",
                 isSelected
@@ -142,7 +151,7 @@ export function Calendar({
           onClick={handleClear}
           className="text-muted-foreground hover:text-foreground font-medium hover:underline cursor-pointer"
         >
-          Borrar
+          Quitar fecha
         </button>
         <button
           type="button"

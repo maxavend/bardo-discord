@@ -9,9 +9,10 @@ import {
   getActiveBlock,
   getActivePoint,
   getPointCounts,
-  getPointStatus,
   getRecordingContextKey,
+  getNextUnhandledPoint,
 } from './session-runner.js';
+import {isBreakBlock} from './time-engine.js';
 
 export const ASSISTANT_EVENT = {
   SESSION_UPCOMING: 'SESSION_UPCOMING',
@@ -139,23 +140,78 @@ export function evaluateSessionAssistant(plannerState, sessionState, now = Date.
   };
 }
 
-function getNextAction(plannerState, sessionState, activeBlock, activePoint) {
+/**
+ * The single primary live action, mirroring exactly what `advanceLiveSession`
+ * will do:
+ * - "Siguiente tema" while the active bloque still has pending temas,
+ * - "Siguiente bloque" when the bloque is done (the active tema is marked as
+ *   tratado, nothing pending is skipped silently),
+ * - "Terminar reunión" on the last bloque (callers must confirm).
+ * With no active bloque (corrupted/missing pointer) it offers to continue at
+ * the first pending bloque, or to end the meeting: there is never a dead end.
+ */
+export function getLivePrimaryAction(plannerState, sessionState) {
   const blocks = plannerState?.blocks || [];
-  const blockIndex = activeBlock ? blocks.findIndex((block) => block.id === activeBlock.id) : -1;
-  const points = activeBlock?.subpoints || [];
-  const pointIndex = activePoint ? points.findIndex((point) => point.id === activePoint.id) : -1;
+  const activeBlock = getActiveBlock(plannerState, sessionState);
+  const activePoint = getActivePoint(plannerState, sessionState);
 
-  if (activePoint) {
-    const nextPoint = points.slice(pointIndex + 1).find((point) => {
-      const status = getPointStatus(sessionState, point.id);
-      return status !== POINT_STATUS.DONE && status !== POINT_STATUS.SKIPPED;
-    });
-    if (nextPoint) return {key: 'next', label: 'Siguiente punto', target: 'point', nextPoint};
+  if (!activeBlock) {
+    const completed = new Set(sessionState?.completedBlockIds || []);
+    const skipped = new Set(sessionState?.skippedBlockIds || []);
+    const pendingBlock = blocks.find((block) => !completed.has(block.id) && !skipped.has(block.id));
+    if (pendingBlock) return {key: 'next', label: 'Ir al bloque pendiente', target: 'block', nextBlock: pendingBlock};
+    return {key: 'finish', label: 'Terminar reunión', target: 'session'};
   }
 
+  const pointStatuses = {...(sessionState?.pointStatuses || {})};
+  if (activePoint) pointStatuses[activePoint.id] = POINT_STATUS.DONE;
+  const nextPoint = getNextUnhandledPoint(activeBlock, activePoint?.id || null, pointStatuses);
+  if (nextPoint) return {key: 'next', label: 'Siguiente tema', target: 'point', nextPoint};
+
+  const blockIndex = blocks.findIndex((block) => block.id === activeBlock.id);
   const nextBlock = blockIndex >= 0 ? blocks[blockIndex + 1] : null;
-  if (nextBlock) return {key: 'next', label: 'Siguiente bloque', target: 'block', nextBlock};
-  return {key: 'finish', label: 'Finalizar sesión', target: 'session'};
+  if (nextBlock) {
+    const label = isBreakBlock(activeBlock) ? 'Terminar descanso' : 'Siguiente bloque';
+    return {key: 'next', label, target: 'block', nextBlock};
+  }
+  return {key: 'finish', label: 'Terminar reunión', target: 'session'};
+}
+
+function getNextAction(plannerState, sessionState) {
+  return getLivePrimaryAction(plannerState, sessionState);
+}
+
+/**
+ * Clock shown in the live dock for the active bloque. Frozen while paused
+ * (elapsed values use `pausedAt`).
+ * - remaining: "Quedan 4:12"
+ * - overtime:  "+2:30" (isWarning)
+ * - unlimited: "Sin límite · 12:30"
+ * - elapsed:   no active bloque → meeting elapsed time
+ */
+export function getLiveBlockClock(plannerState, sessionState, now = Date.now()) {
+  const activeBlock = getActiveBlock(plannerState, sessionState);
+  const isPaused = sessionState?.status === SESSION_STATUS.PAUSED;
+  if (!activeBlock) {
+    const elapsed = getElapsedSessionMs(sessionState, now);
+    return {mode: 'elapsed', ms: elapsed, label: formatMsToClock(elapsed), isWarning: false, isPaused};
+  }
+  const extension = sessionState?.blockExtensions?.[activeBlock.id];
+  if (extension?.isUnlimited) {
+    const elapsed = getElapsedActiveBlockMs(sessionState, now);
+    return {mode: 'unlimited', ms: elapsed, label: `Sin límite · ${formatMsToClock(elapsed)}`, isWarning: false, isPaused};
+  }
+  const remaining = getRemainingActiveBlockMs(activeBlock, sessionState, now);
+  if (remaining >= 0) {
+    return {
+      mode: 'remaining',
+      ms: remaining,
+      label: `Quedan ${formatMsToClock(remaining)}`,
+      isWarning: remaining <= 60 * 1000,
+      isPaused,
+    };
+  }
+  return {mode: 'overtime', ms: -remaining, label: `+${formatMsToClock(-remaining)}`, isWarning: true, isPaused};
 }
 
 export function getAssistantContextDetails(plannerState, sessionState, now = Date.now()) {
@@ -166,14 +222,14 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
   const activeBlockIndex = activeBlock ? blocks.findIndex((block) => block.id === activeBlock.id) : -1;
   const points = activeBlock?.subpoints || [];
   const activePointIndex = activePoint ? points.findIndex((point) => point.id === activePoint.id) : -1;
-  const nextAction = getNextAction(plannerState, sessionState, activeBlock, activePoint);
+  const nextAction = getNextAction(plannerState, sessionState);
   const pointCounts = getPointCounts(plannerState, sessionState);
 
   const blockProgressLabel = activeBlockIndex >= 0
     ? `Bloque ${activeBlockIndex + 1} de ${blocks.length}`
-    : 'Sesión en vivo';
+    : 'Reunión en curso';
   const pointProgressLabel = activePointIndex >= 0
-    ? `Punto ${activePointIndex + 1} de ${points.length}`
+    ? `Tema ${activePointIndex + 1} de ${points.length}`
     : null;
 
   const isPaused = sessionState?.status === SESSION_STATUS.PAUSED;
@@ -205,7 +261,13 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
     return !recording.pointId && recording.blockId === activeBlock?.id;
   });
   const isPromptDismissed = Boolean(recordingContextKey && sessionState?.recordingPromptsDismissed?.[recordingContextKey]);
-  const showInitialRecordingPrompt = Boolean(activeBlock && !hasRecording && !isPromptDismissed && !isPaused);
+  // Asked once per meeting: only while nothing has been recorded yet and the
+  // group has not answered "Ahora no" for any tema/bloque.
+  const anyPromptDismissed = Object.keys(sessionState?.recordingPromptsDismissed || {}).length > 0;
+  const anyRecording = (sessionState?.recordings || []).length > 0;
+  const showInitialRecordingPrompt = Boolean(
+    activeBlock && !isBreakBlock(activeBlock) && !anyRecording && !anyPromptDismissed && !isPromptDismissed && !isPaused
+  );
 
   let stateVariant = 'running';
   let contextualHelperText = `${activeBlock?.durationMinutes || 0} min planificados para el bloque`;
@@ -214,13 +276,13 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
 
   if (isPaused) {
     stateVariant = 'paused';
-    contextualHelperText = 'El tiempo está pausado. La grabación no se reanudará automáticamente.';
-    primaryAction = {label: 'Reanudar sesión', key: 'resume', variant: 'primary'};
+    contextualHelperText = 'La reunión está en pausa: el tiempo está detenido.';
+    primaryAction = {label: 'Reanudar', key: 'resume', variant: 'primary'};
     secondaryAction = {...nextAction, variant: 'ghost'};
   } else if (isExpired) {
     stateVariant = 'expired';
     contextualHelperText = activePoint
-      ? `Tiempo del bloque cumplido. El punto “${activePoint.title}” sigue activo.`
+      ? `Tiempo del bloque cumplido. El tema “${activePoint.title}” sigue activo.`
       : 'Tiempo del bloque cumplido. Puedes extenderlo o continuar.';
   } else if (is5MinWarning) {
     stateVariant = 'warning';
@@ -245,7 +307,7 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
     isPaused,
     isExtended,
     stateVariant,
-    stateTitle: activePoint?.title || activeBlock?.title || 'Sesión en vivo',
+    stateTitle: activePoint?.title || activeBlock?.title || 'Reunión en curso',
     blockTitle: activeBlock?.title || '',
     activeBlockDescription: activeBlock?.introDesc || '',
     activePointDescription: activePoint?.description || activePoint?.desc || '',
@@ -291,14 +353,14 @@ export function computeSessionRecap(plannerState, sessionState) {
   const decisions = sessionState?.decisions || [];
   const tasks = sessionState?.tasks || [];
 
-  const statusLabel = isInterrupted ? 'Interrumpida' : 'Completada';
+  const statusLabel = isInterrupted ? 'Interrumpida' : 'Terminada';
   const statusBadgeColor = isInterrupted ? 'warning' : 'success';
   const recapTitle = isInterrupted
-    ? `Sesión interrumpida · ${plannerState?.title || 'Sesión'}`
-    : `Sesión finalizada · ${plannerState?.title || 'Sesión'}`;
+    ? `Reunión interrumpida · ${plannerState?.title || 'Reunión'}`
+    : `Reunión terminada · ${plannerState?.title || 'Reunión'}`;
   const recapDescription = isInterrupted
-    ? 'El progreso se conservó exactamente en el bloque y punto donde se interrumpió.'
-    : 'Resumen de tiempo, bloques, puntos tratados y artefactos de la sesión.';
+    ? 'El avance se conservó exactamente en el bloque y tema donde quedó.'
+    : 'Resumen del tiempo, los bloques, los temas tratados, las grabaciones y los acuerdos.';
 
   const groupedRecordings = blocks.map((block) => {
     const blockRecordings = recordings.filter((recording) => recording.blockId === block.id);
@@ -311,7 +373,7 @@ export function computeSessionRecap(plannerState, sessionState) {
   }).filter((group) => group.pointGroups.length > 0 || group.blockFallbackRecordings.length > 0);
 
   return {
-    title: plannerState?.title || 'Sesión',
+    title: plannerState?.title || 'Reunión',
     date: plannerState?.date || '',
     host: plannerState?.host || '',
     status: sessionState?.status || SESSION_STATUS.COMPLETED,
@@ -332,7 +394,7 @@ export function computeSessionRecap(plannerState, sessionState) {
     totalPointsCount: pointCounts.total,
     completedPointsCount: pointCounts.done,
     skippedPointsCount: pointCounts.skipped,
-    pointsProgressSubtext: `${pointCounts.done} de ${pointCounts.total} puntos tratados`,
+    pointsProgressSubtext: `${pointCounts.done} de ${pointCounts.total} temas tratados`,
     extensionsCount,
     recordings,
     groupedRecordings,

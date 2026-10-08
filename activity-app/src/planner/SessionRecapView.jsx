@@ -7,6 +7,7 @@ import {
   Clock,
   Mic,
   RotateCw,
+  RotateCcw,
 } from 'lucide-react';
 import {
   PlayIcon,
@@ -18,10 +19,37 @@ import { generateMinutesMarkdown } from './planner-store.js';
 import { todayLocalIso } from './date-utils.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
 
+/** Clipboard write with a fallback for webviews where the async API is blocked. */
+async function copyTextWithFallback(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall back below
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function SessionRecapView({
   plannerState,
   sessionState,
   onResumeSession,
+  onReopenSession,
   _onViewMinutes,
   onNewSession,
   onRenameRecording,
@@ -30,14 +58,17 @@ export function SessionRecapView({
 }) {
   const recap = computeSessionRecap(plannerState, sessionState);
   const isInterrupted = recap.isInterrupted;
+  const canReopen = recap.isCompleted && (plannerState?.blocks || []).length > 0;
 
   const handleSaveDoc = () => {
     if (!onSaveDocToLibrary) return;
     const md = generateMinutesMarkdown(plannerState, sessionState);
     onSaveDocToLibrary({
-      id: `minutes-${Date.now().toString(36)}`,
+      // Stable per meeting so saving again updates the same acta.
+      id: `minutes-${plannerState.id || plannerState.eventId || Date.now().toString(36)}`,
+      plannerSessionId: plannerState.id || null,
       title: `Acta: ${plannerState.title || 'Reunión'}`,
-      description: `Acta y acuerdos de la sesión del ${plannerState.date || todayLocalIso()}`,
+      description: `Acta y acuerdos de la reunión del ${plannerState.date || todayLocalIso()}`,
       body: md,
     });
   };
@@ -52,20 +83,16 @@ export function SessionRecapView({
     if (recap.skippedPointsCount > 0) text += ` · ${recap.skippedPointsCount} saltados`;
     text += '\n';
     text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${recap.totalRecordedMinutes} min de audio)\n`;
-    text += `📝 **Decisiones:** ${recap.decisions.length}\n`;
+    text += `📝 **Acuerdos:** ${recap.decisions.length}\n`;
     if (recap.decisions.length > 0) {
-      text += '\n**Decisiones:**\n';
+      text += '\n**Acuerdos:**\n';
       recap.decisions.forEach((decision) => {
         const ownerTag = decision.owner ? ` (@${decision.owner.replace(/^@/, '')})` : '';
         text += `- ${decision.content}${ownerTag}\n`;
       });
     }
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('Resumen copiado');
-    } catch {
-      toast('No se pudo copiar el resumen');
-    }
+    const copied = await copyTextWithFallback(text);
+    toast(copied ? 'Resumen copiado' : 'No se pudo copiar el resumen. Intenta de nuevo.');
   };
 
   const badgeVariant = isInterrupted
@@ -91,6 +118,11 @@ export function SessionRecapView({
               {isInterrupted && onResumeSession && (
                 <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3">
                   <PlayIcon className="size-3.5" /> Reanudar reunión
+                </Button>
+              )}
+              {canReopen && onReopenSession && (
+                <Button variant="secondary" size="sm" onClick={onReopenSession} className="h-8 px-3" title="Vuelve a la reunión donde quedó; el tiempo cerrada no se cuenta">
+                  <RotateCcw className="size-3.5" /> Reabrir reunión
                 </Button>
               )}
               <Button variant="secondary" size="sm" onClick={handleCopyRecap} className="h-8 px-3">
@@ -130,7 +162,7 @@ export function SessionRecapView({
                 <span className="text-[11px] text-muted-foreground">{recap.totalRecordedMinutes} min de audio</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Decisiones</span>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Acuerdos</span>
                 <strong className="text-base text-foreground">{recap.decisions.length}</strong>
                 <span className="text-[11px] text-muted-foreground">registradas</span>
               </div>
@@ -185,7 +217,7 @@ export function SessionRecapView({
           <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
             <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
               <CheckCircle2 className="size-3.5 text-primary" />
-              Decisiones y acuerdos ({recap.decisions.length})
+              Acuerdos ({recap.decisions.length})
             </h2>
             {recap.decisions.length > 0 ? (
               <div className="flex flex-col gap-2">
@@ -213,7 +245,7 @@ export function SessionRecapView({
                 })}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta sesión.</p>
+              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta reunión.</p>
             )}
           </Card>
         </div>

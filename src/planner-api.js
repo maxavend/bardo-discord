@@ -40,6 +40,7 @@ function apiError(status, error, message, extra = {}) {
 }
 
 const notFound = () => apiError(404, 'not_found', 'No se encontró la reunión en este canal.');
+const methodNotAllowed = () => apiError(405, 'method_not_allowed', 'Esta acción no está disponible.');
 
 function parsePlannerRoute(pathname) {
   if (pathname === `${PLANNER_PREFIX}/sessions` || pathname === `${PLANNER_PREFIX}/sessions/`) {
@@ -141,7 +142,7 @@ async function handleCollection(request, url, env, session) {
     return json({ sessions });
   }
 
-  if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (request.method !== 'POST') return methodNotAllowed();
 
   const body = await readJsonBody(request);
   if (body.error) return body.error;
@@ -210,7 +211,7 @@ async function handleLive(request, env, session, sessionId) {
   }
 
   if (request.method !== 'POST' && request.method !== 'PATCH') {
-    return new Response('Method not allowed', { status: 405 });
+    return methodNotAllowed();
   }
 
   const body = await readJsonBody(request);
@@ -253,13 +254,13 @@ async function handleSingle(request, env, session, route) {
   if (!existing) return notFound();
 
   if (route.action === 'restore') {
-    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+    if (request.method !== 'POST') return methodNotAllowed();
     await restorePlannerSession(env.DB, sessionId, session.guildId, session.channelId, session.userId);
     return json({ ok: true, restored: true, id: sessionId });
   }
 
   if (route.action === 'permanent') {
-    if (request.method !== 'DELETE') return new Response('Method not allowed', { status: 405 });
+    if (request.method !== 'DELETE') return methodNotAllowed();
     const deleted = await deletePlannerSessionPermanently(env.DB, sessionId, session.guildId, session.channelId);
     if (!deleted) return notFound();
     return json({ ok: true, deleted: true, id: sessionId });
@@ -305,7 +306,7 @@ async function handleSingle(request, env, session, route) {
     return json({ ok: true, archived: true, id: sessionId });
   }
 
-  return new Response('Method not allowed', { status: 405 });
+  return methodNotAllowed();
 }
 
 async function routePlannerApi(request, url, env) {
@@ -333,7 +334,7 @@ async function routePlannerApi(request, url, env) {
     const context = await getUserChannelContext(env, session.guildId, session.userId, session.channelId);
     return json(context);
   }
-  if (isContextRoute) return new Response('Method not allowed', { status: 405 });
+  if (isContextRoute) return methodNotAllowed();
 
   if (!env.DB) {
     return apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible.');

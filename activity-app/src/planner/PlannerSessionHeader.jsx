@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,11 +32,11 @@ import {
   PlusIcon,
   PlayIcon,
   CircleCheckIcon as CheckIcon,
-  DeleteIcon as TrashIcon,
 } from '@/components/ui/animated-icons';
 import { toast } from '@/lib/toast';
 import { SESSION_STATUS } from './session-runner.js';
 import { durationUntil, formatShortDuration, getPlannedSchedule } from './time-engine.js';
+import { formatMeetingDuration, MEETING_COPY } from './copy-tokens.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
@@ -54,7 +55,7 @@ function parseMentions(mentionsStr = '') {
 }
 
 function formatDisplayDate(dateStr) {
-  if (!dateStr) return '01/09/2026';
+  if (!dateStr) return 'Sin fecha';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -90,7 +91,7 @@ export function PlannerSessionHeader({
   onGoHome: _onGoHome,
 }) {
   const {
-    title = 'Sesión sin título',
+    title = 'Reunión sin título',
     description = '',
     date = '',
     startTime = '17:45',
@@ -114,13 +115,17 @@ export function PlannerSessionHeader({
 
   const { members } = getAllDiscordEntities();
   const selectedKeys = new Set(parseMentions(mentions));
+  const hasBlocks = (blocks || []).length > 0;
+  const fieldId = useId();
+  const startHintId = `${fieldId}-start-hint`;
+  const [isDateOpen, setIsDateOpen] = useState(false);
 
   const formatHeaderDate = (isoDate) => {
     if (!isoDate) return 'Fecha por definir';
     try {
       const [y, m, d] = isoDate.split('-').map(Number);
       const dateObj = new Date(y, m - 1, d);
-      return new Intl.DateTimeFormat('es-ES', {
+      return new Intl.DateTimeFormat('es-CL', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
@@ -190,12 +195,13 @@ export function PlannerSessionHeader({
               </Button>
             )}
 
+            {/* On phones the floating button (PlannerModule) is the single primary action. */}
             {isEditing ? (
               <Button
                 variant="default"
                 size="sm"
                 onClick={onToggleEditMode}
-                className="font-medium h-8 px-3.5"
+                className="hidden sm:inline-flex font-medium h-8 px-3.5"
               >
                 <CheckIcon className="size-3.5" /> <span>Listo</span>
               </Button>
@@ -204,25 +210,39 @@ export function PlannerSessionHeader({
                 variant="default"
                 size="sm"
                 onClick={onResumeSession}
-                className="font-medium h-8 px-3.5"
+                className="hidden sm:inline-flex font-medium h-8 px-3.5"
               >
                 <PlayIcon className="size-3.5" /> <span>Reanudar</span>
               </Button>
             ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={onStartSession}
-                className="font-medium h-8 px-3.5"
-              >
-                <PlayIcon className="size-3.5" /> <span>Iniciar reunión</span>
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onToggleEditMode}
+                  aria-label="Editar reunión"
+                  className="font-medium h-8 px-2.5 sm:px-3"
+                >
+                  <Pencil className="size-3.5" /> <span className="hidden sm:inline">Editar</span>
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={onStartSession}
+                  disabled={!hasBlocks}
+                  aria-describedby={!hasBlocks ? startHintId : undefined}
+                  title={!hasBlocks ? MEETING_COPY.needsBlock : undefined}
+                  className="hidden sm:inline-flex font-medium h-8 px-3.5"
+                >
+                  <PlayIcon className="size-3.5" /> <span>{MEETING_COPY.startMeeting}</span>
+                </Button>
+              </>
             ) : isCompleted ? (
               <Button
                 variant="default"
                 size="sm"
                 onClick={() => onTabChange('recap')}
-                className="font-medium h-8 px-3.5"
+                className="hidden sm:inline-flex font-medium h-8 px-3.5"
               >
                 <FileTextIcon className="size-3.5" /> <span>Ver resumen</span>
               </Button>
@@ -269,22 +289,15 @@ export function PlannerSessionHeader({
                     <span>Nueva reunión</span>
                   </DropdownMenuItem>
                   {onDeleteSession && (
-                    <>
-                      <DropdownMenuItem
-                        onClick={() => onDeleteSession(state, 'archive')}
-                        className="cursor-pointer"
-                      >
-                        <Archive className="size-4 text-muted-foreground" />
-                        <span>Archivar reunión</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => onDeleteSession(state, 'delete')}
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                      >
-                        <TrashIcon className="size-4" />
-                        <span>Eliminar reunión</span>
-                      </DropdownMenuItem>
-                    </>
+                    // Archiving is the only removal from an open meeting: it can be
+                    // restored (or deleted for good) from "Archivadas".
+                    <DropdownMenuItem
+                      onClick={() => onDeleteSession(state, 'archive')}
+                      className="cursor-pointer"
+                    >
+                      <Archive className="size-4 text-muted-foreground" />
+                      <span>Archivar reunión</span>
+                    </DropdownMenuItem>
                   )}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
@@ -296,17 +309,18 @@ export function PlannerSessionHeader({
         {isEditing ? (
           <div className="flex flex-col gap-3 mt-4">
             {/* Fila 1: Fecha, Hora de inicio, Término, Duración */}
-            <div className="grid grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
+            <div className="grid grid-cols-2 sm:grid-cols-[1.2fr_1fr_1fr_0.6fr] gap-3 items-end">
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Fecha</label>
-                <Popover>
+                <label htmlFor={`${fieldId}-date`} className="text-xs font-semibold text-foreground mb-1.5 block">Fecha</label>
+                <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
                   <PopoverTrigger
                     render={
                       <button
+                        id={`${fieldId}-date`}
                         type="button"
                         className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between text-xs font-medium text-foreground transition-colors cursor-pointer"
                       >
-                        <span>{formatDisplayDate(date)}</span>
+                        <span className={date ? '' : 'text-muted-foreground'}>{formatDisplayDate(date)}</span>
                         <Calendar className="size-4 text-foreground/80 shrink-0" />
                       </button>
                     }
@@ -314,23 +328,28 @@ export function PlannerSessionHeader({
                   <PopoverContent align="start" className="w-auto p-0 border-0 bg-transparent shadow-none">
                     <CalendarComponent
                       selected={date}
-                      onSelect={(newDate) => onUpdateHeaderField?.('date', newDate)}
+                      onSelect={(newDate) => {
+                        onUpdateHeaderField?.('date', newDate);
+                        setIsDateOpen(false);
+                      }}
                     />
                   </PopoverContent>
                 </Popover>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
+                <label htmlFor={`${fieldId}-start`} className="text-xs font-semibold text-foreground mb-1.5 block">Hora de inicio</label>
                 <TimePicker
+                  id={`${fieldId}-start`}
                   value={startTime || '10:00'}
                   onChange={(val) => onUpdateHeaderField?.('startTime', val)}
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
+                <label htmlFor={`${fieldId}-end`} className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
                 <TimePicker
+                  id={`${fieldId}-end`}
                   value={schedule.plannedEnd}
                   onChange={(newEnd) => {
                     const minutes = durationUntil(startTime, newEnd);
@@ -345,8 +364,8 @@ export function PlannerSessionHeader({
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Duración</label>
-                <div className="w-full h-9 px-1 flex items-center justify-center text-xs font-medium text-foreground">
+                <span id={`${fieldId}-duration`} className="text-xs font-semibold text-foreground mb-1.5 block">Duración</span>
+                <div aria-labelledby={`${fieldId}-duration`} className="w-full h-9 px-1 flex items-center justify-center text-xs font-medium text-foreground">
                   {formatShortDuration(totalPlannedMinutes)}
                 </div>
               </div>
@@ -365,14 +384,15 @@ export function PlannerSessionHeader({
             )}
 
             {/* Fila 2: Facilita (1fr), Participan (3fr) */}
-            <div className="grid grid-cols-[1fr_3fr] gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_3fr] gap-3 items-end">
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
+                <label htmlFor={`${fieldId}-host`} className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
                 <SinglePersonPicker
                   value={host}
                   onChange={(name) => onUpdateHeaderField?.('host', name)}
                   renderTrigger={() => (
                       <button
+                        id={`${fieldId}-host`}
                         type="button"
                         className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0"
                       >
@@ -411,11 +431,12 @@ export function PlannerSessionHeader({
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-foreground mb-1.5 block">Participan</label>
+                <label htmlFor={`${fieldId}-people`} className="text-xs font-semibold text-foreground mb-1.5 block">Participan</label>
                 <Popover>
                   <PopoverTrigger
                     render={
                       <button
+                        id={`${fieldId}-people`}
                         type="button"
                         className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-3 text-xs text-foreground transition-colors cursor-pointer min-w-0"
                       >
@@ -485,12 +506,12 @@ export function PlannerSessionHeader({
               </div>
 
               <span className="text-xs text-muted-foreground select-none font-medium">
-                · {totalPlannedMinutes} min
+                · {formatMeetingDuration(totalPlannedMinutes)}
               </span>
 
               {host && (
                 <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground font-normal">
-                  <span>Organiza:</span>
+                  <span>Facilita:</span>
                   <Avatar
                     size="xs"
                     className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
@@ -547,6 +568,12 @@ export function PlannerSessionHeader({
                 </div>
               )}
             </div>
+        )}
+
+        {!isEditing && !hasBlocks && !isRunning && !isPaused && !isCompleted && !isInterrupted && (
+          <p id={startHintId} role="status" className="mt-2 text-xs text-muted-foreground">
+            {MEETING_COPY.needsBlock} para poder iniciar la reunión.
+          </p>
         )}
       </div>
     </header>

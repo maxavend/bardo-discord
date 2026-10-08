@@ -340,14 +340,21 @@ export function setPointStatus(sessionState, pointId, status) {
   };
 }
 
-function getNextUnhandledPoint(block, currentPointId, pointStatuses) {
+/**
+ * Next tema of `block` that is still pending after `currentPointId`. If none
+ * remains after it, earlier pending temas (e.g. un-checked during the
+ * meeting) are offered before leaving the bloque, so no tema is skipped
+ * silently.
+ */
+export function getNextUnhandledPoint(block, currentPointId, pointStatuses) {
   const points = getBlockPoints(block);
   const currentIndex = points.findIndex((point) => point.id === currentPointId);
   const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
-  return points.slice(startIndex).find((point) => {
+  const isPending = (point) => {
     const status = pointStatuses?.[point.id];
-    return status !== POINT_STATUS.DONE && status !== POINT_STATUS.SKIPPED;
-  }) || null;
+    return point.id !== currentPointId && status !== POINT_STATUS.DONE && status !== POINT_STATUS.SKIPPED;
+  };
+  return points.slice(startIndex).find(isPending) || points.slice(0, Math.max(0, startIndex)).find(isPending) || null;
 }
 
 function getCurrentPauseDuration(sessionState, now) {
@@ -557,7 +564,42 @@ export function resumeInterruptedSession(sessionState, now = Date.now()) {
     sessionEndedAt: null,
     accumulatedPausedMs: (sessionState.accumulatedPausedMs || 0) + interruptedDuration,
     activeBlockAccumulatedPausedMs: (sessionState.activeBlockAccumulatedPausedMs || 0) + interruptedDuration,
+    activePointAccumulatedPausedMs: (sessionState.activePointAccumulatedPausedMs || 0) + interruptedDuration,
   };
+}
+
+/**
+ * Reopens a completed (or interrupted) meeting. The time it stayed closed is
+ * counted as paused so the effective duration is not inflated. It resumes at
+ * the first bloque that is neither completed nor skipped; if every bloque was
+ * handled it reopens the last one so the group can keep adding acuerdos.
+ */
+export function reopenLiveSession(plannerState, sessionState, now = Date.now()) {
+  if (!sessionState) return sessionState;
+  if (sessionState.status !== SESSION_STATUS.COMPLETED && sessionState.status !== SESSION_STATUS.INTERRUPTED) {
+    return sessionState;
+  }
+  const blocks = plannerState?.blocks || [];
+  if (blocks.length === 0) return sessionState;
+  const closedDuration = sessionState.sessionEndedAt ? Math.max(0, now - sessionState.sessionEndedAt) : 0;
+  const base = {
+    ...sessionState,
+    status: SESSION_STATUS.RUNNING,
+    sessionEndedAt: null,
+    pausedAt: null,
+    accumulatedPausedMs: (sessionState.accumulatedPausedMs || 0) + closedDuration,
+  };
+  if (sessionState.status === SESSION_STATUS.INTERRUPTED && blocks.some((block) => block.id === sessionState.liveActiveBlockId)) {
+    return {
+      ...base,
+      activeBlockAccumulatedPausedMs: (sessionState.activeBlockAccumulatedPausedMs || 0) + closedDuration,
+      activePointAccumulatedPausedMs: (sessionState.activePointAccumulatedPausedMs || 0) + closedDuration,
+    };
+  }
+  const completed = new Set(base.completedBlockIds || []);
+  const skipped = new Set(base.skippedBlockIds || []);
+  const target = blocks.find((block) => !completed.has(block.id) && !skipped.has(block.id)) || blocks[blocks.length - 1];
+  return moveToBlock(base, target, now, {...(base.pointStatuses || {})});
 }
 
 export function addRecordingToSession(sessionState, recordingMetadata) {
