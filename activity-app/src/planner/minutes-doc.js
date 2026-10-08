@@ -1,4 +1,4 @@
-import {markdownToHtml} from '../editor/bardo-markdown.js';
+import {htmlToMarkdown, markdownToHtml} from '../editor/bardo-markdown.js';
 
 export const MINUTES_DOC_ORIGIN = 'Acta de reunión';
 
@@ -23,4 +23,41 @@ export function buildMinutesDoc(docData, {existing = null, now = new Date().toIS
     builtin: false,
     stress: false,
   };
+}
+
+/**
+ * Huella del contenido de un acta (sobre su Markdown normalizado, estable
+ * tras guardar y recargar). Sirve para saber si alguien la editó en Documentos
+ * después de generarla.
+ */
+export function minutesContentHash(html) {
+  const text = htmlToMarkdown(String(html || '')).replace(/\s+/g, ' ').trim();
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${text.length.toString(36)}-${hash.toString(16)}`;
+}
+
+/**
+ * Qué hacer al guardar de nuevo un acta:
+ * - 'create': no existe todavía;
+ * - 'update': el documento sigue igual a la última acta generada (o igual a la
+ *   nueva), se actualiza sin preguntar;
+ * - 'confirm': fue editado en Documentos; hay que preguntar antes de pisarlo.
+ */
+export function planMinutesSave({existing = null, generatedBody = '', lastGeneratedHash = null} = {}) {
+  if (!existing) return 'create';
+  const currentHash = minutesContentHash(existing.body);
+  if (lastGeneratedHash && currentHash === lastGeneratedHash) return 'update';
+  if (currentHash === minutesContentHash(generatedBody)) return 'update';
+  return 'confirm';
+}
+
+/** Acta guardada como documento nuevo (no toca la versión editada). */
+export function buildMinutesCopy(docData, {id, now = new Date().toISOString(), editorName = ''} = {}) {
+  // El cuerpo se genera con el título original (así no se repite como encabezado).
+  const doc = buildMinutesDoc({...docData, id}, {now, editorName});
+  return {...doc, title: `${doc.title} (nueva versión)`};
 }

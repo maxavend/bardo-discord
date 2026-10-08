@@ -48,6 +48,16 @@ function triggerBlobDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
+/** Copia global antigua (sin ámbito) de la biblioteca, solo para rescatar documentos sin enviar. */
+function readLegacyCacheDocs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DOCS_KEYS.store) || 'null');
+    return Array.isArray(parsed?.docs) ? parsed.docs.filter(doc => doc?.id) : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Copia local de la biblioteca de ESTE canal (nunca la de otro canal). */
 function readCachedDocs() {
   try {
@@ -164,14 +174,14 @@ export async function prepareBardoProduction(options = {}) {
     options.guildId || window.__BARDO_GUILD_ID__,
     options.channelId || window.__BARDO_CHANNEL_ID__,
   ));
+  // La copia global antigua de la biblioteca (de antes de separar por canal)
+  // puede tener documentos que nunca llegaron al servidor: se rescatan en la
+  // cola antigua y la copia se borra SOLO cuando quedaron guardados ahí.
+  let legacyCacheDocs = [];
   if (docsScope) {
     adoptLegacyDocsValue(localStorage, DOCS_KEYS.draft, docsScope);
-    // La copia global antigua de la biblioteca podía mezclar canales: ya no se
-    // usa (el servidor manda y la copia sin conexión ahora es por canal).
-    try {
-      localStorage.removeItem(DOCS_KEYS.store);
-      localStorage.removeItem(DOCS_KEYS.lastOpened);
-    } catch {}
+    legacyCacheDocs = readLegacyCacheDocs();
+    try { localStorage.removeItem(DOCS_KEYS.lastOpened); } catch {}
   }
 
   const headers = {'Accept':'application/json'};
@@ -326,7 +336,10 @@ export async function prepareBardoProduction(options = {}) {
     docsSync.registerCached(baseDocs);
     deliverRemote({type: 'offline-boot'});
   }
-  docsSync.loadPending();
+  const legacyQueued = docsSync.loadPending({legacyDocs: legacyCacheDocs});
+  if (docsScope && legacyQueued) {
+    try { localStorage.removeItem(DOCS_KEYS.store); } catch {}
+  }
   // Importaciones que ya fallaron en este dispositivo: se muestran como error
   // (con "Eliminar" / "Descargar original") en vez de "Procesando archivo…".
   const importFailures = readImportFailures();
@@ -360,6 +373,10 @@ export async function prepareBardoProduction(options = {}) {
   // Marcar una tarea en el lector: ante un 409 se reaplica sobre la versión del
   // servidor en vez de crear una "copia en conflicto".
   window.__bardoNoteChecklistToggle = (id, op, prevDoc) => docsSync.noteChecklistToggle(id, op, prevDoc);
+  // Cambios sin enviar que pertenecen a otro canal: visibles, con Reintentar / Descartar.
+  window.__bardoParkedChanges = () => docsSync.parkedSummary();
+  window.__bardoRetryParked = () => docsSync.retryParked();
+  window.__bardoDiscardParked = () => docsSync.discardParked();
   window.__bardoSubscribeDocs = listener => {
     remoteListeners.add(listener);
     remoteBacklog.splice(0).forEach(event => listener(event));

@@ -271,7 +271,8 @@ export function PlannerSessionHeader({
                       <span>Ver resumen</span>
                     </DropdownMenuItem>
                   )}
-                  {!isEditing && (
+                  {/* Not while live: editing hides the live controls (dock). */}
+                  {!isEditing && !isRunning && !isPaused && (
                     <DropdownMenuItem onClick={onToggleEditMode}>
                       <Pencil className="size-4 text-muted-foreground" />
                       <span>Editar reunión</span>

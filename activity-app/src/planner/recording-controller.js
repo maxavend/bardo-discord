@@ -103,6 +103,7 @@ export class RecordingController {
     this.mimeType = '';
     this.finalizeRequest = null;
     this.lastRecorderError = null;
+    this.trackListeners = [];
   }
 
   getStatus() {
@@ -262,7 +263,7 @@ export class RecordingController {
    * permission prompt, minimal gap). Resolves with the finalized entity of
    * the previous segment. If nothing is being recorded it resolves null.
    */
-  async rolloverRecording({sessionId, blockId, blockTitle = 'Bloque', pointId = null, pointTitle = null, plannerSessionId} = {}) {
+  async rolloverRecording({sessionId, blockId, blockTitle = 'Bloque', pointId = null, pointTitle = null, plannerSessionId, startPaused = false} = {}) {
     if (!this.isActive() || !this.stream || !this.mediaRecorder || this.status === RECORDING_STATUS.FINALIZING) {
       return null;
     }
@@ -319,8 +320,17 @@ export class RecordingController {
     this.segments = [];
     this.lastRecorderError = null;
     try {
-      this.attachNewRecorder();
-      this.setStatus(RECORDING_STATUS.RECORDING);
+      const recorder = this.attachNewRecorder();
+      if (startPaused) {
+        // Meeting is paused: the new part must not capture anything until the
+        // meeting resumes (never "record, then pause after the old one stops").
+        recorder.pause();
+        this.pauseStartTime = this.startTime;
+        this.activeSegmentStartedAt = null;
+        this.setStatus(RECORDING_STATUS.PAUSED);
+      } else {
+        this.setStatus(RECORDING_STATUS.RECORDING);
+      }
     } catch (error) {
       this.lastRecorderError = error;
       this.onError(error);
@@ -330,7 +340,21 @@ export class RecordingController {
     return finalized;
   }
 
+  /** Removes the `ended` listeners of the previous recorder (one set per recorder, never accumulated). */
+  unwatchTracks() {
+    for (const {track, onEnded} of this.trackListeners || []) {
+      try {
+        if (typeof track.removeEventListener === 'function') track.removeEventListener('ended', onEnded);
+        else if (track.onended === onEnded) track.onended = null;
+      } catch {
+        // ignore
+      }
+    }
+    this.trackListeners = [];
+  }
+
   watchTracks(recorder) {
+    this.unwatchTracks();
     const tracks = this.stream?.getTracks?.() || [];
     for (const track of tracks) {
       const onEnded = () => {
@@ -344,6 +368,7 @@ export class RecordingController {
       };
       if (typeof track.addEventListener === 'function') track.addEventListener('ended', onEnded);
       else track.onended = onEnded;
+      this.trackListeners.push({track, onEnded});
     }
   }
 
@@ -530,6 +555,7 @@ export class RecordingController {
   }
 
   cleanup({clearContext = false} = {}) {
+    this.unwatchTracks();
     if (this.stream) {
       try {
         this.stream.getTracks().forEach((track) => track.stop());

@@ -5,6 +5,30 @@ import JSZip from 'jszip';
 import { PDFPage } from 'pdf-lib';
 import { parseBlocks, parseInline, runsToText, unescapeMarkdown } from '../src/export-markdown.js';
 import { generateDocxDocument, generatePdfDocument } from '../src/export-format.js';
+import worker, { attachmentDisposition } from '../src/worker.js';
+import { createExportToken } from '../src/export-token.js';
+
+/** Runs `fn` while recording every PDF text draw (text + baseline y). */
+async function captureDrawnText(fn) {
+  const drawn = [];
+  const original = PDFPage.prototype.drawText;
+  PDFPage.prototype.drawText = function spy(text, options) {
+    drawn.push({ text, y: options?.y, font: options?.font?.name });
+    return original.call(this, text, options);
+  };
+  try {
+    await fn();
+  } finally {
+    PDFPage.prototype.drawText = original;
+  }
+  return drawn;
+}
+
+async function elapsed(fn) {
+  const start = performance.now();
+  await fn();
+  return performance.now() - start;
+}
 
 // Markdown tal como lo escribe el editor de Bardo (escapes incluidos).
 const EDITOR_MARKDOWN = [
@@ -120,9 +144,90 @@ test('PDF: texto limpio, casillas [x]/[ ], tabla alineada, negrita y descripció
   assert.ok(drawn.some(item => item.text === 'Más detalles & notas'));
 });
 
-test('PDF: documentos largos con tablas anchas y palabras enormes no rompen la exportación', async () => {
+test('PDF: tablas anchas y palabras enormes no pierden texto', async () => {
   const row = `| ${'x'.repeat(400)} | b | c |`;
   const markdown = ['| A | B | C |', '| --- | --- | --- |', ...Array.from({ length: 120 }, () => row)].join('\n');
-  const bytes = await generatePdfDocument({ title: 'Largo', originalMarkdown: markdown });
+  let bytes;
+  const drawn = await captureDrawnText(async () => {
+    bytes = await generatePdfDocument({ title: 'Largo', originalMarkdown: markdown });
+  });
   assert.ok(bytes.byteLength > 1000);
+  // Every "x" of every cell is drawn (split into chunks), none below the margin.
+  const xCount = drawn.filter(item => /^x+$/.test(item.text)).reduce((sum, item) => sum + item.text.length, 0);
+  assert.equal(xCount, 400 * 120);
+  assert.ok(drawn.every(item => item.y >= 40), 'ningún texto bajo el margen inferior');
+});
+
+test('PDF: una fila de tabla más alta que una página continúa en la siguiente sin perder líneas', async () => {
+  const words = Array.from({ length: 1500 }, (_, index) => `w${String(index).padStart(4, '0')}`);
+  const markdown = ['| Celda larga | Otra |', '| --- | --- |', `| ${words.join(' ')} | fin |`].join('\n');
+  const drawn = await captureDrawnText(() => generatePdfDocument({ title: 'Tabla', originalMarkdown: markdown }));
+  const text = drawn.map(item => item.text).join(' ');
+  for (const word of words) assert.ok(text.includes(word), `falta ${word}`);
+  assert.ok(drawn.every(item => item.y >= 40), 'ningún texto bajo el margen inferior');
+});
+
+test('un ```npm install``` en una línea es código en línea, no un bloque que se traga el documento', () => {
+  const blocks = parseBlocks('Ejecuta ```npm install``` primero.\n\n```npm install```\n\n## Siguiente\n\nTexto');
+  assert.deepEqual(blocks.map(block => block.type), ['paragraph', 'paragraph', 'heading', 'paragraph']);
+  assert.equal(runsToText(blocks[1].runs), 'npm install');
+  assert.equal(blocks[1].runs[0].code, true);
+  // A real fence (one info word) still opens a code block.
+  assert.equal(parseBlocks('```js\nconst a = 1;\n```')[0].type, 'code');
+});
+
+test('listas numeradas "perezosas" (1. 1. 1.) se exportan como 1, 2, 3', () => {
+  const [lazy] = parseBlocks('1. uno\n1. dos\n1. tres');
+  assert.deepEqual(lazy.items.map(item => item.number), [1, 2, 3]);
+  const [fromThree] = parseBlocks('3. a\n3. b\n   1. sub\n   1. sub2\n3. c');
+  assert.deepEqual(fromThree.items.map(item => item.number), [3, 4, 1, 2, 5]);
+});
+
+test('Content-Disposition: filename* codifica también \' ( ) * (RFC 5987)', () => {
+  const header = attachmentDisposition("Acta (final) *v2* de Ana's.pdf");
+  assert.match(header, /filename\*=UTF-8''Acta%20%28final%29%20%2Av2%2A%20de%20Ana%27s\.pdf$/);
+  assert.doesNotMatch(header.split("filename*=UTF-8''")[1], /['()*]/);
+});
+
+test('rendimiento: un .txt de 380 KB lleno de *, _, [ y ( exporta a PDF y DOCX en menos de 1 s', async () => {
+  const line = index => `2026-10-08T12:00:01Z [WARN] job_${index} *retry* ** [queue (pending=${index} \`x * _y [z ( <u ~~ __init__ __`;
+  let log = '';
+  for (let index = 0; log.length < 380_000; index += 1) log += `${line(index)}\n`;
+  const pdf = await elapsed(() => generatePdfDocument({ title: 'log', originalMarkdown: log }));
+  const docx = await elapsed(() => generateDocxDocument({ title: 'log', originalMarkdown: log }));
+  assert.ok(pdf < 1000, `PDF tardó ${Math.round(pdf)} ms`);
+  assert.ok(docx < 1000, `DOCX tardó ${Math.round(docx)} ms`);
+});
+
+test('rendimiento: "**a " × 2000 exporta en menos de 200 ms', async () => {
+  const markdown = '**a '.repeat(2000);
+  const pdf = await elapsed(() => generatePdfDocument({ title: 't', originalMarkdown: markdown }));
+  const docx = await elapsed(() => generateDocxDocument({ title: 't', originalMarkdown: markdown }));
+  assert.ok(pdf < 200, `PDF tardó ${Math.round(pdf)} ms`);
+  assert.ok(docx < 200, `DOCX tardó ${Math.round(docx)} ms`);
+  // The unmatched markers are kept as text, not swallowed.
+  assert.equal(runsToText(parseInline(markdown)), markdown);
+});
+
+test('entradas extremas (10 000 ">" anidados, tabla de 200 000 filas) no lanzan RangeError', async () => {
+  const nested = `${'> '.repeat(10_000)}hola`;
+  await generatePdfDocument({ title: 'Citas', originalMarkdown: nested });
+  await generateDocxDocument({ title: 'Citas', originalMarkdown: nested });
+  const table = ['| a | b |', '| --- | --- |', ...Array.from({ length: 200_000 }, () => '| 1 | 2 |')].join('\n');
+  const [block] = parseBlocks(table);
+  assert.equal(block.rows.length, 200_000);
+  const deep = `${'**a '.repeat(3000)}z${'**'.repeat(3000)}`;
+  assert.ok(runsToText(parseInline(deep)).includes('z'));
+});
+
+test('un enlace firmado que falla muestra la página en español, no un JSON 500', async () => {
+  const env = {
+    DISCORD_CLIENT_SECRET: 'secreto',
+    DB: { prepare() { throw new Error('D1 caído'); } },
+  };
+  const { token } = await createExportToken(env, { docId: 'doc-1', format: 'pdf', userId: 'u' });
+  const response = await worker.fetch(new Request(`https://bardo.example/api/documents/doc-1/export?format=pdf&t=${encodeURIComponent(token)}`), env);
+  assert.equal(response.status, 500);
+  assert.match(response.headers.get('content-type'), /text\/html/);
+  assert.match(await response.text(), /No pudimos preparar la descarga/);
 });

@@ -78,9 +78,9 @@ import {
   skipActiveBlock,
   extendActiveBlock,
   setUnlimitedActiveBlock,
-  completeLiveSession,
   resumeInterruptedSession,
   reopenLiveSession,
+  finishLiveSessionWith,
   getPointCounts,
   saveFinalizedRecording,
   renameRecordingInSession,
@@ -624,26 +624,34 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         ? 'paused-by-session'
         : null;
 
+    // Commit the transition right away: anything the group does while the
+    // previous audio part is being saved (+5 min, ticking a tema…) is kept,
+    // and the finished recording is merged into the CURRENT state afterwards.
+    commitSessionState(next);
+
     let recording = null;
     let continued = false;
     if (continueMode && stillLive && nextBlock) {
-      const previous = await controller.rolloverRecording({
+      const previousPart = controller.rolloverRecording({
         sessionId: next.sessionId || outgoing.sessionId,
         plannerSessionId: next.plannerSessionId || planner.id || null,
         blockId: nextBlock.id,
         blockTitle: nextBlock.title,
         pointId: nextPoint?.id || null,
         pointTitle: nextPoint?.title || null,
+        startPaused: continueMode === 'paused-by-session',
       });
       continued = controller.isActive();
-      if (continued && continueMode === 'paused-by-session') controller.pauseRecording();
       setRecordingElapsedMs(0);
+      const previous = await previousPart;
       recording = previous ? await persistCapturedRecording(previous) : null;
     } else {
       recording = await finalizeActiveRecording();
     }
-    if (recording) next = saveFinalizedRecording(next, recording);
-    commitSessionState(next);
+    if (recording) {
+      next = saveFinalizedRecording(sessionStateRef.current, recording);
+      commitSessionState(next);
+    }
 
     if (next.status === SESSION_STATUS.COMPLETED) {
       setActiveTab('recap');
@@ -676,12 +684,24 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     toast(`Siguiente bloque: ${getActiveBlock(plannerStateRef.current, next)?.title || 'Bloque'}`);
   }, [runLiveTransition]);
 
+  // Skipping the last tema/bloque would end the meeting: that always goes
+  // through the "Terminar reunión" confirmation instead (decision 1).
   const handleSkipPoint = useCallback(async () => {
+    const preview = skipActivePoint(plannerStateRef.current, sessionStateRef.current);
+    if (preview?.status === SESSION_STATUS.COMPLETED) {
+      setInterruptModal({isOpen: true, mode: 'skip-point'});
+      return;
+    }
     const next = await runLiveTransition((planner, state) => skipActivePoint(planner, state));
     if (next && next.status !== SESSION_STATUS.COMPLETED) toast('Tema saltado');
   }, [runLiveTransition]);
 
   const handleSkipBlock = useCallback(async () => {
+    const preview = skipActiveBlock(plannerStateRef.current, sessionStateRef.current);
+    if (preview?.status === SESSION_STATUS.COMPLETED) {
+      setInterruptModal({isOpen: true, mode: 'skip-block'});
+      return;
+    }
     const next = await runLiveTransition((planner, state) => skipActiveBlock(planner, state));
     if (next && next.status !== SESSION_STATUS.COMPLETED) toast('Bloque saltado');
   }, [runLiveTransition]);
@@ -711,13 +731,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const handleConfirmFinish = useCallback(async () => {
     const mode = interruptModal.mode || 'finish';
     setInterruptModal({isOpen: false});
-    await runLiveTransition((planner, state) => {
-      if (mode === 'advance') {
-        const advanced = advanceLiveSession(planner, state);
-        if (advanced.status === SESSION_STATUS.COMPLETED) return advanced;
-      }
-      return completeLiveSession(state);
-    });
+    await runLiveTransition((planner, state) => finishLiveSessionWith(mode, planner, state));
   }, [interruptModal.mode, runLiveTransition]);
 
   /** Adaptive primary live button: Siguiente tema / Siguiente bloque / Terminar reunión. */
@@ -1307,9 +1321,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const decisionsCount = (sessionState.decisions || []).length;
   const pendingTemasCount = (() => {
     const counts = getPointCounts(plannerState, sessionState);
-    // The active tema counts as pending unless the confirm comes from the
-    // primary button (which marks it as tratado).
-    const activeCountsAsPending = interruptModal.mode !== 'advance' && sessionState.liveActivePointId ? 1 : 0;
+    // The active tema stays pending only when ending from the menu or by
+    // skipping the bloque (advance marks it tratado, skip-point saltado).
+    const mode = interruptModal.mode || 'finish';
+    const activeCountsAsPending = (mode === 'finish' || mode === 'skip-block') && sessionState.liveActivePointId ? 1 : 0;
     return Math.max(0, counts.pending + activeCountsAsPending);
   })();
 
@@ -1507,7 +1522,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       <PlannerUndoToast toast={undoToast} onUndo={handleUndo} onDismiss={handleDismissUndo} />
 
       {/* FAB móvil persistente y sin glow al inicio/edición/reanudación */}
-      {activeTab === 'agenda' && !isLive && (() => {
+      {/* Never leave a state without a visible way back: while editing the
+          FAB shows "Listo" even if the meeting is live (the dock is hidden). */}
+      {activeTab === 'agenda' && (!isLive || isEditing) && (() => {
         const hasBlocks = (plannerState.blocks || []).length > 0;
         let fabLabel = hasBlocks ? 'Iniciar reunión' : 'Agrega al menos un bloque';
         let fabIcon = <Play width={13} height={13} />;

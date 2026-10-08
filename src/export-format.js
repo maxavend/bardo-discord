@@ -296,12 +296,13 @@ export async function generatePdfDocument(document) {
     const available = contentWidth - ctx.indent;
     const withHeader = hasCells(block.header);
     const rows = withHeader ? [block.header, ...block.rows] : block.rows;
-    const columns = Math.max(1, ...rows.map(row => row.length));
+    const columns = rows.reduce((max, row) => Math.max(max, row.length), 1);
 
     // Column widths proportional to content, with a sensible minimum.
-    const natural = Array.from({ length: columns }, (_, column) => Math.max(30, ...rows.map(row => (
-      Math.min(220, measure(toPdfSafeText(runsToText(row[column] || [])).replace(/\n/g, ' '), fonts.regular, size) + padding * 2)
-    ))));
+    const natural = Array.from({ length: columns }, (_, column) => rows.reduce((max, row) => Math.max(
+      max,
+      Math.min(220, measure(toPdfSafeText(runsToText(row[column] || [])).replace(/\n/g, ' '), fonts.regular, size) + padding * 2),
+    ), 30));
     const total = natural.reduce((sum, value) => sum + value, 0);
     const widths = natural.map(value => (value / total) * available);
 
@@ -312,40 +313,56 @@ export async function generatePdfDocument(document) {
         maxWidth: Math.max(10, widths[column] - padding * 2),
         base: isHeader ? { bold: true } : {},
       }));
-      const height = Math.max(...cells.map(lines => lines.length)) * lineHeight + padding * 2;
-      ensureSpace(height + 2);
-      const top = y + size;
-      if (isHeader) {
-        page.drawRectangle({ x: left, y: top - height, width: available, height, color: COLORS.tableHeader });
-      }
-      let cellX = left;
-      cells.forEach((lines, column) => {
-        const align = block.align?.[column] || 'left';
-        let lineY = top - padding - size;
-        for (const lineInfo of lines) {
-          const lineWidth = lineInfo.segments.reduce((sum, segment) => sum + measure(segment.text, segment.font, size), 0);
-          const offset = align === 'right'
-            ? widths[column] - padding - lineWidth
-            : align === 'center' ? (widths[column] - lineWidth) / 2 : padding;
-          const savedY = y;
-          y = lineY;
-          drawLineRaw(lineInfo, cellX + offset, size);
-          y = savedY;
-          lineY -= lineHeight;
+      const totalLines = cells.reduce((max, lines) => Math.max(max, lines.length), 1);
+
+      // A row taller than the rest of the page continues on the next one, so
+      // no line of a long cell is ever drawn below the margin.
+      let firstLine = 0;
+      while (firstLine < totalLines) {
+        ensureSpace(lineHeight + padding * 2 + 2);
+        const top = y + size;
+        const fit = Math.max(1, Math.floor((top - PDF.marginBottom - padding * 2) / lineHeight));
+        const count = Math.min(fit, totalLines - firstLine);
+        const height = count * lineHeight + padding * 2;
+
+        if (isHeader) {
+          page.drawRectangle({ x: left, y: top - height, width: available, height, color: COLORS.tableHeader });
         }
-        cellX += widths[column];
-      });
-      // Grid lines.
-      page.drawLine({ start: { x: left, y: top - height }, end: { x: left + available, y: top - height }, thickness: 0.5, color: COLORS.rule });
-      if (rowIndex === 0) {
-        page.drawLine({ start: { x: left, y: top }, end: { x: left + available, y: top }, thickness: 0.5, color: COLORS.rule });
+        let cellX = left;
+        cells.forEach((lines, column) => {
+          const align = block.align?.[column] || 'left';
+          let lineY = top - padding - size;
+          for (const lineInfo of lines.slice(firstLine, firstLine + count)) {
+            const lineWidth = lineInfo.segments.reduce((sum, segment) => sum + measure(segment.text, segment.font, size), 0);
+            const offset = align === 'right'
+              ? widths[column] - padding - lineWidth
+              : align === 'center' ? (widths[column] - lineWidth) / 2 : padding;
+            const savedY = y;
+            y = lineY;
+            drawLineRaw(lineInfo, cellX + offset, size);
+            y = savedY;
+            lineY -= lineHeight;
+          }
+          cellX += widths[column];
+        });
+
+        // Grid lines (a continued row gets its own top border on the new page).
+        page.drawLine({ start: { x: left, y: top - height }, end: { x: left + available, y: top - height }, thickness: 0.5, color: COLORS.rule });
+        if (rowIndex === 0 || firstLine > 0) {
+          page.drawLine({ start: { x: left, y: top }, end: { x: left + available, y: top }, thickness: 0.5, color: COLORS.rule });
+        }
+        let lineX = left;
+        for (let column = 0; column <= columns; column += 1) {
+          page.drawLine({ start: { x: lineX, y: top }, end: { x: lineX, y: top - height }, thickness: 0.5, color: COLORS.rule });
+          lineX += widths[column] || 0;
+        }
+        y = top - height - size;
+        firstLine += count;
+        if (firstLine < totalLines) {
+          page = pdfDoc.addPage([PDF.pageWidth, PDF.pageHeight]);
+          y = PDF.pageHeight - PDF.marginTop;
+        }
       }
-      let lineX = left;
-      for (let column = 0; column <= columns; column += 1) {
-        page.drawLine({ start: { x: lineX, y: top }, end: { x: lineX, y: top - height }, thickness: 0.5, color: COLORS.rule });
-        lineX += widths[column] || 0;
-      }
-      y = top - height - size;
     });
     y -= 6;
   };
@@ -540,7 +557,7 @@ function docxParagraph(content, ctx, { style = '', spacing = '<w:spacing w:befor
 function docxTable(block, ctx) {
   const withHeader = hasCells(block.header);
   const rows = withHeader ? [block.header, ...block.rows] : block.rows;
-  const columns = Math.max(1, ...rows.map(row => row.length));
+  const columns = rows.reduce((max, row) => Math.max(max, row.length), 1);
   const width = Math.max(2000, DOCX_CONTENT_WIDTH - ctx.indent);
   const columnWidth = Math.floor(width / columns);
   const justify = { left: 'left', center: 'center', right: 'right' };

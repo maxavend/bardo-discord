@@ -540,6 +540,24 @@ export function completeLiveSession(sessionState, now = Date.now()) {
   };
 }
 
+/**
+ * Ends a meeting after the user confirmed "Terminar reunión".
+ * `mode` says which action led to the confirmation:
+ * - 'advance'    primary button on the last tema/bloque (marks it tratado),
+ * - 'skip-point' "Saltar tema" on the last tema (marks it saltado),
+ * - 'skip-block' "Saltar bloque" on the last bloque,
+ * - 'finish'     "Terminar reunión" from the menu (nothing else changes).
+ * The result is always a completed meeting.
+ */
+export function finishLiveSessionWith(mode, plannerState, sessionState, now = Date.now()) {
+  if (!sessionState) return sessionState;
+  let state = sessionState;
+  if (mode === 'advance') state = advanceLiveSession(plannerState, state, now);
+  else if (mode === 'skip-point') state = skipActivePoint(plannerState, state, now);
+  else if (mode === 'skip-block') state = skipActiveBlock(plannerState, state, now);
+  return state.status === SESSION_STATUS.COMPLETED ? state : completeLiveSession(state, now);
+}
+
 export function interruptLiveSession(sessionState, now = Date.now()) {
   if (!sessionState) return sessionState;
   const pauseDuration = getCurrentPauseDuration(sessionState, now);

@@ -78,7 +78,7 @@ import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSna
 import {copyTextToClipboard} from './docs-clipboard.js';
 import {openExternalUrl} from './discord-links.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
-import {buildMinutesDoc} from './planner/minutes-doc.js';
+import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
@@ -88,6 +88,24 @@ const draftKey = () => scopedDocsKey(DOCS_KEYS.draft);
 const lastOpenedKey = () => scopedDocsKey(DOCS_KEYS.lastOpened);
 // Copia de seguridad de la edición en curso (se escribe mientras se tipea).
 const journalKey = () => scopedDocsKey(DOCS_KEYS.journal);
+// Huella de la última acta generada por documento (para detectar ediciones).
+const minutesHashesKey = () => scopedDocsKey(DOCS_KEYS.minutesHashes);
+
+function readMinutesHash(docId) {
+  try {
+    return JSON.parse(localStorage.getItem(minutesHashesKey()) || '{}')?.[docId] || null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberMinutesHash(docId, hash) {
+  try {
+    const all = JSON.parse(localStorage.getItem(minutesHashesKey()) || '{}') || {};
+    all[docId] = hash;
+    localStorage.setItem(minutesHashesKey(), JSON.stringify(all));
+  } catch {}
+}
 const STORE_VERSION = 1;
 const SHARE_CARD_HINT = 'Se publicará una tarjeta con una vista previa y un botón para abrirlo.';
 
@@ -714,6 +732,9 @@ function Library({
   onTabChange,
   activeCount = 0,
   archivedCount = 0,
+  parkedChanges = [],
+  onRetryParked,
+  onDiscardParked,
 }) {
   const fileInputRef = useRef(null);
   const isArchivedTab = activeTab === 'archived';
@@ -759,6 +780,25 @@ function Library({
             </InputGroupAddon>
           )}
         </InputGroup>
+
+        {parkedChanges.length > 0 && !isArchivedTab && (
+          <section className="library-section continue-section">
+            <div className="doc-inline-notice" role="status">
+              <span>
+                <strong>Cambios sin enviar de otro canal</strong>
+                <br />
+                {parkedChanges.length === 1 ? 'Hay 1 cambio guardado en este dispositivo' : `Hay ${parkedChanges.length} cambios guardados en este dispositivo`}
+                {' '}que pertenece{parkedChanges.length === 1 ? '' : 'n'} a otro canal
+                {' '}({parkedChanges.slice(0, 3).map(item => `“${item.title}”`).join(', ')}{parkedChanges.length > 3 ? '…' : ''}).
+                {' '}Se enviarán al abrir Bardo en ese canal.
+              </span>
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={onRetryParked}>Reintentar</Button>
+                <Button variant="ghost" size="sm" onClick={onDiscardParked}>Descartar</Button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {draft && !query && !isArchivedTab && (
           <section className="library-section continue-section">
@@ -994,6 +1034,45 @@ function ShareConfirmDialog({isOpen, doc, onConfirm, onCancel}) {
   );
 }
 
+function MinutesEditedDialog({isOpen, title, onCopy, onReplace, onCancel}) {
+  return (
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>El acta fue editada en Documentos</AlertDialogTitle>
+          <AlertDialogDescription>
+            “{title || 'Acta de reunión'}” tiene cambios hechos en Documentos. Si la reemplazas con el acta de la reunión, esos cambios se pierden.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
+          <Button variant="outline" onClick={onReplace}>Reemplazar</Button>
+          <AlertDialogAction autoFocus onClick={onCopy}>Guardar como copia nueva</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function DiscardParkedDialog({isOpen, count, onConfirm, onCancel}) {
+  return (
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Descartar cambios sin enviar</AlertDialogTitle>
+          <AlertDialogDescription>
+            Se borrará{count === 1 ? '' : 'n'} de este dispositivo {count === 1 ? '1 cambio' : `${count} cambios`} que no se pudo enviar. Esta acción no se puede deshacer.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>Descartar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function NewDocChoiceDialog({isOpen, draft, onContinue, onStartNew, onCancel}) {
   return (
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
@@ -1145,6 +1224,8 @@ function App() {
   // Tarjeta de un documento archivado o eliminado (ver production-bridge).
   const [launchNotice, setLaunchNotice] = useState(null);
   const [uploading, setUploading] = useState(false);
+  // Cambios sin enviar que pertenecen a otro canal (cola antigua estacionada).
+  const [parkedChanges, setParkedChanges] = useState(() => window.__bardoParkedChanges?.() || []);
   // Revisión por documento: cambia cuando se adopta una versión remota y obliga a
   // remontar el editor con el contenido nuevo.
   const [revisions, setRevisions] = useState({});
@@ -1327,6 +1408,7 @@ function App() {
             ...current,
             id: copyId,
             title: copyTitle,
+            serverUpdatedAt: null,
             origin: 'Copia en conflicto',
             archived: false,
             archivedAt: null,
@@ -1408,6 +1490,10 @@ function App() {
         showToast('No tenías acceso a ese documento; guardamos tus cambios como un documento nuevo.');
         const viewing = routeRef.current.id === event.oldId;
         if (viewing) go(`#${routeRef.current.type === 'edit' ? 'edit' : 'doc'}-${event.newId}`, {skipTransition: true});
+        return;
+      }
+      if (event?.type === 'parked-changed' || event?.type === 'parked') {
+        setParkedChanges(window.__bardoParkedChanges?.() || []);
         return;
       }
       if (event?.type === 'import-failed' && event.id) {
@@ -1579,6 +1665,8 @@ function App() {
       title: `${source.title || 'Sin título'} (copia)`,
       createdByName: currentEditorName() || source.createdByName,
       updatedByName: currentEditorName() || source.updatedByName,
+      // Nunca confirmada por el servidor: no heredar la marca del original.
+      serverUpdatedAt: null,
       builtin: false,
       stress: false,
       archived: false,
@@ -1825,6 +1913,53 @@ function App() {
     }
   }, [showToast]);
 
+  /**
+   * Guardar el acta de una reunión en Documentos. Si el acta ya existe y fue
+   * editada en Documentos, pregunta antes de reemplazarla (por defecto, copia).
+   * `mode`: 'auto' | 'replace' | 'copy'.
+   */
+  const saveMinutesDoc = useCallback((docData, mode = 'auto') => {
+    // El id es estable por reunión: guardar de nuevo actualiza la misma acta.
+    const id = docData?.id || newLocalId();
+    const existing = storeRef.current.docs.find(doc => doc.id === id) || null;
+    const editorName = currentEditorName();
+    const generated = buildMinutesDoc({...docData, id}, {existing, editorName});
+    const decision = mode === 'auto'
+      ? planMinutesSave({existing, generatedBody: generated.body, lastGeneratedHash: readMinutesHash(id)})
+      : mode;
+    if (decision === 'confirm') {
+      setModal({type: 'minutes-edited', docData: {...docData, id}, title: existing?.title});
+      return;
+    }
+    const doc = decision === 'copy'
+      ? buildMinutesCopy({...docData, id}, {id: newLocalId(), editorName})
+      : generated;
+    commitStore(prev => ({...prev, docs: [doc, ...(prev.docs || []).filter(d => d.id !== doc.id)]}));
+    rememberMinutesHash(doc.id, minutesContentHash(doc.body));
+    setModal(null);
+    showToast(decision === 'copy'
+      ? 'Guardamos el acta como un documento nuevo; tu versión editada no cambió.'
+      : existing ? 'Acta actualizada en Documentos' : 'Acta guardada en Documentos');
+    go(`#doc-${doc.id}`);
+  }, [commitStore, go, showToast]);
+
+  const retryParkedChanges = useCallback(async () => {
+    if (!window.__bardoRetryParked) return;
+    showToast('Reintentando…');
+    const remaining = await window.__bardoRetryParked();
+    setParkedChanges(window.__bardoParkedChanges?.() || []);
+    showToast(remaining
+      ? `${remaining === 1 ? 'Queda 1 cambio' : `Quedan ${remaining} cambios`} sin enviar: abre Bardo en el canal donde está ese documento.`
+      : 'Cambios enviados.');
+  }, [showToast]);
+
+  const discardParkedChanges = useCallback(() => {
+    setModal(null);
+    const discarded = window.__bardoDiscardParked?.() || 0;
+    setParkedChanges(window.__bardoParkedChanges?.() || []);
+    if (discarded) showToast(discarded === 1 ? 'Se descartó 1 cambio sin enviar.' : `Se descartaron ${discarded} cambios sin enviar.`);
+  }, [showToast]);
+
   const restoreFromNotice = useCallback(() => {
     const notice = launchNotice;
     setLaunchNotice(null);
@@ -1918,15 +2053,7 @@ function App() {
             else if (tab === 'agenda') go('#planner-agenda', {skipTransition: true});
             else go(`#planner-${tab}`, {skipTransition: true});
           }}
-          onSaveDocToLibrary={(docData) => {
-            // The acta id is stable per meeting run: saving again updates it.
-            const id = docData.id || newLocalId();
-            const existing = (storeRef.current?.docs || []).find((d) => d.id === id) || null;
-            const doc = buildMinutesDoc({...docData, id}, {existing, editorName: currentEditorName()});
-            commitStore((prev) => ({...prev, docs: [doc, ...(prev.docs || []).filter((d) => d.id !== doc.id)]}));
-            showToast(existing ? 'Acta actualizada en Documentos' : 'Acta guardada en Documentos');
-            go(`#doc-${doc.id}`);
-          }}
+          onSaveDocToLibrary={(docData) => saveMinutesDoc(docData)}
         />
       )}
       {route.type === 'library' && (
@@ -1946,6 +2073,9 @@ function App() {
           onTabChange={setLibraryTab}
           activeCount={activeDocs.length}
           archivedCount={archivedCount}
+          parkedChanges={parkedChanges}
+          onRetryParked={retryParkedChanges}
+          onDiscardParked={() => setModal({type: 'discard-parked'})}
         />
       )}
 
@@ -2093,6 +2223,21 @@ function App() {
         draft={modal?.type === 'new-doc-choice' ? modal.draft : null}
         onContinue={continueDraft}
         onStartNew={() => discardDraftAndStart(modal?.title || '')}
+        onCancel={() => setModal(null)}
+      />
+
+      <MinutesEditedDialog
+        isOpen={modal?.type === 'minutes-edited'}
+        title={modal?.type === 'minutes-edited' ? modal.title : ''}
+        onCopy={() => saveMinutesDoc(modal?.docData, 'copy')}
+        onReplace={() => saveMinutesDoc(modal?.docData, 'replace')}
+        onCancel={() => setModal(null)}
+      />
+
+      <DiscardParkedDialog
+        isOpen={modal?.type === 'discard-parked'}
+        count={parkedChanges.length}
+        onConfirm={discardParkedChanges}
         onCancel={() => setModal(null)}
       />
 

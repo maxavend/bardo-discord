@@ -11,9 +11,13 @@
  *   como copia y adopta la del servidor (ver `onRemote`).
  * - Emite estados `saving | saved | offline | error | conflict` por documento.
  * - La cola vive en una clave por servidor + canal (`pendingKey`). Las entradas
- *   antiguas sin ámbito (`legacyPendingKey`) quedan "estacionadas": solo se
- *   adoptan si el documento pertenece al canal actual y nunca se crean (POST)
- *   ni se recrean como documento nuevo aquí; con 403/404 vuelven a estacionarse.
+ *   antiguas sin ámbito (`legacyPendingKey`, de antes de separar por canal):
+ *     · documentos que nunca llegaron al servidor (ids `local-…` sin base:
+ *       nuevos, copias en conflicto, recuperados) se adoptan en el PRIMER canal
+ *       que se abra tras la actualización, se crean ahí y se ven en la biblioteca;
+ *     · documentos del servidor se adoptan solo si pertenecen a este canal;
+ *     · el resto queda "estacionado", visible para el usuario (parkedSummary)
+ *       con Reintentar / Descartar; nunca se recrea como documento nuevo aquí.
  * - Marcar una tarea en el lector no genera "copia en conflicto": ante un 409 se
  *   reaplican solo esas tareas sobre la versión del servidor (máx. 2 intentos).
  */
@@ -169,6 +173,23 @@ export function userFacingError(error, fallback = 'No se pudo completar la acci�
   return typeof message === 'string' && message.trim() ? message : fallback;
 }
 
+/** Entrada de cola de un documento que nunca llegó al servidor. */
+export function isNeverCreated(entry) {
+  return String(entry?.doc?.id || '').startsWith('local-') && !entry?.baseUpdatedAt;
+}
+
+/**
+ * Documento de la copia local que nunca se confirmó en el servidor (nuevo, o
+ * una copia cuyo `serverUpdatedAt` heredado es anterior a su creación).
+ */
+export function isUnsavedLocalDoc(doc) {
+  if (!String(doc?.id || '').startsWith('local-')) return false;
+  if (!doc.serverUpdatedAt) return true;
+  const created = Date.parse(doc.createdAt || '');
+  const confirmed = Date.parse(doc.serverUpdatedAt || '');
+  return Number.isFinite(created) && Number.isFinite(confirmed) && confirmed < created;
+}
+
 /**
  * Crea la función `request` usada por el motor.
  * @param {{fetchImpl?: typeof fetch, getHeaders?: () => Record<string,string>}} options
@@ -254,7 +275,9 @@ export function createDocsSync({
       failed: entry.failed || null,
       ...(entry.recreatedFrom ? {recreatedFrom: entry.recreatedFrom} : {}),
       ...(entry.legacy ? {legacy: true} : {}),
-      ...(entry.checklistOps?.length ? {checklistOps: entry.checklistOps, checklistSig: entry.checklistSig} : {}),
+      ...(entry.checklistOps?.length
+        ? {checklistOps: entry.checklistOps, checklistSig: entry.checklistSig, checklistVersion: entry.checklistVersion}
+        : {}),
     };
   }
 
@@ -263,22 +286,24 @@ export function createDocsSync({
     map.forEach((entry, id) => { entries[id] = serializeEntry(entry); });
     try {
       storage.setItem(key, JSON.stringify({version: 1, entries}));
+      return true;
     } catch (error) {
       if (!storageWarned) {
         storageWarned = true;
         onRemote({type: 'storage-warning', error});
       }
+      return false;
     }
   }
 
   function persist() {
-    if (!storage) return;
-    writeQueue(pendingKey, pending);
+    if (!storage) return true;
+    return writeQueue(pendingKey, pending);
   }
 
   function persistParked() {
-    if (!storage || !hasLegacyQueue) return;
-    writeQueue(legacyPendingKey, parked);
+    if (!storage || !hasLegacyQueue) return true;
+    return writeQueue(legacyPendingKey, parked);
   }
 
   function readQueue(key, target, extra = {}) {
@@ -296,7 +321,7 @@ export function createDocsSync({
             ...(entry.recreatedFrom ? {recreatedFrom: entry.recreatedFrom} : {}),
             ...(entry.legacy || extra.legacy ? {legacy: true} : {}),
             ...(Array.isArray(entry.checklistOps) && entry.checklistOps.length
-              ? {checklistOps: entry.checklistOps, checklistSig: entry.checklistSig}
+              ? {checklistOps: entry.checklistOps, checklistSig: entry.checklistSig, checklistVersion: Number(entry.version) || 1}
               : {}),
           });
         });
@@ -305,33 +330,102 @@ export function createDocsSync({
   }
 
   /**
-   * Una entrada antigua (sin ámbito) solo se adopta si el documento ya es
-   * conocido en este canal (lista del servidor o copia local de este canal).
+   * Una entrada antigua (sin ámbito) se adopta en este canal si:
+   * - el documento nunca llegó al servidor (se crea aquí, como el borrador), o
+   * - el documento del servidor pertenece a este canal (lista o copia local).
+   * Devuelve los ids adoptados.
    */
   function adoptParked() {
-    let adopted = false;
+    const adopted = [];
     parked.forEach((entry, id) => {
-      if (!remote.has(id) || pending.has(id)) return;
+      if (pending.has(id)) {
+        parked.delete(id);
+        return;
+      }
+      if (isNeverCreated(entry)) {
+        parked.delete(id);
+        // Ya es de este canal: se crea con POST como cualquier documento nuevo.
+        const {legacy: _legacy, ...rest} = entry;
+        pending.set(id, {...rest, failed: null});
+        adopted.push(id);
+        return;
+      }
+      if (!remote.has(id)) return;
       parked.delete(id);
       pending.set(id, {...entry, legacy: true, failed: null});
-      adopted = true;
+      adopted.push(id);
     });
-    if (adopted) {
+    if (adopted.length) {
       persist();
       persistParked();
+      onRemote({type: 'parked-changed'});
     }
     return adopted;
   }
 
-  function loadPending() {
-    if (!storage) return pending;
+  /**
+   * Carga la cola. `legacyDocs` son los documentos de la copia global antigua
+   * de la biblioteca: los que nunca llegaron al servidor y no están en ninguna
+   * cola se suman a la cola antigua para no perderlos. Devuelve si la cola
+   * antigua quedó guardada (solo entonces se puede borrar la copia global).
+   */
+  function loadPending({legacyDocs = []} = {}) {
+    if (!storage) return true;
     readQueue(pendingKey, pending);
-    if (hasLegacyQueue) {
-      readQueue(legacyPendingKey, parked, {legacy: true});
-      parked.forEach((_, id) => { if (pending.has(id)) parked.delete(id); });
-      adoptParked();
+    if (!hasLegacyQueue) return true;
+    readQueue(legacyPendingKey, parked, {legacy: true});
+    let added = false;
+    legacyDocs.forEach(doc => {
+      if (!doc?.id || pending.has(doc.id) || parked.has(doc.id) || !isUnsavedLocalDoc(doc)) return;
+      parked.set(doc.id, {doc, baseUpdatedAt: null, version: 1, failed: null, legacy: true});
+      added = true;
+    });
+    const saved = added ? persistParked() : true;
+    adoptParked();
+    return saved;
+  }
+
+  /** Resumen de lo estacionado (de otro canal) para mostrarlo al usuario. */
+  function parkedSummary() {
+    return [...parked.values()].map(entry => ({
+      id: entry.doc.id,
+      title: String(entry.doc.title || '').trim() || 'Sin título',
+    }));
+  }
+
+  /**
+   * "Reintentar": consulta cada documento estacionado; si este canal tiene
+   * acceso, se adopta y se envía. Devuelve cuántos siguen estacionados.
+   */
+  async function retryParked() {
+    const before = [...parked.keys()];
+    for (const id of before) {
+      try {
+        const item = documentFrom(await request(`/api/docs/${encodeURIComponent(id)}`));
+        if (item?.id) {
+          abandoned.delete(id);
+          registerRemote([item]);
+        }
+      } catch {
+        // 403/404/red: sigue estacionado, sin perderse.
+      }
     }
-    return pending;
+    adoptParked();
+    const adopted = before.filter(id => !parked.has(id) && pending.has(id));
+    // Mostrarlos en la biblioteca de este canal mientras se envían.
+    if (adopted.length) onRemote({type: 'refresh', docs: adopted.map(id => pending.get(id)?.doc).filter(Boolean)});
+    if (pending.size) schedule(0);
+    return parked.size;
+  }
+
+  /** "Descartar": el usuario decide borrar los cambios estacionados. */
+  function discardParked() {
+    if (!parked.size) return 0;
+    const count = parked.size;
+    parked.clear();
+    persistParked();
+    onRemote({type: 'parked-changed'});
+    return count;
   }
 
   /** Devuelve una entrada antigua a la cola estacionada (sin perderla). */
@@ -339,11 +433,11 @@ export function createDocsSync({
     pending.delete(id);
     // Sin acceso desde este canal: no volver a encolarlo aquí (ni como nuevo).
     abandoned.add(id);
-    if (hasLegacyQueue) parked.set(id, {...entry, failed: null});
+    if (hasLegacyQueue) parked.set(id, {...entry, legacy: true, failed: null});
     persist();
     persistParked();
     setState(id, 'error', message || 'Este cambio pertenece a otro canal. Lo guardamos en este dispositivo y se enviará al abrir Bardo en ese canal.');
-    onRemote({type: 'parked', id});
+    onRemote({type: 'parked-changed', id});
     return 'done';
   }
 
@@ -641,13 +735,29 @@ export function createDocsSync({
       setState(id, 'saved');
       return 'done';
     }
+    // Llegaron cambios durante el envío: las tareas ya enviadas no deben volver
+    // a "reaplicarse" sobre texto nuevo; si lo pendiente no es solo tareas,
+    // cualquier 409 posterior va por el camino normal de conflicto.
+    if (entry.checklistOps?.length && !isChecklistOnly(entry)) clearChecklist(entry);
     persist();
     return 'again';
   }
 
-  /** ¿La entrada solo contiene tareas marcadas en el lector (sin otras ediciones)? */
+  /**
+   * ¿La entrada solo contiene tareas marcadas en el lector (sin otras
+   * ediciones)? Se exige la misma versión registrada al marcar: cualquier
+   * cambio posterior (texto, guardados) la invalida y va por el camino normal.
+   */
   function isChecklistOnly(entry) {
-    return Boolean(entry.checklistOps?.length) && entry.checklistSig === docSignature(entry.doc);
+    return Boolean(entry.checklistOps?.length)
+      && entry.checklistVersion === entry.version
+      && entry.checklistSig === docSignature(entry.doc);
+  }
+
+  function clearChecklist(entry) {
+    delete entry.checklistOps;
+    delete entry.checklistSig;
+    delete entry.checklistVersion;
   }
 
   /**
@@ -662,6 +772,8 @@ export function createDocsSync({
       } catch {
         current = null;
       }
+      // Si mientras tanto llegaron otras ediciones, ya no son solo tareas.
+      if (!isChecklistOnly(entry)) return conflict(id, entry, current);
     }
     entry.rebaseAttempts = (entry.rebaseAttempts || 0) + 1;
     const serverLocal = current ? serverDocToLocal(current) : null;
@@ -692,8 +804,12 @@ export function createDocsSync({
     entry.failed = null;
     entry.baseUpdatedAt = current.updatedAt || null;
     entry.checklistSig = docSignature(rebased);
-    persist();
     onRemote({type: 'replace', docs: [rebased]});
+    // La app adopta la versión combinada (eso sube la versión): sigue siendo
+    // solo tareas si el contenido no cambió.
+    if (docSignature(entry.doc) === entry.checklistSig) entry.checklistVersion = entry.version;
+    else clearChecklist(entry);
+    persist();
     return 'again';
   }
 
@@ -707,18 +823,22 @@ export function createDocsSync({
     if (!entry || !op || !Number.isInteger(Number(op.index))) return false;
     const prevSig = prevDoc ? docSignature(prevDoc) : null;
     const normalized = {index: Number(op.index), done: Boolean(op.done)};
-    if (entry.checklistOps?.length && entry.checklistSig === prevSig) {
+    // `entry.version - 1`: la versión justo antes de esta tarea (track la subió).
+    const continuing = entry.checklistOps?.length
+      && entry.checklistSig === prevSig
+      && entry.checklistVersion === entry.version - 1;
+    if (continuing) {
       entry.checklistOps = [...entry.checklistOps, normalized];
     } else if (!entry.checklistOps?.length && prevSig && remote.get(id)?.sig === prevSig) {
       entry.checklistOps = [normalized];
       entry.rebaseAttempts = 0;
     } else {
-      delete entry.checklistOps;
-      delete entry.checklistSig;
+      clearChecklist(entry);
       persist();
       return false;
     }
     entry.checklistSig = docSignature(entry.doc);
+    entry.checklistVersion = entry.version;
     persist();
     return true;
   }
@@ -884,6 +1004,9 @@ export function createDocsSync({
     remote,
     pending,
     parked,
+    parkedSummary,
+    retryParked,
+    discardParked,
     loadPending,
     registerRemote,
     registerCached,

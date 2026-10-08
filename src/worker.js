@@ -706,7 +706,11 @@ export function attachmentDisposition(fileName) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\x20-\x7E]/g, '_')
     .replace(/["\\]/g, '_');
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  // RFC 5987: encodeURIComponent leaves ' ( ) * unescaped, but they are not
+  // valid attr-chars in filename*.
+  const encoded = encodeURIComponent(fileName)
+    .replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 /**
@@ -1003,7 +1007,15 @@ async function routeRequest(request, env, ctx) {
     }
 
     if (request.method === 'GET' && (route.action === 'export' || route.action === 'download')) {
-      return handleDocumentExportApi(request, url, route.documentId, env);
+      if (!url.searchParams.get('t')) return handleDocumentExportApi(request, url, route.documentId, env);
+      // Signed links are opened in the system browser: whatever fails, show a
+      // readable Spanish page instead of a raw JSON error.
+      try {
+        return await handleDocumentExportApi(request, url, route.documentId, env);
+      } catch (error) {
+        console.error('Error exportando documento (enlace firmado):', error);
+        return downloadErrorPage(500, 'No pudimos preparar la descarga', 'Vuelve a Bardo en Discord e inténtalo de nuevo en unos segundos.');
+      }
     }
 
     if (request.method === 'GET' && route.action === 'source') {

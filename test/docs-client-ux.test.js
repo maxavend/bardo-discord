@@ -93,25 +93,91 @@ function legacyQueue(entries) {
   return JSON.stringify({version: 1, entries});
 }
 
-test('cola antigua: un documento de OTRO canal no se crea aquí ni aparece en la biblioteca', async () => {
+test('cola antigua: documentos que nunca llegaron al servidor se adoptan en el primer canal, se crean y se ven', async () => {
   const pendingKey = `${sync.DOCS_PENDING_KEY}@g1:general`;
-  const privateDoc = {id: 'local-privado', title: 'Secreto', description: '', body: '<p>Solo del canal privado</p>'};
+  const newDoc = {id: 'local-nuevo', title: 'Nuevo sin enviar', description: '', body: '<p>Texto</p>'};
+  const conflictCopy = {
+    id: 'local-copia', title: 'Plan (copia en conflicto)', description: '', body: '<p>Mi versión</p>',
+    origin: 'Copia en conflicto', createdAt: '2026-10-05T00:00:00.000Z', serverUpdatedAt: '2026-10-01T00:00:00.000Z',
+  };
   const store = memoryStorage({
-    [sync.DOCS_PENDING_KEY]: legacyQueue({'local-privado': {doc: privateDoc, baseUpdatedAt: null, version: 1}}),
+    [sync.DOCS_PENDING_KEY]: legacyQueue({'local-nuevo': {doc: newDoc, baseUpdatedAt: null, version: 1}}),
+    // La copia en conflicto solo quedó en la copia global antigua de la biblioteca.
+    [storage.DOCS_KEYS.store]: JSON.stringify({version: 1, docs: [conflictCopy, serverDoc('d9', 'De otro canal')]}),
   });
-  const server = fakeServer(() => { throw new Error('no debería llamar al servidor'); });
-  const engine = sync.createDocsSync({request: server.request, storage: store, pendingKey, legacyPendingKey: sync.DOCS_PENDING_KEY});
+  const legacyDocs = JSON.parse(store.getItem(storage.DOCS_KEYS.store)).docs;
+  const server = fakeServer(call => ({document: serverDoc(call.body.id, 'x', {title: call.body.title})}));
+  const events = [];
+  const engine = sync.createDocsSync({
+    request: server.request, storage: store, pendingKey, legacyPendingKey: sync.DOCS_PENDING_KEY, onRemote: event => events.push(event),
+  });
+  engine.registerRemote([serverDoc('d1', 'Hola')]);
+  assert.equal(engine.loadPending({legacyDocs}), true, 'la cola antigua quedó guardada: se puede borrar la copia global');
+
+  assert.deepEqual([...engine.pending.keys()].sort(), ['local-copia', 'local-nuevo']);
+  assert.equal(engine.parked.size, 0);
+  assert.deepEqual(engine.parkedSummary(), []);
+  const visible = engine.overlayPending([sync.serverDocToLocal(serverDoc('d1', 'Hola'))]);
+  assert.deepEqual(visible.map(doc => doc.id).sort(), ['d1', 'local-copia', 'local-nuevo'], 'se ven en la biblioteca');
+  await engine.flush();
+  assert.deepEqual(server.calls.map(c => `${c.method} ${c.path}`).sort(), ['POST /api/docs', 'POST /api/docs']);
+  assert.equal(engine.pending.size, 0);
+  // Ya no quedan en la cola antigua: otro canal no los vuelve a crear.
+  assert.deepEqual(JSON.parse(store.getItem(sync.DOCS_PENDING_KEY)).entries, {});
+  const other = sync.createDocsSync({request: server.request, storage: store, pendingKey: `${sync.DOCS_PENDING_KEY}@g1:otro`, legacyPendingKey: sync.DOCS_PENDING_KEY});
+  other.loadPending({legacyDocs: []});
+  assert.equal(other.pending.size, 0);
+});
+
+test('cola antigua: un cambio de un documento de OTRO canal queda visible, con Reintentar y Descartar', async () => {
+  const pendingKey = `${sync.DOCS_PENDING_KEY}@g1:general`;
+  const otherChannelEdit = {...sync.serverDocToLocal(serverDoc('d7', 'Privado', {title: 'Plan privado'})), body: '<p>Editado</p>'};
+  const store = memoryStorage({
+    [sync.DOCS_PENDING_KEY]: legacyQueue({d7: {doc: otherChannelEdit, baseUpdatedAt: '2026-10-01T00:00:00.000Z', version: 1}}),
+  });
+  const server = fakeServer(() => { throw new sync.HttpError(403, {error: 'forbidden', message: 'Este documento no está compartido en este canal de Discord.'}); });
+  const events = [];
+  const engine = sync.createDocsSync({
+    request: server.request, storage: store, pendingKey, legacyPendingKey: sync.DOCS_PENDING_KEY, onRemote: event => events.push(event),
+  });
   engine.registerRemote([serverDoc('d1', 'Hola')]);
   engine.loadPending();
 
-  assert.equal(engine.pending.size, 0, 'no se adopta: no pertenece a este canal');
+  assert.equal(engine.pending.size, 0, 'no se envía ni se crea en este canal');
+  assert.deepEqual(engine.parkedSummary(), [{id: 'd7', title: 'Plan privado'}], 'visible para el usuario');
+  assert.deepEqual(engine.overlayPending([]).map(doc => doc.id), [], 'no se mezcla con la biblioteca de este canal');
+
+  // Reintentar: este canal no tiene acceso → sigue estacionado, sin perderse.
+  assert.equal(await engine.retryParked(), 1);
+  assert.deepEqual(server.calls.map(c => `${c.method} ${c.path}`), ['GET /api/docs/d7']);
+  assert.ok(JSON.parse(store.getItem(sync.DOCS_PENDING_KEY)).entries.d7);
+
+  // Descartar: solo cuando el usuario lo decide.
+  assert.equal(engine.discardParked(), 1);
+  assert.deepEqual(engine.parkedSummary(), []);
+  assert.deepEqual(JSON.parse(store.getItem(sync.DOCS_PENDING_KEY)).entries, {});
+  assert.ok(events.some(e => e.type === 'parked-changed'));
+});
+
+test('Reintentar adopta y envía un cambio estacionado cuando este canal sí tiene acceso', async () => {
+  const pendingKey = `${sync.DOCS_PENDING_KEY}@g1:general`;
+  const edit = {...sync.serverDocToLocal(serverDoc('d8', 'Antes')), body: '<p>Después</p>'};
+  const store = memoryStorage({
+    [sync.DOCS_PENDING_KEY]: legacyQueue({d8: {doc: edit, baseUpdatedAt: '2026-10-01T00:00:00.000Z', version: 1}}),
+  });
+  const server = fakeServer(call => (call.method === 'GET'
+    ? serverDoc('d8', 'Antes')
+    : {document: serverDoc('d8', 'Después', {updatedAt: '2026-10-02T00:00:00.000Z'})}));
+  const events = [];
+  const engine = sync.createDocsSync({
+    request: server.request, storage: store, pendingKey, legacyPendingKey: sync.DOCS_PENDING_KEY, onRemote: event => events.push(event),
+  });
+  engine.loadPending();
   assert.equal(engine.parked.size, 1);
-  const visible = engine.overlayPending([sync.serverDocToLocal(serverDoc('d1', 'Hola'))]);
-  assert.deepEqual(visible.map(doc => doc.id), ['d1'], 'no se muestra en la biblioteca de este canal');
+  assert.equal(await engine.retryParked(), 0);
   await engine.flush();
-  assert.equal(server.calls.length, 0, 'nunca se hace POST en este canal');
-  // Sigue guardada (estacionada) para el canal correcto.
-  assert.ok(JSON.parse(store.getItem(sync.DOCS_PENDING_KEY)).entries['local-privado']);
+  assert.deepEqual(server.calls.map(c => c.method), ['GET', 'PATCH']);
+  assert.ok(events.some(e => e.type === 'refresh' && e.docs.some(doc => doc.id === 'd8')), 'se muestra en la biblioteca');
 });
 
 test('cola antigua: un documento de ESTE canal se adopta y se guarda con PATCH', async () => {
@@ -151,7 +217,8 @@ test('cola antigua: un 403 la estaciona (no se pierde) y NUNCA se recrea como do
   await engine.flush();
   assert.deepEqual(server.calls.map(c => c.method), ['PATCH']);
   assert.ok(!events.some(e => e.type === 'recreated'), 'sin copia nueva en este canal');
-  assert.ok(events.some(e => e.type === 'parked'));
+  assert.ok(events.some(e => e.type === 'parked-changed'));
+  assert.deepEqual(engine.parkedSummary().map(item => item.id), ['d1'], 'visible para el usuario');
   assert.equal(engine.pending.size, 0);
   assert.ok(JSON.parse(store.getItem(sync.DOCS_PENDING_KEY)).entries.d1, 'queda estacionada');
   // Y no se vuelve a encolar desde el store de este canal.
@@ -255,6 +322,38 @@ test('con otras ediciones sin enviar, un 409 sigue el camino normal de conflicto
   assert.equal(engine.noteChecklistToggle('d1', {index: 0, done: true}, edited), false);
   await engine.flush();
   assert.ok(events.some(e => e.type === 'conflict'));
+});
+
+test('texto editado mientras se guardaba una tarea: un 409 posterior NO reaplica solo tareas (va a conflicto)', async () => {
+  const base = checklistServerDoc('- [ ] uno', '2026-10-01T00:00:00.000Z');
+  const events = [];
+  let engine;
+  let release;
+  const server = fakeServer((call, n) => {
+    if (n === 1) {
+      // Primer PATCH (la tarea): mientras viaja, el usuario escribe texto.
+      return new Promise(resolve => { release = () => resolve({document: checklistServerDoc('- [x] uno', '2026-10-01T00:01:00.000Z')}); });
+    }
+    throw new sync.HttpError(409, {error: 'conflict', document: checklistServerDoc('- [x] uno\n\nDe otra persona', '2026-10-01T00:02:00.000Z')});
+  });
+  engine = sync.createDocsSync({request: server.request, onRemote: event => events.push(event)});
+  engine.registerRemote([base]);
+  const before = sync.serverDocToLocal(base);
+  const ticked = {...before, body: text.applyChecklistOps(before.body, [{index: 0, done: true}])};
+  engine.track({docs: [ticked]});
+  engine.noteChecklistToggle('d1', {index: 0, done: true}, before);
+  const running = engine.flush();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  // Edición de texto durante el envío.
+  engine.track({docs: [{...ticked, body: `${ticked.body}<p>Mi texto nuevo</p>`}]});
+  release();
+  await running;
+  await engine.flush();
+
+  assert.ok(events.some(e => e.type === 'conflict'), 'el texto nuevo se conserva como copia en conflicto');
+  const conflictEvent = events.find(e => e.type === 'conflict');
+  assert.match(conflictEvent.localDoc.body, /Mi texto nuevo/);
+  assert.ok(!events.some(e => e.type === 'replace'), 'no se reaplican solo las tareas sobre la versión del servidor');
 });
 
 test('applyChecklistOps marca por índice y avisa si el ítem ya no existe', () => {
@@ -507,4 +606,36 @@ test('errores de red y del servidor se muestran en español', () => {
   assert.equal(sync.userFacingError(new TypeError('Failed to fetch'), 'Respaldo'), 'Respaldo');
   assert.doesNotMatch(friendlyAuthError(new Error('RPC_ERROR: something')), /RPC/);
   assert.match(friendlyAuthError(Object.assign(new Error('x'), {code: 'timeout'})), /tardó demasiado/);
+});
+
+/* ── Acta: guardar de nuevo sin perder ediciones hechas en Documentos ──── */
+
+test('guardar de nuevo un acta: sin cambios se actualiza; editada en Documentos pregunta', async () => {
+  const {buildMinutesDoc, buildMinutesCopy, minutesContentHash, planMinutesSave} = await import('../activity-app/src/planner/minutes-doc.js');
+  const md = '# Acta: Weekly\n\n## Acuerdos\n\n- Lanzar el viernes';
+  const first = buildMinutesDoc({id: 'minutes-1', title: 'Acta: Weekly', body: md}, {now: '2026-10-08T12:00:00.000Z', editorName: 'Max'});
+  const lastHash = minutesContentHash(first.body);
+  assert.equal(planMinutesSave({existing: null, generatedBody: first.body}), 'create');
+
+  // La reunión cambió pero nadie editó el acta en Documentos → se actualiza sola.
+  const changed = buildMinutesDoc({id: 'minutes-1', title: 'Acta: Weekly', body: `${md}\n- Nuevo acuerdo`}, {existing: first});
+  assert.equal(planMinutesSave({existing: first, generatedBody: changed.body, lastGeneratedHash: lastHash}), 'update');
+
+  // La huella es estable tras guardar y recargar desde el servidor (Markdown -> HTML).
+  const reloaded = {...first, body: markdownToHtml(`# Acta: Weekly\n\n${htmlToMarkdown(first.body)}`, 'Acta: Weekly')};
+  assert.equal(minutesContentHash(reloaded.body), lastHash);
+
+  // Alguien agregó notas en Documentos → preguntar.
+  const edited = {...first, body: `${first.body}<p>Nota agregada en Documentos</p>`};
+  assert.equal(planMinutesSave({existing: edited, generatedBody: changed.body, lastGeneratedHash: lastHash}), 'confirm');
+  // Sin huella (otro dispositivo) y contenido distinto → también pregunta.
+  assert.equal(planMinutesSave({existing: edited, generatedBody: changed.body, lastGeneratedHash: null}), 'confirm');
+  // Si el acta generada es igual a lo que ya hay, no hace falta preguntar.
+  assert.equal(planMinutesSave({existing: first, generatedBody: first.body, lastGeneratedHash: null}), 'update');
+
+  // "Guardar como copia nueva" no toca el acta editada y no repite el título en el cuerpo.
+  const copy = buildMinutesCopy({id: 'minutes-1', title: 'Acta: Weekly', body: md}, {id: 'local-copia', now: '2026-10-08T14:00:00.000Z'});
+  assert.equal(copy.id, 'local-copia');
+  assert.equal(copy.title, 'Acta: Weekly (nueva versión)');
+  assert.doesNotMatch(copy.body, /<h1>/);
 });

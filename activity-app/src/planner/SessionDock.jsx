@@ -118,8 +118,10 @@ export function SessionDock({
           </span>
         </div>
 
-        {/* min-w-0 + truncated labels: on 320px phones "⋮" (Terminar reunión) must stay on screen. */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 max-w-full ml-auto">
+        {/* Phones (<640px): controls row (grabación · pausa · ⋮) and the primary
+            action on its own full-width row, so "⋮" (Terminar reunión) is never
+            pushed off-screen at 320–390px, recording or not. */}
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-1.5 sm:gap-2 min-w-0 w-full sm:w-auto ml-auto">
           {/* Grabación */}
           {isRecording || isRecPaused ? (
             <div
@@ -128,7 +130,8 @@ export function SessionDock({
             >
               <div className="flex items-center gap-1.5 select-none">
                 <MaterialMorphShape size={11} color="danger" isPaused={isRecPaused} className="shrink-0" />
-                <span className="text-xs font-semibold">{isRecPaused ? 'Grabación en pausa' : 'Grabando'}</span>
+                <span className="text-xs font-semibold hidden min-[420px]:inline">{isRecPaused ? 'Grabación en pausa' : 'Grabando'}</span>
+                <span className="sr-only min-[420px]:hidden">{isRecPaused ? 'Grabación en pausa' : 'Grabando'}</span>
               </div>
               <span className="tabular-nums font-mono text-[11px] font-medium text-destructive/80 px-1">
                 {formatMsToClock(recordingElapsedMs)}
@@ -192,7 +195,7 @@ export function SessionDock({
               size="xs"
               onClick={onPrimaryAction}
               disabled={isBusy}
-              className="h-7 min-w-0 rounded-full gap-1 px-3 text-xs font-semibold cursor-pointer shadow-2xs"
+              className="order-last sm:order-none w-full sm:w-auto h-8 sm:h-7 min-w-0 shrink rounded-full gap-1 px-3 text-xs font-semibold cursor-pointer shadow-2xs"
             >
               {primary.key === 'finish' ? <Flag className="size-3 shrink-0" /> : null}
               <span className="truncate">{primary.label}</span>

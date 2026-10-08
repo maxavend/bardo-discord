@@ -223,3 +223,109 @@ test('microphone errors explain how to allow the mic in Discord, never the raw b
   assert.equal(isMobileUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'), true);
   assert.equal(isMobileUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) discord/1.0'), false);
 });
+
+// ── Review fixes ───────────────────────────────────────────────────────────
+
+import {finishLiveSessionWith, skipActivePoint, skipActiveBlock, saveFinalizedRecording} from '../activity-app/src/planner/session-runner.js';
+import {resolveTimeCommit, parseTime24, formatTime24} from '../activity-app/src/components/ui/time-picker-utils.js';
+
+function sessionAtLastTema() {
+  let session = createLiveSession(PLANNER, T0);
+  session = advanceLiveSession(PLANNER, session, T0 + MINUTE);
+  session = advanceLiveSession(PLANNER, session, T0 + 2 * MINUTE);
+  session = advanceLiveSession(PLANNER, session, T0 + 3 * MINUTE); // b3/t3, the last tema
+  return session;
+}
+
+test('skipping the last tema/bloque would end the meeting, so it must be confirmed first', () => {
+  const last = sessionAtLastTema();
+  assert.equal(skipActivePoint(PLANNER, last, T0 + 4 * MINUTE).status, SESSION_STATUS.COMPLETED);
+  assert.equal(skipActiveBlock(PLANNER, last, T0 + 4 * MINUTE).status, SESSION_STATUS.COMPLETED);
+  // Not the last: skipping just moves on (no confirmation needed).
+  assert.equal(skipActivePoint(PLANNER, createLiveSession(PLANNER, T0), T0 + MINUTE).status, SESSION_STATUS.RUNNING);
+});
+
+test('finishLiveSessionWith applies the confirmed action and always ends the meeting', () => {
+  const last = sessionAtLastTema();
+  const advanced = finishLiveSessionWith('advance', PLANNER, last, T0 + 5 * MINUTE);
+  assert.equal(advanced.status, SESSION_STATUS.COMPLETED);
+  assert.equal(advanced.pointStatuses.t3, POINT_STATUS.DONE);
+
+  const skipped = finishLiveSessionWith('skip-point', PLANNER, last, T0 + 5 * MINUTE);
+  assert.equal(skipped.status, SESSION_STATUS.COMPLETED);
+  assert.equal(skipped.pointStatuses.t3, POINT_STATUS.SKIPPED);
+
+  const fromMenu = finishLiveSessionWith('finish', PLANNER, createLiveSession(PLANNER, T0), T0 + MINUTE);
+  assert.equal(fromMenu.status, SESSION_STATUS.COMPLETED);
+  assert.notEqual(fromMenu.pointStatuses.t1, POINT_STATUS.DONE, 'ending from the menu marks nothing');
+});
+
+test('the finished recording is merged into the CURRENT state, keeping changes made while it was saved', () => {
+  const committed = advanceLiveSession(PLANNER, createLiveSession(PLANNER, T0), T0 + MINUTE);
+  // While the previous audio part is being saved, the group adds +5 min and ticks a tema.
+  const current = setPointStatus(extendActiveBlock(committed, 'b1', 5), 't1', POINT_STATUS.PENDING);
+  const merged = saveFinalizedRecording(current, {id: 'rec-1', pointId: 't1'});
+  assert.equal(merged.blockExtensions.b1.extensionMinutes, 5);
+  assert.equal(merged.pointStatuses.t1, POINT_STATUS.PENDING);
+  assert.deepEqual(merged.recordings.map((recording) => recording.id), ['rec-1']);
+});
+
+test('rollover while the meeting is paused starts the new part paused, and track listeners never pile up', async () => {
+  const previousNavigator = globalThis.navigator;
+  const previousMediaRecorder = globalThis.MediaRecorder;
+  const listeners = new Set();
+  const track = {
+    stop() {},
+    addEventListener(type, fn) { if (type === 'ended') listeners.add(fn); },
+    removeEventListener(type, fn) { if (type === 'ended') listeners.delete(fn); },
+  };
+  const stream = {getTracks: () => [track]};
+  class SlowStopRecorder extends FakeMediaRecorder {
+    stop() { this.state = 'inactive'; } // onstop delivered later
+  }
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {mediaDevices: {getUserMedia: async () => stream}},
+  });
+  globalThis.MediaRecorder = SlowStopRecorder;
+  FakeMediaRecorder.instances = [];
+  try {
+    const controller = new RecordingController();
+    await controller.startRecording('s1', 'b1', 'Novedades', 't1', 'Uno');
+    controller.pauseRecording();
+    assert.equal(listeners.size, 1);
+
+    const pending = controller.rolloverRecording({blockId: 'b1', pointId: 't2', pointTitle: 'Dos', startPaused: true});
+    // Synchronously paused: nothing is captured while the old part is still stopping.
+    assert.equal(controller.getStatus(), RECORDING_STATUS.PAUSED);
+    assert.equal(FakeMediaRecorder.instances.at(-1).state, 'paused');
+    assert.equal(controller.getElapsedRecordingMs(Date.now() + 60_000), 0);
+    assert.equal(listeners.size, 1, 'the previous recorder listener was removed');
+
+    FakeMediaRecorder.instances[0].onstop?.();
+    const previous = await pending;
+    assert.equal(previous.pointId, 't1');
+
+    controller.resumeRecording();
+    assert.equal(controller.getStatus(), RECORDING_STATUS.RECORDING);
+    controller.cleanup({clearContext: true});
+    assert.equal(listeners.size, 0);
+  } finally {
+    if (previousNavigator === undefined) delete globalThis.navigator;
+    else Object.defineProperty(globalThis, 'navigator', {configurable: true, value: previousNavigator});
+    if (previousMediaRecorder === undefined) delete globalThis.MediaRecorder;
+    else globalThis.MediaRecorder = previousMediaRecorder;
+  }
+});
+
+test('time picker only writes on close when the user actually changed the time', () => {
+  const loaded = parseTime24('15:30');
+  assert.deepEqual(loaded, {hour12: 3, minute: 30, period: 'PM'});
+  // Opened and closed without touching anything: never overwrite (a colleague may have changed it).
+  assert.equal(resolveTimeCommit({dirty: false, hour: '03', minute: '30', period: 'PM', value: '16:00'}), null);
+  // Touched but ended on the same value: nothing to write.
+  assert.equal(resolveTimeCommit({dirty: true, hour: '03', minute: '30', period: 'PM', value: '15:30'}), null);
+  assert.equal(resolveTimeCommit({dirty: true, hour: '04', minute: '30', period: 'PM', value: '15:30'}), '16:30');
+  assert.equal(resolveTimeCommit({dirty: true, hour: '13', minute: '75', period: 'AM', value: '15:30'}), '00:59');
+  assert.equal(formatTime24(12, 0, 'AM'), '00:00');
+});

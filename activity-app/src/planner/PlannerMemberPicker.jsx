@@ -631,7 +631,7 @@ export function SinglePersonPicker({
   value = '',
   onChange,
   renderTrigger,
-  clearLabel = 'Quitar facilitador',
+  clearLabel = 'Quitar a quien facilita',
   align = 'start',
 }) {
   const [open, setOpen] = useState(false);

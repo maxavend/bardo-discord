@@ -38,8 +38,16 @@ test('en vivo, las extensiones de bloque corren el término estimado solo si sup
   assert.equal(getPlannedSchedule({ startTime: '10:00', targetDuration: 60, blocks: [{ durationMinutes: 55 }] }, live).estimatedEnd, '11:05');
 });
 
-test('durationUntil rechaza un término igual o anterior al inicio (típico error a.m./p.m.)', () => {
+test('durationUntil rechaza un término igual o un probable error a.m./p.m.', () => {
   assert.equal(durationUntil('14:30', '15:15'), 45);
   assert.equal(durationUntil('14:30', '14:30'), null);
+  // 14:30 → 02:45 would be 12 h 15 min: almost surely an a.m./p.m. slip.
   assert.equal(durationUntil('14:30', '02:45'), null);
+});
+
+test('durationUntil acepta reuniones que cruzan la medianoche (hasta 12 h)', () => {
+  assert.equal(durationUntil('23:30', '00:30'), 60);
+  assert.equal(durationUntil('22:00', '01:15'), 195);
+  assert.equal(durationUntil('20:00', '08:00'), 720);
+  assert.equal(durationUntil('20:00', '08:01'), null);
 });

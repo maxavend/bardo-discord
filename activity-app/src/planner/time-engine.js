@@ -152,11 +152,19 @@ export function getPlannedSchedule({startTime = '10:00', targetDuration = 0, blo
   };
 }
 
+/** Longest meeting accepted when the end is earlier on the clock (crosses midnight). */
+export const MAX_OVERNIGHT_MINUTES = 12 * 60;
+
 /**
- * Minutes between start and a chosen end time, or null when the end is not
- * after the start (likely an AM/PM slip; meetings don't cross midnight).
+ * Minutes between start and a chosen end time. An end earlier on the clock is
+ * read as crossing midnight (23:30 → 00:30 = 60 min) only when that gives at
+ * most 12 h; otherwise it is likely an a.m./p.m. slip and returns null. Equal
+ * times are rejected.
  */
 export function durationUntil(startTime, endTime) {
   const diff = clockToMinutes(endTime) - clockToMinutes(startTime || '10:00');
-  return diff > 0 ? diff : null;
+  if (diff > 0) return diff;
+  if (diff === 0) return null;
+  const overnight = diff + 24 * 60;
+  return overnight <= MAX_OVERNIGHT_MINUTES ? overnight : null;
 }

@@ -14,6 +14,7 @@ export const DOCS_KEYS = Object.freeze({
   journal: 'bardo.docs.editing.v1',
   pending: 'bardo.sync.pending.v1',
   importFailures: 'bardo.docs.import-failures.v1',
+  minutesHashes: 'bardo.docs.minutes-hashes.v1',
 });
 
 let currentScope = null;

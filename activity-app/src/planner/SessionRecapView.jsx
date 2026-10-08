@@ -130,7 +130,7 @@ export function SessionRecapView({
               </Button>
               {onSaveDocToLibrary && (
                 <Button variant="default" size="sm" onClick={handleSaveDoc} className="h-8 px-3 font-semibold">
-                  <FileTextIcon className="size-3.5" /> Guardar acta en Docs
+                  <FileTextIcon className="size-3.5" /> Guardar acta en Documentos
                 </Button>
               )}
               <Button variant="ghost" size="sm" onClick={onNewSession} className="h-8 px-2.5 text-muted-foreground hover:text-foreground">
@@ -164,7 +164,7 @@ export function SessionRecapView({
               <div className="flex flex-col gap-0.5">
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Acuerdos</span>
                 <strong className="text-base text-foreground">{recap.decisions.length}</strong>
-                <span className="text-[11px] text-muted-foreground">registradas</span>
+                <span className="text-[11px] text-muted-foreground">registrados</span>
               </div>
             </div>
           </Card>
