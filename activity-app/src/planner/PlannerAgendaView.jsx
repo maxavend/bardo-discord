@@ -58,6 +58,7 @@ import { shouldLoadDemoFixture } from './planner-store.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
+  SinglePersonPicker,
 } from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
@@ -216,10 +217,11 @@ export function PlannerAgendaView({
 
     if (isEditing) {
       return (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <button
+        <SinglePersonPicker
+          value={leaderName}
+          onChange={(name) => onUpdateBlock?.(block.id, { leader: name })}
+          renderTrigger={() => (
+            <button
                 type="button"
                 className="inline-flex items-center gap-1 text-xs transition-colors cursor-pointer group text-left"
               >
@@ -247,24 +249,8 @@ export function PlannerAgendaView({
                   </span>
                 )}
               </button>
-            }
-          />
-          <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
-            <SearchableParticipantMenu
-              singleSelect
-              hideRoles
-              selectedKeys={leaderName ? new Set([leaderName]) : new Set()}
-              onSelectionChange={(keys) => {
-                const selectedLeader = keys[0] ? keys[0].replace(/^@/, '') : '';
-                onUpdateBlock?.(block.id, { leader: selectedLeader });
-              }}
-              onAddCustomParticipant={(tag) => {
-                const clean = tag.replace(/^@/, '');
-                onUpdateBlock?.(block.id, { leader: clean });
-              }}
-            />
-          </PopoverContent>
-        </Popover>
+          )}
+        />
       );
     }
 

@@ -1,4 +1,4 @@
-import {computePlannerTimes} from './time-engine.js';
+import {computePlannerTimes, getPlannedSchedule} from './time-engine.js';
 import {
   DEFAULT_LIVE_SESSION,
   POINT_STATUS,
@@ -708,7 +708,7 @@ export function generateDiscordAnnouncement(plannerState) {
   const mentions = (computed.mentions || '').trim();
   const dateStr = computed.date || 'Fecha por confirmar';
   const startStr = computed.startTime || '10:00';
-  const totalMin = computed.totalCalculatedDuration || 0;
+  const totalMin = getPlannedSchedule(computed).plannedMinutes;
 
   let text = `📢 **Convocatoria: ${computed.title}**\n`;
   if (mentions) text += `👥 ${mentions}\n`;

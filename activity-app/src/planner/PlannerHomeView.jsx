@@ -22,7 +22,8 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { PlusIcon, DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
-import { SESSION_STATUS, recalculateEstimatedEndTime } from './session-runner.js';
+import { SESSION_STATUS } from './session-runner.js';
+import { getPlannedSchedule } from './time-engine.js';
 import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
 import { pluralize, formatTopicsCountLabel, formatRecordingsCountLabel } from './copy-tokens.js';
 
@@ -63,6 +64,7 @@ export function PlannerHomeView({
     date = '',
     startTime = '10:00',
     blocks = [],
+    targetDuration = 0,
     host = '',
     mentions = '',
   } = plannerState || {};
@@ -77,8 +79,9 @@ export function PlannerHomeView({
 
   const isEmpty = isDefaultEmptySession(plannerState);
 
-  const totalMinutes = (blocks || []).reduce((acc, b) => acc + (b.durationMinutes || 0), 0);
-  const estimatedEnd = recalculateEstimatedEndTime({startTime, totalCalculatedDuration: totalMinutes}, sessionState);
+  const schedule = getPlannedSchedule({startTime, targetDuration, blocks}, sessionState);
+  const totalMinutes = schedule.plannedMinutes;
+  const estimatedEnd = isRunning || isPaused ? schedule.estimatedEnd : schedule.plannedEnd;
 
   let formattedDate = date;
   try {

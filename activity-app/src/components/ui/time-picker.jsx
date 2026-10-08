@@ -64,15 +64,18 @@ export function TimePicker({
   const [minute, setMinute] = React.useState(String(initMin).padStart(2, "0"))
   const [period, setPeriod] = React.useState(initPeriod)
 
-  // Sync internal state when external value changes or popover opens
+  // Load the external value only when the popover opens, so a background
+  // update (sync, poll) never resets what the user is typing.
+  const valueRef = React.useRef(value)
+  valueRef.current = value
   React.useEffect(() => {
     if (open) {
-      const parsed = parseTime24(value)
+      const parsed = parseTime24(valueRef.current)
       setHour(String(parsed.hour12).padStart(2, "0"))
       setMinute(String(parsed.minute).padStart(2, "0"))
       setPeriod(parsed.period)
     }
-  }, [open, value])
+  }, [open])
 
   const hourInputRef = React.useRef(null)
   const minuteInputRef = React.useRef(null)
@@ -89,11 +92,16 @@ export function TimePicker({
     }
   }
 
+  // Functional updates: typing two digits moves focus to the minutes from
+  // inside onChange, so this blur runs before React re-renders and a closure
+  // over `hour` would still hold the old value and overwrite what was typed.
   const handleHourBlur = () => {
-    let num = parseInt(hour, 10)
-    if (isNaN(num) || num < 1) num = 12
-    if (num > 12) num = 12
-    setHour(String(num).padStart(2, "0"))
+    setHour((current) => {
+      let num = parseInt(current, 10)
+      if (isNaN(num) || num < 1) num = 12
+      if (num > 12) num = 12
+      return String(num).padStart(2, "0")
+    })
   }
 
   const handleMinuteChange = (e) => {
@@ -102,13 +110,20 @@ export function TimePicker({
   }
 
   const handleMinuteBlur = () => {
-    let num = parseInt(minute, 10)
-    if (isNaN(num) || num < 0) num = 0
-    if (num > 59) num = 59
-    setMinute(String(num).padStart(2, "0"))
+    setMinute((current) => {
+      let num = parseInt(current, 10)
+      if (isNaN(num) || num < 0) num = 0
+      if (num > 59) num = 59
+      return String(num).padStart(2, "0")
+    })
   }
 
   const handleKeyDown = (unit, e) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleConfirm()
+      return
+    }
     if (e.key === "ArrowUp") {
       e.preventDefault()
       if (unit === "hour") {
@@ -140,7 +155,11 @@ export function TimePicker({
     }
   }
 
-  const handleConfirm = () => {
+  // Closing the popover keeps the edit (outside click / Tab away), like any
+  // other field; only Escape and "Cancelar" discard it.
+  const discardRef = React.useRef(false)
+
+  const commit = () => {
     let validHour = parseInt(hour, 10)
     if (isNaN(validHour) || validHour < 1) validHour = 12
     if (validHour > 12) validHour = 12
@@ -150,11 +169,27 @@ export function TimePicker({
     if (validMin > 59) validMin = 59
 
     const time24 = formatTime24(validHour, validMin, period)
-    onChange?.(time24)
+    if (time24 !== value) onChange?.(time24)
+  }
+
+  const handleOpenChange = (nextOpen, eventDetails) => {
+    if (nextOpen) {
+      discardRef.current = false
+    } else {
+      const reason = eventDetails?.reason
+      if (!discardRef.current && reason !== "escape-key") commit()
+    }
+    setOpen(nextOpen)
+  }
+
+  const handleConfirm = () => {
+    commit()
+    discardRef.current = true
     setOpen(false)
   }
 
   const handleCancel = () => {
+    discardRef.current = true
     setOpen(false)
   }
 
@@ -173,7 +208,7 @@ export function TimePicker({
   const displayText = value ? formatTimeDisplay(value, lowercasePeriod) : placeholder
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         render={
           renderTrigger ? (
@@ -245,7 +280,7 @@ export function TimePicker({
                 <div className="h-9 flex items-center">
                   <ToggleGroup
                     type="single"
-                    spacing={0}
+                    spacing={0.5}
                     value={[period]}
                     onValueChange={(val) => {
                       const selected = Array.isArray(val) ? val[0] : val
@@ -257,7 +292,7 @@ export function TimePicker({
                       value="AM"
                       aria-label="AM"
                       className={cn(
-                        "h-full px-2 text-xs rounded-lg transition-all border-0 shadow-none font-medium",
+                        "h-full px-2 text-xs rounded-[calc(var(--radius-xl)_-_3px)] transition-all border-0 shadow-none font-medium",
                         period === "AM"
                           ? "bg-background text-foreground shadow-2xs font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-transparent"
@@ -269,7 +304,7 @@ export function TimePicker({
                       value="PM"
                       aria-label="PM"
                       className={cn(
-                        "h-full px-2 text-xs rounded-lg transition-all border-0 shadow-none font-medium",
+                        "h-full px-2 text-xs rounded-[calc(var(--radius-xl)_-_3px)] transition-all border-0 shadow-none font-medium",
                         period === "PM"
                           ? "bg-background text-foreground shadow-2xs font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-transparent"

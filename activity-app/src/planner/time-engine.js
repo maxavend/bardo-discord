@@ -112,3 +112,38 @@ export function computePlannerTimes(plannerState) {
     blocks: computedBlocks,
   };
 }
+
+/**
+ * Planned schedule of a meeting. `targetDuration` is the time the meeting was
+ * booked for (set by "Término" or /reu-new duracion); topics can fill less of
+ * it ("quedan X min libres") but never end before their own total, so the
+ * planned end is start + max(target, topics). While live, block extensions
+ * push the estimated end past the plan.
+ */
+export function getPlannedSchedule({startTime = '10:00', targetDuration = 0, blocks = []} = {}, sessionState = null) {
+  const blocksMinutes = (blocks || []).reduce((total, block) => total + (Number(block?.durationMinutes) || 0), 0);
+  const target = Number(targetDuration) > 0 ? Math.round(Number(targetDuration)) : 0;
+  const plannedMinutes = Math.max(target, blocksMinutes);
+  const extensionsMinutes = Object.values(sessionState?.blockExtensions || {})
+    .reduce((total, extension) => total + (Number(extension?.extensionMinutes) || 0), 0);
+  const estimatedMinutes = Math.max(target, blocksMinutes + extensionsMinutes);
+  const start = clockToMinutes(startTime || '10:00');
+  return {
+    blocksMinutes,
+    targetMinutes: target,
+    plannedMinutes,
+    freeMinutes: Math.max(0, target - blocksMinutes),
+    overMinutes: target > 0 ? Math.max(0, blocksMinutes - target) : 0,
+    plannedEnd: minutesToClock(start + plannedMinutes),
+    estimatedEnd: minutesToClock(start + estimatedMinutes),
+  };
+}
+
+/**
+ * Minutes between start and a chosen end time, or null when the end is not
+ * after the start (likely an AM/PM slip; meetings don't cross midnight).
+ */
+export function durationUntil(startTime, endTime) {
+  const diff = clockToMinutes(endTime) - clockToMinutes(startTime || '10:00');
+  return diff > 0 ? diff : null;
+}

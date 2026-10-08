@@ -33,13 +33,13 @@ import {
   CircleCheckIcon as CheckIcon,
   DeleteIcon as TrashIcon,
 } from '@/components/ui/animated-icons';
-import {
-  SESSION_STATUS,
-  recalculateEstimatedEndTime,
-} from './session-runner.js';
+import { toast } from '@/lib/toast';
+import { SESSION_STATUS } from './session-runner.js';
+import { durationUntil, formatShortDuration, getPlannedSchedule } from './time-engine.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
+  SinglePersonPicker,
 } from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
@@ -95,22 +95,18 @@ export function PlannerSessionHeader({
     date = '',
     startTime = '17:45',
     blocks = [],
-    totalCalculatedDuration = 0,
+    targetDuration = 0,
     host = '',
     mentions = '',
   } = state || {};
 
-  const totalPlannedMinutes = (blocks || []).reduce(
-    (accumulator, b) => accumulator + (b.durationMinutes || 0),
-    0
-  ) || totalCalculatedDuration || 0;
-  // recalculateEstimatedEndTime(plannerState, sessionState): includes live block extensions.
-  const estimatedEndTime = recalculateEstimatedEndTime(
-    {startTime, totalCalculatedDuration: totalPlannedMinutes},
-    sessionState
-  );
-
   const status = sessionState?.status || SESSION_STATUS.IDLE;
+  const schedule = getPlannedSchedule({startTime, targetDuration, blocks}, sessionState);
+  const totalPlannedMinutes = schedule.plannedMinutes;
+  // Live: block extensions push the estimated end past the plan.
+  const isLiveStatus = status === SESSION_STATUS.RUNNING || status === SESSION_STATUS.PAUSED;
+  const estimatedEndTime = isLiveStatus ? schedule.estimatedEnd : schedule.plannedEnd;
+
   const isRunning = status === SESSION_STATUS.RUNNING;
   const isPaused = status === SESSION_STATUS.PAUSED;
   const isInterrupted = status === SESSION_STATUS.INTERRUPTED;
@@ -335,37 +331,47 @@ export function PlannerSessionHeader({
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Término</label>
                 <TimePicker
-                  value={estimatedEndTime || '11:00'}
+                  value={schedule.plannedEnd}
                   onChange={(newEnd) => {
-                    onUpdateHeaderField?.('endTime', newEnd);
-                    try {
-                      const [sh, sm] = (startTime || '10:00').split(':').map(Number);
-                      const [eh, em] = newEnd.split(':').map(Number);
-                      let diff = (eh * 60 + em) - (sh * 60 + sm);
-                      if (diff < 0) diff += 1440;
-                      if (diff > 0) onUpdateHeaderField?.('totalCalculatedDuration', diff);
-                    } catch {
-                      // ignore parse errors
+                    const minutes = durationUntil(startTime, newEnd);
+                    if (minutes == null) {
+                      toast('El término tiene que ser después de la hora de inicio. Revisa a.m. / p.m.');
+                      return;
                     }
+                    // The booked time; changing the start later keeps this duration.
+                    onUpdateHeaderField?.('targetDuration', minutes);
                   }}
                 />
               </div>
 
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Duración</label>
-                <div className="w-full h-9 rounded-full bg-muted/40 border border-border/50 px-3.5 flex items-center justify-center text-xs font-medium text-foreground">
-                  {totalPlannedMinutes >= 60 ? `${Math.floor(totalPlannedMinutes / 60)}h${totalPlannedMinutes % 60 ? ` ${totalPlannedMinutes % 60}m` : ''}` : `${totalPlannedMinutes}m`}
+                <div className="w-full h-9 px-1 flex items-center justify-center text-xs font-medium text-foreground">
+                  {formatShortDuration(totalPlannedMinutes)}
                 </div>
               </div>
             </div>
+
+            {/* Tiempo asignado a temas vs. tiempo reservado */}
+            {schedule.targetMinutes > 0 && (schedule.freeMinutes > 0 || schedule.overMinutes > 0) && (
+              <p
+                role="status"
+                className={`-mt-1 text-xs ${schedule.overMinutes > 0 ? 'text-warning' : 'text-muted-foreground'}`}
+              >
+                {schedule.overMinutes > 0
+                  ? `Los bloques suman ${formatShortDuration(schedule.blocksMinutes)}, ${formatShortDuration(schedule.overMinutes)} más de lo reservado: la reunión terminaría a las ${schedule.plannedEnd}. Acorta los bloques o mueve el término.`
+                  : `Bloques: ${formatShortDuration(schedule.blocksMinutes)} de ${formatShortDuration(schedule.targetMinutes)} · quedan ${formatShortDuration(schedule.freeMinutes)} libres`}
+              </p>
+            )}
 
             {/* Fila 2: Facilita (1fr), Participan (3fr) */}
             <div className="grid grid-cols-[1fr_3fr] gap-3 items-end">
               <div>
                 <label className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
-                <Popover>
-                  <PopoverTrigger
-                    render={
+                <SinglePersonPicker
+                  value={host}
+                  onChange={(name) => onUpdateHeaderField?.('host', name)}
+                  renderTrigger={() => (
                       <button
                         type="button"
                         className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0"
@@ -396,28 +402,12 @@ export function PlannerSessionHeader({
                             })()}
                           </div>
                         ) : (
-                          <span className="truncate text-muted-foreground">Buscar persona</span>
+                          <span className="truncate text-muted-foreground">Elegir persona</span>
                         )}
                         <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
                       </button>
-                    }
-                  />
-                  <PopoverContent align="start" className="p-0 w-auto overflow-hidden">
-                    <SearchableParticipantMenu
-                      singleSelect
-                      hideRoles
-                      selectedKeys={host ? new Set([host]) : new Set()}
-                      onSelectionChange={(keys) => {
-                        const selectedHost = keys[0] ? keys[0].replace(/^@/, '') : '';
-                        onUpdateHeaderField?.('host', selectedHost);
-                      }}
-                      onAddCustomParticipant={(tag) => {
-                        const clean = tag.replace(/^@/, '');
-                        onUpdateHeaderField?.('host', clean);
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
+                  )}
+                />
               </div>
 
               <div>
