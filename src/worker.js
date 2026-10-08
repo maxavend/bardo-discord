@@ -5,7 +5,7 @@ import {
   verifyKey,
 } from 'discord-interactions';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
-import { generateDocxDocument, generatePdfDocument, sanitizeExportFileName } from './export-format.js';
+import { exportFileName, generateDocxDocument, generatePdfDocument } from './export-format.js';
 import {
   buildDocumentPayload,
   buildDocNewPayload,
@@ -15,9 +15,11 @@ import {
   buildReuNewPayload,
   buildReusListPayload,
   BARDO_OPEN_PREFIX,
+  EDIT_DOC_TARGET_PREFIX,
 } from './components.js';
 import { normalizeDocumentId } from './document-id.js';
 import { handleDocsApi, normalizeDocumentImport } from './docs-api.js';
+import { normalizeExportFormat, verifyExportToken } from './export-token.js';
 import { handlePlannerApi } from './planner-api.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
 import { sessionCanAccessDocument } from './document-access.js';
@@ -63,6 +65,25 @@ export function isValidIsoDate(value) {
   const [, y, m, d] = match.map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** The single starting bloque of a meeting created with /reu-new. */
+export function initialReuBlocks(durationMinutes = 60) {
+  const minutes = Number.isFinite(Number(durationMinutes)) && Number(durationMinutes) > 0
+    ? Math.min(Math.round(Number(durationMinutes)), REU_DURATION_MAX_MINUTES)
+    : 60;
+  return [{
+    id: `b-${crypto.randomUUID().slice(0, 8)}`,
+    type: 'block',
+    title: 'Temas de la reunión',
+    durationMinutes: minutes,
+    manualDuration: minutes,
+    leader: '',
+    participants: '',
+    introDesc: '',
+    subpoints: [],
+    decisions: [],
+  }];
 }
 
 export function isValidTime(value) {
@@ -159,7 +180,7 @@ function firstPreviewPage(markdown) {
 
 function pendingImportPreview(sourceType) {
   const label = sourceLabel(sourceType);
-  return `**${label} listo para leer.**\n\nBardo adaptará el contenido al mismo formato del lector cuando abras **Mostrar más** por primera vez.`;
+  return `**${label} recibido.**\n\nBardo convertirá su contenido al formato de Documentos la primera vez que pulses **Abrir documento**.`;
 }
 
 async function processAndSaveDocument(env, interaction, attachment, explicitTitle) {
@@ -242,8 +263,8 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     saved = true;
 
     const documentPayload = buildDocumentPayload(document, {
-      applicationId,
       documentId,
+      attribution: `Subido por ${createdByName}`,
     });
 
     const editRes = await discordFetch(originalMessageUrl, {
@@ -262,7 +283,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     console.error('Error procesando documento en background:', error);
     const detail = error instanceof Error ? error.message : 'Error desconocido.';
     const message = saved
-      ? `El documento se guardó en Bardo y ya aparece en la biblioteca de este canal, pero Discord no aceptó la tarjeta del mensaje. No hace falta volver a subirlo.\n\n${detail.slice(0, MAX_ERROR_DETAIL)}`
+      ? `El documento se guardó y ya aparece en **Documentos** de este canal, pero Discord no aceptó la tarjeta del mensaje. No hace falta volver a subirlo.\n\n${detail.slice(0, MAX_ERROR_DETAIL)}`
       : detail.slice(0, 1500);
     const errorPayload = buildErrorPayload(message);
 
@@ -272,6 +293,60 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       body: JSON.stringify(errorPayload),
     }).catch((err) => console.error('Error enviando mensaje de error a Discord:', err));
   }
+}
+
+function interactionUser(interaction) {
+  const user = interaction.member?.user || interaction.user || null;
+  return {
+    id: user?.id || null,
+    name: interaction.member?.nick || user?.global_name || user?.username || 'Usuario de Discord',
+  };
+}
+
+/**
+ * /doc-new [titulo]: creates the (empty) document right away, shared with this
+ * guild + channel, and posts a card whose button opens it in the editor.
+ */
+async function createDocumentFromCommand(interaction, env) {
+  if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible. Inténtalo de nuevo en unos minutos.');
+  if (!interaction.guild_id || !interaction.channel_id) {
+    return ephemeral('Los documentos se crean dentro de un canal de un servidor de Discord.');
+  }
+
+  const titulo = (interaction.data?.options || []).find((opt) => opt.name === 'titulo')?.value;
+  const title = String(titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, REU_TITLE_MAX) || 'Sin título';
+  const author = interactionUser(interaction);
+  const documentId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  try {
+    await env.DB.batch([
+      insertDocumentStatement(env.DB, documentId, {
+        title,
+        description: '',
+        // Same shape the editor saves: the title heading and an empty body.
+        originalMarkdown: `# ${title}`,
+        pages: [],
+        sourceName: null,
+        createdAt: now,
+        createdBy: author.id || 'unknown',
+        createdByName: author.name,
+        updatedAt: now,
+        updatedBy: author.id || 'unknown',
+        updatedByName: author.name,
+      }),
+      grantDocumentGuildAccessStatement(env.DB, documentId, interaction.guild_id, author.id),
+      grantDocumentChannelAccessStatement(env.DB, documentId, interaction.guild_id, interaction.channel_id, author.id),
+    ]);
+  } catch (error) {
+    console.error('Error creando documento con /doc-new:', error);
+    return ephemeral('No se pudo crear el documento. Inténtalo de nuevo en unos segundos.');
+  }
+
+  return jsonResponse({
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: buildDocNewPayload({ documentId, title, createdByName: author.name }),
+  });
 }
 
 async function handleCommandInteraction(interaction, env, ctx) {
@@ -287,13 +362,20 @@ async function handleCommandInteraction(interaction, env, ctx) {
     const explicitTitle = tituloOption?.value;
 
     if (!resolvedAttachment) {
-      return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: 'No se encontró el archivo adjunto.',
-          flags: InteractionResponseFlags.EPHEMERAL,
-        },
-      });
+      return ephemeral('No se encontró el archivo adjunto. Vuelve a usar `/doc-upload` y elige un archivo.');
+    }
+
+    // Everything that can be checked without downloading is answered right
+    // away (ephemeral, only for the person) instead of a public "pensando…"
+    // message that later turns into an error.
+    if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible. Inténtalo de nuevo en unos minutos.');
+    if (!interaction.guild_id || !interaction.channel_id) {
+      return ephemeral('Los documentos se suben desde un canal de un servidor de Discord.');
+    }
+    try {
+      validateAttachment(resolvedAttachment);
+    } catch (error) {
+      return ephemeral(error instanceof Error ? error.message : 'No se pudo leer el archivo.');
     }
 
     ctx.waitUntil(processAndSaveDocument(env, interaction, resolvedAttachment, explicitTitle));
@@ -304,15 +386,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
   }
 
   if (commandName === 'doc-new') {
-    const options = interaction.data?.options || [];
-    const tituloOption = options.find((opt) => opt.name === 'titulo');
-    const title = tituloOption?.value ? String(tituloOption.value).slice(0, REU_TITLE_MAX) : null;
-
-    const payload = buildDocNewPayload({ title });
-    return jsonResponse({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: payload,
-    });
+    return createDocumentFromCommand(interaction, env);
   }
 
   if (commandName === 'reu-new') {
@@ -355,6 +429,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
     const hostName = interaction.member?.nick || interaction.member?.user?.global_name || interaction.member?.user?.username || interaction.user?.username || 'Organizador';
 
     const now = new Date().toISOString();
+    const targetDuration = typeof duracion === 'number' && duracion > 0 ? Math.min(duracion, REU_DURATION_MAX_MINUTES) : 60;
     const session = {
       id: crypto.randomUUID(),
       guildId: interaction.guild_id,
@@ -364,10 +439,12 @@ async function handleCommandInteraction(interaction, env, ctx) {
       hostName,
       date: fecha || todayInTimeZone(env.BARDO_TIME_ZONE || DEFAULT_TIME_ZONE),
       startTime: hora || '10:00',
-      targetDuration: typeof duracion === 'number' && duracion > 0 ? Math.min(duracion, REU_DURATION_MAX_MINUTES) : 60,
+      targetDuration,
       description: descripcion,
       mentions: '',
-      blocks: [],
+      // One bloque so the meeting can be started right away (a meeting with
+      // no bloques cannot start) and its length matches the requested duracion.
+      blocks: initialReuBlocks(targetDuration),
       status: 'scheduled',
       createdAt: now,
       createdBy: hostId || 'unknown',
@@ -477,7 +554,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
  * ACLs are only *established* for legacy documents that have none: a document
  * already shared with some guild/channel is never widened by a click.
  */
-export async function persistDocumentLaunchContext(db, interaction, documentId, invokingUserId) {
+export async function persistDocumentLaunchContext(db, interaction, documentId, invokingUserId, { intent = documentId } = {}) {
   const guildId = interaction.guild_id;
   const channelId = interaction.channel_id;
   if (!guildId) return;
@@ -513,7 +590,7 @@ export async function persistDocumentLaunchContext(db, interaction, documentId, 
   if (statements.length) await db.batch(statements);
 
   if (channelId) {
-    await saveDocsLaunchIntent(db, invokingUserId, guildId, documentId, channelId);
+    await saveDocsLaunchIntent(db, invokingUserId, guildId, intent, channelId);
   }
 }
 
@@ -544,22 +621,23 @@ async function handleComponentInteraction(interaction, env, ctx) {
     return launchActivityToTarget(env, ctx, interaction, target);
   }
 
+  // "bardo:open:edit:<id>" (card of /doc-new): same launch as a document
+  // button, but the Activity lands in the editor of that document.
+  const editTarget = target.startsWith(EDIT_DOC_TARGET_PREFIX) ? target : null;
   const documentId = legacyPageInteraction
     ? normalizeDocumentId(interaction.message?.id)
-    : normalizeDocumentId(customId);
+    : editTarget
+      ? normalizeDocumentId(target.slice(EDIT_DOC_TARGET_PREFIX.length))
+      : normalizeDocumentId(customId);
   if (!documentId || !env.DB) {
-    return jsonResponse({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: 'No pude abrir este documento.',
-        flags: InteractionResponseFlags.EPHEMERAL,
-      },
-    });
+    return ephemeral('No pude abrir este documento.');
   }
 
   const persistLaunchContext = async () => {
     try {
-      await persistDocumentLaunchContext(env.DB, interaction, documentId, invokingUserId);
+      await persistDocumentLaunchContext(env.DB, interaction, documentId, invokingUserId, {
+        intent: editTarget ? `${LAUNCH_TARGET_PREFIX}${EDIT_DOC_TARGET_PREFIX}${documentId}` : documentId,
+      });
     } catch (error) {
       console.error('Error persisting Bardo Activity launch context:', error);
     }
@@ -618,27 +696,97 @@ const PRIVATE_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
-function attachmentDisposition(fileName) {
-  return `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+/**
+ * Always a download: ASCII fallback name for old browsers plus the exact
+ * UTF-8 name (tildes, ñ) in `filename*`.
+ */
+export function attachmentDisposition(fileName) {
+  const ascii = String(fileName)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '_')
+    .replace(/["\\]/g, '_');
+  // RFC 5987: encodeURIComponent leaves ' ( ) * unescaped, but they are not
+  // valid attr-chars in filename*.
+  const encoded = encodeURIComponent(fileName)
+    .replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
+ * Error page for signed download links: they are opened in the system
+ * browser, outside Bardo, so the person gets a readable page, not JSON.
+ */
+function downloadErrorPage(status, title, message) {
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">`
+    + `<meta name="viewport" content="width=device-width,initial-scale=1"><title>Bardo · Descarga</title></head>`
+    + `<body style="font-family:system-ui,-apple-system,sans-serif;max-width:32rem;margin:15vh auto;padding:0 16px;line-height:1.5;color:#1f2328">`
+    + `<h1 style="font-size:1.25rem">${title}</h1><p>${message}</p></body></html>`;
+  return new Response(html, {
+    status,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...PRIVATE_HEADERS },
+  });
 }
 
 async function handleDocumentExportApi(request, url, documentId, env) {
+  const requestedFormat = url.searchParams.get('format');
+  const format = requestedFormat ? normalizeExportFormat(requestedFormat) : 'md';
+  const token = url.searchParams.get('t');
+
   if (!env.DB) {
-    return jsonResponse({ error: 'database_unavailable' }, 503);
+    return token
+      ? downloadErrorPage(503, 'Bardo no está disponible', 'Inténtalo de nuevo en unos minutos.')
+      : jsonResponse({ error: 'database_unavailable', message: 'La base de datos de Bardo no está disponible.' }, 503);
   }
 
-  const access = await authorizeDocumentRequest(request, env, documentId);
-  if (access.error) return access.error;
+  if (token) {
+    // Signed link opened outside Discord: the token replaces the session.
+    const grant = format
+      ? await verifyExportToken(env, token, { docId: documentId, format })
+      : { ok: false, reason: 'invalid' };
+    if (!grant.ok) {
+      return grant.reason === 'expired'
+        ? downloadErrorPage(410, 'El enlace de descarga expiró', 'Los enlaces duran 5 minutos. Vuelve a Bardo en Discord y pulsa de nuevo «Descargar».')
+        : downloadErrorPage(403, 'Este enlace de descarga no es válido', 'Vuelve a Bardo en Discord y pulsa de nuevo «Descargar».');
+    }
+  } else {
+    const access = await authorizeDocumentRequest(request, env, documentId);
+    if (access.error) return access.error;
+    if (!format) {
+      return jsonResponse({ error: 'invalid_format', message: 'Elige un formato de descarga válido: Markdown, Word o PDF.' }, 400);
+    }
+  }
 
   const document = await loadDocument(env.DB, documentId);
   if (!document) {
-    return jsonResponse({ error: 'not_found', message: 'No se encontró el documento.' }, 404);
+    return token
+      ? downloadErrorPage(404, 'Este documento ya no existe', 'Puede que alguien lo haya eliminado.')
+      : jsonResponse({ error: 'not_found', message: 'No se encontró el documento.' }, 404);
   }
 
-  const format = url.searchParams.get('format')?.toLowerCase() || 'markdown';
-  const baseName = sanitizeExportFileName(document.title || document.sourceName || 'documento');
+  const baseName = exportFileName(document.title || document.sourceName || 'documento');
 
-  if (format === 'docx' || format === 'word' || format === 'doc') {
+  if (format === 'original') {
+    const source = await loadDocumentSource(env.DB, documentId);
+    if (!source) {
+      return token
+        ? downloadErrorPage(404, 'El archivo original ya no está disponible', 'Bardo solo guarda el original mientras el documento se procesa o si cabe junto al texto.')
+        : jsonResponse({ error: 'source_not_found', message: 'El archivo original ya no está disponible.' }, 404);
+    }
+    const extension = source.type ? `.${String(source.type).replace(/[^a-z0-9]/gi, '')}` : '';
+    const fileName = document.sourceName || `${baseName}${extension}`;
+    return new Response(source.bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': source.mime,
+        'Content-Length': String(source.bytes.byteLength),
+        'Content-Disposition': attachmentDisposition(fileName),
+        ...PRIVATE_HEADERS,
+      },
+    });
+  }
+
+  if (format === 'docx') {
     const fileName = `${baseName}.docx`;
     const docxBytes = await generateDocxDocument(document);
     return new Response(docxBytes, {
@@ -852,14 +1000,22 @@ async function routeRequest(request, env, ctx) {
 
   if (url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
     const route = parseDocumentApiPath(url.pathname);
-    if (!route) return jsonResponse({ error: 'invalid_route' }, 400);
+    if (!route) return jsonResponse({ error: 'invalid_route', message: 'La dirección del documento no es válida.' }, 400);
 
     if (request.method === 'GET' && route.action === null) {
       return handleDocumentApi(request, route.documentId, env);
     }
 
     if (request.method === 'GET' && (route.action === 'export' || route.action === 'download')) {
-      return handleDocumentExportApi(request, url, route.documentId, env);
+      if (!url.searchParams.get('t')) return handleDocumentExportApi(request, url, route.documentId, env);
+      // Signed links are opened in the system browser: whatever fails, show a
+      // readable Spanish page instead of a raw JSON error.
+      try {
+        return await handleDocumentExportApi(request, url, route.documentId, env);
+      } catch (error) {
+        console.error('Error exportando documento (enlace firmado):', error);
+        return downloadErrorPage(500, 'No pudimos preparar la descarga', 'Vuelve a Bardo en Discord e inténtalo de nuevo en unos segundos.');
+      }
     }
 
     if (request.method === 'GET' && route.action === 'source') {
@@ -870,7 +1026,7 @@ async function routeRequest(request, env, ctx) {
       return handleDocumentNormalizeApi(request, route.documentId, env);
     }
 
-    return new Response('Method not allowed', { status: 405 });
+    return jsonResponse({ error: 'method_not_allowed', message: 'Esta acción no está disponible.' }, 405);
   }
 
   if (request.method === 'GET' && url.pathname.startsWith(ACTIVITY_CONTEXT_API_PREFIX)) {

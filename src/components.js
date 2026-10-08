@@ -75,7 +75,18 @@ export function createDocumentPreview(markdown, limit = PREVIEW_LIMIT) {
   return preview;
 }
 
-export function buildDocumentPayload(document, { documentId }) {
+/** Escapes Discord markdown in user-provided names. */
+export function escapeDiscordMarkdown(text) {
+  return String(text ?? '').replace(/([\\*_~`|>#[\]()])/g, '\\$1');
+}
+
+export const OPEN_DOCUMENT_LABEL = 'Abrir documento';
+
+/**
+ * Card of a document in a channel. `attribution` (e.g. "Compartido por Ana")
+ * is shown under the title; the footer names the real button.
+ */
+export function buildDocumentPayload(document, { documentId, attribution = null }) {
   const previewSource = document.pages?.[0] || document.originalMarkdown || '';
   const preview = createDocumentPreview(previewSource);
   const cleanId = normalizeDocumentId(documentId) || documentId;
@@ -85,14 +96,17 @@ export function buildDocumentPayload(document, { documentId }) {
   // context for the embedded Activity without relying on an external deep-link.
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('Abrir documento')
+      .setLabel(OPEN_DOCUMENT_LABEL)
       .setStyle(ButtonStyle.Primary)
       .setCustomId(`${BARDO_OPEN_PREFIX}${cleanId}`),
   );
 
+  const heading = `# 📄 ${truncateText(document.title || 'Documento', 200)}`;
+  const byline = attribution ? `\n-# ${escapeDiscordMarkdown(truncateText(attribution, 120))}` : '';
+
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# 📚 ${truncateText(document.title || 'Documento', 200)}`),
+      new TextDisplayBuilder().setContent(`${heading}${byline}`),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -106,7 +120,7 @@ export function buildDocumentPayload(document, { documentId }) {
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent('*Vista previa · Abre Bardo para ver el documento completo.*'),
+      new TextDisplayBuilder().setContent(`*Vista previa · Pulsa **${OPEN_DOCUMENT_LABEL}** para leerlo completo en Bardo.*`),
     )
     .addActionRowComponents(openRow);
 
@@ -128,7 +142,7 @@ export function buildReuNewPayload({ session, channelName = null }) {
   const durationText = session.targetDuration ? `${session.targetDuration} min` : '60 min';
   const dateText = session.date || 'Hoy';
   const timeText = session.startTime || 'Por definir';
-  const hostText = session.hostName ? ` · Organiza: ${session.hostName}` : '';
+  const hostText = session.hostName ? ` · Facilita: ${session.hostName}` : '';
   const metaLine = `📅 **${dateText}** a las **${timeText}** (${durationText})${hostText}`;
 
   const descLine = session.description ? `\n\n${session.description}` : '';
@@ -219,7 +233,7 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
   }
 
   if (finished.length > 0) {
-    listText += '✅ **Pasadas / Concluidas**\n';
+    listText += '✅ **Terminadas**\n';
     for (const s of finished.slice(0, 3)) {
       listText += `• **${s.title}** — ${s.date || ''}\n`;
     }
@@ -259,7 +273,11 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
 const CUSTOM_ID_MAX = 100;
 const NEW_DOC_TARGET = 'new-doc';
 
-/** custom_id of "Crear en Bardo"; carries the title so the editor can prefill it. */
+/**
+ * Legacy custom_id of "Crear en Bardo" (cards posted before /doc-new created
+ * the document on the server). Still routed: opens a blank editor with the
+ * title prefilled. Also used by the "Nuevo documento" button of /docs.
+ */
 export function newDocCustomId(title = null) {
   const base = `${BARDO_OPEN_PREFIX}${NEW_DOC_TARGET}`;
   const clean = title?.trim().replace(/\s+/g, ' ');
@@ -267,19 +285,31 @@ export function newDocCustomId(title = null) {
   return `${base}:${Array.from(clean).slice(0, CUSTOM_ID_MAX - base.length - 1).join('')}`;
 }
 
-export function buildDocNewPayload({ title = null }) {
+export const EDIT_DOC_TARGET_PREFIX = 'edit:';
+
+/** custom_id of the /doc-new card: opens the (already created) document in the editor. */
+export function editDocCustomId(documentId) {
+  return `${BARDO_OPEN_PREFIX}${EDIT_DOC_TARGET_PREFIX}${normalizeDocumentId(documentId) || documentId}`;
+}
+
+/**
+ * Card posted by /doc-new. The document already exists (empty) in this
+ * channel; the button opens it straight in the editor.
+ */
+export function buildDocNewPayload({ documentId, title = null, createdByName = null }) {
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('Crear en Bardo')
+      .setLabel(OPEN_DOCUMENT_LABEL)
       .setStyle(ButtonStyle.Primary)
-      .setCustomId(newDocCustomId(title)),
+      .setCustomId(editDocCustomId(documentId)),
   );
 
-  const displayTitle = title?.trim() ? `"${title.trim()}"` : 'un nuevo documento';
+  const displayTitle = truncateText(title?.trim() || 'Sin título', 200);
+  const author = createdByName ? ` por ${escapeDiscordMarkdown(truncateText(createdByName, 80))}` : '';
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent('# 📝 Crear nuevo documento'),
+      new TextDisplayBuilder().setContent(`# 📝 ${displayTitle}\n-# Documento nuevo creado${author}`),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -287,7 +317,7 @@ export function buildDocNewPayload({ title = null }) {
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`Listo para redactar ${displayTitle} en este canal.\nHaz clic en el botón para abrir el editor colaborativo de Bardo.`),
+      new TextDisplayBuilder().setContent(`El documento ya está en **Documentos** de este canal.\nPulsa **${OPEN_DOCUMENT_LABEL}** para empezar a escribir.`),
     )
     .addActionRowComponents(openRow);
 
@@ -361,7 +391,7 @@ export const HELP_TEXT = [
   '',
   '**Reuniones**',
   '`/reu-new` — agenda una reunión (título, fecha AAAA-MM-DD, hora HH:MM, duración, descripción).',
-  '`/reus` — muestra las reuniones programadas, en curso y pasadas.',
+  '`/reus` — muestra las reuniones programadas, en curso y terminadas.',
 ].join('\n');
 
 export function buildHelpPayload() {

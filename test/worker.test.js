@@ -155,8 +155,36 @@ test('/upload-docs avisa que el documento quedó guardado si Discord rechaza la 
   const { patches } = await runUpload(db, { filename: 'notas.md', size: 30 }, { body: '# Notas\n\nHola', patchStatus: 400 });
   assert.equal(db.row('SELECT COUNT(*) AS n FROM documents').n, 1);
   assert.equal(patches.length, 2);
-  assert.match(JSON.stringify(patches[1]), /se guardó en Bardo/);
+  assert.match(JSON.stringify(patches[1]), /se guardó y ya aparece en \*\*Documentos\*\*/);
 });
+
+test('/upload-docs: la tarjeta dice quién lo subió y nombra el botón real', async () => {
+  const db = await setupDb();
+  const { text } = await runUpload(db, { filename: 'notas.md', size: 30 }, { body: '# Notas\n\nHola' });
+  assert.match(text, /Subido por maxi/);
+  assert.match(text, /Pulsa \*\*Abrir documento\*\*/);
+  assert.match(text, /"label":"Abrir documento"/);
+});
+
+for (const [attachment, message] of [
+  [{ filename: 'viejo.doc', size: 10 }, /\.doc/],
+  [{ filename: 'foto.png', size: 10 }, /\.md/],
+  [{ filename: 'enorme.pdf', size: 5_000_000 }, /supera 1,8 MB/],
+]) {
+  test(`/upload-docs rechaza al instante y en privado (${attachment.filename}) sin diferir`, async () => {
+    const db = await setupDb();
+    let deferred = false;
+    const res = await worker.fetch(signedInteraction(uploadInteraction(attachment)), workerEnv(db), {
+      waitUntil() { deferred = true; },
+    });
+    const json = await res.json();
+    assert.equal(json.type, 4);
+    assert.equal(json.data.flags & 64, 64);
+    assert.match(json.data.content, message);
+    assert.equal(deferred, false);
+    assert.equal(db.row('SELECT COUNT(*) AS n FROM documents').n, 0);
+  });
+}
 
 test('Worker responde con error ephemeral si /upload-docs no tiene archivo adjunto', async () => {
   const db = await setupDb();
@@ -348,15 +376,85 @@ function textLength(components) {
   return total;
 }
 
-test('Worker responde a /doc-new con Container V2 y botón para crear documento', async () => {
+test('/doc-new crea el documento en el servidor (ACL de servidor y canal) y publica su tarjeta de edición', async () => {
   const db = await setupDb();
   const res = await worker.fetch(signedInteraction({
-    type: 2, id: 'cmd-doc-new', token: 't', guild_id: GUILD, channel_id: CHANNEL, member: { user: { id: USER } },
+    type: 2, id: 'cmd-doc-new', token: 't', guild_id: GUILD, channel_id: CHANNEL,
+    member: { user: { id: USER, username: 'maxi', global_name: 'Maxi' } },
     data: { name: 'doc-new', options: [{ name: 'titulo', value: 'Borrador Sprint' }] },
   }), workerEnv(db));
   const json = await res.json();
   assert.equal(json.type, 4);
-  assert.equal(json.data.components[0].components.at(-1).components[0].custom_id, 'bardo:open:new-doc:Borrador Sprint');
+
+  const doc = db.row('SELECT id, title, original_markdown, created_by, created_by_name, import_status FROM documents');
+  assert.equal(doc.title, 'Borrador Sprint');
+  assert.equal(doc.original_markdown, '# Borrador Sprint');
+  assert.equal(doc.created_by, USER);
+  assert.equal(doc.created_by_name, 'Maxi');
+  assert.equal(doc.import_status, 'ready');
+  assert.ok(db.row('SELECT 1 AS ok FROM document_guild_access WHERE document_id = ? AND guild_id = ?', doc.id, GUILD));
+  assert.ok(db.row('SELECT 1 AS ok FROM document_channel_access WHERE document_id = ? AND channel_id = ?', doc.id, CHANNEL));
+
+  const button = json.data.components[0].components.at(-1).components[0];
+  assert.equal(button.custom_id, `bardo:open:edit:${doc.id}`);
+  assert.equal(button.label, 'Abrir documento');
+});
+
+test('/doc-new sin título crea "Sin título" y fuera de un servidor responde efímero sin crear nada', async () => {
+  const db = await setupDb();
+  await worker.fetch(signedInteraction({
+    type: 2, id: 'cmd-doc-new-2', token: 't', guild_id: GUILD, channel_id: CHANNEL, member: { user: { id: USER } },
+    data: { name: 'doc-new', options: [] },
+  }), workerEnv(db));
+  assert.equal(db.row('SELECT title FROM documents').title, 'Sin título');
+
+  const dm = await worker.fetch(signedInteraction({
+    type: 2, id: 'cmd-doc-new-3', token: 't', user: { id: USER }, data: { name: 'doc-new', options: [] },
+  }), workerEnv(db));
+  const json = await dm.json();
+  assert.equal(json.data.flags & 64, 64);
+  assert.equal(db.row('SELECT COUNT(*) AS n FROM documents').n, 1);
+});
+
+test('Botón "Abrir documento" de /doc-new: lanza la Activity y la lleva al editor de ese documento', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-nuevo', title: 'Nuevo' });
+  let background = null;
+  const res = await worker.fetch(signedInteraction({
+    type: 3, id: 'btn-edit', token: 't', guild_id: GUILD, channel_id: CHANNEL,
+    member: { user: { id: USER } }, data: { custom_id: 'bardo:open:edit:doc-nuevo' },
+  }), workerEnv(db), { waitUntil(promise) { background = promise; } });
+  assert.equal((await res.json()).type, 12);
+  await background;
+  assert.equal(
+    db.row('SELECT document_id FROM docs_launch_intents WHERE user_id = ? AND guild_id = ?', USER, GUILD).document_id,
+    'target:edit:doc-nuevo',
+  );
+
+  const library = await worker.fetch(new Request('http://localhost/api/docs', { headers: authHeaders() }), createEnv(db));
+  const payload = await library.json();
+  assert.equal(payload.launchTarget, 'edit:doc-nuevo');
+  assert.equal(payload.contextDocumentId, 'doc-nuevo');
+  // One-shot: a later launch from the app launcher is not re-routed.
+  const again = await (await worker.fetch(new Request('http://localhost/api/docs', { headers: authHeaders() }), createEnv(db))).json();
+  assert.equal(again.launchTarget, null);
+});
+
+test('Botón de edición de un documento de otro servidor no da acceso ni destino', async () => {
+  const db = await setupDb();
+  insertDocument(db, { id: 'doc-ajeno', guildId: 'guild-otro', channelIds: ['chan-otro'] });
+  let background = null;
+  await worker.fetch(signedInteraction({
+    type: 3, id: 'btn-edit-x', token: 't', guild_id: GUILD, channel_id: CHANNEL,
+    member: { user: { id: USER } }, data: { custom_id: 'bardo:open:edit:doc-ajeno' },
+  }), workerEnv(db), { waitUntil(promise) { background = promise; } });
+  await background;
+  assert.equal(db.row("SELECT COUNT(*) AS n FROM document_channel_access WHERE document_id = 'doc-ajeno'").n, 1);
+  const payload = await (await worker.fetch(new Request('http://localhost/api/docs', {
+    headers: authHeaders(undefined, { 'x-bardo-custom-id': 'bardo:open:edit:doc-ajeno' }),
+  }), createEnv(db))).json();
+  assert.equal(payload.launchTarget, null);
+  assert.equal(payload.contextDocumentId, null);
 });
 
 test('/reu-new guarda la reunión y su tarjeta nunca supera el límite de Discord', async () => {
@@ -379,10 +477,30 @@ test('/reu-new guarda la reunión y su tarjeta nunca supera el límite de Discor
   assert.equal(json.type, 4);
   assert.match(json.data.components[0].components.at(-1).components[0].custom_id, /^bardo:open:planner-session:/);
   assert.ok(textLength(json.data.components) < 4000, `texto de la tarjeta: ${textLength(json.data.components)}`);
-  const saved = db.row('SELECT title, description, target_duration FROM planner_sessions');
+  const saved = db.row('SELECT title, description, target_duration, blocks_json FROM planner_sessions');
   assert.equal(saved.title.length, 200);
   assert.equal(saved.description.length, 1500);
   assert.equal(saved.target_duration, 45);
+  // Se puede iniciar de inmediato: un bloque inicial que dura lo pedido.
+  const blocks = JSON.parse(saved.blocks_json);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].title, 'Temas de la reunión');
+  assert.equal(blocks[0].type, 'block');
+  assert.equal(blocks[0].durationMinutes, 45);
+});
+
+test('/reu-new sin duración crea el bloque inicial de 60 minutos', async () => {
+  const db = await setupDb();
+  await worker.fetch(signedInteraction({
+    type: 2, id: 'cmd-reu-new-2', token: 't', guild_id: GUILD, channel_id: CHANNEL,
+    member: { user: { id: USER, username: 'Max' } },
+    data: { name: 'reu-new', options: [{ name: 'titulo', value: 'Daily' }] },
+  }), workerEnv(db));
+  const saved = db.row('SELECT target_duration, blocks_json FROM planner_sessions');
+  assert.equal(saved.target_duration, 60);
+  const [block] = JSON.parse(saved.blocks_json);
+  assert.equal(block.durationMinutes, 60);
+  assert.ok(block.id);
 });
 
 test('Worker responde a /reus listando reuniones del canal', async () => {

@@ -5,38 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { cn } from "@/lib/utils"
-
-/**
- * Parses 'HH:mm' string into 12-hour components: { hour12: number, minute: number, period: 'AM'|'PM' }
- */
-function parseTime24(timeStr = "10:00") {
-  const [hStr, mStr] = String(timeStr || "10:00").split(":")
-  let hours = parseInt(hStr, 10)
-  const minutes = parseInt(mStr, 10)
-
-  if (isNaN(hours) || hours < 0 || hours > 23) hours = 10
-  const validMinutes = isNaN(minutes) || minutes < 0 || minutes > 59 ? 0 : minutes
-
-  const period = hours >= 12 ? "PM" : "AM"
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12
-
-  return { hour12, minute: validMinutes, period }
-}
-
-/**
- * Formats 12-hour components back into 'HH:mm' (24-hour) string
- */
-function formatTime24(hour12, minute, period) {
-  let hours24 = parseInt(hour12, 10) || 12
-  if (period === "PM" && hours24 < 12) {
-    hours24 += 12
-  } else if (period === "AM" && hours24 === 12) {
-    hours24 = 0
-  }
-  const mm = String(minute).padStart(2, "0")
-  const hh = String(hours24).padStart(2, "0")
-  return `${hh}:${mm}`
-}
+import { parseTime24, resolveTimeCommit } from "./time-picker-utils.js"
 
 /**
  * Format 24h string to 12h human display (e.g. "10:00 AM" or "10:00 a.m.")
@@ -64,21 +33,28 @@ export function TimePicker({
   const [minute, setMinute] = React.useState(String(initMin).padStart(2, "0"))
   const [period, setPeriod] = React.useState(initPeriod)
 
-  // Sync internal state when external value changes or popover opens
+  // Load the external value only when the popover opens, so a background
+  // update (sync, poll) never resets what the user is typing.
+  const valueRef = React.useRef(value)
+  valueRef.current = value
+  // True only once the user actually changed hour/minute/period.
+  const dirtyRef = React.useRef(false)
   React.useEffect(() => {
     if (open) {
-      const parsed = parseTime24(value)
+      dirtyRef.current = false
+      const parsed = parseTime24(valueRef.current)
       setHour(String(parsed.hour12).padStart(2, "0"))
       setMinute(String(parsed.minute).padStart(2, "0"))
       setPeriod(parsed.period)
     }
-  }, [open, value])
+  }, [open])
 
   const hourInputRef = React.useRef(null)
   const minuteInputRef = React.useRef(null)
 
   const handleHourChange = (e) => {
     const raw = e.target.value.replace(/\D/g, "").slice(0, 2)
+    dirtyRef.current = true
     setHour(raw)
     if (raw.length === 2) {
       const num = parseInt(raw, 10)
@@ -89,28 +65,42 @@ export function TimePicker({
     }
   }
 
+  // Functional updates: typing two digits moves focus to the minutes from
+  // inside onChange, so this blur runs before React re-renders and a closure
+  // over `hour` would still hold the old value and overwrite what was typed.
   const handleHourBlur = () => {
-    let num = parseInt(hour, 10)
-    if (isNaN(num) || num < 1) num = 12
-    if (num > 12) num = 12
-    setHour(String(num).padStart(2, "0"))
+    setHour((current) => {
+      let num = parseInt(current, 10)
+      if (isNaN(num) || num < 1) num = 12
+      if (num > 12) num = 12
+      return String(num).padStart(2, "0")
+    })
   }
 
   const handleMinuteChange = (e) => {
     const raw = e.target.value.replace(/\D/g, "").slice(0, 2)
+    dirtyRef.current = true
     setMinute(raw)
   }
 
   const handleMinuteBlur = () => {
-    let num = parseInt(minute, 10)
-    if (isNaN(num) || num < 0) num = 0
-    if (num > 59) num = 59
-    setMinute(String(num).padStart(2, "0"))
+    setMinute((current) => {
+      let num = parseInt(current, 10)
+      if (isNaN(num) || num < 0) num = 0
+      if (num > 59) num = 59
+      return String(num).padStart(2, "0")
+    })
   }
 
   const handleKeyDown = (unit, e) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleConfirm()
+      return
+    }
     if (e.key === "ArrowUp") {
       e.preventDefault()
+      dirtyRef.current = true
       if (unit === "hour") {
         let num = (parseInt(hour, 10) || 12) + 1
         if (num > 12) num = 1
@@ -122,6 +112,7 @@ export function TimePicker({
       }
     } else if (e.key === "ArrowDown") {
       e.preventDefault()
+      dirtyRef.current = true
       if (unit === "hour") {
         let num = (parseInt(hour, 10) || 12) - 1
         if (num < 1) num = 12
@@ -140,21 +131,34 @@ export function TimePicker({
     }
   }
 
+  // Closing the popover keeps the edit (outside click / Tab away), like any
+  // other field; only Escape and "Cancelar" discard it.
+  const discardRef = React.useRef(false)
+
+  const commit = () => {
+    const next = resolveTimeCommit({ dirty: dirtyRef.current, hour, minute, period, value })
+    if (next) onChange?.(next)
+    dirtyRef.current = false
+  }
+
+  const handleOpenChange = (nextOpen, eventDetails) => {
+    if (nextOpen) {
+      discardRef.current = false
+    } else {
+      const reason = eventDetails?.reason
+      if (!discardRef.current && reason !== "escape-key") commit()
+    }
+    setOpen(nextOpen)
+  }
+
   const handleConfirm = () => {
-    let validHour = parseInt(hour, 10)
-    if (isNaN(validHour) || validHour < 1) validHour = 12
-    if (validHour > 12) validHour = 12
-
-    let validMin = parseInt(minute, 10)
-    if (isNaN(validMin) || validMin < 0) validMin = 0
-    if (validMin > 59) validMin = 59
-
-    const time24 = formatTime24(validHour, validMin, period)
-    onChange?.(time24)
+    commit()
+    discardRef.current = true
     setOpen(false)
   }
 
   const handleCancel = () => {
+    discardRef.current = true
     setOpen(false)
   }
 
@@ -165,6 +169,7 @@ export function TimePicker({
     const currentPeriod = currentHours >= 12 ? "PM" : "AM"
     const current12 = currentHours % 12 === 0 ? 12 : currentHours % 12
 
+    dirtyRef.current = true
     setHour(String(current12).padStart(2, "0"))
     setMinute(String(currentMins).padStart(2, "0"))
     setPeriod(currentPeriod)
@@ -173,7 +178,7 @@ export function TimePicker({
   const displayText = value ? formatTimeDisplay(value, lowercasePeriod) : placeholder
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         render={
           renderTrigger ? (
@@ -245,11 +250,14 @@ export function TimePicker({
                 <div className="h-9 flex items-center">
                   <ToggleGroup
                     type="single"
-                    spacing={0}
+                    spacing={0.5}
                     value={[period]}
                     onValueChange={(val) => {
                       const selected = Array.isArray(val) ? val[0] : val
-                      if (selected) setPeriod(selected)
+                      if (selected) {
+                        dirtyRef.current = true
+                        setPeriod(selected)
+                      }
                     }}
                     className="h-9 rounded-xl border border-input/60 bg-muted/30 p-0.5 box-border"
                   >
@@ -257,7 +265,7 @@ export function TimePicker({
                       value="AM"
                       aria-label="AM"
                       className={cn(
-                        "h-full px-2 text-xs rounded-lg transition-all border-0 shadow-none font-medium",
+                        "h-full px-2 text-xs rounded-[calc(var(--radius-xl)_-_3px)] transition-all border-0 shadow-none font-medium",
                         period === "AM"
                           ? "bg-background text-foreground shadow-2xs font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-transparent"
@@ -269,7 +277,7 @@ export function TimePicker({
                       value="PM"
                       aria-label="PM"
                       className={cn(
-                        "h-full px-2 text-xs rounded-lg transition-all border-0 shadow-none font-medium",
+                        "h-full px-2 text-xs rounded-[calc(var(--radius-xl)_-_3px)] transition-all border-0 shadow-none font-medium",
                         period === "PM"
                           ? "bg-background text-foreground shadow-2xs font-bold"
                           : "text-muted-foreground hover:text-foreground hover:bg-transparent"

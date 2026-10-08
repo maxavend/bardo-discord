@@ -416,8 +416,8 @@ test('Assistant: CTA predicts point, block and session transitions', () => {
   let session = createLiveSession(PLANNER, START);
   let details = getAssistantContextDetails(PLANNER, session, START + MINUTE);
   assert.equal(details.blockProgressLabel, 'Bloque 1 de 3');
-  assert.equal(details.pointProgressLabel, 'Punto 1 de 3');
-  assert.equal(details.primaryAction.label, 'Siguiente punto');
+  assert.equal(details.pointProgressLabel, 'Tema 1 de 3');
+  assert.equal(details.primaryAction.label, 'Siguiente tema');
   assert.equal(details.stateTitle, 'Prototipo navegable');
 
   session = advanceLiveSession(PLANNER, session, START + 2 * MINUTE);
@@ -431,7 +431,7 @@ test('Assistant: CTA predicts point, block and session transitions', () => {
 
   session = advanceLiveSession(PLANNER, session, START + 7 * MINUTE);
   details = getAssistantContextDetails(PLANNER, session, START + 8 * MINUTE);
-  assert.equal(details.primaryAction.label, 'Finalizar sesión');
+  assert.equal(details.primaryAction.label, 'Terminar reunión');
 });
 
 test('Assistant: expired Block keeps current Point and presents overtime context', () => {
@@ -439,7 +439,7 @@ test('Assistant: expired Block keeps current Point and presents overtime context
   const details = getAssistantContextDetails(PLANNER, session, START + 16 * MINUTE);
   assert.equal(details.stateVariant, 'expired');
   assert.equal(details.activePoint.id, 'p1');
-  assert.equal(details.nextAction.label, 'Siguiente punto');
+  assert.equal(details.nextAction.label, 'Siguiente tema');
   assert.match(details.contextualHelperText, /sigue activo/);
 });
 

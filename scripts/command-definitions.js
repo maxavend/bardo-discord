@@ -10,7 +10,7 @@ const titleOption = (description, required = false) => (option) =>
 
 const docUploadCommand = new SlashCommandBuilder()
   .setName('doc-upload')
-  .setDescription('Sube un documento al espacio de Docs de este canal.')
+  .setDescription('Sube un archivo a Documentos de este canal.')
   .addAttachmentOption((option) =>
     option
       .setName('archivo')
@@ -21,7 +21,7 @@ const docUploadCommand = new SlashCommandBuilder()
 
 const legacyUploadCommand = new SlashCommandBuilder()
   .setName('upload-docs')
-  .setDescription('Sube un documento al espacio de Docs de este canal (alias de /doc-upload).')
+  .setDescription('Sube un archivo a Documentos de este canal (igual que /doc-upload).')
   .addAttachmentOption((option) =>
     option
       .setName('archivo')
@@ -32,7 +32,7 @@ const legacyUploadCommand = new SlashCommandBuilder()
 
 const docNewCommand = new SlashCommandBuilder()
   .setName('doc-new')
-  .setDescription('Crea un nuevo documento colaborativo en Bardo para este canal.')
+  .setDescription('Crea un documento nuevo en Documentos de este canal.')
   .addStringOption(titleOption('Título opcional para el nuevo documento.'));
 
 const reuNewCommand = new SlashCommandBuilder()
@@ -68,7 +68,7 @@ const reuNewCommand = new SlashCommandBuilder()
 
 const reusCommand = new SlashCommandBuilder()
   .setName('reus')
-  .setDescription('Muestra las reuniones agendadas, en curso y concluidas de este canal.');
+  .setDescription('Muestra las reuniones programadas, en curso y terminadas de este canal.');
 
 const bardoCommand = new SlashCommandBuilder()
   .setName('bardo')
@@ -76,7 +76,7 @@ const bardoCommand = new SlashCommandBuilder()
   .addStringOption((option) =>
     option
       .setName('seccion')
-      .setDescription('Dónde abrir Bardo. Por defecto, la biblioteca de documentos.')
+      .setDescription('Dónde abrir Bardo. Por defecto, Documentos.')
       .addChoices(
         { name: 'Documentos', value: 'docs' },
         { name: 'Reuniones', value: 'reuniones' },

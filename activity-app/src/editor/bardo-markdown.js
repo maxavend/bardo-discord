@@ -43,12 +43,25 @@ export function isOrderedListStyle(listStyleType) {
   return ORDERED_LIST_STYLES.has(String(listStyleType || ''));
 }
 
+function listStartNumber(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : null;
+}
+
 /**
  * Construye HTML de listas anidadas a partir de una secuencia plana de ítems.
- * @param {Array<{level:number, kind:'ul'|'ol'|'task', html:string, done?:boolean}>} items
+ * En listas numeradas, `start` es el número con que empieza la lista que abre
+ * ese ítem y `restart: true` fuerza una lista nueva (p. ej. "5." tras "2.").
+ * @param {Array<{level:number, kind:'ul'|'ol'|'task', html:string, done?:boolean, start?:number, restart?:boolean}>} items
  */
 export function buildListHtml(items) {
-  const open = kind => (kind === 'ol' ? '<ol>' : kind === 'task' ? '<ul class="checklist">' : '<ul>');
+  const open = item => {
+    if (item.kind === 'ol') {
+      const start = listStartNumber(item.start);
+      return start !== null && (start !== 1 || item.restart) ? `<ol start="${start}">` : '<ol>';
+    }
+    return item.kind === 'task' ? '<ul class="checklist">' : '<ul>';
+  };
   const close = kind => (kind === 'ol' ? '</ol>' : '</ul>');
   const stack = [];
   let out = '';
@@ -59,15 +72,15 @@ export function buildListHtml(items) {
     }
     const top = stack.at(-1);
     if (top && top.level === level) {
-      if (top.kind === item.kind) {
+      if (top.kind === item.kind && !(item.kind === 'ol' && item.restart)) {
         out += '</li>';
       } else {
-        out += `</li>${close(top.kind)}${open(item.kind)}`;
+        out += `</li>${close(top.kind)}${open(item)}`;
         stack.pop();
         stack.push({level, kind: item.kind});
       }
     } else {
-      out += open(item.kind);
+      out += open(item);
       stack.push({level, kind: item.kind});
     }
     out += item.kind === 'task' ? `<li${item.done ? ' class="done"' : ''}>` : '<li>';
@@ -241,10 +254,43 @@ function isBlockStart(lines, index) {
     || (hasUnescapedPipe(line) && isTableSeparator(lines[index + 1] || ''));
 }
 
+/**
+ * Números de las listas numeradas: la primera lista conserva su número inicial
+ * ("3." -> <ol start="3">) y un número que no sigue la secuencia reinicia la
+ * lista ("1. 2. 5." -> 1, 2 y una lista nueva desde 5). Repetir el mismo número
+ * en líneas seguidas ("1. 1. 1.") es numeración perezosa y continúa.
+ */
+function assignListNumbers(items) {
+  const state = [];
+  items.forEach(item => {
+    state.length = Math.min(state.length, item.level + 1);
+    const prev = state[item.level];
+    if (item.kind !== 'ol') {
+      state[item.level] = {kind: item.kind};
+      return;
+    }
+    const number = item.number;
+    if (!prev || prev.kind !== 'ol') {
+      item.start = number;
+      state[item.level] = {kind: 'ol', display: number, raw: number};
+      return;
+    }
+    const expected = prev.display + 1;
+    let display = expected;
+    if (number !== expected && (item.blankBefore || number !== prev.raw)) {
+      item.restart = true;
+      item.start = number;
+      display = number;
+    }
+    state[item.level] = {kind: 'ol', display, raw: number};
+  });
+}
+
 function parseList(lines, start) {
   const items = [];
   const widths = [];
   let index = start;
+  let blankBefore = false;
 
   while (index < lines.length) {
     const line = lines[index];
@@ -254,6 +300,7 @@ function parseList(lines, start) {
       while (next < lines.length && !lines[next].trim()) next += 1;
       if (next < lines.length && LIST_ITEM_RE.test(lines[next]) && !FENCE_RE.test(lines[next])) {
         index = next;
+        blankBefore = true;
         continue;
       }
       break;
@@ -290,14 +337,19 @@ function parseList(lines, start) {
       done = task[1].toLowerCase() === 'x';
       text = task[2];
     }
-    items.push({level, kind, done, text, width});
+    const number = kind === 'ol' ? Number.parseInt(marker, 10) : null;
+    items.push({level, kind, done, text, width, number, blankBefore});
+    blankBefore = false;
     index += 1;
   }
 
+  assignListNumbers(items);
   const html = buildListHtml(items.map(item => ({
     level: item.level,
     kind: item.kind,
     done: item.done,
+    start: item.start,
+    restart: item.restart,
     html: renderInline(item.text.trim()),
   })));
   return {html, next: index};
@@ -535,7 +587,7 @@ function prefixLines(markdown, prefix) {
 function listToMarkdown(el, indent = '') {
   const ordered = el.tagName === 'OL';
   const checklist = el.classList?.contains('checklist');
-  let number = Number(el.getAttribute('start')) || 1;
+  let number = (el.hasAttribute?.('start') ? listStartNumber(el.getAttribute('start')) : null) ?? 1;
   const lines = [];
 
   elementChildren(el).forEach(child => {

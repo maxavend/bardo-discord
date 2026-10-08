@@ -8,7 +8,7 @@ export const BardoEditorSurface = forwardRef(function BardoEditorSurface({ onFoc
       className="doc-body editable-body outline-none"
       role="textbox"
       aria-multiline="true"
-      data-placeholder="Empieza a escribir…"
+      placeholder="Escribe aquí. Usa / para insertar títulos, listas o tablas…"
       onFocus={onFocus}
       onBlur={onBlur}
       {...props}

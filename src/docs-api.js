@@ -1,7 +1,7 @@
 import { requireDocsSession } from './discord-auth.js';
 import { sessionCanAccessDocument } from './document-access.js';
 import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
-import { buildDocumentPayload } from './components.js';
+import { buildDocumentPayload, EDIT_DOC_TARGET_PREFIX } from './components.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
 import {
   adoptLegacyDocumentsForGuild,
@@ -29,6 +29,7 @@ import {
   discordUnavailableResponse,
   isDiscordUnavailableError,
 } from './discord-permissions.js';
+import { createExportToken, exportLinksConfigured, normalizeExportFormat } from './export-token.js';
 
 const DOCS_API_PREFIX = '/api/docs';
 export const MAX_DOCUMENT_BYTES = 1_800_000;
@@ -48,6 +49,8 @@ export function json(data, status = 200) {
 export function apiError(status, error, message, extra = {}) {
   return json({ error, ...(message ? { message } : {}), ...extra }, status);
 }
+
+const methodNotAllowed = () => apiError(405, 'method_not_allowed', 'Esta acción no está disponible.');
 
 export function serialize(document) {
   return {
@@ -119,7 +122,7 @@ function parsePath(pathname) {
   const rest = pathname.slice(DOCS_API_PREFIX.length + 1);
   const [encodedId, action, extra] = rest.split('/');
   if (!encodedId || extra) return null;
-  if (action && !['source', 'normalize', 'message', 'restore', 'permanent'].includes(action)) return null;
+  if (action && !['source', 'normalize', 'message', 'restore', 'permanent', 'export-link'].includes(action)) return null;
 
   try {
     const id = normalizeDocumentId(decodeURIComponent(encodedId));
@@ -186,11 +189,32 @@ async function sessionCanViewCurrentChannel(env, session) {
     .canViewChannel(session.channelId);
 }
 
+async function documentSharedInSessionChannel(env, session, documentId) {
+  if (!documentId) return false;
+  const channels = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
+  return channels.includes(session.channelId);
+}
+
+/**
+ * Where the Activity should land: an open document (`contextDocumentId`)
+ * and/or a destination (`launchTarget`: "planner", "new-doc:<título>",
+ * "edit:<docId>", ...). Edit targets also return their document, and are only
+ * honoured when the document is shared with the session's channel.
+ */
 async function resolveLaunchContext(request, env, session) {
+  const none = { contextDocumentId: null, launchTarget: null };
   const requested = launchDocumentId(request);
-  if (requested && !requested.startsWith(LAUNCH_TARGET_PREFIX)) {
-    const channels = await listDocumentChannelAccess(env.DB, requested, session.guildId);
-    if (channels.includes(session.channelId)) return { contextDocumentId: requested, launchTarget: null };
+
+  if (requested?.startsWith(EDIT_DOC_TARGET_PREFIX)) {
+    const documentId = requested.slice(EDIT_DOC_TARGET_PREFIX.length);
+    if (await documentSharedInSessionChannel(env, session, documentId)) {
+      // The click also stored this target as a one-shot intent; consume it so
+      // a later launch from the app launcher doesn't reopen the editor.
+      await deleteDocsLaunchIntent(env.DB, session.userId, session.guildId, `${LAUNCH_TARGET_PREFIX}${requested}`);
+      return { contextDocumentId: documentId, launchTarget: requested };
+    }
+  } else if (requested && !requested.startsWith(LAUNCH_TARGET_PREFIX)) {
+    if (await documentSharedInSessionChannel(env, session, requested)) return { contextDocumentId: requested, launchTarget: null };
   }
 
   // Some Discord mobile clients launch the Activity without forwarding the
@@ -198,22 +222,28 @@ async function resolveLaunchContext(request, env, session) {
   // handler stores a short-lived intent for this exact user/guild/channel,
   // which is safe to use as a fallback.
   const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
-  if (!intent?.documentId || (intent.channelId && intent.channelId !== session.channelId)) {
-    return { contextDocumentId: null, launchTarget: null };
-  }
+  if (!intent?.documentId || (intent.channelId && intent.channelId !== session.channelId)) return none;
 
   if (intent.documentId.startsWith(LAUNCH_TARGET_PREFIX)) {
     await deleteDocsLaunchIntent(env.DB, session.userId, session.guildId, intent.documentId);
-    return { contextDocumentId: null, launchTarget: intent.documentId.slice(LAUNCH_TARGET_PREFIX.length) || null };
+    const target = intent.documentId.slice(LAUNCH_TARGET_PREFIX.length) || null;
+    if (target?.startsWith(EDIT_DOC_TARGET_PREFIX)) {
+      const documentId = target.slice(EDIT_DOC_TARGET_PREFIX.length);
+      return await documentSharedInSessionChannel(env, session, documentId)
+        ? { contextDocumentId: documentId, launchTarget: target }
+        : none;
+    }
+    return { contextDocumentId: null, launchTarget: target };
   }
 
-  const channels = await listDocumentChannelAccess(env.DB, intent.documentId, session.guildId);
-  if (channels.includes(session.channelId)) return { contextDocumentId: intent.documentId, launchTarget: null };
-  return { contextDocumentId: null, launchTarget: null };
+  if (await documentSharedInSessionChannel(env, session, intent.documentId)) {
+    return { contextDocumentId: intent.documentId, launchTarget: null };
+  }
+  return none;
 }
 
 async function handleSource(route, request, env, session) {
-  if (request.method !== 'GET') return new Response('Method not allowed', {status:405});
+  if (request.method !== 'GET') return methodNotAllowed();
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
   const source = await loadDocumentSource(env.DB, route.id);
@@ -263,7 +293,7 @@ export async function normalizeDocumentImport(env, session, document, payload) {
 }
 
 async function handleNormalize(route, request, env, session) {
-  if (request.method !== 'POST') return new Response('Method not allowed', {status:405});
+  if (request.method !== 'POST') return methodNotAllowed();
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
 
@@ -273,7 +303,7 @@ async function handleNormalize(route, request, env, session) {
 }
 
 async function handleMessage(route, request, env, session) {
-  if (request.method !== 'POST') return new Response('Method not allowed', {status:405});
+  if (request.method !== 'POST') return methodNotAllowed();
   if (!session.channelId) return apiError(403, 'channel_required', 'Abre Bardo desde un canal de Discord.');
 
   const botToken = String(env.DISCORD_TOKEN || '').trim();
@@ -289,7 +319,10 @@ async function handleMessage(route, request, env, session) {
       Authorization: `Bot ${botToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildDocumentPayload(access.document, {documentId: route.id})),
+    body: JSON.stringify(buildDocumentPayload(access.document, {
+      documentId: route.id,
+      attribution: `Compartido por ${sessionDisplayName(session)}`,
+    })),
   });
 
   if (!response.ok) {
@@ -303,6 +336,31 @@ async function handleMessage(route, request, env, session) {
 
   const message = await response.json().catch(() => null);
   return json({ok:true, messageId:message?.id || null});
+}
+
+/**
+ * Short-lived signed download link, so the Activity can open the export in the
+ * system browser (downloads inside the Discord iframe are unreliable).
+ */
+async function handleExportLink(route, request, url, env, session) {
+  if (request.method !== 'POST') return methodNotAllowed();
+  const access = await requireDocumentAccess(env, route.id, session);
+  if (access.error) return access.error;
+
+  const body = await readJson(request);
+  if (body.error) return body.error;
+  const format = normalizeExportFormat(body.payload?.format);
+  if (!format) {
+    return apiError(400, 'invalid_format', 'Elige un formato de descarga válido: Markdown, Word o PDF.');
+  }
+  if (!exportLinksConfigured(env)) {
+    return apiError(503, 'export_unavailable', 'Las descargas no están configuradas en Bardo. Avisa a quien administra el bot.');
+  }
+
+  const { token, expiresAt } = await createExportToken(env, { docId: route.id, format, userId: session.userId });
+  const origin = String(env.PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '') || url.origin;
+  const exportUrl = `${origin}/api/documents/${encodeURIComponent(route.id)}/export?format=${format}&t=${encodeURIComponent(token)}`;
+  return json({ url: exportUrl, expiresAt });
 }
 
 async function handleList(request, url, env, session) {
@@ -467,17 +525,18 @@ async function routeDocsApi(request, url, env) {
   if (!route.collection && route.action === 'source') return handleSource(route, request, env, session);
   if (!route.collection && route.action === 'normalize') return handleNormalize(route, request, env, session);
   if (!route.collection && route.action === 'message') return handleMessage(route, request, env, session);
+  if (!route.collection && route.action === 'export-link') return handleExportLink(route, request, url, env, session);
 
   if (route.collection && request.method === 'GET') return handleList(request, url, env, session);
   if (route.collection && request.method === 'POST') return handleCreate(request, env, session);
-  if (route.collection) return new Response('Method not allowed', { status: 405 });
+  if (route.collection) return methodNotAllowed();
 
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
   const existing = access.document;
 
   if (route.action === 'restore') {
-    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+    if (request.method !== 'POST') return methodNotAllowed();
     await restoreDocument(env.DB, route.id);
     // Restoring bumps updated_at; return the row so clients refresh their
     // baseUpdatedAt and the next PATCH is not a false conflict.
@@ -486,7 +545,7 @@ async function routeDocsApi(request, url, env) {
   }
 
   if (route.action === 'permanent') {
-    if (request.method !== 'DELETE') return new Response('Method not allowed', { status: 405 });
+    if (request.method !== 'DELETE') return methodNotAllowed();
     return handlePermanentDelete(route, env, session, existing);
   }
 
@@ -508,7 +567,7 @@ async function routeDocsApi(request, url, env) {
     return json({ ok: true, archived: true, id: route.id, document: archived ? serialize(archived) : null });
   }
 
-  return new Response('Method not allowed', { status: 405 });
+  return methodNotAllowed();
 }
 
 export async function handleDocsApi(request, url, env) {

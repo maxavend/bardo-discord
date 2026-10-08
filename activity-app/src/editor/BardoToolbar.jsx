@@ -1,8 +1,12 @@
 import { useMemo, useCallback, useLayoutEffect, useState } from 'react';
 import { useEditorSelection, useEditorRef } from 'platejs/react';
 import {
+  BLOCK_LABELS,
   currentBlockKind,
   insertBlock,
+  insertDefaultTable,
+  isInTable,
+  runTableAction,
   setBlockType,
   toggleBardoList,
   toggleBlockquote,
@@ -27,6 +31,7 @@ import {
   Bold,
   ChevronDown,
   ChevronRight,
+  CircleInfo,
   Code,
   Copy,
   EllipsisVertical,
@@ -34,6 +39,7 @@ import {
   Heading2,
   Heading3,
   Italic,
+  LayoutCells,
   Link,
   ListOl,
   ListUl,
@@ -46,30 +52,34 @@ import {
 } from '@gravity-ui/icons';
 
 const BLOCK_TYPES = [
-  { id: 'p', label: 'Texto', icon: Text, shortcut: '', hint: 'Empieza a escribir texto plano' },
-  { id: 'h1', label: 'Encabezado 1', icon: Heading1, shortcut: '#', hint: 'Título de sección principal' },
-  { id: 'h2', label: 'Encabezado 2', icon: Heading2, shortcut: '##', hint: 'Subtítulo mediano' },
-  { id: 'h3', label: 'Encabezado 3', icon: Heading3, shortcut: '###', hint: 'Subtítulo pequeño' },
-  { id: 'blockquote', label: 'Cita', icon: QuoteOpen, shortcut: '', hint: 'Destaca una cita o referencia' },
-  { id: 'code_block', label: 'Bloque de código', icon: Code, shortcut: '', hint: 'Escribe código con formato monoespaciado' },
+  { id: 'p', label: BLOCK_LABELS.p, icon: Text, shortcut: '' },
+  { id: 'h1', label: BLOCK_LABELS.h1, icon: Heading1, shortcut: '#' },
+  { id: 'h2', label: BLOCK_LABELS.h2, icon: Heading2, shortcut: '##' },
+  { id: 'h3', label: BLOCK_LABELS.h3, icon: Heading3, shortcut: '###' },
+  { id: 'blockquote', label: BLOCK_LABELS.blockquote, icon: QuoteOpen, shortcut: '' },
+  { id: 'code_block', label: BLOCK_LABELS.code_block, icon: Code, shortcut: '' },
 ];
 
+// Orden de prioridad: en pantallas angostas las listas quedan a la vista
+// antes que "Rehacer" o los formatos menos usados (que pasan a "Ver más").
 const TOOLBAR_OPTIONAL_ACTIONS = [
-  ['redo', 36, 40],
-  ['italic', 36, 40],
-  ['underline', 36, 40],
-  ['createLink', 36, 40],
-  ['strikeThrough', 36, 40],
-  ['code', 36, 40],
   ['insertUnorderedList', 36, 40],
   ['insertOrderedList', 36, 40],
   ['checklist', 36, 40],
+  ['italic', 36, 40],
+  ['createLink', 36, 40],
+  ['redo', 36, 40],
+  ['underline', 36, 40],
+  ['strikeThrough', 36, 40],
+  ['code', 36, 40],
   ['blockquote', 36, 40],
 ];
 
 const TOOLBAR_ACTION_KEYS = TOOLBAR_OPTIONAL_ACTIONS.map(([action]) => action);
+// Bajo este ancho el selector de tipo de texto muestra solo el ícono.
+const COMPACT_TOOLBAR_QUERY = '(max-width: 479px)';
 
-function useAdaptiveToolbar(containerRef) {
+function useAdaptiveToolbar(containerRef, extraWidth = 0) {
   const [visibleActions, setVisibleActions] = useState(() => new Set());
 
   useLayoutEffect(() => {
@@ -81,9 +91,11 @@ function useAdaptiveToolbar(containerRef) {
       const availableWidth = host.getBoundingClientRect().width;
       const usableWidth = Math.floor(availableWidth) - 24;
       const usesTouchSizedControls = window.matchMedia('(max-width: 759px)').matches;
+      const compact = window.matchMedia(COMPACT_TOOLBAR_QUERY).matches;
       const next = new Set();
 
-      let usedWidth = usesTouchSizedControls ? 220 : 196;
+      // Fijos: tipo de texto, Deshacer, Negrita y "Ver más" (+ menú de tabla).
+      let usedWidth = (compact ? 172 : usesTouchSizedControls ? 220 : 196) + extraWidth;
       TOOLBAR_OPTIONAL_ACTIONS.forEach(([action, regularWidth, touchWidth]) => {
         const incrementalWidth = usesTouchSizedControls ? touchWidth : regularWidth;
         if (usedWidth + incrementalWidth <= usableWidth) {
@@ -107,24 +119,26 @@ function useAdaptiveToolbar(containerRef) {
       observer.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [containerRef]);
+  }, [containerRef, extraWidth]);
 
   return visibleActions;
 }
 
 export function BlockTypeDropdown({ value, onSelect }) {
   const current = BLOCK_TYPES.find(b => b.id === value) || BLOCK_TYPES[0];
+  const CurrentIcon = current.icon;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
           <Button
-            aria-label="Tipo de texto"
+            aria-label={`Tipo de texto: ${current.label}`}
             variant="ghost"
             size="sm"
             className="mobile-toolbar-leading mobile-toolbar-leading-trigger gap-1.5 font-medium rounded-full px-2.5 inline-flex items-center justify-between shrink-0"
           >
+            <CurrentIcon width={15} height={15} className="mobile-toolbar-icon shrink-0" aria-hidden="true" />
             <span className="mobile-toolbar-label truncate text-xs">{current.label}</span>
             <ChevronDown width={13} height={13} className="opacity-70 shrink-0" />
           </Button>
@@ -150,6 +164,54 @@ export function BlockTypeDropdown({ value, onSelect }) {
             })}
           </DropdownMenuGroup>
         </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const TABLE_ACTIONS = [
+  { id: 'row-below', label: 'Agregar fila abajo' },
+  { id: 'row-above', label: 'Agregar fila arriba' },
+  { id: 'column-right', label: 'Agregar columna a la derecha' },
+  { id: 'column-left', label: 'Agregar columna a la izquierda' },
+  { id: 'delete-row', label: 'Eliminar fila', destructive: true },
+  { id: 'delete-column', label: 'Eliminar columna', destructive: true },
+  { id: 'delete-table', label: 'Eliminar tabla', destructive: true },
+];
+
+/** Menú de tabla: aparece en la barra solo cuando el cursor está en una tabla. */
+export function TableActionsMenu({ onAction }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            size="icon-sm"
+            aria-label="Opciones de tabla"
+            title="Opciones de tabla"
+            variant="ghost"
+            className="rounded-full relative shrink-0"
+          >
+            <LayoutCells width={15} height={15} />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="toolbar-dropdown-popover w-60">
+        <DropdownMenuGroup>
+          {TABLE_ACTIONS.filter(action => !action.destructive).map(action => (
+            <DropdownMenuItem key={action.id} onClick={() => onAction(action.id)}>
+              <span>{action.label}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          {TABLE_ACTIONS.filter(action => action.destructive).map(action => (
+            <DropdownMenuItem key={action.id} variant="destructive" onClick={() => onAction(action.id)}>
+              <span>{action.label}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -220,42 +282,46 @@ export function MoreActionsMenu({ onAction, visibleActions }) {
             {isHidden('insertUnorderedList') && (
               <DropdownMenuItem onClick={() => handleAction('insertUnorderedList')}>
                 <ListUl width={16} height={16} />
-                <span>Lista con viñetas</span>
+                <span>{BLOCK_LABELS.ul}</span>
               </DropdownMenuItem>
             )}
             {isHidden('insertOrderedList') && (
               <DropdownMenuItem onClick={() => handleAction('insertOrderedList')}>
                 <ListOl width={16} height={16} />
-                <span>Lista numerada</span>
+                <span>{BLOCK_LABELS.ol}</span>
               </DropdownMenuItem>
             )}
             {isHidden('checklist') && (
               <DropdownMenuItem onClick={() => handleAction('checklist')}>
                 <SquareCheck width={16} height={16} />
-                <span>Lista de tareas</span>
+                <span>{BLOCK_LABELS.checklist}</span>
               </DropdownMenuItem>
             )}
             {isHidden('blockquote') && (
               <DropdownMenuItem onClick={() => handleAction('blockquote')}>
                 <QuoteOpen width={16} height={16} />
-                <span>Cita</span>
+                <span>{BLOCK_LABELS.blockquote}</span>
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>
         )}
         {(showInline || showLists) && <DropdownMenuSeparator />}
         <DropdownMenuGroup>
+          <DropdownMenuItem onClick={() => handleAction('table')}>
+            <LayoutCells width={16} height={16} />
+            <span>{BLOCK_LABELS.table}</span>
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleAction('callout')}>
-            <QuoteOpen width={16} height={16} />
-            <span>Destacado</span>
+            <CircleInfo width={16} height={16} />
+            <span>{BLOCK_LABELS.callout}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleAction('spoiler')}>
             <ChevronRight width={16} height={16} />
-            <span>Lista desplegable</span>
+            <span>{BLOCK_LABELS.spoiler}</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleAction('hr')}>
             <Minus width={16} height={16} />
-            <span>Separador</span>
+            <span>{BLOCK_LABELS.hr}</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -283,7 +349,11 @@ export function MoreActionsMenu({ onAction, visibleActions }) {
 export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRemoveFormat }) {
   const editor = useEditorRef();
   const selection = useEditorSelection();
-  const visibleToolbarActions = useAdaptiveToolbar(toolbarContainerRef);
+  const inTable = useMemo(() => {
+    void selection;
+    return isInTable(editor);
+  }, [editor, selection]);
+  const visibleToolbarActions = useAdaptiveToolbar(toolbarContainerRef, inTable ? 40 : 0);
 
   const isToolbarActionVisible = useCallback(
     action => visibleToolbarActions.has(action),
@@ -340,6 +410,8 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
         toggleChecklist(editor);
       } else if (format === 'blockquote') {
         toggleBlockquote(editor);
+      } else if (format === 'table') {
+        insertDefaultTable(editor);
       } else if (format === 'callout') {
         insertBlock(editor, { type: 'callout', children: [{ text: 'Escribe una nota…' }] });
       } else if (format === 'spoiler') {
@@ -386,6 +458,15 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
     [editor, onCopyAll, onRemoveFormat, runFormat]
   );
 
+  const handleTableAction = useCallback(
+    (action) => {
+      if (!editor) return;
+      editor.tf.focus();
+      runTableAction(editor, action);
+    },
+    [editor]
+  );
+
   const handleUndo = useCallback(() => {
     editor?.undo();
   }, [editor]);
@@ -423,7 +504,7 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
     >
       <div
         role="toolbar"
-        aria-label="Editor toolbar"
+        aria-label="Barra de herramientas del editor"
         className="toolbar flex items-center justify-between gap-1 sm:gap-1.5 flex-nowrap w-full min-w-0"
       >
         <BlockTypeDropdown value={blockType} onSelect={handleBlockSelect} />
@@ -521,8 +602,8 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
         >
           <ToggleGroupItem
             value="insertUnorderedList"
-            aria-label="Lista con viñetas"
-            title="Lista con viñetas"
+            aria-label={BLOCK_LABELS.ul}
+            title={BLOCK_LABELS.ul}
             onClick={() => runFormat('insertUnorderedList')}
             data-state={blockType === 'insertUnorderedList' ? 'on' : 'off'}
             className={`${isToolbarActionVisible('insertUnorderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertUnorderedList' ? 'toolbar-last-visible' : ''}`}
@@ -531,8 +612,8 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
           </ToggleGroupItem>
           <ToggleGroupItem
             value="insertOrderedList"
-            aria-label="Lista numerada"
-            title="Lista numerada"
+            aria-label={BLOCK_LABELS.ol}
+            title={BLOCK_LABELS.ol}
             onClick={() => runFormat('insertOrderedList')}
             data-state={blockType === 'insertOrderedList' ? 'on' : 'off'}
             className={`${isToolbarActionVisible('insertOrderedList') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'insertOrderedList' ? 'toolbar-last-visible' : ''}`}
@@ -541,8 +622,8 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
           </ToggleGroupItem>
           <ToggleGroupItem
             value="checklist"
-            aria-label="Lista de tareas"
-            title="Lista de tareas"
+            aria-label={BLOCK_LABELS.checklist}
+            title={BLOCK_LABELS.checklist}
             onClick={() => runFormat('checklist')}
             data-state={blockType === 'checklist' ? 'on' : 'off'}
             className={`${isToolbarActionVisible('checklist') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'checklist' ? 'toolbar-last-visible' : ''}`}
@@ -551,8 +632,8 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
           </ToggleGroupItem>
           <ToggleGroupItem
             value="blockquote"
-            aria-label="Cita"
-            title="Cita"
+            aria-label={BLOCK_LABELS.blockquote}
+            title={BLOCK_LABELS.blockquote}
             onClick={() => runFormat('blockquote')}
             data-state={blockType === 'blockquote' ? 'on' : 'off'}
             className={`${isToolbarActionVisible('blockquote') ? '' : 'toolbar-control-overflowed'} ${lastVisibleListAction === 'blockquote' ? 'toolbar-last-visible' : ''}`}
@@ -574,6 +655,7 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
           >
             <Link width={15} height={15} />
           </Button>
+          {inTable && <TableActionsMenu onAction={handleTableAction} />}
           <MoreActionsMenu
             onAction={handleMoreAction}
             visibleActions={visibleToolbarActions}

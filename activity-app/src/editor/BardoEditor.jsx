@@ -18,20 +18,30 @@ import { BardoToolbar } from './BardoToolbar.jsx';
 import { BardoEditorSurface } from './BardoEditorSurface.jsx';
 import { BardoSlashMenu } from './BardoSlashMenu.jsx';
 import { BardoBlockDragHandle } from './BardoBlockDragHandle.jsx';
+import { DOCS_KEYS, scopedDocsKey } from '../docs-storage.js';
+import { flattenPastedTitle, htmlToPlainText } from '../docs-text.js';
+import { copyTextToClipboard } from '../docs-clipboard.js';
 
-const DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
 const AUTOSAVE_DELAY_MS = 1500;
 // Copia local de seguridad mientras se escribe: no depende de que el navegador
 // alcance a disparar pagehide/visibilitychange (Discord puede matar el iframe).
 const JOURNAL_DELAY_MS = 250;
+const UNTITLED = 'Sin título';
 
+// Cortos a propósito: deben caber junto a "Listo" en Discord móvil (~380 px).
 const SYNC_LABELS = {
   saving: 'Guardando…',
   saved: 'Guardado',
-  offline: 'Sin conexión, reintentando',
-  error: 'No se pudo guardar',
-  conflict: 'Conflicto: se guardó una copia',
+  offline: 'Sin conexión',
+  error: 'No se guardó',
+  conflict: 'Se guardó una copia',
 };
+
+const SYNC_HINTS = {
+  saved: 'Los cambios se guardan solos mientras escribes.',
+  offline: 'Sin conexión con Bardo. Tus cambios quedan en este dispositivo y se enviarán al reconectar.',
+};
+
 
 function initialSyncState(docId, remoteSync) {
   if (!remoteSync || !docId) return {state: 'saved'};
@@ -44,7 +54,7 @@ function initialSyncState(docId, remoteSync) {
 
 function singleLinePaste(e) {
   e.preventDefault();
-  const text = e.clipboardData.getData('text/plain').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const text = flattenPastedTitle(e.clipboardData.getData('text/plain'));
   const input = e.currentTarget;
   const start = input.selectionStart ?? input.value.length;
   const end = input.selectionEnd ?? start;
@@ -54,6 +64,13 @@ function singleLinePaste(e) {
   setter?.call(input, next);
   input.dispatchEvent(new Event('input', { bubbles: true }));
   requestAnimationFrame(() => input.setSelectionRange(start + text.length, start + text.length));
+}
+
+function normalizeLinkUrl(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(value)) return value;
+  return `https://${value}`;
 }
 
 function changeActorName(doc) {
@@ -91,6 +108,7 @@ export function BardoEditor({
   doc,
   isNew,
   readOnly = false,
+  readOnlyMessage = '',
   remoteSync = false,
   onBack,
   onFinish,
@@ -102,13 +120,15 @@ export function BardoEditor({
   const initialDraft = useMemo(() => {
     if (!isNew) return null;
     try {
-      return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+      return JSON.parse(localStorage.getItem(scopedDocsKey(DOCS_KEYS.draft)) || 'null');
     } catch {
       return null;
     }
   }, [isNew]);
 
-  const [title, setTitle] = useState(doc?.title ?? initialDraft?.title ?? '');
+  // "Sin título" es el valor por defecto del servidor: se muestra como placeholder.
+  const initialTitle = doc ? (doc.title === UNTITLED ? '' : doc.title ?? '') : initialDraft?.title ?? '';
+  const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(doc?.description ?? initialDraft?.description ?? '');
   const [isDirty, setIsDirty] = useState(false);
   const [syncState, setSyncState] = useState(() => initialSyncState(doc?.id, remoteSync && !isNew));
@@ -232,16 +252,15 @@ export function BardoEditor({
     return () => window.removeEventListener('bardo-sync-status', onStatus);
   }, [docId, isNew, remoteSync]);
 
+  const syncKey = isDirty ? 'saving' : remoteSync ? (syncState?.state || 'saved') : 'saved';
   const saveState = readOnly
-    ? 'Procesando archivo…'
-    : isDirty
-      ? 'Cambios sin guardar'
-      : isNew
-        ? 'Borrador guardado'
-        : remoteSync
-          ? (SYNC_LABELS[syncState?.state] || 'Guardado')
-          : 'Guardado';
-  const saveStateTitle = !isDirty && remoteSync && syncState?.message ? syncState.message : undefined;
+    ? (readOnlyMessage ? 'Solo lectura' : 'Procesando…')
+    : isNew
+      ? (isDirty ? 'Guardando…' : 'Borrador')
+      : (SYNC_LABELS[syncKey] || 'Guardado');
+  const saveStateTitle = isNew
+    ? 'Solo tú ves este borrador, en este dispositivo, hasta que pulses Listo.'
+    : (!isDirty && remoteSync && syncState?.message) || SYNC_HINTS[syncKey] || undefined;
 
   const leaveEditor = useCallback((callback) => {
     if (exitTimer.current) return;
@@ -275,21 +294,9 @@ export function BardoEditor({
     clearTimeout(exitTimer.current);
   }, []);
 
-  // Manejo de atajos en título y descripción
+  // Título y descripción: Ctrl/Cmd+Z es el deshacer nativo de cada campo (no
+  // toca el cuerpo). Enter pasa al siguiente campo.
   const handleTitleKey = e => {
-    if (e.metaKey || e.ctrlKey) {
-      const key = e.key.toLowerCase();
-      if (key === 'z') {
-        e.preventDefault();
-        e.shiftKey ? editor.redo() : editor.undo();
-        return;
-      }
-      if (key === 'y') {
-        e.preventDefault();
-        editor.redo();
-        return;
-      }
-    }
     if (e.key === 'Enter') {
       e.preventDefault();
       descriptionInputRef.current?.focus();
@@ -297,35 +304,16 @@ export function BardoEditor({
   };
 
   const handleDescriptionKey = e => {
-    if (e.metaKey || e.ctrlKey) {
-      const key = e.key.toLowerCase();
-      if (key === 'z') {
-        e.preventDefault();
-        e.shiftKey ? editor.redo() : editor.undo();
-        return;
-      }
-      if (key === 'y') {
-        e.preventDefault();
-        editor.redo();
-        return;
-      }
-    }
     if (e.key === 'Enter') {
       e.preventDefault();
       editor.tf.focus();
     }
   };
 
-  const handleCopyAll = useCallback(() => {
-    const text = plateValueToHtml(editor.children);
-    const tempEl = document.createElement('div');
-    tempEl.innerHTML = text;
-    const plain = tempEl.innerText || '';
-    navigator.clipboard?.writeText(plain).then(() => {
-      toast('Texto copiado al portapapeles');
-    }).catch(() => {
-      toast('No se pudo copiar el texto');
-    });
+  const handleCopyAll = useCallback(async () => {
+    const plain = htmlToPlainText(plateValueToHtml(editor.children));
+    const copied = await copyTextToClipboard(plain);
+    toast(copied ? 'Texto copiado' : 'No se pudo copiar. Selecciona el texto y cópialo manualmente.');
   }, [editor]);
 
   const handleRemoveFormat = useCallback(() => {
@@ -337,13 +325,26 @@ export function BardoEditor({
   }, [editor]);
 
   const handleOpenLinkModal = useCallback(() => {
-    const isCollapsed = !editor.selection || editor.api.isCollapsed();
+    const savedSelection = editor.selection;
+    const isCollapsed = !savedSelection || editor.api.isCollapsed();
+    const linkEntry = savedSelection ? editor.api.above({ match: n => n.type === 'a' }) : null;
+    const restoreSelection = () => {
+      editor.tf.focus();
+      if (savedSelection) {
+        try { editor.tf.select(savedSelection); } catch {}
+      }
+    };
     onOpenLink?.({
       isCollapsed,
-      apply: (url) => {
+      initialUrl: linkEntry?.[0]?.url || '',
+      isEditing: Boolean(linkEntry),
+      apply: (rawUrl) => {
+        const url = normalizeLinkUrl(rawUrl);
         if (!url) return;
-        editor.tf.focus();
-        if (isCollapsed) {
+        restoreSelection();
+        if (linkEntry) {
+          editor.tf.setNodes({ url }, { at: linkEntry[1] });
+        } else if (isCollapsed) {
           editor.tf.insertNodes({
             type: 'a',
             url,
@@ -360,6 +361,11 @@ export function BardoEditor({
         }
         markDirty();
       },
+      remove: linkEntry ? () => {
+        restoreSelection();
+        editor.tf.unwrapNodes({ at: linkEntry[1], match: n => n.type === 'a' });
+        markDirty();
+      } : undefined,
     });
   }, [editor, markDirty, onOpenLink]);
 
@@ -376,8 +382,10 @@ export function BardoEditor({
               leaveEditor(onBack);
             }}
             className="back-button"
+            aria-label="Volver a Documentos"
           >
-            <ChevronLeft width={16} height={16} /> Docs
+            <ChevronLeft width={16} height={16} aria-hidden="true" />
+            <span className="header-label">Documentos</span>
           </Button>
           <Badge
             key={saveState}
@@ -386,17 +394,16 @@ export function BardoEditor({
             data-dirty={isDirty ? 'true' : 'false'}
             data-sync-state={isDirty ? 'dirty' : syncState?.state || 'saved'}
             title={saveStateTitle}
-            role="status"
+            aria-live="polite"
           >
             <span key={saveState} className="save-state-label">{saveState}</span>
           </Badge>
         </div>
         <div className="topbar-right flex items-center gap-2">
           {ThemeModeMenu && <ThemeModeMenu />}
+          {/* Un solo botón: el contenido ya se guarda solo; "Listo" vuelve al lector. */}
           <Button variant="default" size="sm" onClick={finish} className="save-action-button">
-            <span key={isDirty ? 'dirty' : 'saved'} className="save-action-label">
-              {isDirty ? 'Guardar' : 'Listo'}
-            </span>
+            <span className="save-action-label">Listo</span>
           </Button>
         </div>
       </header>
@@ -423,7 +430,11 @@ export function BardoEditor({
                 <Badge variant="secondary" className="text-xs">
                   {isNew ? 'Borrador privado' : `Creado por ${createdActorName(doc)}`}
                 </Badge>
-                {!isNew && (
+                {isNew ? (
+                  <span className="text-xs text-muted-foreground">
+                    Solo tú lo ves hasta que pulses Listo.
+                  </span>
+                ) : (
                   <span className="text-xs text-muted-foreground">
                     Último cambio realizado por {changeActorName(doc)} · {formatChangeTime(doc)}
                   </span>
@@ -436,7 +447,7 @@ export function BardoEditor({
                 rows={1}
                 value={title}
                 readOnly={readOnly}
-                placeholder="Sin título"
+                placeholder={UNTITLED}
                 onChange={e => {
                   const nextTitle = e.target.value;
                   titleRef.current = nextTitle;
@@ -467,7 +478,7 @@ export function BardoEditor({
 
             {readOnly ? (
               <div className="import-pending-banner text-sm text-muted-foreground" role="status">
-                Procesando archivo… Bardo está convirtiendo el contenido. Podrás editarlo en cuanto termine.
+                {readOnlyMessage || 'Procesando archivo… Bardo está convirtiendo el contenido. Podrás editarlo en cuanto termine.'}
               </div>
             ) : (
               <div className="editor-toolbar-sticky">

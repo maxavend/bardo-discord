@@ -31,7 +31,6 @@
   "devDependencies": {
     "@mixmark-io/domino": "^2.2.0",
     "esbuild": "^0.28.2",
-    "shadcn": "^4.19.1",
-    "wrangler": "^4.124.0"
+    "wrangler": "^4.148.0"
   }
 }

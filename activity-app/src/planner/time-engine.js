@@ -67,15 +67,28 @@ export function minutesToClock(total) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+const LEGACY_BREAK_TITLES = new Set(['break', 'descanso', 'pausa']);
+
+/**
+ * A block is a Descanso only when it says so explicitly (`type: 'break'`).
+ * The title never turns a typed block into a break: typing "Pausa activa"
+ * must not wipe its temas. The title heuristic survives only for legacy blocks
+ * saved before blocks carried a `type`.
+ */
 export function isBreakBlock(block) {
   if (!block) return false;
-  return Boolean(
-    block.isBreak ||
-    block.type === 'break' ||
-    block.title?.trim().toLowerCase() === 'break' ||
-    block.title?.trim().toLowerCase() === 'descanso' ||
-    block.title?.trim().toLowerCase() === 'pausa'
-  );
+  if (typeof block.type === 'string' && block.type) return block.type === 'break';
+  if (block.isBreak === true) return true;
+  return LEGACY_BREAK_TITLES.has(String(block.title || '').trim().toLowerCase());
+}
+
+/** Custom block duration ("Otra…"): whole minutes between 1 and 480, else null. */
+export const CUSTOM_DURATION_MAX_MINUTES = 480;
+export function parseCustomDurationMinutes(value) {
+  const text = String(value ?? '').trim();
+  if (!/^\d+$/.test(text)) return null;
+  const minutes = Number(text);
+  return minutes >= 1 && minutes <= CUSTOM_DURATION_MAX_MINUTES ? minutes : null;
 }
 
 export function computePlannerTimes(plannerState) {
@@ -111,4 +124,47 @@ export function computePlannerTimes(plannerState) {
     totalCalculatedDuration: grandTotalMinutes,
     blocks: computedBlocks,
   };
+}
+
+/**
+ * Planned schedule of a meeting. `targetDuration` is the time the meeting was
+ * booked for (set by "Término" or /reu-new duracion); topics can fill less of
+ * it ("quedan X min libres") but never end before their own total, so the
+ * planned end is start + max(target, topics). While live, block extensions
+ * push the estimated end past the plan.
+ */
+export function getPlannedSchedule({startTime = '10:00', targetDuration = 0, blocks = []} = {}, sessionState = null) {
+  const blocksMinutes = (blocks || []).reduce((total, block) => total + (Number(block?.durationMinutes) || 0), 0);
+  const target = Number(targetDuration) > 0 ? Math.round(Number(targetDuration)) : 0;
+  const plannedMinutes = Math.max(target, blocksMinutes);
+  const extensionsMinutes = Object.values(sessionState?.blockExtensions || {})
+    .reduce((total, extension) => total + (Number(extension?.extensionMinutes) || 0), 0);
+  const estimatedMinutes = Math.max(target, blocksMinutes + extensionsMinutes);
+  const start = clockToMinutes(startTime || '10:00');
+  return {
+    blocksMinutes,
+    targetMinutes: target,
+    plannedMinutes,
+    freeMinutes: Math.max(0, target - blocksMinutes),
+    overMinutes: target > 0 ? Math.max(0, blocksMinutes - target) : 0,
+    plannedEnd: minutesToClock(start + plannedMinutes),
+    estimatedEnd: minutesToClock(start + estimatedMinutes),
+  };
+}
+
+/** Longest meeting accepted when the end is earlier on the clock (crosses midnight). */
+export const MAX_OVERNIGHT_MINUTES = 12 * 60;
+
+/**
+ * Minutes between start and a chosen end time. An end earlier on the clock is
+ * read as crossing midnight (23:30 → 00:30 = 60 min) only when that gives at
+ * most 12 h; otherwise it is likely an a.m./p.m. slip and returns null. Equal
+ * times are rejected.
+ */
+export function durationUntil(startTime, endTime) {
+  const diff = clockToMinutes(endTime) - clockToMinutes(startTime || '10:00');
+  if (diff > 0) return diff;
+  if (diff === 0) return null;
+  const overnight = diff + 24 * 60;
+  return overnight <= MAX_OVERNIGHT_MINUTES ? overnight : null;
 }

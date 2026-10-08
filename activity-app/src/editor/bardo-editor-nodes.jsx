@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react';
-import { PlateElement, PlateLeaf } from 'platejs/react';
+import { PlateElement, PlateLeaf, useFocused, usePath, useReadOnly, useSelected } from 'platejs/react';
 import { ChevronRight } from '@gravity-ui/icons';
+import { openExternalUrl } from '../discord-links.js';
+
+export const BLOCK_PLACEHOLDER = 'Escribe / para insertar…';
 
 /**
  * Renderizado de marcas de texto (hojas de Slate)
@@ -45,7 +48,11 @@ const LIST_INDENT_PX = 24;
  * div: ListPlugin envuelve su contenido en <ul>/<ol><li>, que no puede ir dentro de <p>.
  */
 export function BardoParagraphElement(props) {
-  const { element } = props;
+  const { element, editor } = props;
+  const selected = useSelected();
+  const focused = useFocused();
+  const readOnly = useReadOnly();
+  const path = usePath();
   if (element.listStyleType) {
     const indent = Math.max(1, Number(element.indent) || 1);
     return (
@@ -59,8 +66,15 @@ export function BardoParagraphElement(props) {
       </PlateElement>
     );
   }
+  // Pista del menú "/" en el párrafo vacío donde está el cursor (el editor
+  // completamente vacío ya muestra el placeholder de PlateContent).
+  const isEmpty = element.children?.length === 1 && element.children[0]?.text === '';
+  const showHint = !readOnly && focused && selected && isEmpty && path?.length === 1 && (editor?.children?.length || 0) > 1;
   return (
-    <PlateElement as="p" {...props}>
+    <PlateElement as="p" {...props} className={showHint ? 'has-block-placeholder' : undefined}>
+      {showHint && (
+        <span className="block-placeholder" contentEditable={false} aria-hidden="true">{BLOCK_PLACEHOLDER}</span>
+      )}
       {props.children}
     </PlateElement>
   );
@@ -219,6 +233,7 @@ export function BardoSpoilerElement(props) {
  */
 export function BardoLinkElement(props) {
   const { element, children } = props;
+  const readOnly = useReadOnly();
   return (
     <PlateElement
       as="a"
@@ -226,7 +241,19 @@ export function BardoLinkElement(props) {
       href={element.url || '#'}
       target="_blank"
       rel="noreferrer"
+      title={readOnly ? element.url : `${element.url} · Ctrl/Cmd + clic para abrir`}
       className="text-primary underline underline-offset-4"
+      onClick={(event) => {
+        // Dentro de Discord los enlaces se abren con el SDK (openExternalLink).
+        // Al editar, un clic coloca el cursor; Ctrl/Cmd + clic abre el enlace
+        // (también disponible en el botón "Enlace" de la barra).
+        if (!readOnly && !event.metaKey && !event.ctrlKey) {
+          event.preventDefault();
+          return;
+        }
+        event.preventDefault();
+        void openExternalUrl(element.url);
+      }}
     >
       {children}
     </PlateElement>

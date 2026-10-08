@@ -397,6 +397,9 @@ export function SearchableParticipantMenu({
   onAddCustomParticipant,
   singleSelect = false,
   hideRoles = false,
+  placeholder,
+  onClear,
+  clearLabel = 'Quitar selección',
 }) {
   const [searchValue, setSearchValue] = useState('');
   const { members, roles } = getAllDiscordEntities();
@@ -461,9 +464,13 @@ export function SearchableParticipantMenu({
         ],
     });
 
-    const nextKeys = new Set(selectedKeys);
-    nextKeys.add(cleanTag);
-    onSelectionChange(Array.from(nextKeys));
+    if (singleSelect) {
+      onSelectionChange([cleanTag]);
+    } else {
+      const nextKeys = new Set(selectedKeys);
+      nextKeys.add(cleanTag);
+      onSelectionChange(Array.from(nextKeys));
+    }
     onAddCustomParticipant?.(cleanTag);
     setSearchValue('');
   };
@@ -475,12 +482,22 @@ export function SearchableParticipantMenu({
       (e.globalName || e.name || '').toLowerCase() === searchValue.trim().toLowerCase()
   );
 
+  // Start the keyboard highlight on the current choice instead of the first
+  // row, so the highlight never reads as a second selection.
+  const selectedMember = singleSelect
+    ? members.find((member) => {
+        const key = Array.from(selectedKeys)[0]?.replace(/^@/, '').toLowerCase();
+        return key && (member.globalName.toLowerCase() === key || member.tag.toLowerCase() === `@${key}`);
+      })
+    : null;
+  const memberItemValue = (member) => `${member.globalName} ${member.username} ${member.tag}`;
+
   return (
-    <Command className="w-[300px] p-1">
+    <Command className="w-[300px] p-1" defaultValue={selectedMember ? memberItemValue(selectedMember) : undefined}>
       <CommandInput
         value={searchValue}
         onValueChange={setSearchValue}
-        placeholder="Buscar miembro o rol..."
+        placeholder={placeholder || (hideRoles ? 'Buscar persona...' : 'Buscar miembro o rol...')}
         className="text-xs"
       />
 
@@ -501,6 +518,15 @@ export function SearchableParticipantMenu({
 
       <CommandList className="max-h-64 mt-1">
         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+
+        {onClear && selectedKeys.size > 0 && !searchValue.trim() && (
+          <CommandGroup>
+            <CommandItem value="__clear__" onSelect={onClear} className="cursor-pointer text-muted-foreground">
+              <XIcon className="size-3.5 shrink-0" />
+              <span className="text-xs font-medium">{clearLabel}</span>
+            </CommandItem>
+          </CommandGroup>
+        )}
 
         {!hideRoles && roles.length > 0 && (
           <CommandGroup heading="Roles del servidor">
@@ -562,7 +588,7 @@ export function SearchableParticipantMenu({
               return (
                 <CommandItem
                   key={member.tag}
-                  value={`${member.globalName} ${member.username} ${member.tag}`}
+                  value={memberItemValue(member)}
                   onSelect={() => handleToggle(singleSelect ? member.globalName : member.tag)}
                   data-checked={isSelected}
                   className="cursor-pointer"
@@ -594,5 +620,40 @@ export function SearchableParticipantMenu({
         )}
       </CommandList>
     </Command>
+  );
+}
+
+/**
+ * One person (meeting or topic facilitator). Picking closes the menu right
+ * away, which is what makes it read as single-choice; "Quitar" clears it.
+ */
+export function SinglePersonPicker({
+  value = '',
+  onChange,
+  renderTrigger,
+  clearLabel = 'Quitar a quien facilita',
+  align = 'start',
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedKeys = value ? new Set([value]) : new Set();
+  const pick = (name) => {
+    onChange?.(name);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={renderTrigger({open})} />
+      <PopoverContent align={align} className="p-0 w-auto overflow-hidden">
+        <SearchableParticipantMenu
+          singleSelect
+          hideRoles
+          selectedKeys={selectedKeys}
+          onSelectionChange={(keys) => pick(keys[0] ? keys[0].replace(/^@/, '') : '')}
+          onClear={value ? () => pick('') : undefined}
+          clearLabel={clearLabel}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }

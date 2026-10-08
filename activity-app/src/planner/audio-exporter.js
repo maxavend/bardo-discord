@@ -307,12 +307,12 @@ export async function exportBlockRecordingsAsZip(blockTitle, recordings, options
 
   let index = 1;
   for (const {recording, blob} of available) {
-    const title = sanitizeFileName(recording.pointTitle || recording.name, `Punto ${index}`);
+    const title = sanitizeFileName(recording.pointTitle || recording.name, `Tema ${index}`);
     folder.file(`${index}. ${title}.${extensionForMimeType(blob.type || recording.mimeType)}`, blob);
     index++;
   }
 
   const zipContent = await zip.generateAsync({type: 'blob'});
-  downloadBlob(zipContent, `${cleanBlockTitle} - Grabaciones por punto.zip`);
+  downloadBlob(zipContent, `${cleanBlockTitle} - Grabaciones por tema.zip`);
   return {mode: 'zip', missing: missing.length};
 }

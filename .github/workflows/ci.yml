@@ -58,3 +58,23 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # E2E de la Activity con Playwright (solo Chromium, 3 vistas representativas).
+      # `npm test` ya construyó la Activity en ./activity, que `vite preview` sirve.
+      - name: Install Playwright Chromium
+        working-directory: activity-app
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (laptop, mobile-narrow, mobile-standard)
+        working-directory: activity-app
+        timeout-minutes: 8
+        run: npm run test:e2e:ci
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: activity-app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

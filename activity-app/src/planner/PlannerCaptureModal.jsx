@@ -53,14 +53,14 @@ export function PlannerCaptureModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md rounded-4xl">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-foreground">Agregar decisión</DialogTitle>
+          <DialogTitle className="text-base font-bold text-foreground">Agregar acuerdo</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Escribe la decisión o acuerdo alcanzado en este bloque..."
+            placeholder="Escribe el acuerdo al que llegaron en este bloque..."
             autoFocus
             rows={4}
             required
@@ -96,7 +96,7 @@ export function PlannerCaptureModal({
               disabled={!content.trim() || isSubmitting}
               className="rounded-full px-5 h-9"
             >
-              {isSubmitting ? 'Guardando...' : 'Aceptar'}
+              {isSubmitting ? 'Guardando…' : 'Guardar acuerdo'}
             </Button>
           </DialogFooter>
         </form>

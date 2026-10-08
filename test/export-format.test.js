@@ -103,7 +103,8 @@ test('generatePdfDocument dibuja comillas, rayas y viñetas (no espacios vacíos
   const pdf = await PDFDocument.load(bytes);
   assert.equal(pdf.getPageCount(), 1);
   const text = drawn.join('\n');
-  assert.match(text, /- Ítem con "comillas" - y raya\.\.\./);
+  // The bullet is drawn on its own (hanging indent), followed by the item text.
+  assert.match(text, /^- \nÍtem con "comillas" - y raya\.\.\.$/m);
   assert.match(text, /Texto \? final/);
   assert.match(text, /Prueba "tipográfica"/);
 });

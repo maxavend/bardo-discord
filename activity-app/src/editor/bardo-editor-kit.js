@@ -246,5 +246,8 @@ export function createBardoEditor(initialValue = [{ type: 'p', children: [{ text
   return createPlateEditor({
     plugins: bardoPlugins,
     value: initialValue,
+    // Sin normalizar, los ítems numerados no tienen `listStart` y todos se ven
+    // como "1."; además `listRestart` (lista que empieza en 3) no se aplicaría.
+    shouldNormalizeEditor: true,
   });
 }

@@ -1,20 +1,30 @@
 import {markdownToHtml} from './editor/bardo-markdown.js';
 import {
   DOCS_STORE_KEY as STORE_KEY,
+  DOCS_PENDING_KEY,
+  HttpError,
   createApiRequest,
   createDocsSync,
-  errorMessage,
   fetchDocsLibrary,
   serverDocToLocal,
+  userFacingError,
 } from './production-docs-sync.js';
 import {normalizePendingImports} from './production-import-normalizer.js';
+import {
+  DOCS_KEYS,
+  adoptLegacyDocsValue,
+  docsScopeFor,
+  scopedDocsKey,
+  setDocsStorageScope,
+} from './docs-storage.js';
 
 export {markdownToHtml};
 
-const LAST_OPENED_KEY = 'bardo.docs.heroui.last-opened.v1';
 const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
+/** Destinos de lanzamiento que no son un documento. */
+const SPECIAL_LAUNCH_TARGETS = new Set(['docs', 'planner', 'new-doc']);
 
 function responseFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || '';
@@ -25,10 +35,8 @@ function responseFileName(response, fallback) {
   return disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallback;
 }
 
-function triggerBlobDownload(blob, filename, {preview = false} = {}) {
+function triggerBlobDownload(blob, filename) {
   const objectUrl = URL.createObjectURL(blob);
-  if (preview) return {url: objectUrl, filename, mime: blob.type || 'application/octet-stream'};
-
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
   anchor.download = filename;
@@ -40,13 +48,57 @@ function triggerBlobDownload(blob, filename, {preview = false} = {}) {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
-function readCachedDocs() {
+/** Copia global antigua (sin ámbito) de la biblioteca, solo para rescatar documentos sin enviar. */
+function readLegacyCacheDocs() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    const parsed = JSON.parse(localStorage.getItem(DOCS_KEYS.store) || 'null');
     return Array.isArray(parsed?.docs) ? parsed.docs.filter(doc => doc?.id) : [];
   } catch {
     return [];
   }
+}
+
+/** Copia local de la biblioteca de ESTE canal (nunca la de otro canal). */
+function readCachedDocs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(scopedDocsKey(STORE_KEY)) || 'null');
+    return Array.isArray(parsed?.docs) ? parsed.docs.filter(doc => doc?.id) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readImportFailures() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(scopedDocsKey(DOCS_KEYS.importFailures)) || 'null');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeImportFailures(failures) {
+  try {
+    localStorage.setItem(scopedDocsKey(DOCS_KEYS.importFailures), JSON.stringify(failures));
+  } catch {}
+}
+
+/**
+ * Destino de un lanzamiento ("bardo:open:<destino>"): un documento a leer, uno a
+ * editar (`edit:<id>`, tarjeta de /doc-new) o una sección.
+ */
+export function parseDocsLaunchTarget(target) {
+  const value = String(target || '').trim();
+  if (!value) return {type: 'none'};
+  if (value.startsWith('edit:')) {
+    const id = value.slice('edit:'.length).trim();
+    return id ? {type: 'edit', id} : {type: 'none'};
+  }
+  if (SPECIAL_LAUNCH_TARGETS.has(value) || value.startsWith('new-doc:') || value.startsWith('planner')) {
+    return {type: 'section', target: value};
+  }
+  if (value.includes(':')) return {type: 'none'};
+  return {type: 'doc', id: value};
 }
 
 function resolveClientId() {
@@ -69,21 +121,29 @@ async function initSdk() {
   }
 }
 
-const NEW_DOC_DRAFT_KEY = 'bardo.docs.heroui.draft.v1';
+/**
+ * Where a Discord "Abrir reunión" button (custom_id planner-session:<id>)
+ * lands: that meeting's agenda when it is the one loaded, otherwise the
+ * meetings list (e.g. the meeting was archived or deleted meanwhile).
+ */
+export function plannerSessionLaunchHash(requestedId, openedPlannerId) {
+  return requestedId && openedPlannerId && requestedId === openedPlannerId ? '#planner-agenda' : '#planner';
+}
 
 /**
- * "/doc-new titulo:..." carries the title in the button's custom_id. Prefill
- * it into the new-document draft, but never overwrite a draft that already
- * has a title or content (that would lose unfinished work).
+ * Tarjetas antiguas "/doc-new titulo:..." llevan el título en el custom_id. Se
+ * usa como título del borrador nuevo, pero nunca pisa un borrador con título o
+ * contenido (se perdería trabajo): en ese caso devuelve false y la app ofrece
+ * "Continuar borrador" / "Empezar uno nuevo".
  */
-export function prefillNewDocTitle(rawTitle, storage = globalThis.localStorage) {
+export function prefillNewDocTitle(rawTitle, storage = globalThis.localStorage, key = scopedDocsKey(DOCS_KEYS.draft)) {
   const title = String(rawTitle || '').trim();
   if (!title || !storage) return false;
   try {
-    const draft = JSON.parse(storage.getItem(NEW_DOC_DRAFT_KEY) || 'null');
+    const draft = JSON.parse(storage.getItem(key) || 'null');
     const body = String(draft?.body || '').replace(/<p>\s*(<br\s*\/?>)?\s*<\/p>/gi, '').trim();
     if (draft?.title?.trim() || draft?.description?.trim() || body) return false;
-    storage.setItem(NEW_DOC_DRAFT_KEY, JSON.stringify({
+    storage.setItem(key, JSON.stringify({
       title,
       description: '',
       body: '<p><br></p>',
@@ -107,22 +167,22 @@ export async function prepareBardoProduction(options = {}) {
   const sdk = options.sdk || window.__BARDO_DISCORD_SDK__ || await initSdk();
   if (sdk) window.__BARDO_DISCORD_SDK__ = sdk;
 
-  window.__bardoExportDocument = async (documentId, format, options = {}) => {
-    // Exportar la última versión: primero se envían los cambios pendientes.
-    if (window.__bardoSettleDocument) await window.__bardoSettleDocument(documentId);
-    const url = `${window.location.origin}/api/documents/${encodeURIComponent(documentId)}/export?format=${encodeURIComponent(format)}`;
-    const headers = {'Accept': 'application/octet-stream'};
-    if (window.__BARDO_SESSION_TOKEN__) headers['Authorization'] = `Bearer ${window.__BARDO_SESSION_TOKEN__}`;
-    if (window.__BARDO_CUSTOM_ID__) headers['x-bardo-custom-id'] = window.__BARDO_CUSTOM_ID__;
-    if (instanceId) headers['x-bardo-instance-id'] = instanceId;
-
-    const response = await fetch(url, {headers, cache: 'no-store'});
-    if (!response.ok) throw new Error(`Export HTTP ${response.status}`);
-
-    const blob = await response.blob();
-    const fallbackName = `${documentId}.${format === 'word' ? 'docx' : format}`;
-    return triggerBlobDownload(blob, responseFileName(response, fallbackName), options);
-  };
+  // Todo lo que Documentos guarda en este dispositivo queda separado por
+  // servidor + canal: un borrador o un cambio sin enviar de un canal (incluso
+  // privado) nunca aparece ni se publica en otro.
+  const docsScope = setDocsStorageScope(docsScopeFor(
+    options.guildId || window.__BARDO_GUILD_ID__,
+    options.channelId || window.__BARDO_CHANNEL_ID__,
+  ));
+  // La copia global antigua de la biblioteca (de antes de separar por canal)
+  // puede tener documentos que nunca llegaron al servidor: se rescatan en la
+  // cola antigua y la copia se borra SOLO cuando quedaron guardados ahí.
+  let legacyCacheDocs = [];
+  if (docsScope) {
+    adoptLegacyDocsValue(localStorage, DOCS_KEYS.draft, docsScope);
+    legacyCacheDocs = readLegacyCacheDocs();
+    try { localStorage.removeItem(DOCS_KEYS.lastOpened); } catch {}
+  }
 
   const headers = {'Accept':'application/json'};
   if (window.__BARDO_SESSION_TOKEN__) headers['Authorization'] = `Bearer ${window.__BARDO_SESSION_TOKEN__}`;
@@ -259,6 +319,10 @@ export async function prepareBardoProduction(options = {}) {
     },
     emit: detail => window.dispatchEvent(new CustomEvent('bardo-sync-status', {detail})),
     onRemote: deliverRemote,
+    // Cola por canal; la cola antigua sin ámbito solo se adopta para documentos
+    // de este canal y nunca se crea ni se recrea aquí.
+    pendingKey: scopedDocsKey(DOCS_PENDING_KEY, docsScope),
+    legacyPendingKey: docsScope ? DOCS_PENDING_KEY : null,
   });
   window.__bardoDocsSync = docsSync;
 
@@ -272,14 +336,32 @@ export async function prepareBardoProduction(options = {}) {
     docsSync.registerCached(baseDocs);
     deliverRemote({type: 'offline-boot'});
   }
-  docsSync.loadPending();
+  const legacyQueued = docsSync.loadPending({legacyDocs: legacyCacheDocs});
+  if (docsScope && legacyQueued) {
+    try { localStorage.removeItem(DOCS_KEYS.store); } catch {}
+  }
+  // Importaciones que ya fallaron en este dispositivo: se muestran como error
+  // (con "Eliminar" / "Descargar original") en vez de "Procesando archivo…".
+  const importFailures = readImportFailures();
+  const stillPendingIds = new Set(serverDocuments.filter(item => item?.importStatus === 'pending').map(item => item.id));
+  let failuresChanged = false;
+  Object.keys(importFailures).forEach(id => {
+    if (libraryLoaded && !stillPendingIds.has(id)) {
+      delete importFailures[id];
+      failuresChanged = true;
+    }
+  });
+  if (failuresChanged) writeImportFailures(importFailures);
+  const markFailed = doc => (doc.importStatus === 'pending' && importFailures[doc.id]
+    ? {...doc, importStatus: 'failed', importError: importFailures[doc.id].message || ''}
+    : doc);
   // Las ediciones locales sin confirmar se superponen ANTES de que la copia del
   // servidor reemplace el store, y se reenvían de inmediato.
-  const docs = docsSync.overlayPending(baseDocs);
+  const docs = docsSync.overlayPending(baseDocs).map(markFailed);
   const initialStore = {version:1, docs, deletedIds:[]};
   window.__BARDO_INITIAL_STORE__ = initialStore;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(initialStore));
+    localStorage.setItem(scopedDocsKey(STORE_KEY, docsScope), JSON.stringify(initialStore));
   } catch (error) {
     console.warn('Bardo Docs: almacenamiento local lleno; la biblioteca queda en memoria', error);
   }
@@ -288,7 +370,13 @@ export async function prepareBardoProduction(options = {}) {
   window.__bardoSyncDocs = store => docsSync.track(store);
   window.__bardoDocSyncState = id => docsSync.stateFor(id);
   window.__bardoSettleDocument = id => docsSync.settle(id);
-  window.__bardoResolveDocConflict = id => docsSync.resolveConflict(id);
+  // Marcar una tarea en el lector: ante un 409 se reaplica sobre la versión del
+  // servidor en vez de crear una "copia en conflicto".
+  window.__bardoNoteChecklistToggle = (id, op, prevDoc) => docsSync.noteChecklistToggle(id, op, prevDoc);
+  // Cambios sin enviar que pertenecen a otro canal: visibles, con Reintentar / Descartar.
+  window.__bardoParkedChanges = () => docsSync.parkedSummary();
+  window.__bardoRetryParked = () => docsSync.retryParked();
+  window.__bardoDiscardParked = () => docsSync.discardParked();
   window.__bardoSubscribeDocs = listener => {
     remoteListeners.add(listener);
     remoteBacklog.splice(0).forEach(event => listener(event));
@@ -334,11 +422,23 @@ export async function prepareBardoProduction(options = {}) {
   }
   if (!libraryLoaded) refreshTimer = setTimeout(refreshLibrary, 5_000);
 
-  // Importaciones PDF/DOCX pendientes: normalizar en segundo plano y refrescar el store.
-  const pendingImports = serverDocuments.filter(item => item?.importStatus === 'pending' && item?.hasSource);
+  // Importaciones PDF/DOCX pendientes: normalizar en segundo plano y refrescar
+  // el store. Si un archivo no se puede leer (dañado, con contraseña, escaneado
+  // o demasiado largo) el documento muestra el error en vez de quedar
+  // "Procesando archivo…" para siempre.
+  const pendingImports = serverDocuments.filter(item => item?.importStatus === 'pending' && item?.hasSource && !importFailures[item.id]);
   if (pendingImports.length) {
     setTimeout(() => {
-      normalizePendingImports(pendingImports, {request: docsRequest}).then(normalized => {
+      normalizePendingImports(pendingImports, {
+        request: docsRequest,
+        onFailure: (doc, error) => {
+          const failure = {code: error?.code || 'unreadable', message: error?.userMessage || '', at: Date.now()};
+          const failures = readImportFailures();
+          failures[doc.id] = failure;
+          writeImportFailures(failures);
+          deliverRemote({type: 'import-failed', id: doc.id, message: failure.message});
+        },
+      }).then(normalized => {
         if (!normalized.length) return;
         docsSync.registerRemote(normalized);
         deliverRemote({
@@ -347,7 +447,6 @@ export async function prepareBardoProduction(options = {}) {
             .filter(item => !docsSync.pending.has(item.id))
             .map(item => serverDocToLocal(item)),
         });
-        window.dispatchEvent(new CustomEvent('bardo-documents-normalized', {detail: {documents: normalized}}));
       }).catch(error => console.error('Bardo Docs: no se pudieron normalizar importaciones', error));
     }, 0);
   }
@@ -357,26 +456,51 @@ export async function prepareBardoProduction(options = {}) {
     : window.__BARDO_CUSTOM_ID__;
   // Prefer the explicit component custom id. On Discord mobile the SDK can
   // omit it, in which case the API returns the short-lived launch intent.
-  const contextId = payload.contextDocumentId || explicitCustomId;
+  const launch = parseDocsLaunchTarget(explicitCustomId);
+  const contextId = payload.contextDocumentId || (launch.type === 'doc' ? launch.id : null);
+  window.__BARDO_LAUNCH_MISSING_DOC__ = null;
+  window.__BARDO_PENDING_NEW_TITLE__ = null;
+  const rememberOpened = id => {
+    try {
+      localStorage.setItem(scopedDocsKey(DOCS_KEYS.lastOpened, docsScope), JSON.stringify({id, offset:0, at:Date.now()}));
+    } catch {}
+  };
 
-  if (explicitCustomId === 'new-doc' || explicitCustomId?.startsWith('new-doc:')) {
-    prefillNewDocTitle(explicitCustomId.slice('new-doc:'.length));
+  if (launch.type === 'edit') {
+    // Tarjeta de /doc-new: el documento ya existe en el servidor; abrir su editor.
+    if (docs.some(doc => doc.id === launch.id)) {
+      rememberOpened(launch.id);
+      window.__BARDO_DOCUMENT_ID__ = launch.id;
+      history.replaceState(null, '', `#edit-${encodeURIComponent(launch.id)}`);
+    } else {
+      window.__BARDO_DOCUMENT_ID__ = null;
+      window.__BARDO_LAUNCH_MISSING_DOC__ = launch.id;
+      history.replaceState(null, '', '#docs');
+    }
+  } else if (explicitCustomId === 'new-doc' || explicitCustomId?.startsWith('new-doc:')) {
+    const requestedTitle = explicitCustomId.slice('new-doc:'.length).trim();
+    // Con un borrador sin terminar, la app pregunta "Continuar" / "Empezar uno nuevo".
+    if (requestedTitle && !prefillNewDocTitle(requestedTitle)) window.__BARDO_PENDING_NEW_TITLE__ = requestedTitle;
     history.replaceState(null, '', '#new');
   } else if (explicitCustomId === 'planner') {
     history.replaceState(null, '', '#planner');
   } else if (explicitCustomId?.startsWith('planner-session:')) {
     // The planner bootstrap above already opened this agenda (preferredId),
     // keeping unsynced local edits; writing the raw server row here would
-    // revert them.
-    history.replaceState(null, '', '#planner');
-  } else if (contextId && docs.some(doc => doc.id === contextId)) {
+    // revert them. Land on its agenda, not on the meetings list.
+    let openedPlannerId = null;
     try {
-      localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({id:contextId, offset:0, at:Date.now()}));
+      openedPlannerId = JSON.parse(localStorage.getItem(PLANNER_STORE_KEY) || 'null')?.id || null;
     } catch {}
+    history.replaceState(null, '', plannerSessionLaunchHash(explicitCustomId.slice('planner-session:'.length), openedPlannerId));
+  } else if (contextId && docs.some(doc => doc.id === contextId)) {
+    rememberOpened(contextId);
     window.__BARDO_DOCUMENT_ID__ = contextId;
     history.replaceState(null, '', `#doc-${encodeURIComponent(contextId)}`);
   } else {
     window.__BARDO_DOCUMENT_ID__ = null;
+    // Tarjeta de un documento archivado o eliminado: la app explica qué pasó.
+    if (contextId) window.__BARDO_LAUNCH_MISSING_DOC__ = contextId;
     if (!location.hash || location.hash === '#docs') {
       history.replaceState(null, '', '#docs');
     }
@@ -391,15 +515,96 @@ export async function prepareBardoProduction(options = {}) {
 
   const request = (path, init = {}) => docsRequest(path, init);
 
+  const UNSAVED_MESSAGE = 'El documento tiene cambios sin guardar. Revisa tu conexión e intenta de nuevo.';
+
   window.__bardoPublishDocument = async documentId => {
     // Publicar la versión guardada más reciente.
     const settled = await docsSync.settle(documentId);
-    if (!settled) throw new Error('El documento tiene cambios sin guardar. Revisa tu conexión e intenta de nuevo.');
-    return request(`/api/docs/${encodeURIComponent(documentId)}/message`, {method:'POST'});
+    if (!settled) throw new Error(UNSAVED_MESSAGE);
+    try {
+      return await request(`/api/docs/${encodeURIComponent(documentId)}/message`, {method:'POST'});
+    } catch (error) {
+      const message = error?.status === 403 && error?.data?.error === 'publish_failed'
+        ? 'Bardo no tiene permiso para escribir en este canal. Pide a quien administra el servidor que le permita enviar mensajes aquí.'
+        : userFacingError(error, 'No se pudo compartir el documento en el canal.');
+      throw new Error(message);
+    }
   };
 
-  window.__bardoRestoreDocument = async documentId => {
-    return request(`/api/docs/${encodeURIComponent(documentId)}/restore`, {method:'POST'});
+  /**
+   * Enlace firmado y de corta duración para descargar un documento (md, docx,
+   * pdf) fuera de Discord: el iframe de la Activity no descarga archivos de
+   * forma fiable, así que el enlace se abre en el navegador del usuario.
+   */
+  window.__bardoExportLink = async (documentId, format) => {
+    const settled = await docsSync.settle(documentId);
+    if (!settled) throw new Error(UNSAVED_MESSAGE);
+    let data;
+    try {
+      data = await request(`/api/docs/${encodeURIComponent(documentId)}/export-link`, {method:'POST', body:{format}});
+    } catch (error) {
+      throw new Error(userFacingError(error, 'No pudimos preparar la descarga. Intenta de nuevo.'));
+    }
+    if (!data?.url) throw new Error('No pudimos preparar la descarga. Intenta de nuevo.');
+    return data;
+  };
+
+  /**
+   * Archivo original de una importación (PDF/DOCX). Primero intenta un enlace
+   * firmado (formato "original"); si el servidor no lo ofrece, lo descarga con
+   * la sesión actual.
+   */
+  window.__bardoDownloadOriginal = async documentId => {
+    try {
+      const data = await request(`/api/docs/${encodeURIComponent(documentId)}/export-link`, {method:'POST', body:{format:'original'}});
+      if (data?.url) return {url: data.url};
+    } catch (error) {
+      if (error?.status === 401 || error?.status === 403 || !error?.status) {
+        throw new Error(userFacingError(error, 'No pudimos descargar el archivo original.'));
+      }
+    }
+    let response;
+    try {
+      response = await fetch(`/api/docs/${encodeURIComponent(documentId)}/source`, {
+        headers: {...docsHeaders(), Accept: 'application/octet-stream'},
+        cache: 'no-store',
+      });
+    } catch (error) {
+      throw new Error(userFacingError(new HttpError(0, {detail: error?.message}), ''));
+    }
+    if (!response.ok) {
+      throw new Error(response.status === 404
+        ? 'El archivo original ya no está disponible.'
+        : 'No pudimos descargar el archivo original.');
+    }
+    const blob = await response.blob();
+    triggerBlobDownload(blob, responseFileName(response, 'archivo-original'));
+    return {downloaded: true};
+  };
+
+  /**
+   * Documento individual (incluye archivados) en formato del store, ya
+   * registrado como confirmado por el servidor; null si no existe o no está
+   * compartido en este canal.
+   */
+  window.__bardoFetchDocument = async documentId => {
+    let data;
+    try {
+      data = await request(`/api/docs/${encodeURIComponent(documentId)}`);
+    } catch (error) {
+      if (error?.status === 404 || error?.status === 403) return null;
+      throw error;
+    }
+    const item = data?.id ? data : (data?.document || null);
+    if (!item?.id) return null;
+    docsSync.registerRemote([item]);
+    return serverDocToLocal(item);
+  };
+
+  /** Ids de los documentos archivados (sin contenido) para el contador de la pestaña. */
+  window.__bardoFetchArchivedSummary = async () => {
+    const res = await request('/api/docs?archived=1&summary=1');
+    return (Array.isArray(res?.documents) ? res.documents : []).map(item => item?.id).filter(Boolean);
   };
 
   window.__bardoDeleteDocumentPermanent = async documentId => {
@@ -415,7 +620,7 @@ export async function prepareBardoProduction(options = {}) {
         ? 'Solo quien creó el documento o alguien con permisos de moderación puede eliminarlo definitivamente.'
         : error?.status === 409 && code === 'not_archived'
           ? 'Archiva el documento antes de eliminarlo definitivamente.'
-          : errorMessage(error);
+          : userFacingError(error, 'No se pudo eliminar el documento.');
       const wrapped = new Error(message);
       wrapped.status = error?.status;
       throw wrapped;

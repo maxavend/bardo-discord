@@ -31,6 +31,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [showTechModal, setShowTechModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [renameValue, setRenameValue] = useState(recording?.name || '');
   const audioRef = useRef(null);
 
@@ -160,7 +161,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                 {onDelete && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onClick={() => onDelete(recording.id)}>
+                    <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteModal(true)}>
                       <TrashIcon className="size-4 text-destructive" />
                       <span>Eliminar grabación</span>
                     </DropdownMenuItem>
@@ -198,12 +199,37 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
         </DialogContent>
       </Dialog>
 
+      {/* Confirmación antes de borrar: el audio no se puede recuperar */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar esta grabación?</DialogTitle>
+            <DialogDescription>
+              Se borrará “{recording?.name || 'Grabación'}” de este dispositivo y no se podrá recuperar.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowDeleteModal(false)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                setShowDeleteModal(false);
+                onDelete?.(recording.id);
+              }}
+            >
+              Eliminar grabación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal de renombrar grabación */}
       <Dialog open={showRenameModal} onOpenChange={setShowRenameModal}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Renombrar grabación</DialogTitle>
-            <DialogDescription>Cambia sólo el nombre visible. El punto asociado no se modifica.</DialogDescription>
+            <DialogDescription>Cambia sólo el nombre visible. El tema asociado no se modifica.</DialogDescription>
           </DialogHeader>
           <Input
             value={renameValue}

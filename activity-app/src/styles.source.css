@@ -137,7 +137,10 @@ button { font-size: 14px; }
 }
 .app-root {
   color: var(--foreground);
-  animation: app-root-enter 280ms var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  /* `backwards`, not `both`: a retained transform (even translateY(0)) makes
+     .app-root the containing block of every position:fixed child (mobile
+     "Listo"/"Iniciar" button, undo bar, toasts), pushing them off-screen. */
+  animation: app-root-enter 280ms var(--ease-smooth-out, cubic-bezier(0.22, 1, 0.36, 1)) backwards;
   padding-block-start: var(--bardo-safe-top);
   padding-block-end: var(--bardo-safe-bottom);
   padding-inline-start: var(--bardo-safe-left);
@@ -325,7 +328,7 @@ button { font-size: 14px; }
 
 @keyframes app-root-enter {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes boot-stage-enter {
@@ -813,7 +816,8 @@ button { font-size: 14px; }
 
 .doc-body .checklist { list-style: none; padding-left: 0; margin: 16px 0 24px; }
 .doc-body .checklist li { position: relative; min-height: 40px; padding: 8px 0 8px 40px; margin: 0; }
-.doc-body .checklist li.done { color: var(--muted); text-decoration: line-through; }
+/* Tareas completadas: tachadas pero legibles (--muted es un color de fondo). */
+.doc-body .checklist li.done { color: var(--muted-foreground); text-decoration: line-through; }
 .check-control { position: absolute; left: 0; top: 0; width: 40px; height: 40px; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; color: transparent; border-radius: var(--radius-lg); }
 .check-control::before { content: ""; position: absolute; width: 18px; height: 18px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--background); }
 .check-control span { position: relative; z-index: 1; font-size: 12px; font-weight: 800; }
@@ -959,7 +963,49 @@ button { font-size: 14px; }
   color: var(--destructive) !important;
 }
 .editable-body { min-height: 45vh; }
-.editable-body:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+/* Pista del menú "/" en un párrafo vacío (BardoParagraphElement). */
+.has-block-placeholder { position: relative; }
+.block-placeholder {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  color: var(--muted-foreground);
+  opacity: 0.8;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+/* Placeholder del editor vacío (PlateContent / Slate). */
+.editable-body [data-slate-placeholder="true"] {
+  color: var(--muted-foreground);
+  opacity: 0.8 !important;
+}
+
+/* Importación que no se pudo leer. */
+.import-failed-state {
+  margin-top: 32px;
+  padding: 16px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, var(--border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--destructive) 6%, var(--card));
+}
+
+/* Avisos dentro del lector: documento archivado, compartir tras crear. */
+.doc-inline-notice {
+  margin-top: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
 
 .editor-shell {
   position: relative;
@@ -1017,7 +1063,7 @@ button { font-size: 14px; }
   }
 }
 
-.missing-state { min-height: 70vh; display: grid; place-content: center; justify-items: center; gap: 16px; padding: 24px; color: var(--muted); text-align: center; }
+.missing-state { min-height: 70vh; display: grid; place-content: center; justify-items: center; gap: 16px; padding: 24px; color: var(--muted-foreground); text-align: center; }
 
 @media (min-width: 760px) {
   .library-inner { padding-inline: 24px; }
@@ -1029,6 +1075,46 @@ button { font-size: 14px; }
   .library-inner { padding-inline: 16px; }
   .document-shell { width: calc(100% - 32px); padding-top: 20px; }
   .editor-toolbar-sticky { justify-content: stretch; }
+}
+
+/*
+ * Discord móvil (~380 px): las cabeceras y la barra del editor deben caber sin
+ * recortarse. Los textos de los botones pasan a ser solo íconos (con
+ * aria-label) y el indicador de guardado se trunca.
+ */
+.mobile-toolbar-icon { display: none; }
+
+@media (max-width: 479px) {
+  .mobile-toolbar-icon { display: inline-block; }
+  .header-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .header-compact-button { padding-inline: 8px !important; }
+  .doc-topbar { padding-inline: 12px; }
+  .topbar-right { gap: 6px; }
+  .save-state {
+    max-inline-size: 38vw;
+    overflow: hidden;
+    margin-inline: 4px;
+  }
+  .save-state-label { overflow: hidden; text-overflow: ellipsis; }
+  .mobile-toolbar-label { display: none; }
+  .mobile-toolbar-leading,
+  .mobile-toolbar-leading-trigger,
+  .editor-toolbar-container-full .mobile-toolbar-leading,
+  .editor-toolbar-container-full .mobile-toolbar-leading-trigger {
+    flex: 0 0 auto;
+    min-width: 0;
+    width: auto;
+    padding-inline: 8px;
+  }
+  .block-placeholder { white-space: normal; }
 }
 
 @media (max-width: 480px) {
