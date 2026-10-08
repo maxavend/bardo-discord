@@ -189,22 +189,24 @@ test('Content-Disposition: filename* codifica también \' ( ) * (RFC 5987)', () 
   assert.doesNotMatch(header.split("filename*=UTF-8''")[1], /['()*]/);
 });
 
-test('rendimiento: un .txt de 380 KB lleno de *, _, [ y ( exporta a PDF y DOCX en menos de 1 s', async () => {
+// Umbrales holgados a propósito: atrapan la regresión cuadrática (8,5 s / 43 s)
+// sin fallar en runners de CI más lentos (local ~0,3 s; GitHub ~1,2 s).
+test('rendimiento: un .txt de 380 KB lleno de *, _, [ y ( exporta a PDF y DOCX en menos de 3 s', async () => {
   const line = index => `2026-10-08T12:00:01Z [WARN] job_${index} *retry* ** [queue (pending=${index} \`x * _y [z ( <u ~~ __init__ __`;
   let log = '';
   for (let index = 0; log.length < 380_000; index += 1) log += `${line(index)}\n`;
   const pdf = await elapsed(() => generatePdfDocument({ title: 'log', originalMarkdown: log }));
   const docx = await elapsed(() => generateDocxDocument({ title: 'log', originalMarkdown: log }));
-  assert.ok(pdf < 1000, `PDF tardó ${Math.round(pdf)} ms`);
-  assert.ok(docx < 1000, `DOCX tardó ${Math.round(docx)} ms`);
+  assert.ok(pdf < 3000, `PDF tardó ${Math.round(pdf)} ms`);
+  assert.ok(docx < 3000, `DOCX tardó ${Math.round(docx)} ms`);
 });
 
-test('rendimiento: "**a " × 2000 exporta en menos de 200 ms', async () => {
+test('rendimiento: "**a " × 2000 exporta en menos de 1 s', async () => {
   const markdown = '**a '.repeat(2000);
   const pdf = await elapsed(() => generatePdfDocument({ title: 't', originalMarkdown: markdown }));
   const docx = await elapsed(() => generateDocxDocument({ title: 't', originalMarkdown: markdown }));
-  assert.ok(pdf < 200, `PDF tardó ${Math.round(pdf)} ms`);
-  assert.ok(docx < 200, `DOCX tardó ${Math.round(docx)} ms`);
+  assert.ok(pdf < 1000, `PDF tardó ${Math.round(pdf)} ms`);
+  assert.ok(docx < 1000, `DOCX tardó ${Math.round(docx)} ms`);
   // The unmatched markers are kept as text, not swallowed.
   assert.equal(runsToText(parseInline(markdown)), markdown);
 });
