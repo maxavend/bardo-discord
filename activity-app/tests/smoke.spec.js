@@ -116,6 +116,9 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   await expect(search).toBeVisible();
   // La biblioteca entra con una animación corta: medir cuando la cabecera ya está en su sitio.
   await expect.poll(() => page.evaluate(() => Math.round(document.querySelector('.library-header').getBoundingClientRect().top))).toBe(0);
+  // Y cuando terminan las animaciones de entrada de sus botones (a mitad de
+  // camino miden 31,999… px de alto).
+  await expect.poll(() => page.evaluate(() => document.querySelector('.library-header').getAnimations({subtree: true}).every(animation => animation.playState === 'finished'))).toBe(true);
 
   const audit = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
@@ -164,7 +167,7 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
   expect(audit.headerTargets.map(target => target.name)).toEqual(['Reuniones', 'Subir archivo', 'Crear documento', 'Cambiar a modo claro']);
-  expect(audit.headerTargets.every(({w, h}) => w >= 32 && h >= 32)).toBeTruthy();
+  expect(audit.headerTargets.every(({w, h}) => w >= 32 && h >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();
 
   await search.focus();
   await expect(search).toBeFocused();
@@ -287,7 +290,7 @@ test('editor supports undo and redo with the platform shortcut', async ({page}) 
   await expect(body).not.toContainText('[undo-redo-smoke]');
   if (page.viewportSize().width < 480) {
     // Sin espacio, "Rehacer" vive en "Ver más" (pulsarlo ahí con la página
-    // desplazada está cubierto por el test de menús con scroll, en fixme).
+    // desplazada está cubierto por el test de menús con scroll).
     await expect(toolbar.getByRole('button', {name: 'Rehacer'})).toBeHidden();
     await toolbar.getByRole('button', {name: 'Ver más'}).click();
     await expect(page.getByRole('menuitem', {name: 'Rehacer'})).toBeVisible();
@@ -361,7 +364,7 @@ test('selected text drives block types and lists; "Ver más" inserts callout and
   await body.click();
   for (const [index, line] of ['Título seleccionado.', 'Cita seleccionada.', 'Código seleccionado.', 'Tarea seleccionada.', 'Paso numerado.'].entries()) {
     if (index) await page.keyboard.press('Enter');
-    // A ritmo humano: tecleado sin pausas dispara el React #185 del fixme de documentos.spec.js.
+    // El tecleado sin pausas está cubierto en documentos.spec.js (React #185).
     await page.keyboard.type(line, {delay: 25});
   }
 
@@ -417,7 +420,6 @@ test('selected text drives block types and lists; "Ver más" inserts callout and
 
 test('editor renders checklist, callout and disclosure blocks with their own controls', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run block rendering once on the representative mobile viewport.');
-  test.fixme(true, 'BUG: bardo-editor-kit.js registra Callout/ActionItem/Toggle/CodeBlock con `component` de primer nivel, que Plate 53 ignora (usa node.component): en el editor se ven como texto plano, sin casilla ni desplegable.');
 
   await startNewDocument(page);
   const body = page.locator('.editable-body');
@@ -498,7 +500,7 @@ test('adaptive toolbar uses spare width and keeps priorities', async ({page}, te
 
   await startNewDocument(page);
   const counts = [];
-  // 390/430 px quedan en el fixme "never overflows at common phone widths".
+  // 390/430 px: ver "adaptive toolbar never overflows at common phone widths".
   for (const width of [320, 477, 600, 1024]) {
     await page.setViewportSize({width, height: 800});
     const layout = await settledToolbarLayout(page);
@@ -533,7 +535,6 @@ test('adaptive toolbar uses spare width and keeps priorities', async ({page}, te
 
 test('adaptive toolbar never overflows at common phone widths', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run once on the representative mobile viewport.');
-  test.fixme(true, 'BUG: useAdaptiveToolbar (BardoToolbar.jsx) presupone 40 px por acción e ignora los huecos entre grupos: a 350/390/430 px (tras redimensionar o con movimiento reducido) "Ver más" sobresale hasta 12 px de la barra.');
 
   // Sin la animación de entrada (que mide con scale .99) el desborde aparece al primer render.
   await page.emulateMedia({reducedMotion: 'reduce'});
@@ -547,7 +548,6 @@ test('adaptive toolbar never overflows at common phone widths', async ({page}, t
 
 test('a control left alone in its toolbar group is a full pill', async ({page}, testInfo) => {
   test.skip(!['mobile-standard', 'mobile-narrow'].includes(testInfo.project.name), 'Run on the representative mobile viewports.');
-  test.fixme(true, 'BUG: BardoToolbar.jsx marca el grupo con `toolbar-group-standalone` pero no hay CSS para esa clase: "Deshacer" y "Ver más" solos quedan como media pastilla.');
 
   await startNewDocument(page);
   const layout = await toolbarLayout(page);
@@ -559,7 +559,6 @@ test('a control left alone in its toolbar group is a full pill', async ({page}, 
 
 test('the text type selector follows a type change without moving the cursor', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-standard', 'Run once on the representative mobile viewport.');
-  test.fixme(true, 'BUG: BardoToolbar.jsx calcula el tipo de bloque con useMemo sobre la selección; setBlockType no cambia la selección y el selector sigue diciendo "Texto".');
 
   await startNewDocument(page);
   await page.locator('.editable-body').click();
@@ -573,7 +572,6 @@ test('the text type selector follows a type change without moving the cursor', a
 
 test('menus opened while scrolled keep the sticky chrome and open on screen', async ({page}, testInfo) => {
   test.skip(!['mobile-standard', 'laptop'].includes(testInfo.project.name), 'Run on one touch and one desktop viewport.');
-  test.fixme(true, 'BUG: el bloqueo de scroll de Radix pone body{overflow:hidden}; con html/body overflow-x:clip la cabecera y la barra sticky saltan fuera de pantalla y "Ver más" se abre en y<0.');
 
   await openDocFromLibrary(page, monsterTitle);
   await page.getByRole('button', {name: 'Editar', exact: true}).click();

@@ -51,3 +51,19 @@ test('durationUntil acepta reuniones que cruzan la medianoche (hasta 12 h)', () 
   assert.equal(durationUntil('20:00', '08:00'), 720);
   assert.equal(durationUntil('20:00', '08:01'), null);
 });
+
+test('formatSpokenDuration se lee de un vistazo', async () => {
+  const { formatSpokenDuration } = await import('../activity-app/src/planner/time-engine.js');
+  assert.equal(formatSpokenDuration(45), '45 min');
+  assert.equal(formatSpokenDuration(120), '2 h');
+  assert.equal(formatSpokenDuration(165), '2 h 45 min');
+  assert.equal(formatSpokenDuration(40133), '27 d 20 h');
+});
+
+test('una reunión olvidada abierta días no se muestra como tiempo real', async () => {
+  const { wasMeetingLeftOpen } = await import('../activity-app/src/planner/time-engine.js');
+  assert.equal(wasMeetingLeftOpen(40133, 165), true);
+  assert.equal(wasMeetingLeftOpen(190, 165), false, 'pasarse un poco no es "quedó abierta"');
+  assert.equal(wasMeetingLeftOpen(600, 165), false, 'un día largo de taller sigue siendo real');
+  assert.equal(wasMeetingLeftOpen(800, 165), true);
+});

@@ -1,5 +1,5 @@
-import { useMemo, useCallback, useLayoutEffect, useState } from 'react';
-import { useEditorSelection, useEditorRef } from 'platejs/react';
+import { useMemo, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useEditorRef, useEditorSelector } from 'platejs/react';
 import {
   BLOCK_LABELS,
   currentBlockKind,
@@ -63,70 +63,154 @@ const BLOCK_TYPES = [
 // Orden de prioridad: en pantallas angostas las listas quedan a la vista
 // antes que "Rehacer" o los formatos menos usados (que pasan a "Ver más").
 const TOOLBAR_OPTIONAL_ACTIONS = [
-  ['insertUnorderedList', 36, 40],
-  ['insertOrderedList', 36, 40],
-  ['checklist', 36, 40],
-  ['italic', 36, 40],
-  ['createLink', 36, 40],
-  ['redo', 36, 40],
-  ['underline', 36, 40],
-  ['strikeThrough', 36, 40],
-  ['code', 36, 40],
-  ['blockquote', 36, 40],
+  'insertUnorderedList',
+  'insertOrderedList',
+  'checklist',
+  'italic',
+  'createLink',
+  'redo',
+  'underline',
+  'strikeThrough',
+  'code',
+  'blockquote',
 ];
 
-const TOOLBAR_ACTION_KEYS = TOOLBAR_OPTIONAL_ACTIONS.map(([action]) => action);
-// Bajo este ancho el selector de tipo de texto muestra solo el ícono.
-const COMPACT_TOOLBAR_QUERY = '(max-width: 479px)';
+const MARK_KEYS = ['bold', 'italic', 'underline', 'strikethrough', 'code'];
+// Margen para redondeos de subpíxeles al medir.
+const TOOLBAR_FIT_SAFETY_PX = 2;
 
-function useAdaptiveToolbar(containerRef, extraWidth = 0) {
-  const [visibleActions, setVisibleActions] = useState(() => new Set());
+/**
+ * Ancho natural (sin estirar) de la barra con lo que hay a la vista: suma real
+ * de cada grupo/control (offsetWidth no se ve afectado por la animación de
+ * entrada con scale) más los huecos entre grupos.
+ */
+function measureNaturalToolbarWidth(toolbar) {
+  // El selector de tipo de texto se estira (flex 1) para llenar la barra: se
+  // mide sin estirar. Sin transición, o el cambio de flex se animaría (el botón
+  // tiene transition-all) y la medida saldría con el ancho anterior.
+  const leading = toolbar.querySelector('.mobile-toolbar-leading');
+  const previousFlex = leading ? leading.style.flex : '';
+  const previousTransition = leading ? leading.style.transition : '';
+  if (leading) {
+    leading.style.transition = 'none';
+    leading.style.flex = '0 0 auto';
+  }
+  const style = getComputedStyle(toolbar);
+  const gap = parseFloat(style.columnGap) || 0;
+  const items = [...toolbar.children].filter(el => getComputedStyle(el).display !== 'none' && el.offsetWidth > 0);
+  const total = items.reduce((sum, el) => {
+    const itemStyle = getComputedStyle(el);
+    return sum + el.offsetWidth + (parseFloat(itemStyle.marginLeft) || 0) + (parseFloat(itemStyle.marginRight) || 0);
+  }, 0) + gap * Math.max(0, items.length - 1);
+  if (leading) {
+    leading.style.flex = previousFlex;
+    void leading.offsetWidth;
+    leading.style.transition = previousTransition;
+  }
+  return {total, gap};
+}
 
+/** Ancho disponible para la barra: el del contenedor sticky menos bordes y padding del contenedor. */
+function measureAvailableToolbarWidth(container) {
+  const host = container.parentElement;
+  const style = getComputedStyle(container);
+  const chrome = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+    + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0);
+  return Math.floor((host?.clientWidth || container.clientWidth) - chrome);
+}
+
+/**
+ * Barra adaptable medida de verdad: muestra el mayor prefijo de acciones
+ * opcionales que cabe. Tras cada render compara el ancho natural real (con
+ * huecos entre grupos, grupos que aparecen, menú de tabla, fuentes) con el
+ * disponible: si desborda quita una; si sobra al menos un control más su hueco,
+ * prueba con una más y, si desbordó, la recuerda como tope para ese ancho.
+ */
+function useAdaptiveToolbar(containerRef, contentKey = '') {
+  const [count, setCount] = useState(0);
+  const [, setMeasureTick] = useState(0);
+  // Tope aprendido: {count, width, key} = con `count` acciones no cabe en
+  // `width` px mientras los controles fijos (`key`: tabla, tipo de texto) no cambien.
+  const ceilingRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const toolbar = container?.querySelector('[role="toolbar"]');
+    if (!container || !toolbar) return;
+    const available = measureAvailableToolbarWidth(container);
+    const {total, gap} = measureNaturalToolbarWidth(toolbar);
+
+    if (total + TOOLBAR_FIT_SAFETY_PX > available) {
+      if (count > 0) {
+        ceilingRef.current = {count, width: available, key: contentKey};
+        setCount(count - 1);
+      }
+      return;
+    }
+    if (count >= TOOLBAR_OPTIONAL_ACTIONS.length) return;
+    const ceiling = ceilingRef.current;
+    if (ceiling && ceiling.key === contentKey && ceiling.count <= count + 1 && available <= ceiling.width) return;
+    const bold = toolbar.querySelector('[aria-label="Negrita"]');
+    const step = (bold?.offsetWidth || 36) + gap;
+    if (total + step + TOOLBAR_FIT_SAFETY_PX <= available) setCount(count + 1);
+  });
+
+  // Cambios de ancho (rotación, panel lateral, fuentes que terminan de cargar).
   useLayoutEffect(() => {
     const container = containerRef.current;
     const host = container?.parentElement;
     if (!container || !host) return undefined;
-
-    const update = () => {
-      const availableWidth = host.getBoundingClientRect().width;
-      const usableWidth = Math.floor(availableWidth) - 24;
-      const usesTouchSizedControls = window.matchMedia('(max-width: 759px)').matches;
-      const compact = window.matchMedia(COMPACT_TOOLBAR_QUERY).matches;
-      const next = new Set();
-
-      // Fijos: tipo de texto, Deshacer, Negrita y "Ver más" (+ menú de tabla).
-      let usedWidth = (compact ? 172 : usesTouchSizedControls ? 220 : 196) + extraWidth;
-      TOOLBAR_OPTIONAL_ACTIONS.forEach(([action, regularWidth, touchWidth]) => {
-        const incrementalWidth = usesTouchSizedControls ? touchWidth : regularWidth;
-        if (usedWidth + incrementalWidth <= usableWidth) {
-          next.add(action);
-          usedWidth += incrementalWidth;
-        }
-      });
-
-      setVisibleActions(previous => {
-        const previousKey = TOOLBAR_ACTION_KEYS.filter(action => previous.has(action)).join('|');
-        const nextKey = TOOLBAR_ACTION_KEYS.filter(action => next.has(action)).join('|');
-        return previousKey === nextKey ? previous : next;
-      });
+    let lastWidth = host.clientWidth;
+    const remeasure = () => {
+      if (host.clientWidth > lastWidth) ceilingRef.current = null;
+      lastWidth = host.clientWidth;
+      setMeasureTick(tick => tick + 1);
     };
-
-    update();
-    const observer = new ResizeObserver(update);
+    const observer = new ResizeObserver(remeasure);
     observer.observe(host);
-    window.addEventListener('resize', update);
+    const toolbar = container.querySelector('[role="toolbar"]');
+    if (toolbar) [...toolbar.children].forEach(child => observer.observe(child));
+    window.addEventListener('resize', remeasure);
+    document.fonts?.ready?.then?.(remeasure).catch?.(() => {});
     return () => {
       observer.disconnect();
-      window.removeEventListener('resize', update);
+      window.removeEventListener('resize', remeasure);
     };
-  }, [containerRef, extraWidth]);
+  }, [containerRef]);
 
-  return visibleActions;
+  return useMemo(() => new Set(TOOLBAR_OPTIONAL_ACTIONS.slice(0, count)), [count]);
+}
+
+/**
+ * Al elegir una opción de un menú de la barra, el foco vuelve al texto (o al
+ * diálogo que la opción abre, p. ej. "Enlace"), no al botón del menú: Radix lo
+ * devolvía al disparador y competía con el foco del editor o del diálogo.
+ * Cerrar con Escape sigue devolviendo el foco al botón.
+ */
+function useMenuSelectionFocus() {
+  const editor = useEditorRef();
+  const selectionRef = useRef(null);
+  const markSelected = useCallback((target = 'editor') => {
+    selectionRef.current = target;
+  }, []);
+  const onCloseAutoFocus = useCallback((event) => {
+    const target = selectionRef.current;
+    selectionRef.current = null;
+    if (!target) return;
+    event.preventDefault();
+    if (target !== 'editor') return;
+    const active = document.activeElement;
+    if (!active || active === document.body || active.closest?.('[role="menu"]')) {
+      try { editor?.tf.focus(); } catch { /* el editor ya no está montado */ }
+    }
+  }, [editor]);
+  return { markSelected, onCloseAutoFocus };
 }
 
 export function BlockTypeDropdown({ value, onSelect }) {
   const current = BLOCK_TYPES.find(b => b.id === value) || BLOCK_TYPES[0];
   const CurrentIcon = current.icon;
+  const { markSelected, onCloseAutoFocus } = useMenuSelectionFocus();
 
   return (
     <DropdownMenu>
@@ -144,7 +228,7 @@ export function BlockTypeDropdown({ value, onSelect }) {
           </Button>
         }
       />
-      <DropdownMenuContent align="start" className="toolbar-dropdown-popover w-52 p-1">
+      <DropdownMenuContent align="start" className="toolbar-dropdown-popover w-52 p-1" onCloseAutoFocus={onCloseAutoFocus}>
         <div className="max-h-60 overflow-y-auto overscroll-contain pr-0.5">
           <DropdownMenuGroup>
             {BLOCK_TYPES.map(item => {
@@ -152,7 +236,10 @@ export function BlockTypeDropdown({ value, onSelect }) {
               return (
                 <DropdownMenuItem
                   key={item.id}
-                  onClick={() => onSelect(item.id)}
+                  onClick={() => {
+                    markSelected();
+                    onSelect(item.id);
+                  }}
                 >
                   <ItemIcon width={16} height={16} />
                   <span>{item.label}</span>
@@ -181,6 +268,11 @@ const TABLE_ACTIONS = [
 
 /** Menú de tabla: aparece en la barra solo cuando el cursor está en una tabla. */
 export function TableActionsMenu({ onAction }) {
+  const { markSelected, onCloseAutoFocus } = useMenuSelectionFocus();
+  const select = id => {
+    markSelected();
+    onAction(id);
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -196,10 +288,10 @@ export function TableActionsMenu({ onAction }) {
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="toolbar-dropdown-popover w-60">
+      <DropdownMenuContent align="end" className="toolbar-dropdown-popover w-60" onCloseAutoFocus={onCloseAutoFocus}>
         <DropdownMenuGroup>
           {TABLE_ACTIONS.filter(action => !action.destructive).map(action => (
-            <DropdownMenuItem key={action.id} onClick={() => onAction(action.id)}>
+            <DropdownMenuItem key={action.id} onClick={() => select(action.id)}>
               <span>{action.label}</span>
             </DropdownMenuItem>
           ))}
@@ -207,7 +299,7 @@ export function TableActionsMenu({ onAction }) {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           {TABLE_ACTIONS.filter(action => action.destructive).map(action => (
-            <DropdownMenuItem key={action.id} variant="destructive" onClick={() => onAction(action.id)}>
+            <DropdownMenuItem key={action.id} variant="destructive" onClick={() => select(action.id)}>
               <span>{action.label}</span>
             </DropdownMenuItem>
           ))}
@@ -217,8 +309,15 @@ export function TableActionsMenu({ onAction }) {
   );
 }
 
+// Acciones de "Ver más" que abren un diálogo (el foco va a él, no al editor).
+const DIALOG_ACTIONS = new Set(['createLink']);
+
 export function MoreActionsMenu({ onAction, visibleActions }) {
-  const handleAction = key => onAction(key);
+  const { markSelected, onCloseAutoFocus } = useMenuSelectionFocus();
+  const handleAction = key => {
+    markSelected(DIALOG_ACTIONS.has(key) ? 'dialog' : 'editor');
+    onAction(key);
+  };
   const isHidden = action => !visibleActions.has(action);
   const showInline = ['strikeThrough', 'code', 'italic', 'underline', 'createLink'].some(isHidden);
   const showLists = ['insertUnorderedList', 'insertOrderedList', 'checklist', 'blockquote'].some(isHidden);
@@ -241,6 +340,7 @@ export function MoreActionsMenu({ onAction, visibleActions }) {
       <DropdownMenuContent
         align="end"
         className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain w-56"
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         {showInline && (
           <DropdownMenuGroup>
@@ -348,12 +448,17 @@ export function MoreActionsMenu({ onAction, visibleActions }) {
 
 export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRemoveFormat }) {
   const editor = useEditorRef();
-  const selection = useEditorSelection();
-  const inTable = useMemo(() => {
-    void selection;
-    return isInTable(editor);
-  }, [editor, selection]);
-  const visibleToolbarActions = useAdaptiveToolbar(toolbarContainerRef, inTable ? 40 : 0);
+  // Estado del editor derivado del valor Y de la selección (useEditorSelector se
+  // recalcula con cada cambio): p. ej. cambiar a "Título 2" sin mover el cursor
+  // actualiza el selector de tipo de texto al instante.
+  const inTable = useEditorSelector(ed => isInTable(ed), []);
+  const blockType = useEditorSelector(ed => currentBlockKind(ed), []);
+  const marksKey = useEditorSelector(ed => {
+    if (!ed.selection) return '';
+    const active = ed.api.marks() || {};
+    return MARK_KEYS.filter(key => active[key]).join('|');
+  }, []);
+  const visibleToolbarActions = useAdaptiveToolbar(toolbarContainerRef, `${inTable ? 'table' : ''}|${blockType}`);
 
   const isToolbarActionVisible = useCallback(
     action => visibleToolbarActions.has(action),
@@ -368,21 +473,16 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
     () => ['insertUnorderedList', 'insertOrderedList', 'checklist', 'blockquote'].filter(isToolbarActionVisible),
     [isToolbarActionVisible]
   );
+  const showRedo = isToolbarActionVisible('redo');
+  const showLink = isToolbarActionVisible('createLink');
   const lastVisibleStyleAction = visibleStyleActions.at(-1);
   const lastVisibleListAction = visibleListActions.at(-1);
   const isFullToolbar = visibleToolbarActions.size === TOOLBAR_OPTIONAL_ACTIONS.length;
 
-  // Inspección del estado actual del editor para marks y bloques
-  const marks = useMemo(() => {
-    if (!editor || !editor.selection) return {};
-    return editor.api.marks() || {};
-  }, [editor, selection]);
-
-  const blockType = useMemo(() => {
-    // `selection` fuerza el recálculo cuando se mueve el cursor.
-    void selection;
-    return currentBlockKind(editor);
-  }, [editor, selection]);
+  const marks = useMemo(
+    () => Object.fromEntries(marksKey.split('|').filter(Boolean).map(key => [key, true])),
+    [marksKey]
+  );
 
   // Manejo de comandos del editor Plate
   const runFormat = useCallback(
@@ -511,7 +611,7 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
 
         <ButtonGroup
           aria-label="Historial de edición"
-          className={`mobile-history-group shrink-0 ${isToolbarActionVisible('redo') ? '' : 'toolbar-group-standalone'}`}
+          className={`mobile-history-group shrink-0 ${showRedo ? '' : 'toolbar-group-standalone'}`}
         >
           <Button
             size="icon-sm"
@@ -524,17 +624,21 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
           >
             <ArrowUturnCcwLeft width={15} height={15} />
           </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Rehacer"
-            title="Rehacer (⌘/Ctrl+Y)"
-            onClick={handleRedo}
-            disabled={!canRedo}
-            className={`rounded-full ${isToolbarActionVisible('redo') ? '' : 'toolbar-control-overflowed'}`}
-          >
-            <ArrowUturnCwRight width={15} height={15} />
-          </Button>
+          {/* Solo se renderiza si cabe: un control oculto dentro del grupo
+              rompería el redondeado del que queda a la vista. */}
+          {showRedo && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Rehacer"
+              title="Rehacer (⌘/Ctrl+Y)"
+              onClick={handleRedo}
+              disabled={!canRedo}
+              className="rounded-full"
+            >
+              <ArrowUturnCwRight width={15} height={15} />
+            </Button>
+          )}
         </ButtonGroup>
 
         <ToggleGroup
@@ -643,18 +747,20 @@ export function BardoToolbar({ toolbarContainerRef, onOpenLink, onCopyAll, onRem
         </ToggleGroup>
 
         <ButtonGroup
-          className={`mobile-actions-group shrink-0 ${isToolbarActionVisible('createLink') ? '' : 'toolbar-group-standalone'}`}
+          className={`mobile-actions-group shrink-0 ${!showLink && !inTable ? 'toolbar-group-standalone' : ''}`}
         >
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Enlace"
-            title="Enlace (⌘/Ctrl+K)"
-            onClick={() => runFormat('createLink')}
-            className={`rounded-full ${isToolbarActionVisible('createLink') ? '' : 'toolbar-control-overflowed'}`}
-          >
-            <Link width={15} height={15} />
-          </Button>
+          {showLink && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Enlace"
+              title="Enlace (⌘/Ctrl+K)"
+              onClick={() => runFormat('createLink')}
+              className="rounded-full"
+            >
+              <Link width={15} height={15} />
+            </Button>
+          )}
           {inTable && <TableActionsMenu onAction={handleTableAction} />}
           <MoreActionsMenu
             onAction={handleMoreAction}

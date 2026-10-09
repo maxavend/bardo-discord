@@ -54,7 +54,7 @@ import {
   isPlannerRemoteEnabled,
   describeSyncError,
 } from './planner-sync.js';
-import {computePlannerTimes} from './time-engine.js';
+import {computePlannerTimes, getPlannedSchedule, wasMeetingLeftOpen} from './time-engine.js';
 import {
   removeBlock,
   removeTopic,
@@ -1345,6 +1345,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           plannerState={plannerState}
           onStartSession={handleStartSession}
           onDismiss={() => setDismissedUpcomingBanner(true)}
+          showStartAction={activeTab !== 'agenda'}
         />
       )}
 
@@ -1481,6 +1482,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         hasActiveRecording={recordingControllerRef.current?.isActive()}
         activeRecordingName={recordingContext?.recordingName}
         elapsedMinutes={elapsedMinutes}
+        leftOpen={wasMeetingLeftOpen(elapsedMinutes, getPlannedSchedule(plannerState).plannedMinutes)}
         recordingsCount={recordingsCount}
         decisionsCount={decisionsCount}
         pendingTemasCount={pendingTemasCount}

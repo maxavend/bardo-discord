@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -51,7 +52,6 @@ import {
   Archive,
   ArrowDownToLine,
   ArrowUpRightFromSquare,
-  ArrowUturnCwRight,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -70,6 +70,7 @@ import {
   TrashBin,
   TriangleExclamation,
   Xmark,
+  PaperPlane,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {htmlToMarkdown, markdownToHtml} from './editor/bardo-markdown.js';
@@ -387,7 +388,10 @@ function saveDraft(snapshot) {
   }
 }
 
-function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
+// `context="reader"`: the reader header already shows "Editar" (primary) and
+// "Compartir en el canal" (icon button), so the menu doesn't repeat them.
+function DocActionMenu({doc, onAction, triggerLabel = 'Acciones', context = 'row'}) {
+  const inReader = context === 'reader';
   const blocked = isImportBlocked(doc);
   const isProduction = Boolean(window.__BARDO_PRODUCTION__);
   return (
@@ -405,16 +409,20 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
         }
       />
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => onAction('open', doc)}>
-          <Eye width={15} height={15} className="text-muted-foreground" />
-          <span>Abrir</span>
-        </DropdownMenuItem>
+        {!inReader && (
+          <DropdownMenuItem onClick={() => onAction('open', doc)}>
+            <Eye width={15} height={15} className="text-muted-foreground" />
+            <span>Abrir</span>
+          </DropdownMenuItem>
+        )}
         {!blocked && (
           <>
-            <DropdownMenuItem onClick={() => onAction('edit', doc)}>
-              <Pencil width={15} height={15} className="text-muted-foreground" />
-              <span>Editar</span>
-            </DropdownMenuItem>
+            {!inReader && (
+              <DropdownMenuItem onClick={() => onAction('edit', doc)}>
+                <Pencil width={15} height={15} className="text-muted-foreground" />
+                <span>Editar</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => onAction('duplicate', doc)}>
               <Copy width={15} height={15} className="text-muted-foreground" />
               <span>Duplicar</span>
@@ -423,10 +431,12 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
               <FileText width={15} height={15} className="text-muted-foreground" />
               <span>Copiar texto</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAction('publish', doc)}>
-              <ArrowUturnCwRight width={15} height={15} className="text-muted-foreground" />
-              <span>Compartir en el canal</span>
-            </DropdownMenuItem>
+            {!inReader && (
+              <DropdownMenuItem onClick={() => onAction('publish', doc)}>
+                <PaperPlane width={15} height={15} className="text-muted-foreground" />
+                <span>Compartir en el canal</span>
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuSeparator />
 
@@ -559,7 +569,8 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
           </div>
         ) : !isArchived ? (
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button variant="default" size="sm" onClick={onNewDoc}>
+            {/* The header's "Nuevo" is this view's single primary action. */}
+            <Button variant="secondary" size="sm" onClick={onNewDoc}>
               <Plus width={16} height={16} /> Crear documento
             </Button>
             <Button variant="secondary" size="sm" onClick={onUpload}>
@@ -619,24 +630,27 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       className={isLibrary || isPlanner ? 'library-header' : ''}
       actions={isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
-          {route.tab === 'home' && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onPlannerNew}
-              className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-            >
-              <Plus width={14} height={14} /> Nueva reunión
-            </Button>
-          )}
+          {/* Same responsive pattern as the library: labels collapse to icons on narrow phones. */}
           <Button
             variant="secondary"
             size="sm"
             onClick={() => onNavigateModule?.('docs')}
-            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+            aria-label="Documentos"
+            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <FileText width={14} height={14} /> Documentos
+            <FileText width={14} height={14} aria-hidden="true" /> <span className="header-label">Documentos</span>
           </Button>
+          {route.tab === 'home' && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onPlannerNew}
+              aria-label="Nueva reunión"
+              className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+            >
+              <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva reunión</span>
+            </Button>
+          )}
         </div>
       ) : isLibrary ? (
         <div key="library-actions" className="header-slot-enter flex items-center gap-2">
@@ -676,13 +690,18 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           </Button>
         </div>
       ) : doc ? (
-        <div key="document-actions" className="header-slot-enter flex items-center gap-2">
+        <div key="document-actions" className="header-slot-enter flex items-center gap-1">
           {!isImportBlocked(doc) && (
-            <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
-              <Pencil width={14} height={14} /> Editar
-            </Button>
+            <>
+              <IconButton label="Compartir en el canal" onClick={() => onAction('publish', doc)}>
+                <PaperPlane width={16} height={16} />
+              </IconButton>
+              <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 ml-1 font-medium text-xs flex items-center gap-1.5">
+                <Pencil width={14} height={14} /> Editar
+              </Button>
+            </>
           )}
-          <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
+          <DocActionMenu doc={doc} context="reader" triggerLabel="Más acciones del documento" onAction={onAction} />
         </div>
       ) : null}
     >

@@ -18,6 +18,7 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
 import { TimePicker } from '@/components/ui/time-picker.jsx';
+import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   Pencil,
   MoreVertical,
@@ -112,6 +113,7 @@ export function PlannerSessionHeader({
   const isPaused = status === SESSION_STATUS.PAUSED;
   const isInterrupted = status === SESSION_STATUS.INTERRUPTED;
   const isCompleted = status === SESSION_STATUS.COMPLETED;
+  const isIdleView = !isEditing && !isRunning && !isPaused && !isCompleted && !isInterrupted;
 
   const { members } = getAllDiscordEntities();
   const selectedKeys = new Set(parseMentions(mentions));
@@ -183,16 +185,17 @@ export function PlannerSessionHeader({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {!isEditing && !isRunning && !isPaused && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onCopyAnnouncement}
-                className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
-              >
-                <CopyIcon className="size-3.5" /> <span>Copiar anuncio</span>
-              </Button>
+          {/* Jerarquía: íconos para lo frecuente → una acción principal → "⋯" para el resto. */}
+          <div className="flex items-center gap-1 shrink-0">
+            {isIdleView && (
+              <>
+                <IconButton label="Copiar anuncio" onClick={onCopyAnnouncement}>
+                  <CopyIcon className="size-4" />
+                </IconButton>
+                <IconButton label="Editar reunión" onClick={onToggleEditMode}>
+                  <Pencil className="size-4" />
+                </IconButton>
+              </>
             )}
 
             {/* On phones the floating button (PlannerModule) is the single primary action. */}
@@ -214,29 +217,18 @@ export function PlannerSessionHeader({
               >
                 <PlayIcon className="size-3.5" /> <span>Reanudar</span>
               </Button>
-            ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onToggleEditMode}
-                  aria-label="Editar reunión"
-                  className="font-medium h-8 px-2.5 sm:px-3"
-                >
-                  <Pencil className="size-3.5" /> <span className="hidden sm:inline">Editar</span>
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={onStartSession}
-                  disabled={!hasBlocks}
-                  aria-describedby={!hasBlocks ? startHintId : undefined}
-                  title={!hasBlocks ? MEETING_COPY.needsBlock : undefined}
-                  className="hidden sm:inline-flex font-medium h-8 px-3.5"
-                >
-                  <PlayIcon className="size-3.5" /> <span>{MEETING_COPY.startMeeting}</span>
-                </Button>
-              </>
+            ) : isIdleView ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onStartSession}
+                disabled={!hasBlocks}
+                aria-describedby={!hasBlocks ? startHintId : undefined}
+                title={!hasBlocks ? MEETING_COPY.needsBlock : undefined}
+                className="hidden sm:inline-flex font-medium h-8 px-3.5 ml-1"
+              >
+                <PlayIcon className="size-3.5" /> <span>{MEETING_COPY.startMeeting}</span>
+              </Button>
             ) : isCompleted ? (
               <Button
                 variant="default"
@@ -256,6 +248,7 @@ export function PlannerSessionHeader({
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Más opciones de la reunión"
+                    title="Más opciones"
                     className="text-muted-foreground hover:text-foreground rounded-full"
                   >
                     <MoreVertical className="size-4" />
@@ -265,23 +258,26 @@ export function PlannerSessionHeader({
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Reunión</DropdownMenuLabel>
-                  {(isCompleted || isInterrupted) && (
+                  {/* Completed: "Ver resumen" is already the primary button. */}
+                  {isInterrupted && (
                     <DropdownMenuItem onClick={() => onTabChange('recap')}>
                       <RotateCw className="size-4 text-muted-foreground" />
                       <span>Ver resumen</span>
                     </DropdownMenuItem>
                   )}
-                  {/* Not while live: editing hides the live controls (dock). */}
-                  {!isEditing && !isRunning && !isPaused && (
+                  {/* Idle view shows these as icon buttons; never while live (editing hides the dock). */}
+                  {!isIdleView && !isEditing && !isRunning && !isPaused && (
                     <DropdownMenuItem onClick={onToggleEditMode}>
                       <Pencil className="size-4 text-muted-foreground" />
                       <span>Editar reunión</span>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={onCopyAnnouncement}>
-                    <CopyIcon className="size-4 text-muted-foreground" />
-                    <span>Copiar anuncio</span>
-                  </DropdownMenuItem>
+                  {!isIdleView && (
+                    <DropdownMenuItem onClick={onCopyAnnouncement}>
+                      <CopyIcon className="size-4 text-muted-foreground" />
+                      <span>Copiar anuncio</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>

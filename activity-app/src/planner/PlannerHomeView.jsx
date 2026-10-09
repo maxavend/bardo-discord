@@ -120,8 +120,9 @@ export function PlannerHomeView({
               <p className="text-xs text-muted-foreground mt-0.5">Arma la agenda, guía la reunión y anota los acuerdos.</p>
             </div>
             <div className="flex items-center justify-center gap-2 w-full sm:w-auto">
+              {/* The header's "Nueva reunión" is this view's single primary action. */}
               <Button
-                variant="default"
+                variant="secondary"
                 size="sm"
                 onClick={onNewCleanSession}
                 className="text-xs font-semibold h-8 px-4 flex items-center justify-center gap-1.5"

@@ -7,3 +7,7 @@ data/
 prototypes/docs-app/dist/
 .agents/
 skills-lock.json
+
+# Playwright
+activity-app/test-results/
+activity-app/playwright-report/

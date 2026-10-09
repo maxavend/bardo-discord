@@ -26,7 +26,6 @@ import {
   Pause,
   ChevronUp,
   ChevronDown,
-  ChevronRight,
 } from 'lucide-react';
 import {
   CoffeeIcon,
@@ -42,7 +41,7 @@ import {
   getElapsedActivePointMs,
   getBlockPlannedMs,
 } from './session-runner.js';
-import { formatMsToClock, getLivePrimaryAction } from './session-assistant-engine.js';
+import { formatMsToClock } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialWavyProgress } from './MaterialWavyProgress.jsx';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
@@ -181,11 +180,12 @@ export function PlannerAgendaView({
   recordingElapsedMs = 0,
   isEditing = false,
   dockSlot = null,
-  onAdvance,
+  // Advancing lives in the live dock (single primary action).
+  onAdvance: _onAdvance,
   onAdvanceBlock: _onAdvanceBlock,
   onSkipBlock: _onSkipBlock,
-  onPrimaryAction,
-  isTransitioning = false,
+  onPrimaryAction: _onPrimaryAction,
+  isTransitioning: _isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
   onAddFirstBlock,
@@ -207,8 +207,6 @@ export function PlannerAgendaView({
   const isSessionActive = isRunning || isPaused;
   // Live controls: one adaptive primary action (Siguiente tema / Siguiente
   // bloque / Terminar reunión); "Terminar reunión" always asks to confirm.
-  const livePrimary = isSessionActive ? getLivePrimaryAction(state, sessionState) : null;
-  const runLivePrimary = () => (onPrimaryAction ? onPrimaryAction() : onAdvance?.());
   const canToggleTemas = isSessionActive && !isEditing && Boolean(onToggleSubpointStatus);
 
   const isRecording = recordingStatus === RECORDING_STATUS.RECORDING;
@@ -705,15 +703,8 @@ export function PlannerAgendaView({
 
                     <div className="flex items-center gap-2 shrink-0">
                       {isLive ? (
-                        <button
-                          type="button"
-                          onClick={runLivePrimary}
-                          disabled={isTransitioning || isPaused}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-2xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                        >
-                          <span>{livePrimary?.label || 'Terminar descanso'}</span>
-                          <ChevronRight className="size-3 stroke-[2]" />
-                        </button>
+                        // The live dock holds the single primary action ("Terminar descanso").
+                        <span className="text-[11px] font-semibold text-primary select-none">En curso</span>
                       ) : isCompleted ? (
                         <div className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 select-none">
                           <Check className="size-3 text-emerald-500 stroke-[2]" />
@@ -1031,7 +1022,6 @@ export function PlannerAgendaView({
                       }
 
                       if (isPointActive) {
-                        const nextActionLabel = livePrimary?.label || 'Siguiente tema';
 
                         return (
                           <div
@@ -1096,21 +1086,6 @@ export function PlannerAgendaView({
                                 )}
                               </div>
 
-                              {(onPrimaryAction || onAdvance) && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    runLivePrimary();
-                                  }}
-                                  disabled={isTransitioning || isPaused}
-                                  title={isPaused ? 'Reanuda la reunión para continuar' : undefined}
-                                  className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-background hover:bg-background/90 text-primary font-medium text-xs shadow-xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                                >
-                                  <span className="font-medium">{nextActionLabel}</span>
-                                  <ChevronRight strokeWidth={1.75} className="size-3.5 text-primary stroke-[1.75]" />
-                                </button>
-                              )}
                             </div>
                           </div>
                         );
@@ -1372,21 +1347,7 @@ export function PlannerAgendaView({
                       <span>Acuerdo</span>
                     </button>
 
-                    {/* Only when the bloque has no active tema: otherwise the tema's
-                        own button is the primary action (no silent skipping). */}
-                    {isLive && !liveActivePointId && (onPrimaryAction || onAdvance) && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={runLivePrimary}
-                        disabled={isTransitioning || isPaused}
-                        title={isPaused ? 'Reanuda la reunión para continuar' : undefined}
-                        className="h-8 min-w-0 max-w-full px-3.5 text-xs font-semibold rounded-full gap-1.5 cursor-pointer shadow-xs ml-auto"
-                      >
-                        <span className="truncate">{livePrimary?.label || 'Siguiente bloque'}</span>
-                        <ChevronRight className="size-3.5" />
-                      </Button>
-                    )}
+                    {/* No primary button here: the sticky live dock is the single place to advance. */}
                   </div>
                 )}
               </Card>

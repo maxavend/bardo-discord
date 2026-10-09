@@ -6,9 +6,17 @@ import {
   CheckCircle2,
   Clock,
   Mic,
-  RotateCw,
+  MoreVertical,
+  Plus,
   RotateCcw,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   PlayIcon,
   CopyIcon,
@@ -17,6 +25,7 @@ import {
 import { computeSessionRecap } from './session-assistant-engine.js';
 import { generateMinutesMarkdown } from './planner-store.js';
 import { todayLocalIso } from './date-utils.js';
+import { formatSpokenDuration, getPlannedSchedule } from './time-engine.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
 
 /** Clipboard write with a fallback for webviews where the async API is blocked. */
@@ -43,6 +52,26 @@ async function copyTextWithFallback(text) {
   } catch {
     return false;
   }
+}
+
+function formatRecapDate(isoDate) {
+  if (!isoDate) return '';
+  const [year, month, day] = String(isoDate).split('-').map(Number);
+  if (!year || !month || !day) return '';
+  const text = new Intl.DateTimeFormat('es-CL', {weekday: 'short', day: 'numeric', month: 'short'})
+    .format(new Date(year, month - 1, day))
+    .replace(/\./g, '');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function Stat({icon = null, label, value, hint = null}) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[11px] text-muted-foreground flex items-center gap-1">{icon}{label}</span>
+      <strong className="text-lg font-semibold text-foreground tabular-nums">{value}</strong>
+      {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+    </div>
+  );
 }
 
 export function SessionRecapView({
@@ -74,15 +103,17 @@ export function SessionRecapView({
   };
 
   const handleCopyRecap = async () => {
-    let text = `📋 **${recap.recapTitle}**\n`;
-    text += `⏱ **Tiempo:** ${recap.actualDurationMinutes} min de ${recap.plannedDurationMinutes} min planificados\n`;
-    text += `📚 **Bloques:** ${recap.completedCount} / ${recap.totalBlocksCount} completados`;
+    let text = `📋 **Resumen · ${recap.recapTitle}**\n`;
+    text += recap.leftOpen
+      ? `⏱ **Tiempo:** no medible (la reunión quedó abierta) · ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados\n`
+      : `⏱ **Tiempo:** ${formatSpokenDuration(recap.actualDurationMinutes)} de ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados\n`;
+    text += `📚 **Bloques:** ${recap.completedCount} de ${recap.totalBlocksCount} completados`;
     if (recap.skippedCount > 0) text += ` · ${recap.skippedCount} saltados`;
     text += '\n';
-    text += `✅ **Temas tratados:** ${recap.completedPointsCount} / ${recap.totalPointsCount}`;
+    text += `✅ **Temas tratados:** ${recap.completedPointsCount} de ${recap.totalPointsCount}`;
     if (recap.skippedPointsCount > 0) text += ` · ${recap.skippedPointsCount} saltados`;
     text += '\n';
-    text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${recap.totalRecordedMinutes} min de audio)\n`;
+    text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${formatSpokenDuration(recap.totalRecordedMinutes)} de audio)\n`;
     text += `📝 **Acuerdos:** ${recap.decisions.length}\n`;
     if (recap.decisions.length > 0) {
       text += '\n**Acuerdos:**\n';
@@ -95,77 +126,144 @@ export function SessionRecapView({
     toast(copied ? 'Resumen copiado' : 'No se pudo copiar el resumen. Intenta de nuevo.');
   };
 
-  const badgeVariant = isInterrupted
-    ? 'destructive'
-    : recap.completedCount === recap.totalBlocksCount
-      ? 'default'
-      : 'secondary';
+  const schedule = getPlannedSchedule(plannerState || {});
+  const metaLine = [
+    formatRecapDate(plannerState?.date),
+    plannerState?.startTime ? `${plannerState.startTime}–${schedule.plannedEnd}` : null,
+    plannerState?.host ? `Facilita ${plannerState.host}` : null,
+  ].filter(Boolean).join(' · ');
+  const hasDecisions = recap.decisions.length > 0;
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-16 pt-2 animate-in fade-in duration-150">
-      <div className="flex flex-col gap-4 min-w-0 w-full">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-1">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant={badgeVariant}>{recap.statusLabel}</Badge>
-                <span className="text-xs text-muted-foreground">Resumen de la reunión</span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{recap.recapTitle}</h1>
-              <p className="text-xs text-muted-foreground mt-1">{recap.recapDescription}</p>
+      <div className="flex flex-col gap-5 min-w-0 w-full">
+        {/* Título → estado y fecha → una acción principal, ícono para copiar, "⋯" para el resto. */}
+        <header className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground text-balance">{recap.recapTitle}</h1>
+            <div className="mt-2 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+              <Badge variant={isInterrupted ? 'destructive' : 'secondary'}>{recap.statusLabel}</Badge>
+              {metaLine && <span>{metaLine}</span>}
             </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {isInterrupted && onResumeSession && (
-                <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3">
-                  <PlayIcon className="size-3.5" /> Reanudar reunión
-                </Button>
-              )}
-              {canReopen && onReopenSession && (
-                <Button variant="secondary" size="sm" onClick={onReopenSession} className="h-8 px-3" title="Vuelve a la reunión donde quedó; el tiempo cerrada no se cuenta">
-                  <RotateCcw className="size-3.5" /> Reabrir reunión
-                </Button>
-              )}
-              <Button variant="secondary" size="sm" onClick={handleCopyRecap} className="h-8 px-3">
-                <CopyIcon className="size-3.5" /> Copiar resumen
-              </Button>
-              {onSaveDocToLibrary && (
-                <Button variant="default" size="sm" onClick={handleSaveDoc} className="h-8 px-3 font-semibold">
-                  <FileTextIcon className="size-3.5" /> Guardar acta en Documentos
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={onNewSession} className="h-8 px-2.5 text-muted-foreground hover:text-foreground">
-                <RotateCw className="size-3.5" /> Nueva reunión
-              </Button>
-            </div>
+            {recap.recapDescription && <p className="text-sm text-muted-foreground mt-2">{recap.recapDescription}</p>}
           </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <IconButton label="Copiar resumen" onClick={handleCopyRecap}>
+              <CopyIcon className="size-4" />
+            </IconButton>
+            {isInterrupted && onResumeSession ? (
+              <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3.5 ml-1">
+                <PlayIcon className="size-3.5" /> Reanudar reunión
+              </Button>
+            ) : onSaveDocToLibrary ? (
+              <Button variant="default" size="sm" onClick={handleSaveDoc} className="font-semibold h-8 px-3.5 ml-1">
+                <FileTextIcon className="size-3.5" /> Guardar acta en Documentos
+              </Button>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Más opciones del resumen"
+                    title="Más opciones"
+                    className="rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <MoreVertical className="size-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-56">
+                {isInterrupted && onSaveDocToLibrary && (
+                  <DropdownMenuItem onClick={handleSaveDoc}>
+                    <FileTextIcon className="size-4 text-muted-foreground" />
+                    <span>Guardar acta en Documentos</span>
+                  </DropdownMenuItem>
+                )}
+                {canReopen && onReopenSession && (
+                  <DropdownMenuItem onClick={onReopenSession}>
+                    <RotateCcw className="size-4 text-muted-foreground" />
+                    <span>Reabrir reunión</span>
+                  </DropdownMenuItem>
+                )}
+                {onNewSession && (
+                  <DropdownMenuItem onClick={onNewSession}>
+                    <Plus className="size-4 text-muted-foreground" />
+                    <span>Nueva reunión</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+          {hasDecisions && (
+            <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <CheckCircle2 className="size-3.5 text-primary" />
+                Acuerdos ({recap.decisions.length})
+              </h2>
+              <div className="flex flex-col gap-2">
+                {recap.decisions.map((decision, index) => {
+                  const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
+                  const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
+                  const ownerName = decision.owner ? decision.owner.trim().replace(/^@/, '') : null;
+                  return (
+                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <strong className="font-semibold">{decision.content}</strong>
+                        {(point || block) && (
+                          <span className="block text-[11px] text-muted-foreground mt-0.5">
+                            {point ? `${block?.title} → ${point.title}` : block?.title}
+                          </span>
+                        )}
+                      </div>
+                      {ownerName && (
+                        <span className="text-[11px] text-muted-foreground font-medium shrink-0 bg-muted/60 px-2 py-0.5 rounded-full">
+                          {ownerName}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           <Card className="p-4 sm:p-5 rounded-2xl">
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Clock className="size-3" /> Tiempo efectivo</span>
-                <strong className="text-base text-foreground">{recap.actualDurationMinutes} min</strong>
-                <span className="text-[11px] text-muted-foreground">de {recap.plannedDurationMinutes} min</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted-foreground">Bloques</span>
-                <strong className="text-base text-foreground">{recap.completedCount} / {recap.totalBlocksCount}</strong>
-                {recap.skippedCount > 0 && <span className="text-[11px] text-muted-foreground">{recap.skippedCount} saltados</span>}
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted-foreground">Temas tratados</span>
-                <strong className="text-base text-foreground">{recap.completedPointsCount} / {recap.totalPointsCount}</strong>
-                {recap.skippedPointsCount > 0 && <span className="text-[11px] text-muted-foreground">{recap.skippedPointsCount} saltados</span>}
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Mic className="size-3" /> Grabaciones</span>
-                <strong className="text-base text-foreground">{recap.totalRecordingsCount}</strong>
-                <span className="text-[11px] text-muted-foreground">{recap.totalRecordedMinutes} min de audio</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3" /> Acuerdos</span>
-                <strong className="text-base text-foreground">{recap.decisions.length}</strong>
-                <span className="text-[11px] text-muted-foreground">registrados</span>
-              </div>
+              <Stat
+                icon={<Clock className="size-3" />}
+                label={recap.timeEffectiveLabel}
+                value={recap.leftOpen ? '—' : formatSpokenDuration(recap.actualDurationMinutes)}
+                hint={recap.leftOpen
+                  ? `Quedó abierta ${formatSpokenDuration(recap.actualDurationMinutes)}; no se puede medir`
+                  : `de ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados`}
+              />
+              <Stat
+                label="Bloques"
+                value={`${recap.completedCount} de ${recap.totalBlocksCount}`}
+                hint={recap.skippedCount > 0 ? `${recap.skippedCount} saltados` : null}
+              />
+              <Stat
+                label="Temas tratados"
+                value={recap.totalPointsCount > 0 ? `${recap.completedPointsCount} de ${recap.totalPointsCount}` : '—'}
+                hint={recap.totalPointsCount === 0 ? 'Sin temas' : recap.skippedPointsCount > 0 ? `${recap.skippedPointsCount} saltados` : null}
+              />
+              <Stat
+                icon={<Mic className="size-3" />}
+                label="Grabaciones"
+                value={recap.totalRecordingsCount}
+                hint={recap.totalRecordingsCount > 0 ? `${formatSpokenDuration(recap.totalRecordedMinutes)} de audio` : 'Sin audio'}
+              />
+              <Stat
+                icon={<CheckCircle2 className="size-3" />}
+                label="Acuerdos"
+                value={recap.decisions.length}
+                hint={hasDecisions ? (recap.decisions.length === 1 ? 'registrado' : 'registrados') : 'Ninguno anotado'}
+              />
             </div>
           </Card>
 
@@ -214,40 +312,6 @@ export function SessionRecapView({
             </Card>
           )}
 
-          <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <CheckCircle2 className="size-3.5 text-primary" />
-              Acuerdos ({recap.decisions.length})
-            </h2>
-            {recap.decisions.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {recap.decisions.map((decision, index) => {
-                  const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
-                  const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
-                  const ownerName = decision.owner ? decision.owner.trim().replace(/^@/, '') : null;
-                  return (
-                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <strong className="font-semibold">{decision.content}</strong>
-                        {(point || block) && (
-                          <span className="block text-[11px] text-muted-foreground mt-0.5">
-                            {point ? `${block?.title} → ${point.title}` : block?.title}
-                          </span>
-                        )}
-                      </div>
-                      {ownerName && (
-                        <span className="text-[11px] text-muted-foreground font-medium shrink-0 bg-muted/60 px-2 py-0.5 rounded-full">
-                          {ownerName}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">No se anotaron acuerdos durante esta reunión.</p>
-            )}
-          </Card>
         </div>
     </div>
   );

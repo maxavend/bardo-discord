@@ -158,9 +158,10 @@ test('reunión en vivo: tiempo restante, pausa congela el reloj, terminar pide c
   await page.getByRole('button', {name: 'Más acciones de la reunión'}).click();
   await page.getByRole('menuitem', {name: 'Terminar reunión'}).click();
   await page.getByRole('dialog', {name: '¿Terminar la reunión?'}).getByRole('button', {name: 'Terminar reunión'}).click();
-  await expect(page.getByRole('button', {name: 'Reabrir reunión'})).toBeVisible();
-
-  await page.getByRole('button', {name: 'Reabrir reunión'}).click();
+  // Resumen: una acción principal visible; "Reabrir" vive en el menú "⋯".
+  await expect(page.getByRole('button', {name: 'Guardar acta en Documentos'})).toBeVisible();
+  await page.getByRole('button', {name: 'Más opciones del resumen'}).click();
+  await page.getByRole('menuitem', {name: 'Reabrir reunión'}).click();
   await expect(page.getByRole('region', {name: 'Controles de la reunión en curso'})).toBeVisible();
   expect(errors).toEqual([]);
 });
