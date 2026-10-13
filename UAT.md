@@ -2,6 +2,8 @@
 
 **READY_FOR_UAT — implementación terminada y lista para aceptación humana.**
 
+Actualización del 13 de octubre de 2026: desplegada por autorización del usuario en el Worker habitual de Discord. Consulta [DEPLOYMENT.md](DEPLOYMENT.md) para abrirla y recuperar el checkpoint.
+
 Rama: `codex/product-completion-uat`. Base: `03a9a79`, con los cuatro commits del PR #22 sobre `main` (`8a02ebd`). El PR #22 estaba abierto y con un fallo de CI al consultarlo el 13 de octubre de 2026. No se hizo merge ni se publicó la rama.
 
 ## Qué cambia
@@ -17,7 +19,7 @@ Se conservan React 19, Vite, Plate 53, el formato canónico HTML/Markdown, los t
 
 ## Preparación para probar
 
-La rama todavía no está desplegada. Los tests de navegador usan modo standalone y mocks donde corresponde: **no certifican funcionamiento dentro de Discord**.
+La rama ya está desplegada en el Worker habitual. Los tests automatizados de navegador usaron modo standalone y mocks donde corresponde: **no certifican funcionamiento dentro de Discord**.
 
 Para revisar localmente, usa Node >=22.12 y las dependencias existentes:
 
@@ -28,7 +30,7 @@ npm --prefix activity-app run preview -- --host 127.0.0.1 --port 4173
 
 Abre `http://127.0.0.1:4173/#home`. En este modo se puede probar Home, edición, borradores, reuniones e importación; publicar en el canal y exportar PDF/Word requieren Discord y backend.
 
-Para UAT real se necesita una aplicación de Discord de prueba que apunte a una instancia de esta rama, con Worker y D1 de prueba, secretos configurados por su administrador y el bot presente en el servidor. Esto requiere autorización separada: no se ejecutaron despliegues, migraciones remotas ni registros de comandos. **No uses las ramas `main` o `module/bardo-docs` para preparar una prueba: su workflow despliega automáticamente a producción.**
+Para UAT real se necesita una aplicación de Discord de prueba que apunte a una instancia de esta rama, con Worker y D1 de prueba, secretos configurados por su administrador y el bot presente en el servidor. Para esta aceptación el usuario autorizó desplegar en el Worker habitual; ya se realizó y quedó un checkpoint. No se ejecutaron migraciones remotas ni registros de comandos. **No uses las ramas `main` o `module/bardo-docs` para preparar una prueba: su workflow despliega automáticamente a producción.**
 
 El cliente solicita OAuth `identify`. El servidor consulta permisos mediante el bot. La búsqueda oficial de miembros por nombre/apodo no necesita el intent de listado masivo `GUILD_MEMBERS`; solicita al menos dos caracteres y devuelve hasta 100 coincidencias, pidiendo acotar si alcanza el límite. Si Discord la rechaza o limita, el selector explica el fallo y conserva participantes conectados, la cuenta actual e invitados. Los invitados son etiquetas, no una prueba de pertenencia ni de autorización.
 
@@ -102,4 +104,4 @@ La revisión técnica siguió [Web Interface Guidelines](https://raw.githubuserc
 
 - Integración E2E final: **172 aprobadas, 56 omisiones condicionales preexistentes, 0 fallos** en 320, 390, 768, 1024, 1280 y 1440 px. Se ejecutó `npm --prefix activity-app run test:e2e -- --project=mobile-narrow --project=mobile-standard --project=tablet --project=desktop-compact --project=laptop --project=desktop --workers=4 --forbid-only`. Ninguna prueba nueva se omite. Capturas de Home inspeccionadas en móvil y escritorio; cobertura automatizada adicional de texto largo, contraste, foco, reduced motion y aumento de texto.
 
-**Próxima acción:** autorizar la preparación de un entorno Discord de prueba con esta rama para ejecutar los cinco recorridos. La entrega permanece local, sin publicación ni despliegue.
+**Próxima acción:** cerrar y volver a abrir Bardo con `/bardo` en Discord para ejecutar los cinco recorridos sobre la versión desplegada.
