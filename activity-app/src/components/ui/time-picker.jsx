@@ -190,7 +190,7 @@ export function TimePicker({
               variant="outline"
               disabled={disabled}
               className={cn(
-                "w-full justify-between font-normal h-9 rounded-full bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 text-xs text-foreground transition-colors",
+                "w-full justify-between font-medium h-9 rounded-full bg-muted/40 dark:bg-muted/40 hover:bg-muted/60 border-border/50 px-3.5 text-xs text-foreground transition-colors",
                 !value && "text-muted-foreground",
                 className
               )}

@@ -396,7 +396,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!entity) return null;
     const persisted = await persistRecordingBinary(entity);
     if (persisted.status === 'error') {
-      toast('No se pudo persistir el audio. Sigue disponible en esta pestaña, pero no recargues hasta resolverlo.');
+      toast('No se pudo guardar el audio en este dispositivo. Descárgalo desde sus opciones antes de salir o recargar.');
     } else {
       // Full audio saved: incremental chunks are no longer needed.
       recordingStorage.clearInProgress?.(persisted.id)?.catch?.(() => {});
@@ -409,7 +409,9 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!persisted) return;
     recordingPausedBySessionRef.current = false;
     commitSessionState(saveFinalizedRecording(sessionStateRef.current, persisted));
-    toast(`La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo grabado: ${formatMsToClock(persisted.durationMs || 0)}.`);
+    toast(persisted.status === 'saved'
+      ? `La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo grabado: ${formatMsToClock(persisted.durationMs || 0)}.`
+      : 'El micrófono dejó de responder. El audio sigue en esta pestaña: descárgalo antes de salir.');
   };
 
   useEffect(() => {
@@ -588,7 +590,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     const recording = await finalizeActiveRecording();
     if (recording) {
       commitSessionState(saveFinalizedRecording(sessionStateRef.current, recording));
-      toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
+      if (recording.status === 'saved') toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
     }
   }, [commitSessionState, finalizeActiveRecording]);
 
@@ -683,18 +685,18 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     }
 
     if (next.status === SESSION_STATUS.COMPLETED) {
-      setActiveTab('recap');
-      toast(recording ? `Reunión terminada. Se guardó la grabación “${recording.name}”.` : 'Reunión terminada. Este es el resumen.');
+      handleTabChange('recap');
+      if (recording?.status !== 'error') toast(recording ? `Reunión terminada. Se guardó la grabación “${recording.name}”.` : 'Reunión terminada. Este es el resumen.');
       return next;
     }
     const target = nextPoint?.title || nextBlock?.title || 'la reunión';
-    if (continued) {
+    if (continued && recording?.status !== 'error') {
       toast(`Se guardó “${recording?.name || 'la grabación'}” · sigue grabando en “${target}”`);
-    } else if (recording) {
+    } else if (recording?.status === 'saved') {
       toast(`Se guardó la grabación “${recording.name}” (${formatMsToClock(recording.durationMs)})`);
     }
     return next;
-  }), [commitSessionState, finalizeActiveRecording, persistCapturedRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, handleTabChange, persistCapturedRecording, runAtomicTransition]);
 
   const handleAdvance = useCallback(async () => {
     const before = sessionStateRef.current;

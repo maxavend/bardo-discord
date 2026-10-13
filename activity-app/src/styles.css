@@ -914,7 +914,8 @@ button { font-size: 14px; }
 .editor-toolbar-sticky > * {
   pointer-events: auto;
 }
-.bardo-slash-menu [data-slot="scroll-area-scrollbar"] {
+.bardo-slash-menu [data-slot="scroll-area-scrollbar"],
+.overlay-scroll-area > [data-slot="scroll-area-scrollbar"] {
   margin-block: 8px;
   height: calc(100% - 16px);
 }
@@ -1399,4 +1400,15 @@ button { font-size: 14px; }
   .text-muted {
     color: var(--muted-foreground) !important;
   }
+}
+
+/* Meeting rows have four cells; the chevron must not wrap below the title. */
+.meeting-row { grid-template-columns: 32px minmax(0, 1fr) 36px 16px; }
+.meeting-row > .doc-symbol { grid-column: 1; }
+.meeting-row > .doc-row-main { grid-column: 2; }
+.meeting-row > button { grid-column: 3; }
+.meeting-row > svg { grid-column: 4; }
+.meeting-row > * { grid-row: 1; }
+@media (max-width: 480px) {
+  .meeting-row { grid-template-columns: 24px minmax(0, 1fr) 32px 16px; gap: 6px; }
 }

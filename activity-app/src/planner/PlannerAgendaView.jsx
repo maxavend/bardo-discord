@@ -147,7 +147,7 @@ function BlockDurationControl({ minutes, presets, onChange, label = 'Duración d
         <DropdownMenuGroup>
           <DropdownMenuLabel>Duración</DropdownMenuLabel>
           <div
-            className="max-h-52 overflow-y-auto overscroll-contain pr-0.5"
+            className="min-w-0"
             onWheel={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
           >
@@ -278,10 +278,10 @@ export function PlannerAgendaView({
     }
   };
 
-  const handleTimeUpdate = (pointId, e) => {
+  const handleTimeUpdate = (pointId, e, totalDurationMs) => {
     const el = e.currentTarget;
     const currentMs = (el.currentTime || 0) * 1000;
-    const totalMs = el.duration && !isNaN(el.duration) && el.duration > 0 ? el.duration * 1000 : 0;
+    const totalMs = Number.isFinite(el.duration) && el.duration > 0 ? el.duration * 1000 : totalDurationMs;
     const percent = totalMs > 0 ? Math.min(100, (currentMs / totalMs) * 100) : 0;
     setAudioProgress((prev) => ({
       ...prev,
@@ -297,20 +297,23 @@ export function PlannerAgendaView({
     }));
   };
 
-  const handleSeek = (pointId, e, totalDurationMs) => {
-    e.stopPropagation();
-    const track = e.currentTarget;
-    const rect = track.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+  const seekAudio = (pointId, ratio, totalDurationMs) => {
     const audioEl = document.getElementById(`audio-element-${pointId}`);
-    if (audioEl && audioEl.duration) {
-      audioEl.currentTime = ratio * audioEl.duration;
+    if (audioEl?.src) {
+      const duration = Number.isFinite(audioEl.duration) ? audioEl.duration : totalDurationMs / 1000;
+      audioEl.currentTime = ratio * duration;
     }
     setAudioProgress((prev) => ({
       ...prev,
       [pointId]: { currentMs: ratio * totalDurationMs, percent: ratio * 100 },
     }));
+  };
+
+  const handleSeek = (pointId, e, totalDurationMs) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekAudio(pointId, ratio, totalDurationMs);
   };
 
   const [, setTicker] = useState(0);
@@ -1194,7 +1197,7 @@ export function PlannerAgendaView({
                                 <audio
                                   id={`audio-element-${point.id}`}
                                   className="bardo-point-audio hidden"
-                                  onTimeUpdate={(e) => handleTimeUpdate(point.id, e)}
+                                  onTimeUpdate={(e) => handleTimeUpdate(point.id, e, pointRecordingDurationMs)}
                                   onEnded={() => handleEnded(point.id)}
                                 />
                                 <button
@@ -1220,6 +1223,16 @@ export function PlannerAgendaView({
                                   aria-valuemax={100}
                                   tabIndex={0}
                                   onClick={(e) => handleSeek(point.id, e, pointRecordingDurationMs)}
+                                  onKeyDown={(e) => {
+                                    const current = audioProgress[point.id]?.percent || 0;
+                                    const percent = e.key === 'Home' ? 0 : e.key === 'End' ? 100
+                                      : ['ArrowRight', 'ArrowUp'].includes(e.key) ? Math.min(100, current + 5)
+                                        : ['ArrowLeft', 'ArrowDown'].includes(e.key) ? Math.max(0, current - 5) : null;
+                                    if (percent == null) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    seekAudio(point.id, percent / 100, pointRecordingDurationMs);
+                                  }}
                                   className="w-28 sm:w-44 h-1.5 bg-muted/80 hover:bg-muted rounded-full overflow-hidden relative cursor-pointer select-none"
                                 >
                                   <div

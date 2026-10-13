@@ -34,7 +34,7 @@ export function FinishMeetingDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+            <div className="size-8 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center">
               <Flag className="size-4" />
             </div>
             <DialogTitle>¿Terminar la reunión?</DialogTitle>

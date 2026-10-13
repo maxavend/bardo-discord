@@ -475,9 +475,11 @@ test('mobile toolbar fits without horizontal overflow and sends the rest to "Ver
   expect(openLayout.rootClientWidth).toBe(layout.rootClientWidth);
   expect(Math.abs(openLayout.containerLeft - layout.containerLeft)).toBeLessThanOrEqual(1);
 
-  await expect(overflowPopover).toHaveClass(/scrollbar/);
-  await expect(overflowPopover).toHaveCSS('overflow-y', 'auto');
-  await expect(overflowPopover).toHaveCSS('overscroll-behavior-y', 'contain');
+  const scrollViewport = overflowPopover.locator('[data-slot="scroll-area-viewport"]');
+  await expect(scrollViewport).toHaveCSS('overflow-y', /auto|scroll/);
+  await expect(scrollViewport).toHaveCSS('overscroll-behavior-y', 'contain');
+  await expect(scrollViewport).toHaveCSS('scrollbar-width', 'none');
+  await expect(overflowPopover).toHaveCSS('overflow-y', 'hidden');
   const separatorHeights = await overflowPopover.locator('[data-slot="dropdown-menu-separator"]').evaluateAll(elements => elements.map(element => getComputedStyle(element).height));
   expect(separatorHeights.length).toBeGreaterThanOrEqual(2);
   expect(separatorHeights.every(height => height === '1px')).toBeTruthy();

@@ -229,7 +229,7 @@ export function BlockTypeDropdown({ value, onSelect }) {
         }
       />
       <DropdownMenuContent align="start" className="toolbar-dropdown-popover w-52 p-1" onCloseAutoFocus={onCloseAutoFocus}>
-        <div className="max-h-60 overflow-y-auto overscroll-contain pr-0.5">
+        <div>
           <DropdownMenuGroup>
             {BLOCK_TYPES.map(item => {
               const ItemIcon = item.icon;
@@ -339,7 +339,7 @@ export function MoreActionsMenu({ onAction, visibleActions }) {
       />
       <DropdownMenuContent
         align="end"
-        className="toolbar-dropdown-popover scrollbar overflow-y-auto overscroll-contain w-56"
+        className="toolbar-dropdown-popover w-56"
         onCloseAutoFocus={onCloseAutoFocus}
       >
         {showInline && (

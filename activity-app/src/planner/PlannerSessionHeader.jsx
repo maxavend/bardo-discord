@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
-import { TimePicker } from '@/components/ui/time-picker.jsx';
+import { TimePicker, formatTimeDisplay } from '@/components/ui/time-picker.jsx';
 import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   Pencil,
@@ -362,7 +362,7 @@ export function PlannerSessionHeader({
 
               <div>
                 <span id={`${fieldId}-duration`} className="text-xs font-semibold text-foreground mb-1.5 block">Duración</span>
-                <div aria-labelledby={`${fieldId}-duration`} className="w-full h-9 px-1 flex items-center justify-center text-xs font-medium text-foreground">
+                <div aria-labelledby={`${fieldId}-duration`} className="w-full h-9 px-1 flex items-center justify-start text-xs font-medium text-foreground">
                   {formatShortDuration(totalPlannedMinutes)}
                 </div>
               </div>
@@ -375,7 +375,7 @@ export function PlannerSessionHeader({
                 className={`-mt-1 text-xs ${schedule.overMinutes > 0 ? 'text-warning' : 'text-muted-foreground'}`}
               >
                 {schedule.overMinutes > 0
-                  ? `Los bloques suman ${formatShortDuration(schedule.blocksMinutes)}, ${formatShortDuration(schedule.overMinutes)} más de lo reservado: la reunión terminaría a las ${schedule.plannedEnd}. Acorta los bloques o mueve el término.`
+                  ? `Los bloques suman ${formatShortDuration(schedule.blocksMinutes)}, ${formatShortDuration(schedule.overMinutes)} más de lo reservado: terminaría a las ${formatTimeDisplay(schedule.plannedEnd)}. Acorta los bloques o mueve el término.`
                   : `Bloques: ${formatShortDuration(schedule.blocksMinutes)} de ${formatShortDuration(schedule.targetMinutes)} · quedan ${formatShortDuration(schedule.freeMinutes)} libres`}
               </p>
             )}
@@ -440,7 +440,7 @@ export function PlannerSessionHeader({
                         {selectedKeys.size > 0 ? (
                           <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                             <div className="flex items-center -space-x-1.5 shrink-0">
-                              {Array.from(selectedKeys).slice(0, 4).map((tag, idx) => {
+                              {Array.from(selectedKeys).slice(0, 2).map((tag, idx) => {
                                 const cleanName = tag.replace(/^[@#]/, '');
                                 const matched = members.find(
                                   (m) =>
@@ -448,7 +448,7 @@ export function PlannerSessionHeader({
                                     m.tag.toLowerCase() === tag.toLowerCase() ||
                                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                                 );
-                                const isRole = tag.startsWith('#') || (!matched && tag.startsWith('@'));
+                                const isRole = tag.startsWith('#');
                                 const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
 
                                 return (
@@ -466,8 +466,9 @@ export function PlannerSessionHeader({
                               })}
                             </div>
                             <span className="font-medium text-foreground truncate min-w-0">
-                              {Array.from(selectedKeys).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
+                              {Array.from(selectedKeys).slice(0, 2).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
                             </span>
+                            {selectedKeys.size > 2 && <span className="shrink-0 text-muted-foreground">+{selectedKeys.size - 2}</span>}
                           </div>
                         ) : (
                           <span className="truncate text-muted-foreground">Buscar personas o roles</span>

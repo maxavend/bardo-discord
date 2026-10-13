@@ -1,3 +1,4 @@
+import { OverlayScrollArea } from "@/components/ui/scroll-area";
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button.jsx';
@@ -1198,14 +1199,14 @@ function TextPreviewModal({isOpen, doc, onCopy, onCancel}) {
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent scrollable={false} className="sm:max-w-2xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Texto del documento</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 py-2">
+        <OverlayScrollArea className="min-h-0 max-h-[calc(85dvh-12rem)]" contentClassName="py-2 pr-2">
           <pre className="markdown-preview-content" tabIndex="0" aria-label="Texto del documento">{text}</pre>
-        </div>
+        </OverlayScrollArea>
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <ChevronLeft width={15} height={15} /> Atrás

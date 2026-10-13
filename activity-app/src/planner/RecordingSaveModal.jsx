@@ -73,8 +73,9 @@ export function RecordingSaveModal({
 
         <div className="flex flex-col gap-4 py-1">
           <Field>
-            <FieldLabel>Nombre de la grabación</FieldLabel>
+            <FieldLabel htmlFor="recording-save-name">Nombre de la grabación</FieldLabel>
             <Input
+              id="recording-save-name"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               placeholder="Nombre de la grabación"
