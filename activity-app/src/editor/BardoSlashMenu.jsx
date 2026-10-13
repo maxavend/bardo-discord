@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef, useId } from 'react';
 import { useEditorRef, useEditorSelector } from 'platejs/react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   BLOCK_LABELS,
   insertBlock,
@@ -88,6 +89,7 @@ export function BardoSlashMenu() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
+  const viewportRef = useRef(null);
   const menuId = useId();
 
   // Foco real del editable (no depende de eventos de foco del documento, que
@@ -142,14 +144,16 @@ export function BardoSlashMenu() {
   }, [editable, menuId, selectedIndex, visible]);
 
   useLayoutEffect(() => {
-    const menu = menuRef.current;
+    const menu = viewportRef.current;
     const item = menu?.querySelector('[aria-selected="true"]');
     if (!item) return;
     const menuRect = menu.getBoundingClientRect();
     const itemRect = item.getBoundingClientRect();
     // Scroll the popup alone, preserving the document's cursor/scroll position.
-    if (itemRect.bottom > menuRect.bottom) menu.scrollTop += itemRect.bottom - menuRect.bottom;
-    else if (itemRect.top < menuRect.top) menu.scrollTop -= menuRect.top - itemRect.top;
+    // Keep the active option clear of the faded edges.
+    const edge = 16;
+    if (itemRect.bottom > menuRect.bottom - edge) menu.scrollTop += itemRect.bottom - menuRect.bottom + edge;
+    else if (itemRect.top < menuRect.top + edge) menu.scrollTop -= menuRect.top + edge - itemRect.top;
   }, [selectedIndex, triggerKey, visible]);
 
   const closeMenu = useCallback(() => {
@@ -255,17 +259,24 @@ export function BardoSlashMenu() {
   if (!isOpen || filteredItems.length === 0) return null;
 
   return (
-    <div
+    <ScrollArea
       ref={menuRef}
       id={menuId}
       role="listbox"
       aria-label="Insertar bloque"
-      className="fixed z-50 w-72 max-h-80 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 backdrop-blur-md"
+      className="bardo-slash-menu fixed z-50 w-72 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
+      onMouseDown={e => e.preventDefault()}
+      viewportProps={{
+        ref: viewportRef,
+        tabIndex: -1,
+        className: 'scroll-fade scroll-fade-4 motion-reduce:scroll-fade-none overscroll-contain p-1.5 pr-3',
+        style: {maxHeight: 'var(--slash-menu-height)'},
+      }}
       style={{
         top: `${coords.top}px`,
         left: `${Math.max(8, Math.min(coords.left, window.innerWidth - 300))}px`,
         maxWidth: 'calc(100vw - 16px)',
-        maxHeight: `${Math.min(320, Math.max(80, window.innerHeight - coords.top - 8))}px`,
+        '--slash-menu-height': `${Math.min(320, Math.max(80, window.innerHeight - coords.top - 10))}px`,
       }}
     >
       <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/60 mb-1">
@@ -301,6 +312,6 @@ export function BardoSlashMenu() {
           );
         })}
       </div>
-    </div>
+    </ScrollArea>
   );
 }
