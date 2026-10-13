@@ -80,7 +80,7 @@ test('una URL dañada recupera Inicio sin bloquear la aplicación', async ({page
   expect(errors).toEqual([]);
 });
 
-test('Inicio usa títulos naturales, acciones alineadas y un aviso antiguo desplegable', async ({page}) => {
+test('Inicio usa títulos naturales y acciones alineadas sin avisos de copias antiguas', async ({page}) => {
   await page.addInitScript(() => {window.__BARDO_UNOWNED_LOCAL_DATA__ = true;});
   await seedDocs(page, [makeDoc({title: 'Documento del canal'})], {hash: '#home'});
   await page.evaluate(async () => {
@@ -95,11 +95,6 @@ test('Inicio usa títulos naturales, acciones alineadas y un aviso antiguo despl
     const [title, action] = await Promise.all([heading.locator('h2').boundingBox(), heading.locator('button, a').boundingBox()]);
     expect(Math.abs(title.y + title.height / 2 - action.y - action.height / 2)).toBeLessThanOrEqual(1);
   }
-  const notice = page.locator('.home-legacy-notice');
-  await expect(notice.locator('p')).toBeHidden();
-  await notice.locator('summary').focus();
-  await page.keyboard.press('Enter');
-  await expect(notice.locator('p')).toBeVisible();
-  await expect(notice).toContainText('No sabemos a qué cuenta pertenecen');
+  await expect(page.getByText('Hay copias antiguas guardadas en este dispositivo')).toHaveCount(0);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 });

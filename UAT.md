@@ -101,7 +101,7 @@ Para probar permisos, prepara dos cuentas y dos canales: uno compartido y otro r
 
 ## Datos antiguos y recuperación
 
-Los documentos y reuniones confirmados en D1 vuelven a descargarse con los permisos actuales. Borradores, diarios y colas locales anteriores no incluyen propietario verificable: no se importan automáticamente al nuevo ámbito y no se eliminan. Si Inicio avisa de datos anteriores, conserva ese navegador/dispositivo y solicita recuperación al administrador del entorno.
+Los documentos y reuniones confirmados en D1 vuelven a descargarse con los permisos actuales. Borradores, diarios y colas locales anteriores no incluyen propietario verificable: no se importan automáticamente al nuevo ámbito y no se eliminan. Inicio no muestra un aviso por estas copias. Las indicaciones están en `/ayuda` → «Recuperar contenido anterior»: conserva ese navegador/dispositivo y solicita recuperación al administrador del entorno. No hay importación automática ni se han borrado datos.
 
 La recuperación requiere identificar al dueño legítimo antes de exportar o trasladar esos datos. No se debe copiar indiscriminadamente todo el localStorage entre cuentas ni borrar el almacenamiento para quitar el aviso. Conserva una copia local de las claves anteriores y recupera únicamente contenido cuya propiedad se haya verificado. Es una limitación deliberada de compatibilidad frente a datos antiguos sin dueño, no una migración destructiva.
 

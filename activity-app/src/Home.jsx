@@ -58,10 +58,6 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
           <p>No pudimos actualizar {errors.join(', ')}. El contenido disponible puede estar incompleto.</p>
           <Button variant="secondary" size="sm" onClick={() => location.reload()}>Reintentar conexión</Button>
         </div>}
-        {window.__BARDO_UNOWNED_LOCAL_DATA__ && <details className="home-notice home-legacy-notice">
-          <summary>Hay copias antiguas guardadas en este dispositivo</summary>
-          <p>No sabemos a qué cuenta pertenecen, así que no las hemos añadido a la tuya. Si echas de menos algún contenido, pide ayuda para recuperarlo antes de borrar los datos del navegador.</p>
-        </details>}
 
         {draft && <section className="library-section continue-section" aria-labelledby="home-draft">
           <h2 id="home-draft" className="section-title">Borrador pendiente</h2>

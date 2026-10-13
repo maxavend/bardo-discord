@@ -396,6 +396,9 @@ export const HELP_TEXT = [
   '**Ayuda**',
   '`/ayuda` — muestra esta guía.',
   '`/upload-docs` — alias de /doc-upload; hace lo mismo.',
+  '',
+  '**Recuperar contenido anterior**',
+  'Si te falta contenido de una versión anterior, pide ayuda al administrador de Bardo. Usa el mismo dispositivo y no borres los datos de Discord o del navegador: podrían conservar una copia. Las copias antiguas no se incorporan automáticamente porque no podemos verificar a qué cuenta pertenecen.',
 ].join('\n');
 
 export function buildHelpPayload() {

@@ -164,6 +164,8 @@ test('/ayuda responde efímero con todos los comandos', async () => {
   assert.ok(json.includes('bardo:open:home'));
   assert.ok(json.includes('/upload-docs'));
   assert.ok(!json.includes('elige sección'));
+  assert.ok(json.includes('Recuperar contenido anterior'));
+  assert.ok(json.includes('no borres los datos de Discord o del navegador'));
 });
 
 test('/reu-new rechaza fechas y horas inválidas sin crear la reunión', async () => {

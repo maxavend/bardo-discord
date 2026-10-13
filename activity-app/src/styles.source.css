@@ -498,10 +498,6 @@ button { font-size: 14px; }
 .home-empty { margin-block: 16px; }
 .home-section-heading { margin-bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .home .section-title { text-transform: none; letter-spacing: normal; }
-.home-notice.home-legacy-notice { display: block; font-size: 14px; color: var(--muted-foreground); }
-.home-legacy-notice summary { cursor: pointer; border-radius: var(--radius); }
-.home-legacy-notice summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
-.home-legacy-notice p { margin-top: 12px; line-height: 1.5; }
 .home-section-heading .section-title { display: flex; align-items: center; gap: 8px; margin: 0; }
 .home-list { list-style: none; padding: 0; margin-block: 0 8px; }
 .home-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px; border-bottom: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; }
