@@ -113,7 +113,7 @@ export function SessionRecapView({
     text += `✅ **Temas tratados:** ${recap.completedPointsCount} de ${recap.totalPointsCount}`;
     if (recap.skippedPointsCount > 0) text += ` · ${recap.skippedPointsCount} saltados`;
     text += '\n';
-    text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${formatSpokenDuration(recap.totalRecordedMinutes)} de audio)\n`;
+    if (recap.totalRecordingsCount > 0) text += `🎙 **Grabaciones:** ${recap.totalRecordingsCount} (${formatSpokenDuration(recap.totalRecordedMinutes)} de audio)\n`;
     text += `📝 **Acuerdos:** ${recap.decisions.length}\n`;
     if (recap.decisions.length > 0) {
       text += '\n**Acuerdos:**\n';
@@ -233,7 +233,7 @@ export function SessionRecapView({
           )}
 
           <Card className="p-4 sm:p-5 rounded-2xl">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-4">
+            <div className={`grid grid-cols-2 ${recap.totalRecordingsCount > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-x-4 gap-y-4`}>
               <Stat
                 icon={<Clock className="size-3" />}
                 label={recap.timeEffectiveLabel}
@@ -252,12 +252,12 @@ export function SessionRecapView({
                 value={recap.totalPointsCount > 0 ? `${recap.completedPointsCount} de ${recap.totalPointsCount}` : '—'}
                 hint={recap.totalPointsCount === 0 ? 'Sin temas' : recap.skippedPointsCount > 0 ? `${recap.skippedPointsCount} saltados` : null}
               />
-              <Stat
+              {recap.totalRecordingsCount > 0 && <Stat
                 icon={<Mic className="size-3" />}
                 label="Grabaciones"
                 value={recap.totalRecordingsCount}
-                hint={recap.totalRecordingsCount > 0 ? `${formatSpokenDuration(recap.totalRecordedMinutes)} de audio` : 'Sin audio'}
-              />
+                hint={`${formatSpokenDuration(recap.totalRecordedMinutes)} de audio`}
+              />}
               <Stat
                 icon={<CheckCircle2 className="size-3" />}
                 label="Acuerdos"

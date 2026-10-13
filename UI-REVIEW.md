@@ -1,5 +1,7 @@
 # Revisión de interfaces y grabación — 13 de octubre de 2026
 
+Registro histórico: la captura nueva se retiró posteriormente del MVP; se conservan los audios anteriores. El alcance actual está en UAT.md y el despliegue en DEPLOYMENT.md.
+
 Se conserva la identidad visual de Bardo: paleta, tipografía, iconos, tokens y componentes. No hay nuevas dependencias ni cambios de esquema.
 
 ## Ajustes realizados

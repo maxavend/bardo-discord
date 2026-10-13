@@ -6,7 +6,15 @@ Actualización del 13 de octubre de 2026: desplegada por autorización del usuar
 
 Rama: `codex/product-completion-uat`. Base: `03a9a79`, con los cuatro commits del PR #22 sobre `main` (`8a02ebd`). El PR #22 estaba abierto y con un fallo de CI al consultarlo el 13 de octubre de 2026. No se hizo merge ni se publicó la rama.
 
-## Qué cambia
+## Recorte MVP — captura de audio retirada
+
+La captura nueva está deshabilitada en código y no aparece en la interfaz. Se conservan documentos, agenda, participantes, reloj, acuerdos y actas. Las grabaciones anteriores siguen disponibles en el resumen para descargar desde sus opciones, en el dispositivo donde se guardaron. También se recuperan fragmentos de una captura interrumpida anterior y se muestran audios cuyo tema o bloque ya no está en la agenda.
+
+No se borraron audios, metadatos ni bases locales. No hubo migraciones D1. El resto del diseño mantiene sus componentes y estilos; solo se cierran los espacios de los controles retirados y se omiten estadísticas vacías de audio.
+
+Validación de este recorte: 393 pruebas unitarias aprobadas; 116 E2E generales aprobadas con 44 omisiones condicionales por viewport; 8 E2E adicionales de descarga y recuperación de audio anterior aprobadas en cuatro tamaños. Descargas verificadas byte a byte, sin solicitar micrófono. Lint, tipos, build y revisión visual de reunión/resumen en 320 y 1440 px aprobados. La aceptación autenticada en Discord sigue siendo humana.
+
+## Qué cambia (implementación anterior)
 
 - Inicio reúne Documentos, borradores y Reuniones con datos disponibles del canal. `/bardo` y la apertura nativa llegan a Inicio; Docs y Reuniones conservan sus destinos directos. El historial no repite acciones de creación.
 - Docs conserva líneas vacías dentro de código, permite reabrir `/` tras Escape y mantiene visible la opción seleccionada con teclado. Un fallo de almacenamiento conserva el editor y permite reintentar; también protege Atrás y el cierre del navegador.
@@ -64,11 +72,11 @@ Para probar permisos, prepara dos cuentas y dos canales: uno compartido y otro r
 
 ### 4. Reuniones
 
-**Acción:** crea agenda, cambia fecha/hora, elige facilitador y participantes, añade temas y responsables. Inicia la reunión, pausa/reanuda, registra acuerdos y termina. Guarda el acta en Documentos y reábrela. Si usas audio, empieza una grabación e intenta ir a Inicio; luego detenla y guárdala.
+**Acción:** crea agenda, cambia fecha/hora, elige facilitador y participantes, añade temas y responsables. Inicia la reunión, pausa/reanuda, registra acuerdos y termina. Guarda el acta en Documentos y reábrela. Si tienes audios anteriores, abre el resumen y usa «Opciones de la grabación → Descargar audio» desde el dispositivo donde se guardaron. Repite tras recargar.
 
-**Esperado:** agenda y acuerdos sobreviven a recargar. El reloj respeta pausa, el cierre pide confirmación y el acta corresponde a esa reunión. Una grabación activa bloquea la salida explicando cómo continuar; después de guardarla se puede navegar y volver a reproducirla.
+**Esperado:** agenda y acuerdos sobreviven a recargar. El reloj respeta pausa, el cierre pide confirmación y el acta corresponde a esa reunión. No aparece Grabar ni se solicita permiso de micrófono. Las reuniones sin audio no muestran estadísticas vacías de grabación; los audios anteriores conservan su descarga.
 
-**Error reconocible:** cambios aplicados a otra reunión, reloj que avanza pausado, acta incorrecta, audio perdido o duplicación por Atrás. El audio requiere permiso de micrófono y almacenamiento del dispositivo; no representa una grabación automática de todos los participantes de Discord.
+**Error reconocible:** cambios aplicados a otra reunión, reloj que avanza pausado, acta incorrecta, audio perdido o duplicación por Atrás. Los audios anteriores dependen del almacenamiento del dispositivo original; no hay captura nueva en el MVP.
 
 ### 5. Discord: comandos, miembros y permisos
 

@@ -52,36 +52,27 @@ test('sin reuniones no aparece el aviso de "empieza en…"', async ({page}) => {
   await expect(page.getByText(/empieza en/)).toHaveCount(0);
 });
 
-test('salir a Inicio durante una grabación conserva la captura y explica cómo salir', async ({page}) => {
-  // Exercise the real controller and route guard without using a real microphone.
+test('el MVP conduce reuniones sin ofrecer captura ni pedir micrófono', async ({page}) => {
   await page.evaluate(() => {
-    const track = new EventTarget();
-    track.stop = () => { window.__recordingTrackStopped = true; };
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {configurable: true, value: async () => ({getTracks: () => [track], getAudioTracks: () => [track]})});
-    window.MediaRecorder = class {
-      static isTypeSupported() { return true; }
-      state = 'inactive';
-      start() { this.state = 'recording'; }
-      pause() { this.state = 'paused'; }
-      resume() { this.state = 'recording'; }
-      stop() {
-        this.state = 'inactive';
-        this.ondataavailable?.({data: new Blob(['test-audio'], {type: 'audio/webm'})});
-        queueMicrotask(() => this.onstop?.());
-      }
-    };
+    window.__microphoneRequests = 0;
+    navigator.mediaDevices.getUserMedia = async () => { window.__microphoneRequests++; throw Error('Unexpected microphone request'); };
   });
   await createMeeting(page);
   await page.getByRole('button', {name: 'Listo', exact: true}).click();
   await page.getByRole('button', {name: 'Iniciar reunión'}).first().click();
-  await page.getByRole('button', {name: 'Grabar', exact: true}).click();
-  await expect(page.getByRole('button', {name: 'Detener y guardar grabación'})).toBeVisible();
-  await page.evaluate(() => { location.hash = '#home'; });
-  await expect(page).toHaveURL(/#planner-agenda$/);
-  await expect(page.getByText('Detén y guarda la grabación antes de salir de Reuniones.')).toBeVisible();
-  expect(await page.evaluate(() => Boolean(window.__recordingTrackStopped))).toBe(false);
-  await page.getByRole('button', {name: 'Detener y guardar grabación'}).click();
-  await expect.poll(() => page.evaluate(() => Boolean(window.__recordingTrackStopped))).toBe(true);
+  await expect(page.getByRole('button', {name: 'Grabar', exact: true})).toHaveCount(0);
+  await expect(page.getByText(/Toca Grabar/)).toHaveCount(0);
+  await page.getByRole('button', {name: 'Pausar reunión'}).click();
+  await page.getByRole('button', {name: 'Reanudar reunión'}).click();
+  await page.getByRole('button', {name: 'Más acciones de la reunión'}).click();
+  await page.getByRole('menuitem', {name: 'Terminar reunión'}).click();
+  const dialog = page.getByRole('dialog', {name: '¿Terminar la reunión?'});
+  await expect(dialog).not.toContainText(/grabaci[oó]n/);
+  await dialog.getByRole('button', {name: 'Terminar reunión'}).click();
+  await expect(page.getByRole('button', {name: 'Guardar acta en Documentos'})).toBeVisible();
+  await expect(page.getByText('Grabaciones', {exact: true})).toHaveCount(0);
+  await expect(page.getByText('Sin audio', {exact: true})).toHaveCount(0);
+  expect(await page.evaluate(() => window.__microphoneRequests)).toBe(0);
 });
 
 test('hora de inicio, término y facilitador se guardan y sobreviven a recargar', async ({page}) => {

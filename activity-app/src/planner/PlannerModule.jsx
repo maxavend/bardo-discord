@@ -111,6 +111,8 @@ import {
   recoverInProgressRecordings,
 } from './recording-storage.js';
 
+import {RECORDING_CAPTURE_ENABLED} from './recording-policy.js';
+
 const REMOTE_POLL_MS = 4000;
 
 function timeOf(iso) {
@@ -415,6 +417,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   };
 
   useEffect(() => {
+    if (!RECORDING_CAPTURE_ENABLED) return undefined;
     const controller = new RecordingController({
       onStatusChange: setRecordingStatus,
       onError: (error) => toast(describeMicrophoneError(error, {isMobile: isMobileUserAgent()})),
@@ -786,7 +789,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   // Recording context is always resolved from the runner. The user never has to
   // pick a Point that Bardo already knows is active.
   const handleStartRecording = useCallback(async () => {
-    if (!recordingControllerRef.current) return;
+    if (!RECORDING_CAPTURE_ENABLED || !recordingControllerRef.current) return;
     const currentSession = sessionStateRef.current;
     const currentPlanner = plannerStateRef.current;
     const block = getActiveBlock(currentPlanner, currentSession);
@@ -812,7 +815,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   }, []);
 
   const handleFinalizeRecording = useCallback(async () => {
-    if (!recordingControllerRef.current) return;
+    if (!RECORDING_CAPTURE_ENABLED || !recordingControllerRef.current) return;
     recordingPausedBySessionRef.current = false;
     const entity = await recordingControllerRef.current.finalizeRecording();
     if (entity) setSaveRecordingModal({isOpen: true, recordingEntity: entity});
@@ -1509,13 +1512,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         blocks={plannerState.blocks}
       />
 
-      <RecordingSaveModal
+      {RECORDING_CAPTURE_ENABLED && <RecordingSaveModal
         isOpen={saveRecordingModal.isOpen}
         recordingEntity={saveRecordingModal.recordingEntity}
         onClose={handleSaveRecordingConfirmed}
         onSave={handleSaveRecordingConfirmed}
         onDiscard={handleDiscardRecording}
-      />
+      />}
 
       <FinishMeetingDialog
         isOpen={interruptModal.isOpen}

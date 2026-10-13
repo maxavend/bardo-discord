@@ -28,6 +28,7 @@ import { SESSION_STATUS, getElapsedSessionMs } from './session-runner.js';
 import { getPlannedSchedule, wasMeetingLeftOpen } from './time-engine.js';
 import { formatMsToClock, getAssistantContextDetails, getLiveBlockClock } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
+import { RECORDING_CAPTURE_ENABLED } from './recording-policy.js';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
 
 /**
@@ -134,8 +135,8 @@ export function SessionDock({
         </div>
 
         {/* Grabación + pausa: dos mitades iguales en móvil, grupo compacto en escritorio */}
-        <div className="col-span-2 row-start-2 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:order-2">
-          {isRecording || isRecPaused ? (
+        <div className={`col-span-2 row-start-2 grid ${RECORDING_CAPTURE_ENABLED ? 'grid-cols-2' : 'grid-cols-1'} gap-2 sm:flex sm:items-center sm:order-2`}>
+          {RECORDING_CAPTURE_ENABLED && (isRecording || isRecPaused ? (
             <div
               className="h-9 sm:h-8 flex items-center justify-between gap-1.5 pl-3 pr-1 rounded-full bg-destructive/10 border border-destructive/20 text-destructive min-w-0"
               title={recordingLabel ? `Grabando: ${recordingLabel}` : undefined}
@@ -184,7 +185,7 @@ export function SessionDock({
               <MicIcon className="size-3.5 text-destructive shrink-0" />
               <span>Grabar</span>
             </Button>
-          )}
+          ))}
 
           <Button
             variant="secondary"
@@ -278,7 +279,7 @@ export function SessionDock({
         </div>
       )}
 
-      {!leftOpen && details.showInitialRecordingPrompt && !isRecording && !isRecPaused && (
+      {RECORDING_CAPTURE_ENABLED && !leftOpen && details.showInitialRecordingPrompt && !isRecording && !isRecPaused && (
         // A hint, not a second "Grabar": the dock right above already has the button.
         <div role="note" className="w-full max-w-4xl mx-auto mt-2 flex items-center gap-2 rounded-2xl border border-border/70 bg-card/95 backdrop-blur-md pl-3 pr-1.5 py-1.5 text-xs shadow-2xs animate-in fade-in duration-200">
           <MicIcon className="size-3.5 text-destructive shrink-0" />

@@ -42,8 +42,8 @@ export function FinishMeetingDialog({
           <DialogDescription className="text-left text-xs leading-relaxed pt-2">
             {leftOpen
               ? <>La reunión quedó abierta {formatSpokenDuration(elapsedMinutes)}, así que el resumen no mostrará ese tiempo. Se guardarán</>
-              : <>Se guardarán <strong className="text-foreground font-semibold">{formatSpokenDuration(elapsedMinutes)}</strong> de reunión,</>}{' '}
-            <strong className="text-foreground font-semibold">{recordingsCount} {recordingsCount === 1 ? 'grabación' : 'grabaciones'}</strong> y{' '}
+              : <>Se guardarán <strong className="text-foreground font-semibold">{formatSpokenDuration(elapsedMinutes)}</strong> de reunión y</>}{' '}
+            {recordingsCount > 0 && <><strong className="text-foreground font-semibold">{recordingsCount} {recordingsCount === 1 ? 'grabación' : 'grabaciones'}</strong> y{' '}</>}
             <strong className="text-foreground font-semibold">{decisionsCount} {decisionsCount === 1 ? 'acuerdo' : 'acuerdos'}</strong>.
             {hasActiveRecording && (
               <> La grabación en curso de <strong className="text-foreground font-semibold">“{activeRecordingName || 'este tema'}”</strong> se detendrá y se guardará.</>
