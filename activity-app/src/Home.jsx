@@ -58,9 +58,10 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
           <p>No pudimos actualizar {errors.join(', ')}. El contenido disponible puede estar incompleto.</p>
           <Button variant="secondary" size="sm" onClick={() => location.reload()}>Reintentar conexión</Button>
         </div>}
-        {window.__BARDO_UNOWNED_LOCAL_DATA__ && <div className="home-notice" role="status">
-          <p>Hay datos locales de una versión anterior conservados en este dispositivo. No se cargan automáticamente porque no podemos verificar a qué cuenta pertenecen. Conserva los datos del navegador y solicita ayuda para recuperarlos.</p>
-        </div>}
+        {window.__BARDO_UNOWNED_LOCAL_DATA__ && <details className="home-notice home-legacy-notice">
+          <summary>Hay copias antiguas guardadas en este dispositivo</summary>
+          <p>No sabemos a qué cuenta pertenecen, así que no las hemos añadido a la tuya. Si echas de menos algún contenido, pide ayuda para recuperarlo antes de borrar los datos del navegador.</p>
+        </details>}
 
         {draft && <section className="library-section continue-section" aria-labelledby="home-draft">
           <h2 id="home-draft" className="section-title">Borrador pendiente</h2>
@@ -75,7 +76,6 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
             <h2 id="home-docs" className="section-title"><FileText width={18} height={18} aria-hidden="true" /> Documentos</h2>
             <Button variant="secondary" size="sm" onClick={onNewDoc}><Plus aria-hidden="true" /> Crear documento</Button>
           </div>
-          <p className="home-description">Escribe, importa y comparte el trabajo de tu canal.</p>
           {recentDocs.length ? <ul className="home-list" aria-label="Documentos recientes">
             {recentDocs.map(doc => <li key={doc.id}>
               <a className="home-item" href={`#doc-${encodeURIComponent(doc.id)}`} onClick={event => {
@@ -94,7 +94,6 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
             <h2 id="home-meetings" className="section-title"><Calendar width={18} height={18} aria-hidden="true" /> Reuniones</h2>
             <a className={buttonVariants({variant: 'secondary', size: 'sm'})} href="#planner-new"><Plus aria-hidden="true" /> Nueva reunión</a>
           </div>
-          <p className="home-description">Prepara la agenda, reúne al equipo y conserva los acuerdos.</p>
           {meetings.length ? <ul className="home-list" aria-label="Reuniones para continuar">
             {meetings.map(meeting => <li key={meeting.id || meeting.eventId}>
               <a className="home-item" href={`#planner-session:${encodeURIComponent(meeting.id || meeting.eventId)}`}>

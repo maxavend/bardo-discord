@@ -382,16 +382,20 @@ export function buildDocsListPayload({ documents = [], channelName = null }) {
 
 export const HELP_TEXT = [
   '**Abrir**',
-  '`/bardo` — abre Inicio de Bardo en este canal (elige sección: documentos, reuniones o nuevo documento).',
+  '`/bardo` — abre siempre Inicio de Bardo en este canal.',
   '',
   '**Documentos**',
-  '`/doc-new` — crea un documento nuevo (título opcional).',
+  '`/doc-new` — crea un documento y muestra un botón para editarlo (título opcional).',
   '`/doc-upload` — sube un Markdown, TXT, PDF o Word.',
   '`/docs` — lista los documentos del canal con botones para abrirlos.',
   '',
   '**Reuniones**',
   '`/reu-new` — agenda una reunión (título, fecha AAAA-MM-DD, hora HH:MM, duración, descripción).',
   '`/reus` — muestra las reuniones programadas, en curso y terminadas.',
+  '',
+  '**Ayuda**',
+  '`/ayuda` — muestra esta guía.',
+  '`/upload-docs` — alias de /doc-upload; hace lo mismo.',
 ].join('\n');
 
 export function buildHelpPayload() {
@@ -404,7 +408,7 @@ export function buildHelpPayload() {
         new ButtonBuilder()
           .setLabel('Abrir Bardo')
           .setStyle(ButtonStyle.Primary)
-          .setCustomId(`${BARDO_OPEN_PREFIX}docs`),
+          .setCustomId(`${BARDO_OPEN_PREFIX}home`),
       ),
     );
 

@@ -32,7 +32,7 @@ const legacyUploadCommand = new SlashCommandBuilder()
 
 const docNewCommand = new SlashCommandBuilder()
   .setName('doc-new')
-  .setDescription('Crea un documento nuevo en Documentos de este canal.')
+  .setDescription('Crea un documento en este canal y muestra un botón para editarlo.')
   .addStringOption(titleOption('Título opcional para el nuevo documento.'));
 
 const reuNewCommand = new SlashCommandBuilder()
@@ -72,17 +72,7 @@ const reusCommand = new SlashCommandBuilder()
 
 const bardoCommand = new SlashCommandBuilder()
   .setName('bardo')
-  .setDescription('Abre Bardo en este canal.')
-  .addStringOption((option) =>
-    option
-      .setName('seccion')
-      .setDescription('Dónde abrir Bardo. Por defecto, Inicio.')
-      .addChoices(
-        { name: 'Documentos', value: 'docs' },
-        { name: 'Reuniones', value: 'reuniones' },
-        { name: 'Nuevo documento', value: 'nuevo' },
-      ),
-  );
+  .setDescription('Abre el Inicio de Bardo en este canal.');
 
 const docsCommand = new SlashCommandBuilder()
   .setName('docs')
@@ -90,7 +80,7 @@ const docsCommand = new SlashCommandBuilder()
 
 const helpCommand = new SlashCommandBuilder()
   .setName('ayuda')
-  .setDescription('Muestra todos los comandos de Bardo.');
+  .setDescription('Explica qué hace cada comando y permite abrir Inicio.');
 
 export const allCommands = [
   bardoCommand,

@@ -79,3 +79,27 @@ test('una URL dañada recupera Inicio sin bloquear la aplicación', async ({page
   await expect(page.getByRole('heading', {name: 'Tu espacio en Bardo'})).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('Inicio usa títulos naturales, acciones alineadas y un aviso antiguo desplegable', async ({page}) => {
+  await page.addInitScript(() => {window.__BARDO_UNOWNED_LOCAL_DATA__ = true;});
+  await seedDocs(page, [makeDoc({title: 'Documento del canal'})], {hash: '#home'});
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    document.documentElement.style.scrollbarGutter = 'stable';
+  });
+  await expect(page.getByText('Escribe, importa y comparte el trabajo de tu canal.')).toHaveCount(0);
+  await expect(page.getByText('Prepara la agenda, reúne al equipo y conserva los acuerdos.')).toHaveCount(0);
+  const headings = page.locator('.home-section-heading');
+  for (const heading of await headings.all()) {
+    await expect(heading.locator('h2')).toHaveCSS('text-transform', 'none');
+    const [title, action] = await Promise.all([heading.locator('h2').boundingBox(), heading.locator('button, a').boundingBox()]);
+    expect(Math.abs(title.y + title.height / 2 - action.y - action.height / 2)).toBeLessThanOrEqual(1);
+  }
+  const notice = page.locator('.home-legacy-notice');
+  await expect(notice.locator('p')).toBeHidden();
+  await notice.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(notice.locator('p')).toBeVisible();
+  await expect(notice).toContainText('No sabemos a qué cuenta pertenecen');
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+});

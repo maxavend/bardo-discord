@@ -21,11 +21,15 @@ export function resolveClientId() {
 
 export function launchCustomId(sdk) {
   const params = new URLSearchParams(window.location.search);
-  return sdk?.customId
-    || params.get('custom_id')
-    || params.get('document')
-    || params.get('id')
-    || null;
+  // Only Bardo component IDs describe a document/section. Discord may pass
+  // other custom identifiers when opening from a command or app launcher.
+  const component = [params.get('custom_id'), sdk?.customId]
+    .find(value => typeof value === 'string' && value.startsWith('bardo:open:'));
+  if (component) return component;
+  const document = params.get('document')?.trim();
+  if (document) return document.startsWith('bardo:open:') ? document : `bardo:open:${document}`;
+  const legacyId = params.get('id')?.trim();
+  return /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(legacyId || '') ? `bardo:open:${legacyId}` : null;
 }
 
 export function isEmbeddedActivity() {

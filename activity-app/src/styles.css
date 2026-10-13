@@ -493,11 +493,15 @@ button { font-size: 14px; }
 .library-header { width: 100%; margin: 0; }
 .home-intro { padding-block: 28px 8px; }
 .home-intro h1 { font-size: 24px; font-weight: 700; line-height: 1.3; text-wrap: balance; }
-.home-context, .home-description, .home-empty { color: var(--muted-foreground); line-height: 1.5; overflow-wrap: anywhere; }
+.home-context, .home-empty { color: var(--muted-foreground); line-height: 1.5; overflow-wrap: anywhere; }
 .home-context { margin-top: 8px; font-size: 14px; }
-.home-description { margin-block: 4px 16px; font-size: 14px; }
 .home-empty { margin-block: 16px; }
-.home-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.home-section-heading { margin-bottom: 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.home .section-title { text-transform: none; letter-spacing: normal; }
+.home-notice.home-legacy-notice { display: block; font-size: 14px; color: var(--muted-foreground); }
+.home-legacy-notice summary { cursor: pointer; border-radius: var(--radius); }
+.home-legacy-notice summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.home-legacy-notice p { margin-top: 12px; line-height: 1.5; }
 .home-section-heading .section-title { display: flex; align-items: center; gap: 8px; margin: 0; }
 .home-list { list-style: none; padding: 0; margin-block: 0 8px; }
 .home-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px; border-bottom: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; }
