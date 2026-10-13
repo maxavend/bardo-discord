@@ -273,6 +273,7 @@ export function BardoSlashMenu() {
         style: {maxHeight: 'var(--slash-menu-height)'},
       }}
       style={{
+        position: 'fixed',
         top: `${coords.top}px`,
         left: `${Math.max(8, Math.min(coords.left, window.innerWidth - 300))}px`,
         maxWidth: 'calc(100vw - 16px)',
