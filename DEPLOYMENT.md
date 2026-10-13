@@ -2,6 +2,21 @@
 
 
 
+## Recuperación fuera de Inicio — 13 de octubre de 2026, 14:02 Chile
+
+- Código: `bbf6f0c`. Worker activo al 100%: `8e788332-f3ec-4f21-a072-3e71cd063278`.
+- Retirado el aviso de copias antiguas de Inicio y sus estilos. Las indicaciones están en `/ayuda` → «Recuperar contenido anterior», dentro de la respuesta privada existente.
+- Sin cambios en almacenamiento, separación entre cuentas ni sincronización: las copias se conservan; la recuperación sigue siendo asistida, no automática.
+- Validación: lint/tipos/build, 396 unitarias (incluida conservación exacta de copias anteriores y aislamiento de cuentas), 12 E2E de Inicio en móvil y escritorio. HTML y ocho assets publicados verificados; APIs protegidas responden 401 sin sesión. Sin prueba autenticada dentro del cliente real de Discord.
+- Checkpoint Git: `checkpoint/pre-home-recovery-2026-10-13` (`6fee178`). Registro local: `.wrangler/checkpoints/home-recovery-2026-10-13/`.
+- Para probar: cerrar y reabrir `/bardo`; Inicio ya no muestra el aviso. Ejecutar `/ayuda` para consultar las indicaciones de recuperación. No fue necesario cambiar el registro de comandos.
+
+Rollback sin modificar datos:
+
+```sh
+node node_modules/wrangler/bin/wrangler.js rollback ab1ac4f9-5351-402c-9cf6-80e770cd124f --message 'Restaurar checkpoint previo a retirar aviso de Inicio' --yes
+```
+
 ## Inicio y comandos — 13 de octubre de 2026, 16:54 UTC
 
 - Código desplegado: `a994ad7`.
