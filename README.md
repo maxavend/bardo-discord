@@ -2,14 +2,14 @@
 
 **Documentos y reuniones, sin salir de Discord.**
 
-Bardo convierte un canal de Discord en un espacio de trabajo embebido para **crear, importar, leer y compartir documentación**, además de **planificar y conducir reuniones con agenda, tiempos, acuerdos y grabaciones**.
+Bardo convierte un canal de Discord en un espacio de trabajo embebido para **crear, importar, leer y compartir documentación**, además de **planificar y conducir reuniones con agenda, tiempos y acuerdos**.
 
 Todo ocurre dentro de una **Discord Activity** y se ejecuta sobre una arquitectura serverless con Cloudflare Workers y D1. No requiere un bot conectado permanentemente al Gateway ni un proceso Node ejecutándose 24/7.
 
 Bardo abre en **Inicio**, con el contexto del canal, documentos recientes, borradores pendientes y reuniones para continuar. Desde allí se accede a dos espacios principales:
 
 - **Docs** — documentación compartida, editor enriquecido, biblioteca y exportación.
-- **Reuniones** — planificación, agenda en vivo, control de tiempos, acuerdos, grabaciones y recap.
+- **Reuniones** — planificación, agenda en vivo, control de tiempos, acuerdos y recap, con descarga de audios anteriores.
 
 La [guía de aceptación](UAT.md) describe los cinco recorridos de prueba, los requisitos de Discord y la recuperación de datos locales anteriores. `/bardo` abre Inicio; los comandos de cada módulo mantienen sus destinos directos.
 
@@ -209,32 +209,15 @@ Durante la reunión, Bardo permite:
 - reanudar una reunión interrumpida;
 - finalizar la sesión.
 
-Bardo mantiene el contexto del bloque y del punto que están activos y utiliza esa información para relacionar acuerdos y grabaciones con el momento correcto de la agenda.
+Bardo mantiene el contexto del bloque y del punto que están activos y utiliza esa información para relacionar acuerdos con el momento correcto de la agenda.
 
 Cuando un bloque se acerca a su límite, Bardo puede advertir que quedan cinco minutos.
 
-### Grabaciones
+### Audios anteriores
 
-Durante una sesión puedes grabar audio directamente desde la Activity.
+El MVP no permite iniciar nuevas grabaciones ni solicita acceso al micrófono. Los audios de versiones anteriores se conservan en **IndexedDB** del dispositivo original y se pueden reproducir y descargar desde el resumen de la reunión, mediante **Opciones de la grabación → Descargar audio**.
 
-Bardo asocia automáticamente cada grabación con el bloque y, cuando corresponde, con el punto de agenda activo.
-
-Las grabaciones pueden:
-
-- iniciarse;
-- pausarse;
-- reanudarse;
-- finalizarse;
-- guardarse;
-- descartarse;
-- reproducirse;
-- navegarse mediante una barra de progreso;
-- renombrarse;
-- eliminarse.
-
-También se muestran datos técnicos como duración, formato, tamaño y número de segmentos.
-
-El binario de audio se persiste actualmente en **IndexedDB** del navegador para permitir recuperarlo al volver a abrir la sesión desde el mismo entorno.
+También se recuperan fragmentos de grabaciones interrumpidas anteriores y se conservan los audios de temas o bloques eliminados. Para recuperar otro contenido antiguo, consulta `/ayuda` → **Recuperar contenido anterior** antes de borrar datos del navegador o de Discord.
 
 ### Acuerdos y decisiones
 
@@ -295,13 +278,13 @@ Bardo registra actualmente los siguientes comandos:
 
 | Comando | Función |
 | --- | --- |
-| `/bardo` | Abre Bardo en el canal. Opción `seccion`: Documentos (por defecto), Reuniones o Nuevo documento |
+| `/bardo` | Abre siempre Inicio de Bardo en el canal, sin opciones de sección |
 | `/doc-new` | Crea un nuevo documento; el `titulo` opcional queda precargado en el editor |
 | `/doc-upload` | Importa un Markdown, TXT, PDF o Word y lo comparte con el canal |
 | `/docs` | Lista los documentos del canal con botones para abrir los cinco más recientes |
 | `/reu-new` | Agenda una reunión (`fecha` AAAA-MM-DD y `hora` HH:MM se validan; sin fecha, hoy en America/Santiago) |
 | `/reus` | Muestra las reuniones programadas, en curso y pasadas del canal |
-| `/ayuda` | Muestra todos los comandos (mensaje privado) |
+| `/ayuda` | Muestra los comandos y las indicaciones de recuperación de contenido anterior (mensaje privado) |
 | `/upload-docs` | Alias legado de `/doc-upload` |
 
 Los botones y `/bardo` guardan su destino durante 10 minutos, así la Activity abre la sección correcta aunque Discord móvil no envíe el `custom_id`. La zona horaria de `/reu-new` se puede cambiar con la variable `BARDO_TIME_ZONE`.

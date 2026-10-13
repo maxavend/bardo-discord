@@ -1,10 +1,10 @@
 # Bardo — aceptación de producto
 
-**READY_FOR_UAT — implementación terminada y lista para aceptación humana.**
+**Versión estable v0.5.0 — cierre del MVP autorizado por el usuario el 13 de octubre de 2026.**
 
 Actualización del 13 de octubre de 2026: desplegada por autorización del usuario en el Worker habitual de Discord. Consulta [DEPLOYMENT.md](DEPLOYMENT.md) para abrirla y recuperar el checkpoint.
 
-Rama: `codex/product-completion-uat`. Base: `03a9a79`, con los cuatro commits del PR #22 sobre `main` (`8a02ebd`). El PR #22 estaba abierto y con un fallo de CI al consultarlo el 13 de octubre de 2026. No se hizo merge ni se publicó la rama.
+La release integra el trabajo de `codex/product-completion-uat`, incluidos los cuatro commits del PR #22 sobre `main` (`8a02ebd`). El registro definitivo de integración y despliegue está en [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Recorte MVP — captura de audio retirada
 
