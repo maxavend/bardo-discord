@@ -1,6 +1,26 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
 
+
+## MVP sin captura nueva — 13 de octubre de 2026
+
+- Código desplegado: `4f05b05954537c93e684edf2dbffe2a71f75aea8`.
+- Versión activa al 100%: `0d7e1d2a-d7d3-4bf3-9aca-436588c74eb3`. Fecha UTC: `2026-10-13T16:40:53.17526Z`.
+- Retirados Grabar, los controles de captura y su aviso; no se inicializa el capturador ni se solicita micrófono. Las reuniones sin audio omiten las estadísticas vacías. Se conservan los demás controles y estilos.
+- Audios anteriores: almacenamiento, recuperación de fragmentos y descargas preservados. El resumen incluye audios de temas o bloques eliminados, usando los mismos reproductores y menús existentes.
+- Validación: lint, tipos y build; 393 unitarias; 116 E2E generales aprobadas (44 omisiones condicionales por viewport); 8 pruebas adicionales de descarga exacta y recuperación, incluidas dos recargas y ausencia de solicitudes de micrófono. Revisión visual de reunión/resumen en 320 y 1440 px.
+- HTML y 8 assets verificados contra el build local. APIs protegidas: HTTP 401 sin sesión. La aceptación autenticada dentro de Discord queda para el usuario.
+- Checkpoint Git: `checkpoint/pre-mvp-no-capture-2026-10-13` (`9b86998786ecc5e134b10dab887e09d02104dd93`). Versión anterior: `f66be97d-232f-4d05-b840-87cfb697a05d`.
+- Registro local: `.wrangler/checkpoints/mvp-no-capture-2026-10-13/`. No se borraron audios ni metadatos; no hubo migraciones ni cambios de secretos.
+
+Para probar, cerrar la Activity y volver a abrir `/bardo`. Los audios anteriores se descargan desde el resumen → Opciones de la grabación → Descargar audio, en el dispositivo donde se guardaron.
+
+Rollback de código y assets, conservando datos:
+
+```sh
+node node_modules/wrangler/bin/wrangler.js rollback f66be97d-232f-4d05-b840-87cfb697a05d --message 'Restaurar checkpoint previo al recorte de captura' --yes
+```
+
 ## Revisión integral de interfaces — 13 de octubre, 15:51 UTC
 
 - Código desplegado: `56ce6c658d3aca4422dbc2ff63cc4e7a646d3d75`.
