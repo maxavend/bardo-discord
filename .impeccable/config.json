@@ -1,0 +1,38 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "activity-app/src/styles.css",
+          "activity-app/src/styles.source.css"
+        ],
+        "createdAt": "2026-10-13T17:03:56.147Z",
+        "reason": "Agent review: the only finding in these files is .doc-body blockquote, a neutral semantic quotation border inherited from ca7fc556; preserve existing Bardo identity per user instructions."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.36, 0.64, 1)",
+        "files": [
+          "activity-app/src/styles.css",
+          "activity-app/src/styles.source.css"
+        ],
+        "createdAt": "2026-10-13T17:03:56.232Z",
+        "reason": "Agent review: declaration-only legacy token --ease-bounce from 7f1922fc; no source consumers found, so no bounce animation occurs. Reassess if activated."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 3.85, 0.64, 1)",
+        "files": [
+          "activity-app/src/styles.css",
+          "activity-app/src/styles.source.css"
+        ],
+        "createdAt": "2026-10-13T17:03:56.309Z",
+        "reason": "Agent review: declaration-only legacy token --ease-bounce-strong from 7f1922fc; no source consumers found, so no bounce animation occurs. Reassess if activated."
+      }
+    ]
+  }
+}
