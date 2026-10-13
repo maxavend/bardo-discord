@@ -1,5 +1,22 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+
+## Revisión integral de interfaces — 13 de octubre, 15:51 UTC
+
+- Código desplegado: `56ce6c658d3aca4422dbc2ff63cc4e7a646d3d75`.
+- Versión activa al 100%: `f66be97d-232f-4d05-b840-87cfb697a05d`.
+- Dropdowns y modales con scrollbar y fade compartidos; alineaciones de reuniones, campos y avisos; descarga de audio y navegación al resumen corregidas. Detalles y evidencia en [UI-REVIEW.md](UI-REVIEW.md).
+- Validación: lint, tipos y build; 392 pruebas unitarias; recorridos E2E y captura real de audio sintético en cuatro tamaños; revisión visual en móvil, tablet y escritorio. Micrófono y autenticación del cliente real de Discord quedan para aceptación humana.
+- Checkpoint Git: `checkpoint/pre-interface-review-2026-10-13` (`715bd7d`). Worker anterior: `0332284f-0f37-404a-8a3d-89e8be9cdd19`.
+- Manifest, despliegues y comprobación de hashes: `.wrangler/checkpoints/interface-review-2026-10-13/`, excluido de Git. HTML y assets publicados coinciden con el build; las APIs protegidas responden 401 sin sesión.
+- No hubo migraciones D1 ni cambios de secretos. El rollback conserva los datos:
+
+```sh
+node node_modules/wrangler/bin/wrangler.js rollback 0332284f-0f37-404a-8a3d-89e8be9cdd19 --message 'Restaurar checkpoint previo a revisión de interfaces' --yes
+```
+
+Para probar: cerrar la Activity y volver a abrir `/bardo` en Discord. La grabación usa el micrófono y almacenamiento del dispositivo; no captura automáticamente el audio de todos los participantes del canal.
+
 ## Actualización de UI — 13 de octubre, 14:42 UTC
 
 - Código: `89d923893d2debc1a4982a47a6d1a21d042efe6a`.
