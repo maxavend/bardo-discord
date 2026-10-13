@@ -5,7 +5,11 @@ data/
 .DS_Store
 .wrangler/
 prototypes/docs-app/dist/
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/impeccable
+!.agents/skills/shadcn/
 skills-lock.json
 
 # Playwright
