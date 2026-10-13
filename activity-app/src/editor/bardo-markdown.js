@@ -637,8 +637,9 @@ function tableToMarkdown(el) {
 
 function codeBlockToMarkdown(el) {
   const codeEl = el.querySelector('code');
-  let text = (codeEl || el).textContent || '';
-  if (text.endsWith('\n')) text = text.slice(0, -1);
+  // The newline before the closing fence is separate from the code itself.
+  // Removing one here loses an intentional blank final line on every save.
+  const text = (codeEl || el).textContent || '';
   const lang = Array.from(codeEl?.classList || []).find(name => name.startsWith('language-'))?.slice(9) || '';
   const runs = text.match(/`{3,}/g) || [];
   const longest = runs.reduce((max, run) => Math.max(max, run.length), 2);
@@ -713,7 +714,7 @@ function blocksToMarkdown(nodes) {
         const summaryEl = elementChildren(el).find(child => child.tagName === 'SUMMARY');
         const summary = (summaryEl?.textContent || '').replace(/\s+/g, ' ').trim() || 'Detalles';
         const inner = blocksToMarkdown(Array.from(el.childNodes).filter(child => child !== summaryEl));
-        blocks.push(`<details>\n<summary>${escapeHtml(summary)}</summary>\n\n${inner}\n\n</details>`.replace(/\n{3,}/g, '\n\n'));
+        blocks.push(`<details>\n<summary>${escapeHtml(summary)}</summary>\n\n${inner}\n\n</details>`);
         break;
       }
       default: {
@@ -734,5 +735,7 @@ function blocksToMarkdown(nodes) {
 
 export function htmlToMarkdown(html = '') {
   const doc = new DOMParser().parseFromString(`<!doctype html><html><body>${html}</body></html>`, 'text/html');
-  return blocksToMarkdown(Array.from(doc.body.childNodes)).replace(/\n{3,}/g, '\n\n').trim();
+  // Block boundaries already use two newlines. Collapsing whitespace across
+  // the result would also mutate fenced code (including code inside details).
+  return blocksToMarkdown(Array.from(doc.body.childNodes)).trim();
 }

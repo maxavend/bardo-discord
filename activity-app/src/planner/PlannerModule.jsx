@@ -54,7 +54,7 @@ import {
   isPlannerRemoteEnabled,
   describeSyncError,
 } from './planner-sync.js';
-import {computePlannerTimes} from './time-engine.js';
+import {computePlannerTimes, getPlannedSchedule, wasMeetingLeftOpen} from './time-engine.js';
 import {
   removeBlock,
   removeTopic,
@@ -111,6 +111,8 @@ import {
   recoverInProgressRecordings,
 } from './recording-storage.js';
 
+import {RECORDING_CAPTURE_ENABLED} from './recording-policy.js';
+
 const REMOTE_POLL_MS = 4000;
 
 function timeOf(iso) {
@@ -133,6 +135,14 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
+  // Keep Home and a remounted module on the latest channel list, including
+  // meetings created/archived since the initial Discord bootstrap.
+  useEffect(() => {
+    window.__bardoChannelSessions = plannerEvents.map(event => ({...event,
+      id: event.id || event.eventId,
+      status: event.eventStatus === 'in_progress' ? 'live' : event.eventStatus,
+    }));
+  }, [plannerEvents]);
   const [selectedEventId, setSelectedEventId] = useState(() => plannerState.eventId || null);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
@@ -388,7 +398,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!entity) return null;
     const persisted = await persistRecordingBinary(entity);
     if (persisted.status === 'error') {
-      toast('No se pudo persistir el audio. Sigue disponible en esta pestaña, pero no recargues hasta resolverlo.');
+      toast('No se pudo guardar el audio en este dispositivo. Descárgalo desde sus opciones antes de salir o recargar.');
     } else {
       // Full audio saved: incremental chunks are no longer needed.
       recordingStorage.clearInProgress?.(persisted.id)?.catch?.(() => {});
@@ -401,10 +411,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!persisted) return;
     recordingPausedBySessionRef.current = false;
     commitSessionState(saveFinalizedRecording(sessionStateRef.current, persisted));
-    toast(`La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo grabado: ${formatMsToClock(persisted.durationMs || 0)}.`);
+    toast(persisted.status === 'saved'
+      ? `La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo grabado: ${formatMsToClock(persisted.durationMs || 0)}.`
+      : 'El micrófono dejó de responder. El audio sigue en esta pestaña: descárgalo antes de salir.');
   };
 
   useEffect(() => {
+    if (!RECORDING_CAPTURE_ENABLED) return undefined;
     const controller = new RecordingController({
       onStatusChange: setRecordingStatus,
       onError: (error) => toast(describeMicrophoneError(error, {isMobile: isMobileUserAgent()})),
@@ -416,6 +429,27 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     recordingControllerRef.current = controller;
     return () => controller.cleanup({clearContext: true});
   }, []);
+
+  useEffect(() => {
+    const previousGuard = window.__bardoBeforeNavigate;
+    const beforeNavigate = (nextRoute) => {
+      if (nextRoute?.type === 'planner') return true;
+      if (saveRecordingModal.isOpen) {
+        toast('Guarda o descarta la grabación antes de salir de Reuniones.');
+        return false;
+      }
+      const status = recordingControllerRef.current?.getStatus();
+      if ([RECORDING_STATUS.STARTING, RECORDING_STATUS.RECORDING, RECORDING_STATUS.PAUSED, RECORDING_STATUS.FINALIZING].includes(status) || transitionLockRef.current) {
+        toast('Detén y guarda la grabación antes de salir de Reuniones.');
+        return false;
+      }
+      return true;
+    };
+    window.__bardoBeforeNavigate = beforeNavigate;
+    return () => {
+      if (window.__bardoBeforeNavigate === beforeNavigate) window.__bardoBeforeNavigate = previousGuard;
+    };
+  }, [saveRecordingModal.isOpen]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -559,7 +593,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     const recording = await finalizeActiveRecording();
     if (recording) {
       commitSessionState(saveFinalizedRecording(sessionStateRef.current, recording));
-      toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
+      if (recording.status === 'saved') toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
     }
   }, [commitSessionState, finalizeActiveRecording]);
 
@@ -654,18 +688,18 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     }
 
     if (next.status === SESSION_STATUS.COMPLETED) {
-      setActiveTab('recap');
-      toast(recording ? `Reunión terminada. Se guardó la grabación “${recording.name}”.` : 'Reunión terminada. Este es el resumen.');
+      handleTabChange('recap');
+      if (recording?.status !== 'error') toast(recording ? `Reunión terminada. Se guardó la grabación “${recording.name}”.` : 'Reunión terminada. Este es el resumen.');
       return next;
     }
     const target = nextPoint?.title || nextBlock?.title || 'la reunión';
-    if (continued) {
+    if (continued && recording?.status !== 'error') {
       toast(`Se guardó “${recording?.name || 'la grabación'}” · sigue grabando en “${target}”`);
-    } else if (recording) {
+    } else if (recording?.status === 'saved') {
       toast(`Se guardó la grabación “${recording.name}” (${formatMsToClock(recording.durationMs)})`);
     }
     return next;
-  }), [commitSessionState, finalizeActiveRecording, persistCapturedRecording, runAtomicTransition]);
+  }), [commitSessionState, finalizeActiveRecording, handleTabChange, persistCapturedRecording, runAtomicTransition]);
 
   const handleAdvance = useCallback(async () => {
     const before = sessionStateRef.current;
@@ -755,7 +789,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   // Recording context is always resolved from the runner. The user never has to
   // pick a Point that Bardo already knows is active.
   const handleStartRecording = useCallback(async () => {
-    if (!recordingControllerRef.current) return;
+    if (!RECORDING_CAPTURE_ENABLED || !recordingControllerRef.current) return;
     const currentSession = sessionStateRef.current;
     const currentPlanner = plannerStateRef.current;
     const block = getActiveBlock(currentPlanner, currentSession);
@@ -781,7 +815,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   }, []);
 
   const handleFinalizeRecording = useCallback(async () => {
-    if (!recordingControllerRef.current) return;
+    if (!RECORDING_CAPTURE_ENABLED || !recordingControllerRef.current) return;
     recordingPausedBySessionRef.current = false;
     const entity = await recordingControllerRef.current.finalizeRecording();
     if (entity) setSaveRecordingModal({isOpen: true, recordingEntity: entity});
@@ -1142,8 +1176,17 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     } else if (initialTab === 'demo' && shouldLoadDemoFixture()) {
       handleLoadDemo();
       handleTabChange('agenda');
+    } else if (initialTab.startsWith('session:')) {
+      const targetId = initialTab.slice('session:'.length);
+      const current = plannerStateRef.current;
+      const event = current?.id === targetId ? current : plannerEvents.find(item => eventIdOf(item) === targetId);
+      if (event) void handleSelectEvent(event);
+      else {
+        toast('Esta reunión ya no está disponible en este canal.');
+        handleTabChange('home');
+      }
     }
-  }, [initialTab, handleCleanSession, handleLoadDemo, handleTabChange]);
+  }, [initialTab, handleCleanSession, handleLoadDemo, handleTabChange, handleSelectEvent, plannerEvents]);
 
   const isEditingRef = useRef(isEditing);
   isEditingRef.current = isEditing;
@@ -1345,6 +1388,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           plannerState={plannerState}
           onStartSession={handleStartSession}
           onDismiss={() => setDismissedUpcomingBanner(true)}
+          showStartAction={activeTab !== 'agenda'}
         />
       )}
 
@@ -1468,19 +1512,20 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         blocks={plannerState.blocks}
       />
 
-      <RecordingSaveModal
+      {RECORDING_CAPTURE_ENABLED && <RecordingSaveModal
         isOpen={saveRecordingModal.isOpen}
         recordingEntity={saveRecordingModal.recordingEntity}
         onClose={handleSaveRecordingConfirmed}
         onSave={handleSaveRecordingConfirmed}
         onDiscard={handleDiscardRecording}
-      />
+      />}
 
       <FinishMeetingDialog
         isOpen={interruptModal.isOpen}
         hasActiveRecording={recordingControllerRef.current?.isActive()}
         activeRecordingName={recordingContext?.recordingName}
         elapsedMinutes={elapsedMinutes}
+        leftOpen={wasMeetingLeftOpen(elapsedMinutes, getPlannedSchedule(plannerState).plannedMinutes)}
         recordingsCount={recordingsCount}
         decisionsCount={decisionsCount}
         pendingTemasCount={pendingTemasCount}

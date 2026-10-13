@@ -102,18 +102,21 @@ function ephemeral(content) {
  * Slash commands (and some mobile clients) don't forward a custom_id, so the
  * Activity reads this short-lived, one-shot intent on boot instead.
  */
-function launchActivityToTarget(env, ctx, interaction, target) {
+async function launchActivityToTarget(env, _ctx, interaction, target) {
   const userId = interaction.member?.user?.id || interaction.user?.id || null;
-  if (env.DB && userId && interaction.guild_id && target) {
-    const save = saveDocsLaunchIntent(env.DB, userId, interaction.guild_id, `${LAUNCH_TARGET_PREFIX}${target}`, interaction.channel_id)
-      .catch((error) => console.error('Error guardando el destino de Bardo:', error));
-    if (typeof ctx?.waitUntil === 'function') ctx.waitUntil(save);
+  if (!env.DB || !userId || !interaction.guild_id || !interaction.channel_id) {
+    return ephemeral('No pudimos preparar Bardo. Vuelve a intentarlo desde un canal del servidor.');
   }
-  // LAUNCH_ACTIVITY must be the initial response, inline, within 3 seconds.
+  try {
+    // Persist before Discord can boot the Activity and read the destination.
+    await saveDocsLaunchIntent(env.DB, userId, interaction.guild_id, `${LAUNCH_TARGET_PREFIX}${target}`, interaction.channel_id);
+  } catch (error) {
+    console.error('Error guardando el destino de Bardo:', error);
+    return ephemeral('No pudimos abrir Bardo. Vuelve a intentarlo en unos segundos.');
+  }
   return jsonResponse({ type: 12 });
 }
 
-const BARDO_SECTION_TARGETS = { docs: 'docs', reuniones: 'planner', nuevo: 'new-doc' };
 const MAX_ERROR_DETAIL = 300;
 
 function jsonResponse(data, status = 200, extraHeaders = {}) {
@@ -511,8 +514,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
     if (!interaction.guild_id || !interaction.channel_id) {
       return ephemeral('Bardo se abre dentro de un canal de un servidor de Discord.');
     }
-    const seccion = (interaction.data?.options || []).find((opt) => opt.name === 'seccion')?.value;
-    return launchActivityToTarget(env, ctx, interaction, BARDO_SECTION_TARGETS[seccion] || 'docs');
+    return launchActivityToTarget(env, ctx, interaction, 'home');
   }
 
   if (commandName === 'docs') {
@@ -613,7 +615,7 @@ async function handleComponentInteraction(interaction, env, ctx) {
 
   // Non-document routes like planner, new document, the library, etc.
   const target = customId.slice(BARDO_OPEN_PREFIX.length);
-  const isSpecialTarget = target === 'docs' || target.startsWith('planner') || target.startsWith('new-doc');
+  const isSpecialTarget = target === 'home' || target === 'docs' || target.startsWith('planner') || target.startsWith('new-doc');
 
   if (isSpecialTarget) {
     // Saved as a launch intent too: some Discord mobile clients don't forward

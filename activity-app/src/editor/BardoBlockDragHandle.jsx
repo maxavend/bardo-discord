@@ -59,8 +59,10 @@ export function BardoBlockDragHandle({ shellRef, bodyRef }) {
   }, [getDirectBlock, shellRef]);
 
   const handleEditorDrop = useCallback((e) => {
-    e.preventDefault();
     const dragged = draggedBlockRef.current;
+    // External text/HTML drops belong to Plate's clipboard pipeline.
+    if (!dragged) return;
+    e.preventDefault();
     const targetInfo = dropTargetRef.current;
 
     if (dragged && targetInfo?.block && dragged !== targetInfo.block && bodyRef.current && editor) {

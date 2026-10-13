@@ -1,5 +1,7 @@
+import { OverlayScrollArea } from "@/components/ui/scroll-area";
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -51,7 +53,6 @@ import {
   Archive,
   ArrowDownToLine,
   ArrowUpRightFromSquare,
-  ArrowUturnCwRight,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -70,16 +71,18 @@ import {
   TrashBin,
   TriangleExclamation,
   Xmark,
+  PaperPlane,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {htmlToMarkdown, markdownToHtml} from './editor/bardo-markdown.js';
-import {DOCS_KEYS, getDocsStorageScope, scopedDocsKey} from './docs-storage.js';
+import {DOCS_KEYS, scopedDocsKey} from './docs-storage.js';
 import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSnapshot} from './docs-text.js';
 import {copyTextToClipboard} from './docs-clipboard.js';
 import {openExternalUrl} from './discord-links.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
 import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
+import {Home} from './Home.jsx';
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
 // Claves por servidor + canal (ver docs-storage.js): nada de un canal aparece en otro.
@@ -111,16 +114,19 @@ const SHARE_CARD_HINT = 'Se publicará una tarjeta con una vista previa y un bot
 
 
 function parseRoute() {
-  const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
+  let raw;
+  try { raw = decodeURIComponent(location.hash.replace(/^#/, '')); }
+  catch { return {type: 'home', key: 'home'}; }
+  if (!raw || raw === 'home') return {type: 'home', key: 'home'};
   if (raw === 'planner' || raw.startsWith('planner-')) {
     const tab = raw.replace(/^planner-?/, '') || 'home';
     return {type: 'planner', tab: tab === 'planner' ? 'home' : tab, key: raw};
   }
-  if (!raw || raw === 'docs') return {type: 'library', key: 'library'};
+  if (raw === 'docs' || raw === 'library') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
   if (raw.startsWith('edit-')) return {type: 'edit', id: raw.slice(5), key: raw};
   if (raw.startsWith('doc-')) return {type: 'doc', id: raw.slice(4), key: raw};
-  return {type: 'library', key: 'library'};
+  return {type: 'home', key: 'home'};
 }
 
 function stripHtml(value = '') {
@@ -311,7 +317,7 @@ function warnStorageFull() {
   if (storageWarningShown) return;
   storageWarningShown = true;
   toast(window.__BARDO_PRODUCTION__
-    ? 'El almacenamiento local está lleno. Tus cambios se siguen guardando en Bardo, pero no queda copia sin conexión.'
+    ? 'No pudimos guardar la copia local. Mantén Bardo abierto hasta confirmar el guardado o copia tu contenido.'
     : 'El almacenamiento local está lleno. Exporta o elimina documentos para no perder cambios.');
 }
 
@@ -327,13 +333,11 @@ function saveStore(store) {
 }
 
 /**
- * Copia de seguridad de la edición en curso. Primero la de este canal; una
- * copia antigua sin ámbito solo se aplica si su documento existe en este canal
- * (applyJournal lo comprueba), así que nunca trae contenido de otro canal.
+ * Copia de seguridad de esta cuenta y canal. Las copias antiguas sin dueño
+ * permanecen intactas, pero nunca se aplican a una sesión autenticada distinta.
  */
 function readJournal() {
   const keys = [journalKey()];
-  if (getDocsStorageScope()) keys.push(DOCS_KEYS.journal);
   for (const key of keys) {
     try {
       const journal = JSON.parse(localStorage.getItem(key) || 'null');
@@ -346,8 +350,10 @@ function readJournal() {
 function writeJournal(entry) {
   try {
     localStorage.setItem(journalKey(), JSON.stringify(entry));
+    return true;
   } catch (error) {
     console.warn('Bardo Docs: no se pudo escribir la copia de seguridad', error);
+    return false;
   }
 }
 
@@ -381,13 +387,18 @@ function applyJournal(store) {
 function saveDraft(snapshot) {
   try {
     localStorage.setItem(draftKey(), JSON.stringify(snapshot));
+    return true;
   } catch (error) {
     console.warn('Bardo Docs: no se pudo guardar el borrador', error);
     warnStorageFull();
+    return false;
   }
 }
 
-function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
+// `context="reader"`: the reader header already shows "Editar" (primary) and
+// "Compartir en el canal" (icon button), so the menu doesn't repeat them.
+function DocActionMenu({doc, onAction, triggerLabel = 'Acciones', context = 'row'}) {
+  const inReader = context === 'reader';
   const blocked = isImportBlocked(doc);
   const isProduction = Boolean(window.__BARDO_PRODUCTION__);
   return (
@@ -405,16 +416,20 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
         }
       />
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => onAction('open', doc)}>
-          <Eye width={15} height={15} className="text-muted-foreground" />
-          <span>Abrir</span>
-        </DropdownMenuItem>
+        {!inReader && (
+          <DropdownMenuItem onClick={() => onAction('open', doc)}>
+            <Eye width={15} height={15} className="text-muted-foreground" />
+            <span>Abrir</span>
+          </DropdownMenuItem>
+        )}
         {!blocked && (
           <>
-            <DropdownMenuItem onClick={() => onAction('edit', doc)}>
-              <Pencil width={15} height={15} className="text-muted-foreground" />
-              <span>Editar</span>
-            </DropdownMenuItem>
+            {!inReader && (
+              <DropdownMenuItem onClick={() => onAction('edit', doc)}>
+                <Pencil width={15} height={15} className="text-muted-foreground" />
+                <span>Editar</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={() => onAction('duplicate', doc)}>
               <Copy width={15} height={15} className="text-muted-foreground" />
               <span>Duplicar</span>
@@ -423,10 +438,12 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Acciones'}) {
               <FileText width={15} height={15} className="text-muted-foreground" />
               <span>Copiar texto</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAction('publish', doc)}>
-              <ArrowUturnCwRight width={15} height={15} className="text-muted-foreground" />
-              <span>Compartir en el canal</span>
-            </DropdownMenuItem>
+            {!inReader && (
+              <DropdownMenuItem onClick={() => onAction('publish', doc)}>
+                <PaperPlane width={15} height={15} className="text-muted-foreground" />
+                <span>Compartir en el canal</span>
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuSeparator />
 
@@ -559,7 +576,8 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
           </div>
         ) : !isArchived ? (
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button variant="default" size="sm" onClick={onNewDoc}>
+            {/* The header's "Nuevo" is this view's single primary action. */}
+            <Button variant="secondary" size="sm" onClick={onNewDoc}>
               <Plus width={16} height={16} /> Crear documento
             </Button>
             <Button variant="secondary" size="sm" onClick={onUpload}>
@@ -613,30 +631,34 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
+  const isHome = route.type === 'home';
 
   return (
     <DocsHeader
-      className={isLibrary || isPlanner ? 'library-header' : ''}
+      className={isHome || isLibrary || isPlanner ? 'library-header' : ''}
       actions={isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
-          {route.tab === 'home' && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onPlannerNew}
-              className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-            >
-              <Plus width={14} height={14} /> Nueva reunión
-            </Button>
-          )}
+          {/* Same responsive pattern as the library: labels collapse to icons on narrow phones. */}
           <Button
             variant="secondary"
             size="sm"
             onClick={() => onNavigateModule?.('docs')}
-            className="h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+            aria-label="Documentos"
+            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <FileText width={14} height={14} /> Documentos
+            <FileText width={14} height={14} aria-hidden="true" /> <span className="header-label">Documentos</span>
           </Button>
+          {route.tab === 'home' && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onPlannerNew}
+              aria-label="Nueva reunión"
+              className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+            >
+              <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva reunión</span>
+            </Button>
+          )}
         </div>
       ) : isLibrary ? (
         <div key="library-actions" className="header-slot-enter flex items-center gap-2">
@@ -676,17 +698,22 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           </Button>
         </div>
       ) : doc ? (
-        <div key="document-actions" className="header-slot-enter flex items-center gap-2">
+        <div key="document-actions" className="header-slot-enter flex items-center gap-1">
           {!isImportBlocked(doc) && (
-            <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 font-medium text-xs flex items-center gap-1.5">
-              <Pencil width={14} height={14} /> Editar
-            </Button>
+            <>
+              <IconButton label="Compartir en el canal" onClick={() => onAction('publish', doc)}>
+                <PaperPlane width={16} height={16} />
+              </IconButton>
+              <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 ml-1 font-medium text-xs flex items-center gap-1.5">
+                <Pencil width={14} height={14} /> Editar
+              </Button>
+            </>
           )}
-          <DocActionMenu doc={doc} triggerLabel="Acciones del documento" onAction={onAction} />
+          <DocActionMenu doc={doc} context="reader" triggerLabel="Más acciones del documento" onAction={onAction} />
         </div>
       ) : null}
     >
-      {isPlanner ? (
+      {isHome ? <span className="topbar-title font-bold">Bardo</span> : isPlanner ? (
         route.tab && route.tab !== 'home' ? (
           <Button
             key="planner-back"
@@ -699,14 +726,14 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
             <ChevronLeft width={15} height={15} /> Volver
           </Button>
         ) : (
-          <span key="planner-brand" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
+          <a key="planner-brand" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
             <span>Bardo</span>
-          </span>
+          </a>
         )
       ) : isLibrary ? (
-        <span key="library-title" className="topbar-title header-slot-enter font-bold text-sm tracking-tight text-foreground">
+        <a key="library-title" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
           <span>Bardo</span>
-        </span>
+        </a>
       ) : (
         <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label="Volver a Documentos" className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">Documentos</span>
@@ -1172,14 +1199,14 @@ function TextPreviewModal({isOpen, doc, onCopy, onCancel}) {
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onCancel()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent scrollable={false} className="sm:max-w-2xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Texto del documento</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 py-2">
+        <OverlayScrollArea className="min-h-0 max-h-[calc(85dvh-12rem)]" contentClassName="py-2 pr-2">
           <pre className="markdown-preview-content" tabIndex="0" aria-label="Texto del documento">{text}</pre>
-        </div>
+        </OverlayScrollArea>
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <ChevronLeft width={15} height={15} /> Atrás
@@ -1382,13 +1409,16 @@ function App() {
     return window.scrollY - bodyTop;
   }, []);
 
-  const go = useCallback((hash, {preserveBody = false, restore = null, skipTransition = false} = {}) => {
+  const go = useCallback((hash, {preserveBody = false, restore = null, skipTransition = false, replace = false} = {}) => {
     scrollMemory.current.set(routeRef.current.key, window.scrollY);
     skipNextRouteAnimation.current = skipTransition;
     if (preserveBody) pendingRestore.current = {kind: 'body', target: hash.replace(/^#/, ''), offset: captureBodyOffset() ?? 0};
     else if (restore) pendingRestore.current = {kind: 'absolute', target: hash.replace(/^#/, ''), y: restore};
     else pendingRestore.current = {kind: 'absolute', target: hash.replace(/^#/, ''), y: 0};
-    if (location.hash === hash) setRoute(parseRoute());
+    if (replace) {
+      history.replaceState(null, '', hash);
+      setRoute(parseRoute());
+    } else if (location.hash === hash) setRoute(parseRoute());
     else location.hash = hash;
   }, [captureBodyOffset]);
 
@@ -1543,9 +1573,15 @@ function App() {
 
   useEffect(() => {
     const onHash = () => {
-      scrollMemory.current.set(routeRef.current.key, window.scrollY);
       const nextRoute = parseRoute();
-      if (nextRoute.type === 'library') {
+      if (window.__bardoBeforeNavigate?.(nextRoute) === false) {
+        const previous = routeRef.current;
+        const hash = previous.type === 'library' ? 'docs' : previous.key;
+        history.replaceState(null, '', `#${encodeURI(hash)}`);
+        return;
+      }
+      scrollMemory.current.set(routeRef.current.key, window.scrollY);
+      if (nextRoute.type === 'library' || nextRoute.type === 'home') {
         if (lastOpenedRef.current) setLastOpened(lastOpenedRef.current);
         setDraft(readDraft());
       }
@@ -1574,7 +1610,7 @@ function App() {
       } else applyRoute();
     };
     window.addEventListener('hashchange', onHash);
-    if (!location.hash) history.replaceState(null, '', '#docs');
+    if (!location.hash) history.replaceState(null, '', '#home');
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
@@ -1631,18 +1667,18 @@ function App() {
   /** Guardado del editor. Un snapshot de una revisión antigua (tras un conflicto) va a la copia. */
   const saveEditorSnapshot = useCallback((docId, revision, snapshot) => {
     const redirected = redirectsRef.current.get(docId);
-    if (redirected) {
-      updateDoc(redirected, snapshot);
-      return;
-    }
     const current = revisionsRef.current[docId] || 0;
-    if (revision !== current) {
-      const copyId = conflictCopiesRef.current.get(docId);
-      if (copyId) updateDoc(copyId, {...snapshot, title: `${snapshot.title || 'Sin título'} (copia en conflicto)`});
-      return;
+    const conflict = !redirected && revision !== current;
+    const targetId = redirected || (conflict ? conflictCopiesRef.current.get(docId) : docId);
+    if (!targetId || !storeRef.current.docs.some(doc => doc.id === targetId)) return false;
+    const savedSnapshot = conflict ? {...snapshot, title: `${snapshot.title || 'Sin título'} (copia en conflicto)`} : snapshot;
+    updateDoc(targetId, savedSnapshot);
+    if (lastPersistOkRef.current) {
+      clearJournal(targetId);
+      return true;
     }
-    updateDoc(docId, snapshot);
-    if (lastPersistOkRef.current) clearJournal(docId);
+    return writeJournal({docId: targetId, snapshot: savedSnapshot,
+      baseUpdatedAt: window.__bardoDocsSync?.baseFor?.(targetId) ?? null, at: Date.now()});
   }, [updateDoc]);
 
   const journalEditorSnapshot = useCallback((docId, revision, snapshot) => {
@@ -2025,7 +2061,7 @@ function App() {
 
   return (
     <main className="app-root">
-      {(route.type === 'library' || route.type === 'planner' || (route.type === 'doc' && currentDoc)) && (
+      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || (route.type === 'doc' && currentDoc)) && (
         <PersistentHeader
           route={route}
           doc={currentDoc}
@@ -2045,13 +2081,16 @@ function App() {
           onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
         />
       )}
+      {route.type === 'home' && <Home docs={activeDocs} draft={draft} onNewDoc={startNewDoc} onOpenDoc={openDoc} />}
       {route.type === 'planner' && (
         <PlannerModule
           initialTab={route.tab || 'home'}
           onSwitchTab={(tab) => {
-            if (tab === 'home') go('#planner', {skipTransition: true});
-            else if (tab === 'agenda') go('#planner-agenda', {skipTransition: true});
-            else go(`#planner-${tab}`, {skipTransition: true});
+            // An action URL is consumed once; Back must not create/open again.
+            const options = {skipTransition: true, replace: route.tab === 'new' || route.tab?.startsWith('session:')};
+            if (tab === 'home') go('#planner', options);
+            else if (tab === 'agenda') go('#planner-agenda', options);
+            else go(`#planner-${tab}`, options);
           }}
           onSaveDocToLibrary={(docData) => saveMinutesDoc(docData)}
         />
@@ -2128,7 +2167,10 @@ function App() {
                 builtin: false,
                 stress: false,
               };
-              commitStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
+              const nextStore = {...storeRef.current, docs: [doc, ...storeRef.current.docs]};
+              // Keep the draft and editor mounted if creating the durable document fails.
+              if (!saveStore(nextStore)) return false;
+              commitStore(nextStore);
               try {
                 localStorage.removeItem(draftKey());
               } catch {}
@@ -2137,14 +2179,15 @@ function App() {
               setSharePromptDocId(doc.id);
               go(`#doc-${doc.id}`);
             } else if (editorDocId) {
-              saveEditorSnapshot(editorDocId, editorRevision, snapshot);
+              if (!saveEditorSnapshot(editorDocId, editorRevision, snapshot)) return false;
               const targetId = redirectsRef.current.get(editorDocId) || editorDocId;
               go(`#doc-${targetId}`, {preserveBody: true, skipTransition: true});
             }
           }}
           onAutosave={(snapshot) => {
-            if (route.type === 'new') saveDraft(snapshot);
-            else if (editorDocId) saveEditorSnapshot(editorDocId, editorRevision, snapshot);
+            if (route.type === 'new') return saveDraft(snapshot);
+            if (editorDocId) return saveEditorSnapshot(editorDocId, editorRevision, snapshot);
+            return false;
           }}
           onJournal={(snapshot) => {
             if (route.type === 'new') saveDraft(snapshot);
@@ -2157,7 +2200,7 @@ function App() {
         />
       )}
 
-      {route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
+      {route.type !== 'home' && route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
         <div className="missing-state flex flex-col items-center justify-center py-20 text-center">
           <p className="text-base text-muted-foreground mb-4">
             Este documento ya no existe o no está compartido en este canal.

@@ -7,6 +7,9 @@ export function PlannerUpcomingBanner({
   plannerState,
   onStartSession,
   onDismiss,
+  // Inside the meeting's own agenda the header already has "Iniciar reunión":
+  // one primary action per view, so the notice is informational there.
+  showStartAction = true,
 }) {
   const firstBlock = (plannerState?.blocks || [])[0];
   const hasBlocks = Boolean(firstBlock);
@@ -30,7 +33,7 @@ export function PlannerUpcomingBanner({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <Button
+          {showStartAction && <Button
             variant="default"
             size="sm"
             onClick={onStartSession}
@@ -40,7 +43,7 @@ export function PlannerUpcomingBanner({
           >
             <PlayIcon className="size-3" />
             <span>{MEETING_COPY.startMeeting}</span>
-          </Button>
+          </Button>}
           <Button
             variant="ghost"
             size="icon-xs"

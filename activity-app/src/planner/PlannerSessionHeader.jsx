@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/tooltip';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar.jsx';
-import { TimePicker } from '@/components/ui/time-picker.jsx';
+import { TimePicker, formatTimeDisplay } from '@/components/ui/time-picker.jsx';
+import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   Pencil,
   MoreVertical,
@@ -112,6 +113,7 @@ export function PlannerSessionHeader({
   const isPaused = status === SESSION_STATUS.PAUSED;
   const isInterrupted = status === SESSION_STATUS.INTERRUPTED;
   const isCompleted = status === SESSION_STATUS.COMPLETED;
+  const isIdleView = !isEditing && !isRunning && !isPaused && !isCompleted && !isInterrupted;
 
   const { members } = getAllDiscordEntities();
   const selectedKeys = new Set(parseMentions(mentions));
@@ -183,16 +185,17 @@ export function PlannerSessionHeader({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {!isEditing && !isRunning && !isPaused && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onCopyAnnouncement}
-                className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex h-8 px-2.5 font-medium"
-              >
-                <CopyIcon className="size-3.5" /> <span>Copiar anuncio</span>
-              </Button>
+          {/* Jerarquía: íconos para lo frecuente → una acción principal → "⋯" para el resto. */}
+          <div className="flex items-center gap-1 shrink-0">
+            {isIdleView && (
+              <>
+                <IconButton label="Copiar anuncio" onClick={onCopyAnnouncement}>
+                  <CopyIcon className="size-4" />
+                </IconButton>
+                <IconButton label="Editar reunión" onClick={onToggleEditMode}>
+                  <Pencil className="size-4" />
+                </IconButton>
+              </>
             )}
 
             {/* On phones the floating button (PlannerModule) is the single primary action. */}
@@ -214,29 +217,18 @@ export function PlannerSessionHeader({
               >
                 <PlayIcon className="size-3.5" /> <span>Reanudar</span>
               </Button>
-            ) : !isRunning && !isPaused && !isCompleted && !isInterrupted ? (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onToggleEditMode}
-                  aria-label="Editar reunión"
-                  className="font-medium h-8 px-2.5 sm:px-3"
-                >
-                  <Pencil className="size-3.5" /> <span className="hidden sm:inline">Editar</span>
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={onStartSession}
-                  disabled={!hasBlocks}
-                  aria-describedby={!hasBlocks ? startHintId : undefined}
-                  title={!hasBlocks ? MEETING_COPY.needsBlock : undefined}
-                  className="hidden sm:inline-flex font-medium h-8 px-3.5"
-                >
-                  <PlayIcon className="size-3.5" /> <span>{MEETING_COPY.startMeeting}</span>
-                </Button>
-              </>
+            ) : isIdleView ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onStartSession}
+                disabled={!hasBlocks}
+                aria-describedby={!hasBlocks ? startHintId : undefined}
+                title={!hasBlocks ? MEETING_COPY.needsBlock : undefined}
+                className="hidden sm:inline-flex font-medium h-8 px-3.5 ml-1"
+              >
+                <PlayIcon className="size-3.5" /> <span>{MEETING_COPY.startMeeting}</span>
+              </Button>
             ) : isCompleted ? (
               <Button
                 variant="default"
@@ -256,6 +248,7 @@ export function PlannerSessionHeader({
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Más opciones de la reunión"
+                    title="Más opciones"
                     className="text-muted-foreground hover:text-foreground rounded-full"
                   >
                     <MoreVertical className="size-4" />
@@ -265,23 +258,26 @@ export function PlannerSessionHeader({
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Reunión</DropdownMenuLabel>
-                  {(isCompleted || isInterrupted) && (
+                  {/* Completed: "Ver resumen" is already the primary button. */}
+                  {isInterrupted && (
                     <DropdownMenuItem onClick={() => onTabChange('recap')}>
                       <RotateCw className="size-4 text-muted-foreground" />
                       <span>Ver resumen</span>
                     </DropdownMenuItem>
                   )}
-                  {/* Not while live: editing hides the live controls (dock). */}
-                  {!isEditing && !isRunning && !isPaused && (
+                  {/* Idle view shows these as icon buttons; never while live (editing hides the dock). */}
+                  {!isIdleView && !isEditing && !isRunning && !isPaused && (
                     <DropdownMenuItem onClick={onToggleEditMode}>
                       <Pencil className="size-4 text-muted-foreground" />
                       <span>Editar reunión</span>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={onCopyAnnouncement}>
-                    <CopyIcon className="size-4 text-muted-foreground" />
-                    <span>Copiar anuncio</span>
-                  </DropdownMenuItem>
+                  {!isIdleView && (
+                    <DropdownMenuItem onClick={onCopyAnnouncement}>
+                      <CopyIcon className="size-4 text-muted-foreground" />
+                      <span>Copiar anuncio</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -366,7 +362,7 @@ export function PlannerSessionHeader({
 
               <div>
                 <span id={`${fieldId}-duration`} className="text-xs font-semibold text-foreground mb-1.5 block">Duración</span>
-                <div aria-labelledby={`${fieldId}-duration`} className="w-full h-9 px-1 flex items-center justify-center text-xs font-medium text-foreground">
+                <div aria-labelledby={`${fieldId}-duration`} className="w-full h-9 px-1 flex items-center justify-start text-xs font-medium text-foreground">
                   {formatShortDuration(totalPlannedMinutes)}
                 </div>
               </div>
@@ -379,7 +375,7 @@ export function PlannerSessionHeader({
                 className={`-mt-1 text-xs ${schedule.overMinutes > 0 ? 'text-warning' : 'text-muted-foreground'}`}
               >
                 {schedule.overMinutes > 0
-                  ? `Los bloques suman ${formatShortDuration(schedule.blocksMinutes)}, ${formatShortDuration(schedule.overMinutes)} más de lo reservado: la reunión terminaría a las ${schedule.plannedEnd}. Acorta los bloques o mueve el término.`
+                  ? `Los bloques suman ${formatShortDuration(schedule.blocksMinutes)}, ${formatShortDuration(schedule.overMinutes)} más de lo reservado: terminaría a las ${formatTimeDisplay(schedule.plannedEnd)}. Acorta los bloques o mueve el término.`
                   : `Bloques: ${formatShortDuration(schedule.blocksMinutes)} de ${formatShortDuration(schedule.targetMinutes)} · quedan ${formatShortDuration(schedule.freeMinutes)} libres`}
               </p>
             )}
@@ -444,7 +440,7 @@ export function PlannerSessionHeader({
                         {selectedKeys.size > 0 ? (
                           <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                             <div className="flex items-center -space-x-1.5 shrink-0">
-                              {Array.from(selectedKeys).slice(0, 4).map((tag, idx) => {
+                              {Array.from(selectedKeys).slice(0, 2).map((tag, idx) => {
                                 const cleanName = tag.replace(/^[@#]/, '');
                                 const matched = members.find(
                                   (m) =>
@@ -452,7 +448,7 @@ export function PlannerSessionHeader({
                                     m.tag.toLowerCase() === tag.toLowerCase() ||
                                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                                 );
-                                const isRole = tag.startsWith('#') || (!matched && tag.startsWith('@'));
+                                const isRole = tag.startsWith('#');
                                 const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
 
                                 return (
@@ -470,8 +466,9 @@ export function PlannerSessionHeader({
                               })}
                             </div>
                             <span className="font-medium text-foreground truncate min-w-0">
-                              {Array.from(selectedKeys).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
+                              {Array.from(selectedKeys).slice(0, 2).map((tag) => tag.replace(/^[@#]/, '')).join(', ')}
                             </span>
+                            {selectedKeys.size > 2 && <span className="shrink-0 text-muted-foreground">+{selectedKeys.size - 2}</span>}
                           </div>
                         ) : (
                           <span className="truncate text-muted-foreground">Buscar personas o roles</span>

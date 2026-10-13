@@ -1,3 +1,5 @@
+import {getDocsStorageScope} from '../docs-storage.js';
+
 const DB_NAME = 'bardo-planner-recordings-v1';
 const DB_VERSION = 2;
 const STORE_NAME = 'audio';
@@ -23,7 +25,10 @@ function openDatabase(indexedDBImpl) {
   return new Promise((resolve, reject) => {
     let request;
     try {
-      request = indexedDBImpl.open(DB_NAME, DB_VERSION);
+      // Keep legacy audio intact in its original database. It has no verified
+      // owner, so another account must never auto-recover it by meeting id.
+      const scope = getDocsStorageScope();
+      request = indexedDBImpl.open(scope ? `${DB_NAME}@${scope}` : DB_NAME, DB_VERSION);
     } catch (error) {
       reject(new RecordingStorageError('No se pudo abrir el almacenamiento de audio.', error));
       return;

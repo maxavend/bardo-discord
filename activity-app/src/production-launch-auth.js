@@ -1,4 +1,4 @@
-const API_PREFIXES = ['/api/docs', '/api/documents'];
+const API_PREFIXES = ['/api/docs', '/api/documents', '/api/planner', '/api/discord'];
 let installed = false;
 let sessionToken = null;
 let launchCustomId = null;
@@ -11,7 +11,7 @@ function isBardoDataRequest(input) {
         ? input.href
         : input?.url || '';
     const url = new URL(raw, window.location.href);
-    return API_PREFIXES.some(prefix => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`));
+    return url.origin === window.location.origin && API_PREFIXES.some(prefix => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`));
   } catch {
     return false;
   }
@@ -28,7 +28,7 @@ function ensureInterceptor() {
     }
 
     const inheritedHeaders = input instanceof Request ? input.headers : undefined;
-    const headers = new Headers(inheritedHeaders || init.headers || undefined);
+    const headers = new Headers(init.headers || inheritedHeaders || undefined);
     if (sessionToken) headers.set('Authorization', `Bearer ${sessionToken}`);
     if (launchCustomId) headers.set('x-bardo-custom-id', launchCustomId);
 
@@ -42,7 +42,7 @@ function ensureInterceptor() {
 
 export function installBardoApiSession({token, customId} = {}) {
   if (token) sessionToken = token;
-  if (customId) launchCustomId = customId;
+  if (customId !== undefined) launchCustomId = customId || null;
   ensureInterceptor();
   return Boolean(sessionToken);
 }

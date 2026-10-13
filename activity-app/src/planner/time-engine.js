@@ -168,3 +168,31 @@ export function durationUntil(startTime, endTime) {
   const overnight = diff + 24 * 60;
   return overnight <= MAX_OVERNIGHT_MINUTES ? overnight : null;
 }
+
+/**
+ * Duración en palabras para resúmenes: "45 min", "2 h", "2 h 45 min",
+ * "3 d 4 h". Pensado para leerse de un vistazo (no "40133 min").
+ */
+export function formatSpokenDuration(totalMinutes) {
+  const minutes = Math.max(0, Math.round(Number(totalMinutes) || 0));
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest ? `${hours} h ${rest} min` : `${hours} h`;
+  }
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  return hours ? `${days} d ${hours} h` : `${days} d`;
+}
+
+/**
+ * Una reunión "quedó abierta" cuando su tiempo supera con creces lo
+ * planificado (p. ej. se olvidó de terminar y se cerró días después). En ese
+ * caso el tiempo transcurrido no representa la reunión y no se muestra como
+ * dato real.
+ */
+export function wasMeetingLeftOpen(actualMinutes, plannedMinutes) {
+  const planned = Math.max(0, Number(plannedMinutes) || 0);
+  return Number(actualMinutes) > Math.max(planned * 3, planned + 180, 12 * 60);
+}

@@ -132,7 +132,9 @@ test('recap uses the meeting vocabulary', () => {
   const closed = completeLiveSession(createLiveSession(PLANNER, T0), T0 + MINUTE);
   const recap = computeSessionRecap(PLANNER, closed);
   assert.equal(recap.statusLabel, 'Terminada');
-  assert.match(recap.recapTitle, /^Reunión terminada · /);
+  // El nombre de la reunión es el título; el estado va en la etiqueta.
+  assert.equal(recap.statusLabel, 'Terminada');
+  assert.doesNotMatch(recap.recapTitle, /Reunión terminada/);
   assert.match(recap.pointsProgressSubtext, /temas tratados$/);
 });
 
@@ -328,4 +330,21 @@ test('time picker only writes on close when the user actually changed the time',
   assert.equal(resolveTimeCommit({dirty: true, hour: '04', minute: '30', period: 'PM', value: '15:30'}), '16:30');
   assert.equal(resolveTimeCommit({dirty: true, hour: '13', minute: '75', period: 'AM', value: '15:30'}), '00:59');
   assert.equal(formatTime24(12, 0, 'AM'), '00:00');
+});
+
+test('recap keeps every legacy recording downloadable after topics or blocks are removed', () => {
+  const recordings = [
+    {id: 'kept', blockId: 'b1', pointId: 't1'},
+    {id: 'removed-topic', blockId: 'b1', pointId: 'deleted'},
+    {id: 'removed-block', blockId: 'deleted', pointId: 'deleted'},
+    {id: 'no-context'},
+  ];
+  const session = {...completeLiveSession(createLiveSession(PLANNER, T0), T0 + MINUTE), recordings};
+  const recap = computeSessionRecap(PLANNER, session);
+  const visible = recap.groupedRecordings.flatMap(group => [
+    ...group.blockFallbackRecordings, ...group.pointGroups.flatMap(point => point.recordings),
+  ]);
+  assert.deepEqual(visible.map(recording => recording.id).sort(), recordings.map(recording => recording.id).sort());
+  assert.equal(new Set(visible.map(recording => recording.id)).size, recordings.length);
+  assert.deepEqual(session.recordings, recordings);
 });

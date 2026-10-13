@@ -8,8 +8,15 @@ import { cn } from "@/lib/utils"
 function ScrollArea({
   className,
   children,
+  viewportProps,
+  contentClassName,
+  contentStyle,
   ...props
-}: ScrollAreaPrimitive.Root.Props) {
+}: ScrollAreaPrimitive.Root.Props & {
+  contentStyle?: React.CSSProperties
+  contentClassName?: string
+  viewportProps?: React.ComponentProps<typeof ScrollAreaPrimitive.Viewport>
+}) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
@@ -17,10 +24,11 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
+        {...viewportProps}
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] outline-none"
+        className={cn("size-full rounded-[inherit] outline-none", viewportProps?.className)}
       >
-        <ScrollAreaPrimitive.Content data-slot="scroll-area-content">
+        <ScrollAreaPrimitive.Content data-slot="scroll-area-content" className={contentClassName} style={contentStyle}>
           {children}
         </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
@@ -57,4 +65,20 @@ function ScrollBar({
   )
 }
 
-export { ScrollArea, ScrollBar }
+// Surface stays outside the mask; only overflowing content fades.
+function OverlayScrollArea({className, viewportProps, contentStyle, ...props}: React.ComponentProps<typeof ScrollArea>) {
+  return (
+    <ScrollArea
+      className={cn("overlay-scroll-area min-h-0 max-h-[inherit]", className)}
+      contentStyle={{minWidth: 0, ...contentStyle}}
+      viewportProps={{
+        ...viewportProps,
+        className: cn("scroll-fade scroll-fade-4 motion-reduce:scroll-fade-none overscroll-contain scroll-py-4", viewportProps?.className),
+        style: {maxHeight: "inherit", ...viewportProps?.style},
+      }}
+      {...props}
+    />
+  )
+}
+
+export { ScrollArea, ScrollBar, OverlayScrollArea }

@@ -6,6 +6,8 @@ import {
 } from './db.js';
 import {
   canUserViewChannel,
+  DiscordUnavailableError,
+  retryAfterFromResponse,
   discordUnavailableResponse,
   isDiscordUnavailableError,
 } from './discord-permissions.js';
@@ -49,10 +51,22 @@ function newSessionToken() {
   return base64Url(bytes);
 }
 
-async function discordJson(path, accessToken) {
-  const response = await fetch(`https://discord.com/api/v10${path}`, {
+async function authFetch(url, init, env) {
+  let response;
+  try { response = await (env.DISCORD_FETCH || fetch)(url, init); }
+  catch (cause) { throw new DiscordUnavailableError('Discord OAuth network failure', {cause}); }
+  if (response.status === 429 || response.status >= 500) {
+    throw new DiscordUnavailableError(`Discord OAuth ${response.status}`, {
+      status: response.status, retryAfterMs: await retryAfterFromResponse(response),
+    });
+  }
+  return response;
+}
+
+async function discordJson(path, accessToken, env) {
+  const response = await authFetch(`https://discord.com/api/v10${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  }, env);
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = new Error(`Discord API ${response.status}`);
@@ -70,7 +84,7 @@ async function exchangeCode(code, env) {
     throw error;
   }
 
-  const response = await fetch('https://discord.com/api/oauth2/token', {
+  const response = await authFetch('https://discord.com/api/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -79,7 +93,7 @@ async function exchangeCode(code, env) {
       grant_type: 'authorization_code',
       code,
     }),
-  });
+  }, env);
 
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.access_token) {
@@ -100,18 +114,10 @@ async function createAuthenticatedSession(code, guildId, channelId, env) {
   }
 
   const oauth = await exchangeCode(code, env);
-  const [user, guilds] = await Promise.all([
-    discordJson('/users/@me', oauth.access_token),
-    discordJson('/users/@me/guilds', oauth.access_token),
-  ]);
+  const user = await discordJson('/users/@me', oauth.access_token, env);
+  if (!user?.id) throw new Error('Discord identity missing');
 
-  if (!Array.isArray(guilds) || !guilds.some(guild => guild?.id === guildId)) {
-    const error = new Error('Discord user is not a member of this guild');
-    error.code = 'guild_membership_required';
-    throw error;
-  }
-
-  if (!channelId || !(await canUserViewChannel(env, guildId, user.id, channelId))) {
+  if (!channelId || !(await canUserViewChannel({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, guildId, user.id, channelId))) {
     const error = new Error('Discord user cannot view this channel');
     error.code = 'channel_access_required';
     throw error;
@@ -171,7 +177,7 @@ export async function requireDocsSession(request, env) {
   const session = await loadDocsSession(env.DB, tokenHash);
   if (!session) return { error: apiError(401, 'session_not_found', SESSION_EXPIRED_MESSAGE) };
 
-  if (Date.parse(session.expiresAt) <= Date.now()) {
+  if (!Number.isFinite(Date.parse(session.expiresAt)) || Date.parse(session.expiresAt) <= Date.now()) {
     await deleteDocsSession(env.DB, tokenHash);
     return { error: apiError(401, 'session_expired', SESSION_EXPIRED_MESSAGE) };
   }

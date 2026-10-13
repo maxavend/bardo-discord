@@ -22,8 +22,11 @@ import {
   MoreVertical,
   Pencil,
   Info,
+  Download,
 } from 'lucide-react';
 import { DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
+import { downloadPointAudio } from './audio-exporter.js';
+import { toast } from '@/lib/toast';
 import { formatMsToClock } from './session-assistant-engine.js';
 
 export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
@@ -148,6 +151,16 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                 }
               />
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem disabled={!canPlay} onClick={async () => {
+                  try {
+                    await downloadPointAudio(recording.name || recording.pointTitle || 'Grabación', recording);
+                  } catch (error) {
+                    toast(error?.message || 'No se pudo descargar el audio.');
+                  }
+                }}>
+                  <Download className="size-4" />
+                  <span>Descargar audio</span>
+                </DropdownMenuItem>
                 {onRename && (
                   <DropdownMenuItem onClick={() => setShowRenameModal(true)}>
                     <Pencil className="size-4 text-muted-foreground" />

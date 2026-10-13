@@ -1,3 +1,4 @@
+import {scopedDocsKey} from '../docs-storage.js';
 import {computePlannerTimes, getPlannedSchedule} from './time-engine.js';
 import {
   DEFAULT_LIVE_SESSION,
@@ -372,7 +373,7 @@ export function createCleanPlannerSession({now = new Date(), host = ''} = {}) {
 
 export function loadPlannerState() {
   try {
-    const raw = localStorage.getItem(PLANNER_STORE_KEY);
+    const raw = localStorage.getItem(scopedDocsKey(PLANNER_STORE_KEY));
     if (!raw) {
       if (shouldLoadDemoFixture()) {
         return computePlannerTimes(DEMO_PLANNER_FIXTURE);
@@ -382,7 +383,7 @@ export function loadPlannerState() {
     const parsed = JSON.parse(raw);
     if (!shouldLoadDemoFixture() && isDemoPlannerState(parsed)) {
       try {
-        localStorage.removeItem(PLANNER_STORE_KEY);
+        localStorage.removeItem(scopedDocsKey(PLANNER_STORE_KEY));
       } catch {}
       const clean = createCleanPlannerSession({host: currentUserName()});
       savePlannerState(clean);
@@ -399,7 +400,7 @@ export function loadPlannerState() {
 
 export function savePlannerState(state) {
   try {
-    localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(state));
+    localStorage.setItem(scopedDocsKey(PLANNER_STORE_KEY), JSON.stringify(state));
   } catch {
     // Local storage persistence fallback.
   }
@@ -500,7 +501,7 @@ export function isLiveStateForOtherPlanner(liveState, plannerState) {
 
 export function loadLiveSessionState(plannerState = null) {
   try {
-    const raw = localStorage.getItem(LIVE_SESSION_STORE_KEY);
+    const raw = localStorage.getItem(scopedDocsKey(LIVE_SESSION_STORE_KEY));
     if (!raw) {
       if (shouldLoadDemoFixture() && (plannerState?.title === 'Weekly Diseño & SD' || plannerState?.title?.includes('Weekly Diseño'))) {
         return createDemoLiveSession(plannerState);
@@ -510,7 +511,7 @@ export function loadLiveSessionState(plannerState = null) {
     const parsed = JSON.parse(raw);
     if (!shouldLoadDemoFixture() && (parsed?.sessionId === 'demo-session-weekly-design' || parsed?.sessionId?.startsWith('demo-session-'))) {
       try {
-        localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+        localStorage.removeItem(scopedDocsKey(LIVE_SESSION_STORE_KEY));
       } catch {}
       return createEmptyLiveSession(plannerState);
     }
@@ -659,7 +660,7 @@ export function choosePlannerBootSession(sessions = [], localPlanner = null, pen
 
 export function saveLiveSessionState(sessionState) {
   try {
-    localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(serializeLiveSessionState(sessionState)));
+    localStorage.setItem(scopedDocsKey(LIVE_SESSION_STORE_KEY), JSON.stringify(serializeLiveSessionState(sessionState)));
   } catch {
     // Local storage persistence fallback.
   }
@@ -667,7 +668,7 @@ export function saveLiveSessionState(sessionState) {
 
 export function clearLiveSessionState() {
   try {
-    localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+    localStorage.removeItem(scopedDocsKey(LIVE_SESSION_STORE_KEY));
   } catch {
     // Local storage persistence fallback.
   }

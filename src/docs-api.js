@@ -204,6 +204,14 @@ async function documentSharedInSessionChannel(env, session, documentId) {
 async function resolveLaunchContext(request, env, session) {
   const none = { contextDocumentId: null, launchTarget: null };
   const requested = launchDocumentId(request);
+  const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
+  // /bardo deliberately resets the destination, including a stale custom_id
+  // retained by a reused Discord Activity instance. A later document click
+  // replaces this same per-user intent before launching.
+  if (intent?.documentId === `${LAUNCH_TARGET_PREFIX}home` && intent.channelId === session.channelId) {
+    await deleteDocsLaunchIntent(env.DB, session.userId, session.guildId, intent.documentId);
+    return {contextDocumentId: null, launchTarget: 'home'};
+  }
 
   if (requested?.startsWith(EDIT_DOC_TARGET_PREFIX)) {
     const documentId = requested.slice(EDIT_DOC_TARGET_PREFIX.length);
@@ -221,7 +229,6 @@ async function resolveLaunchContext(request, env, session) {
   // originating custom_id, and slash commands never have one. The interaction
   // handler stores a short-lived intent for this exact user/guild/channel,
   // which is safe to use as a fallback.
-  const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
   if (!intent?.documentId || (intent.channelId && intent.channelId !== session.channelId)) return none;
 
   if (intent.documentId.startsWith(LAUNCH_TARGET_PREFIX)) {

@@ -120,8 +120,9 @@ export function PlannerHomeView({
               <p className="text-xs text-muted-foreground mt-0.5">Arma la agenda, guía la reunión y anota los acuerdos.</p>
             </div>
             <div className="flex items-center justify-center gap-2 w-full sm:w-auto">
+              {/* The header's "Nueva reunión" is this view's single primary action. */}
               <Button
-                variant="default"
+                variant="secondary"
                 size="sm"
                 onClick={onNewCleanSession}
                 className="text-xs font-semibold h-8 px-4 flex items-center justify-center gap-1.5"
@@ -315,13 +316,15 @@ export function PlannerHomeView({
                 {events.map((event) => {
                   const eventMinutes = getPlannedSchedule(event).plannedMinutes;
                   const eventDate = formatShortDate(event.date) || 'Fecha por confirmar';
-                  const eventStatus = eventStatusLabel(event.eventStatus);
                   const blocksCount = event.blocks?.length || 0;
                   const isSelected = selectedEventId === event.eventId;
+                  const hasLiveStatus = isSelected && status !== SESSION_STATUS.IDLE;
+                  const eventStatus = hasLiveStatus ? liveStatusLabel(status) : eventStatusLabel(event.eventStatus);
+                  const eventCompleted = hasLiveStatus ? isCompleted : event.eventStatus === 'completed';
                   return (
-                    <article className={`doc-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
+                    <article className={`doc-row meeting-row ${isSelected ? 'event-row-selected' : ''}`} key={event.eventId}>
                       <span className="doc-symbol">
-                        {event.eventStatus === 'completed' ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
+                        {eventCompleted ? <CheckCircle2 className="size-4.5 text-primary" /> : <Calendar className="size-4.5" />}
                       </span>
                       <button
                         className="doc-row-main"

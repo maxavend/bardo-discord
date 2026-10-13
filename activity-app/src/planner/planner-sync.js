@@ -1,3 +1,4 @@
+import {getDocsStorageScope, scopedDocsKey} from '../docs-storage.js';
 /**
  * Planner ↔ D1 sync engine.
  *
@@ -197,20 +198,20 @@ function defaultStorage() {
   }
 }
 
-export function readPendingPlannerEdits(storage = defaultStorage()) {
+export function readPendingPlannerEdits(storage = defaultStorage(), scope = getDocsStorageScope()) {
   if (!storage) return {};
   try {
-    const parsed = JSON.parse(storage.getItem(PLANNER_PENDING_KEY) || '{}');
+    const parsed = JSON.parse(storage.getItem(scopedDocsKey(PLANNER_PENDING_KEY, scope)) || '{}');
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 }
 
-export function readPendingLiveStates(storage = defaultStorage()) {
+export function readPendingLiveStates(storage = defaultStorage(), scope = getDocsStorageScope()) {
   if (!storage) return {};
   try {
-    const parsed = JSON.parse(storage.getItem(PLANNER_PENDING_LIVE_KEY) || '{}');
+    const parsed = JSON.parse(storage.getItem(scopedDocsKey(PLANNER_PENDING_LIVE_KEY, scope)) || '{}');
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
@@ -228,13 +229,16 @@ export function createPlannerSyncEngine({
   onPlannerConflict = () => {},
   onError = () => {},
 } = {}) {
+  const scope = getDocsStorageScope();
+  const pendingKey = scopedDocsKey(PLANNER_PENDING_KEY, scope);
+  const pendingLiveKey = scopedDocsKey(PLANNER_PENDING_LIVE_KEY, scope);
   const request = (path, init) => plannerRequest(path, init, fetchImpl);
-  const pending = readPendingPlannerEdits(storage); // id -> {payload, baseUpdatedAt}
+  const pending = readPendingPlannerEdits(storage, scope); // id -> {payload, baseUpdatedAt}
   const baseVersions = new Map(); // id -> server updatedAt
   const debounceTimers = new Map();
   const retryTimers = new Map();
   const attempts = new Map();
-  const latestLive = new Map(Object.entries(readPendingLiveStates(storage))); // id -> serialized live state
+  const latestLive = new Map(Object.entries(readPendingLiveStates(storage, scope))); // id -> serialized live state
   const resumedLive = new Set(latestLive.keys()); // loaded from storage: verify against server before sending
   const lastPlannerPayload = new Map();
   let chain = Promise.resolve();
@@ -248,8 +252,8 @@ export function createPlannerSyncEngine({
   const persistPending = () => {
     if (!storage) return;
     try {
-      if (Object.keys(pending).length === 0) storage.removeItem(PLANNER_PENDING_KEY);
-      else storage.setItem(PLANNER_PENDING_KEY, JSON.stringify(pending));
+      if (Object.keys(pending).length === 0) storage.removeItem(pendingKey);
+      else storage.setItem(pendingKey, JSON.stringify(pending));
     } catch {
       // Storage unavailable: edits still live in memory and will be sent.
     }
@@ -258,8 +262,8 @@ export function createPlannerSyncEngine({
   const persistPendingLive = () => {
     if (!storage) return;
     try {
-      if (latestLive.size === 0) storage.removeItem(PLANNER_PENDING_LIVE_KEY);
-      else storage.setItem(PLANNER_PENDING_LIVE_KEY, JSON.stringify(Object.fromEntries(latestLive)));
+      if (latestLive.size === 0) storage.removeItem(pendingLiveKey);
+      else storage.setItem(pendingLiveKey, JSON.stringify(Object.fromEntries(latestLive)));
     } catch {
       // Storage unavailable/full: state still in memory and in the live slot.
     }

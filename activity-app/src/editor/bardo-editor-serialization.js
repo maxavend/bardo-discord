@@ -215,8 +215,7 @@ function deserializeElement(el) {
 
   if (tag === 'PRE') {
     const codeEl = el.querySelector('code');
-    let text = (codeEl ? codeEl.textContent : el.textContent) || '';
-    if (text.endsWith('\n')) text = text.slice(0, -1);
+    const text = (codeEl ? codeEl.textContent : el.textContent) || '';
     const lang = Array.from(codeEl?.classList || []).find(name => name.startsWith('language-'))?.slice(9);
     const node = {type: 'code_block', children: [{text}]};
     if (lang) node.lang = lang;

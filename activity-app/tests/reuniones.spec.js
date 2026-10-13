@@ -52,6 +52,29 @@ test('sin reuniones no aparece el aviso de "empieza en…"', async ({page}) => {
   await expect(page.getByText(/empieza en/)).toHaveCount(0);
 });
 
+test('el MVP conduce reuniones sin ofrecer captura ni pedir micrófono', async ({page}) => {
+  await page.evaluate(() => {
+    window.__microphoneRequests = 0;
+    navigator.mediaDevices.getUserMedia = async () => { window.__microphoneRequests++; throw Error('Unexpected microphone request'); };
+  });
+  await createMeeting(page);
+  await page.getByRole('button', {name: 'Listo', exact: true}).click();
+  await page.getByRole('button', {name: 'Iniciar reunión'}).first().click();
+  await expect(page.getByRole('button', {name: 'Grabar', exact: true})).toHaveCount(0);
+  await expect(page.getByText(/Toca Grabar/)).toHaveCount(0);
+  await page.getByRole('button', {name: 'Pausar reunión'}).click();
+  await page.getByRole('button', {name: 'Reanudar reunión'}).click();
+  await page.getByRole('button', {name: 'Más acciones de la reunión'}).click();
+  await page.getByRole('menuitem', {name: 'Terminar reunión'}).click();
+  const dialog = page.getByRole('dialog', {name: '¿Terminar la reunión?'});
+  await expect(dialog).not.toContainText(/grabaci[oó]n/);
+  await dialog.getByRole('button', {name: 'Terminar reunión'}).click();
+  await expect(page.getByRole('button', {name: 'Guardar acta en Documentos'})).toBeVisible();
+  await expect(page.getByText('Grabaciones', {exact: true})).toHaveCount(0);
+  await expect(page.getByText('Sin audio', {exact: true})).toHaveCount(0);
+  expect(await page.evaluate(() => window.__microphoneRequests)).toBe(0);
+});
+
 test('hora de inicio, término y facilitador se guardan y sobreviven a recargar', async ({page}) => {
   const errors = collectRuntimeErrors(page);
   await createMeeting(page);
@@ -158,9 +181,10 @@ test('reunión en vivo: tiempo restante, pausa congela el reloj, terminar pide c
   await page.getByRole('button', {name: 'Más acciones de la reunión'}).click();
   await page.getByRole('menuitem', {name: 'Terminar reunión'}).click();
   await page.getByRole('dialog', {name: '¿Terminar la reunión?'}).getByRole('button', {name: 'Terminar reunión'}).click();
-  await expect(page.getByRole('button', {name: 'Reabrir reunión'})).toBeVisible();
-
-  await page.getByRole('button', {name: 'Reabrir reunión'}).click();
+  // Resumen: una acción principal visible; "Reabrir" vive en el menú "⋯".
+  await expect(page.getByRole('button', {name: 'Guardar acta en Documentos'})).toBeVisible();
+  await page.getByRole('button', {name: 'Más opciones del resumen'}).click();
+  await page.getByRole('menuitem', {name: 'Reabrir reunión'}).click();
   await expect(page.getByRole('region', {name: 'Controles de la reunión en curso'})).toBeVisible();
   expect(errors).toEqual([]);
 });

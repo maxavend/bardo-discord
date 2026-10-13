@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useMemo, useRef, useId } from 'react';
 import { useEditorRef, useEditorSelector } from 'platejs/react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   BLOCK_LABELS,
   insertBlock,
@@ -88,6 +89,8 @@ export function BardoSlashMenu() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
+  const viewportRef = useRef(null);
+  const menuId = useId();
 
   // Foco real del editable (no depende de eventos de foco del documento, que
   // no siempre llegan dentro del iframe de Discord).
@@ -123,7 +126,35 @@ export function BardoSlashMenu() {
   // Reiniciar la selección cuando cambia la consulta.
   useEffect(() => {
     setSelectedIndex(0);
+    // Escape dismisses this trigger, not every future slash at this position.
+    if (!triggerKey) setDismissedKey('');
   }, [query, triggerKey]);
+
+  const visible = isOpen && filteredItems.length > 0;
+  useEffect(() => {
+    if (!visible || !editable) return undefined;
+    editable.setAttribute('aria-controls', menuId);
+    editable.setAttribute('aria-haspopup', 'listbox');
+    editable.setAttribute('aria-activedescendant', `${menuId}-${selectedIndex}`);
+    return () => {
+      editable.removeAttribute('aria-controls');
+      editable.removeAttribute('aria-haspopup');
+      editable.removeAttribute('aria-activedescendant');
+    };
+  }, [editable, menuId, selectedIndex, visible]);
+
+  useLayoutEffect(() => {
+    const menu = viewportRef.current;
+    const item = menu?.querySelector('[aria-selected="true"]');
+    if (!item) return;
+    const menuRect = menu.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    // Scroll the popup alone, preserving the document's cursor/scroll position.
+    // Keep the active option clear of the faded edges.
+    const edge = 16;
+    if (itemRect.bottom > menuRect.bottom - edge) menu.scrollTop += itemRect.bottom - menuRect.bottom + edge;
+    else if (itemRect.top < menuRect.top + edge) menu.scrollTop -= menuRect.top + edge - itemRect.top;
+  }, [selectedIndex, triggerKey, visible]);
 
   const closeMenu = useCallback(() => {
     const current = findTrigger(editor);
@@ -188,6 +219,7 @@ export function BardoSlashMenu() {
     if (!isOpen || !editor || !editable) return undefined;
 
     const handleKeyDown = (e) => {
+      if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
@@ -227,14 +259,25 @@ export function BardoSlashMenu() {
   if (!isOpen || filteredItems.length === 0) return null;
 
   return (
-    <div
+    <ScrollArea
       ref={menuRef}
-      role="menu"
+      id={menuId}
+      role="listbox"
       aria-label="Insertar bloque"
-      className="fixed z-50 w-72 max-h-80 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg p-1.5 backdrop-blur-md"
+      className="bardo-slash-menu fixed z-50 w-72 rounded-xl border border-border bg-popover text-popover-foreground shadow-lg"
+      onMouseDown={e => e.preventDefault()}
+      viewportProps={{
+        ref: viewportRef,
+        tabIndex: -1,
+        className: 'scroll-fade scroll-fade-4 motion-reduce:scroll-fade-none overscroll-contain p-1.5 pr-3',
+        style: {maxHeight: 'var(--slash-menu-height)'},
+      }}
       style={{
+        position: 'fixed',
         top: `${coords.top}px`,
-        left: `${Math.min(coords.left, window.innerWidth - 300)}px`,
+        left: `${Math.max(8, Math.min(coords.left, window.innerWidth - 300))}px`,
+        maxWidth: 'calc(100vw - 16px)',
+        '--slash-menu-height': `${Math.min(320, Math.max(80, window.innerHeight - coords.top - 10))}px`,
       }}
     >
       <div className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/60 mb-1">
@@ -248,7 +291,10 @@ export function BardoSlashMenu() {
             <button
               key={item.id}
               type="button"
-              role="menuitem"
+              id={`${menuId}-${index}`}
+              role="option"
+              aria-selected={isSelected}
+              tabIndex={-1}
               className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left text-sm transition-colors ${
                 isSelected ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-muted text-foreground'
               }`}
@@ -257,7 +303,7 @@ export function BardoSlashMenu() {
               onMouseEnter={() => setSelectedIndex(index)}
             >
               <span className="flex items-center justify-center w-6 h-6 rounded-md bg-muted text-muted-foreground">
-                <Icon width={14} height={14} />
+                <Icon width={14} height={14} aria-hidden="true" />
               </span>
               <div className="flex flex-col min-w-0">
                 <span className="truncate leading-tight text-xs font-semibold">{item.label}</span>
@@ -267,6 +313,6 @@ export function BardoSlashMenu() {
           );
         })}
       </div>
-    </div>
+    </ScrollArea>
   );
 }

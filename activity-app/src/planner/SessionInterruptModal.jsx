@@ -8,6 +8,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Flag } from 'lucide-react';
+import { formatSpokenDuration } from './time-engine.js';
 
 /**
  * Confirmation before ending a meeting ("Terminar reunión"). Anyone can end a
@@ -19,6 +20,7 @@ export function FinishMeetingDialog({
   hasActiveRecording,
   activeRecordingName,
   elapsedMinutes = 0,
+  leftOpen = false,
   recordingsCount = 0,
   decisionsCount = 0,
   pendingTemasCount = 0,
@@ -32,14 +34,16 @@ export function FinishMeetingDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+            <div className="size-8 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center">
               <Flag className="size-4" />
             </div>
             <DialogTitle>¿Terminar la reunión?</DialogTitle>
           </div>
           <DialogDescription className="text-left text-xs leading-relaxed pt-2">
-            Se guardarán los <strong className="text-foreground font-semibold">{elapsedMinutes} min</strong> de reunión,{' '}
-            <strong className="text-foreground font-semibold">{recordingsCount} {recordingsCount === 1 ? 'grabación' : 'grabaciones'}</strong> y{' '}
+            {leftOpen
+              ? <>La reunión quedó abierta {formatSpokenDuration(elapsedMinutes)}, así que el resumen no mostrará ese tiempo. Se guardarán</>
+              : <>Se guardarán <strong className="text-foreground font-semibold">{formatSpokenDuration(elapsedMinutes)}</strong> de reunión y</>}{' '}
+            {recordingsCount > 0 && <><strong className="text-foreground font-semibold">{recordingsCount} {recordingsCount === 1 ? 'grabación' : 'grabaciones'}</strong> y{' '}</>}
             <strong className="text-foreground font-semibold">{decisionsCount} {decisionsCount === 1 ? 'acuerdo' : 'acuerdos'}</strong>.
             {hasActiveRecording && (
               <> La grabación en curso de <strong className="text-foreground font-semibold">“{activeRecordingName || 'este tema'}”</strong> se detendrá y se guardará.</>

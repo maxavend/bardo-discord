@@ -72,23 +72,23 @@ test('los comandos registrados incluyen abrir, documentos, reuniones y ayuda', (
     assert.ok(names.includes(name), `falta /${name}`);
   }
   const bardo = allCommands.find((cmd) => cmd.toJSON().name === 'bardo').toJSON();
-  assert.deepEqual(bardo.options[0].choices.map((c) => c.value), ['docs', 'reuniones', 'nuevo']);
+  assert.deepEqual(bardo.options, []);
 });
 
 test('/bardo abre la Activity (LAUNCH_ACTIVITY) y la biblioteca recibe el destino una sola vez', async () => {
   const { env, send } = await setup();
   const res = await send(command('bardo', [{ name: 'seccion', value: 'reuniones' }]));
   assert.equal(res.type, 12);
-  assert.equal(await launchTargetFromLibrary(env), 'planner');
+  assert.equal(await launchTargetFromLibrary(env), 'home');
   assert.equal(await launchTargetFromLibrary(env), null, 'el destino se consume al leerlo');
 });
 
-test('/bardo sin sección abre la biblioteca; "nuevo" abre el editor', async () => {
+test('/bardo siempre abre Inicio aunque Discord envíe una opción antigua', async () => {
   const { env, send } = await setup();
   await send(command('bardo'));
-  assert.equal(await launchTargetFromLibrary(env), 'docs');
+  assert.equal(await launchTargetFromLibrary(env), 'home');
   await send(command('bardo', [{ name: 'seccion', value: 'nuevo' }]));
-  assert.equal(await launchTargetFromLibrary(env), 'new-doc');
+  assert.equal(await launchTargetFromLibrary(env), 'home');
 });
 
 test('/bardo fuera de un servidor responde un aviso efímero', async () => {
@@ -161,6 +161,11 @@ test('/ayuda responde efímero con todos los comandos', async () => {
   const json = JSON.stringify(res.data);
   for (const name of ['/bardo', '/doc-new', '/doc-upload', '/docs', '/reu-new', '/reus']) assert.ok(json.includes(name));
   assert.deepEqual(buildHelpPayload().flags & 64, 64);
+  assert.ok(json.includes('bardo:open:home'));
+  assert.ok(json.includes('/upload-docs'));
+  assert.ok(!json.includes('elige sección'));
+  assert.ok(json.includes('Recuperar contenido anterior'));
+  assert.ok(json.includes('no borres los datos de Discord o del navegador'));
 });
 
 test('/reu-new rechaza fechas y horas inválidas sin crear la reunión', async () => {
@@ -189,4 +194,21 @@ test('validadores de fecha y hora', () => {
   assert.ok(isValidTime('23:59'));
   assert.ok(!isValidTime('24:00'));
   assert.ok(!isValidTime('9:30'));
+});
+
+
+test('/bardo wins over a stale document custom_id and does not launch before its intent is saved', async () => {
+  const {db, env, send} = await setup();
+  insertDocument(db, {id: 'stale-doc', title: 'Anterior', createdBy: USER, guildId: GUILD, channelId: CHANNEL});
+  await send(button('bardo:open:stale-doc'));
+  // Call directly: do not drain waitUntil, as the Activity can boot immediately.
+  const pending = [];
+  const response = await worker.fetch(signedInteraction(command('bardo')), env, {waitUntil: value => pending.push(value)});
+  assert.equal((await response.json()).type, 12);
+  const result = await worker.fetch(new Request('http://localhost/api/docs', {headers: {...authHeaders(), 'x-bardo-custom-id': 'bardo:open:stale-doc'}}), env);
+  const payload = await result.json();
+  assert.equal(payload.launchTarget, 'home');
+  assert.equal(payload.contextDocumentId, null);
+  assert.equal(await launchTargetFromLibrary(env), null);
+  await Promise.all(pending);
 });

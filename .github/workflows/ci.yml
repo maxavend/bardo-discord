@@ -28,6 +28,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm --prefix activity-app run typecheck
+
       - name: Build
         run: npm run build
 

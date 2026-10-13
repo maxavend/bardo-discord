@@ -26,7 +26,6 @@ import {
   Pause,
   ChevronUp,
   ChevronDown,
-  ChevronRight,
 } from 'lucide-react';
 import {
   CoffeeIcon,
@@ -42,7 +41,7 @@ import {
   getElapsedActivePointMs,
   getBlockPlannedMs,
 } from './session-runner.js';
-import { formatMsToClock, getLivePrimaryAction } from './session-assistant-engine.js';
+import { formatMsToClock } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialWavyProgress } from './MaterialWavyProgress.jsx';
 import { MaterialMorphShape } from './MaterialMorphShape.jsx';
@@ -148,7 +147,7 @@ function BlockDurationControl({ minutes, presets, onChange, label = 'Duración d
         <DropdownMenuGroup>
           <DropdownMenuLabel>Duración</DropdownMenuLabel>
           <div
-            className="max-h-52 overflow-y-auto overscroll-contain pr-0.5"
+            className="min-w-0"
             onWheel={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
           >
@@ -181,11 +180,12 @@ export function PlannerAgendaView({
   recordingElapsedMs = 0,
   isEditing = false,
   dockSlot = null,
-  onAdvance,
+  // Advancing lives in the live dock (single primary action).
+  onAdvance: _onAdvance,
   onAdvanceBlock: _onAdvanceBlock,
   onSkipBlock: _onSkipBlock,
-  onPrimaryAction,
-  isTransitioning = false,
+  onPrimaryAction: _onPrimaryAction,
+  isTransitioning: _isTransitioning = false,
   onUpdateBlock,
   onAddBlock,
   onAddFirstBlock,
@@ -207,8 +207,6 @@ export function PlannerAgendaView({
   const isSessionActive = isRunning || isPaused;
   // Live controls: one adaptive primary action (Siguiente tema / Siguiente
   // bloque / Terminar reunión); "Terminar reunión" always asks to confirm.
-  const livePrimary = isSessionActive ? getLivePrimaryAction(state, sessionState) : null;
-  const runLivePrimary = () => (onPrimaryAction ? onPrimaryAction() : onAdvance?.());
   const canToggleTemas = isSessionActive && !isEditing && Boolean(onToggleSubpointStatus);
 
   const isRecording = recordingStatus === RECORDING_STATUS.RECORDING;
@@ -280,10 +278,10 @@ export function PlannerAgendaView({
     }
   };
 
-  const handleTimeUpdate = (pointId, e) => {
+  const handleTimeUpdate = (pointId, e, totalDurationMs) => {
     const el = e.currentTarget;
     const currentMs = (el.currentTime || 0) * 1000;
-    const totalMs = el.duration && !isNaN(el.duration) && el.duration > 0 ? el.duration * 1000 : 0;
+    const totalMs = Number.isFinite(el.duration) && el.duration > 0 ? el.duration * 1000 : totalDurationMs;
     const percent = totalMs > 0 ? Math.min(100, (currentMs / totalMs) * 100) : 0;
     setAudioProgress((prev) => ({
       ...prev,
@@ -299,20 +297,23 @@ export function PlannerAgendaView({
     }));
   };
 
-  const handleSeek = (pointId, e, totalDurationMs) => {
-    e.stopPropagation();
-    const track = e.currentTarget;
-    const rect = track.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+  const seekAudio = (pointId, ratio, totalDurationMs) => {
     const audioEl = document.getElementById(`audio-element-${pointId}`);
-    if (audioEl && audioEl.duration) {
-      audioEl.currentTime = ratio * audioEl.duration;
+    if (audioEl?.src) {
+      const duration = Number.isFinite(audioEl.duration) ? audioEl.duration : totalDurationMs / 1000;
+      audioEl.currentTime = ratio * duration;
     }
     setAudioProgress((prev) => ({
       ...prev,
       [pointId]: { currentMs: ratio * totalDurationMs, percent: ratio * 100 },
     }));
+  };
+
+  const handleSeek = (pointId, e, totalDurationMs) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekAudio(pointId, ratio, totalDurationMs);
   };
 
   const [, setTicker] = useState(0);
@@ -705,15 +706,8 @@ export function PlannerAgendaView({
 
                     <div className="flex items-center gap-2 shrink-0">
                       {isLive ? (
-                        <button
-                          type="button"
-                          onClick={runLivePrimary}
-                          disabled={isTransitioning || isPaused}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-2xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                        >
-                          <span>{livePrimary?.label || 'Terminar descanso'}</span>
-                          <ChevronRight className="size-3 stroke-[2]" />
-                        </button>
+                        // The live dock holds the single primary action ("Terminar descanso").
+                        <span className="text-[11px] font-semibold text-primary select-none">En curso</span>
                       ) : isCompleted ? (
                         <div className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 select-none">
                           <Check className="size-3 text-emerald-500 stroke-[2]" />
@@ -1031,7 +1025,6 @@ export function PlannerAgendaView({
                       }
 
                       if (isPointActive) {
-                        const nextActionLabel = livePrimary?.label || 'Siguiente tema';
 
                         return (
                           <div
@@ -1096,21 +1089,6 @@ export function PlannerAgendaView({
                                 )}
                               </div>
 
-                              {(onPrimaryAction || onAdvance) && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    runLivePrimary();
-                                  }}
-                                  disabled={isTransitioning || isPaused}
-                                  title={isPaused ? 'Reanuda la reunión para continuar' : undefined}
-                                  className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-background hover:bg-background/90 text-primary font-medium text-xs shadow-xs transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                                >
-                                  <span className="font-medium">{nextActionLabel}</span>
-                                  <ChevronRight strokeWidth={1.75} className="size-3.5 text-primary stroke-[1.75]" />
-                                </button>
-                              )}
                             </div>
                           </div>
                         );
@@ -1219,7 +1197,7 @@ export function PlannerAgendaView({
                                 <audio
                                   id={`audio-element-${point.id}`}
                                   className="bardo-point-audio hidden"
-                                  onTimeUpdate={(e) => handleTimeUpdate(point.id, e)}
+                                  onTimeUpdate={(e) => handleTimeUpdate(point.id, e, pointRecordingDurationMs)}
                                   onEnded={() => handleEnded(point.id)}
                                 />
                                 <button
@@ -1245,6 +1223,16 @@ export function PlannerAgendaView({
                                   aria-valuemax={100}
                                   tabIndex={0}
                                   onClick={(e) => handleSeek(point.id, e, pointRecordingDurationMs)}
+                                  onKeyDown={(e) => {
+                                    const current = audioProgress[point.id]?.percent || 0;
+                                    const percent = e.key === 'Home' ? 0 : e.key === 'End' ? 100
+                                      : ['ArrowRight', 'ArrowUp'].includes(e.key) ? Math.min(100, current + 5)
+                                        : ['ArrowLeft', 'ArrowDown'].includes(e.key) ? Math.max(0, current - 5) : null;
+                                    if (percent == null) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    seekAudio(point.id, percent / 100, pointRecordingDurationMs);
+                                  }}
                                   className="w-28 sm:w-44 h-1.5 bg-muted/80 hover:bg-muted rounded-full overflow-hidden relative cursor-pointer select-none"
                                 >
                                   <div
@@ -1372,21 +1360,7 @@ export function PlannerAgendaView({
                       <span>Acuerdo</span>
                     </button>
 
-                    {/* Only when the bloque has no active tema: otherwise the tema's
-                        own button is the primary action (no silent skipping). */}
-                    {isLive && !liveActivePointId && (onPrimaryAction || onAdvance) && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={runLivePrimary}
-                        disabled={isTransitioning || isPaused}
-                        title={isPaused ? 'Reanuda la reunión para continuar' : undefined}
-                        className="h-8 min-w-0 max-w-full px-3.5 text-xs font-semibold rounded-full gap-1.5 cursor-pointer shadow-xs ml-auto"
-                      >
-                        <span className="truncate">{livePrimary?.label || 'Siguiente bloque'}</span>
-                        <ChevronRight className="size-3.5" />
-                      </Button>
-                    )}
+                    {/* No primary button here: the sticky live dock is the single place to advance. */}
                   </div>
                 )}
               </Card>

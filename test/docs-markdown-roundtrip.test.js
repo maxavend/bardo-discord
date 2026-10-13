@@ -169,6 +169,15 @@ test('bloques de código conservan saltos, backticks y lenguaje', () => {
   ], 'código');
 });
 
+test('código conserva líneas vacías finales en HTML y en sucesivos guardados remotos', () => {
+  for (const text of ['línea\n', 'línea\n\n', '\n', '\n\n', '  indentado\n\n']) {
+    const value = [{type: 'code_block', lang: 'js', children: [{text}]}];
+    assert.deepEqual(htmlToPlateValue(plateValueToHtml(value)), value, 'HTML local conserva exactamente el código');
+    assertRoundTrip(value, 'el salto anterior al cierre de la valla no forma parte del código');
+    assertRoundTrip([{type: 'toggle', summary: 'Código', children: value}], 'código dentro de un desplegable');
+  }
+});
+
 test('markdownToHtml importa tablas GFM, listas anidadas y h1 desde Markdown externo', () => {
   const html = markdownToHtml([
     '# Doc',
