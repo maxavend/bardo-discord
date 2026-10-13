@@ -38,7 +38,7 @@ npm --prefix activity-app run preview -- --host 127.0.0.1 --port 4173
 
 Abre `http://127.0.0.1:4173/#home`. En este modo se puede probar Home, edición, borradores, reuniones e importación; publicar en el canal y exportar PDF/Word requieren Discord y backend.
 
-Para UAT real se necesita una aplicación de Discord de prueba que apunte a una instancia de esta rama, con Worker y D1 de prueba, secretos configurados por su administrador y el bot presente en el servidor. Para esta aceptación el usuario autorizó desplegar en el Worker habitual; ya se realizó y quedó un checkpoint. No se ejecutaron migraciones remotas ni registros de comandos. **No uses las ramas `main` o `module/bardo-docs` para preparar una prueba: su workflow despliega automáticamente a producción.**
+Para UAT real se necesita una aplicación de Discord de prueba que apunte a una instancia de esta rama, con Worker y D1 de prueba, secretos configurados por su administrador y el bot presente en el servidor. Para esta aceptación el usuario autorizó desplegar en el Worker habitual; ya se realizó y quedó un checkpoint. No se ejecutaron migraciones remotas. El 13 de octubre se actualizaron y verificaron las descripciones/opciones de los comandos del servidor, con copia previa para rollback. **No uses las ramas `main` o `module/bardo-docs` para preparar una prueba: su workflow despliega automáticamente a producción.**
 
 El cliente solicita OAuth `identify`. El servidor consulta permisos mediante el bot. La búsqueda oficial de miembros por nombre/apodo no necesita el intent de listado masivo `GUILD_MEMBERS`; solicita al menos dos caracteres y devuelve hasta 100 coincidencias, pidiendo acotar si alcanza el límite. Si Discord la rechaza o limita, el selector explica el fallo y conserva participantes conectados, la cuenta actual e invitados. Los invitados son etiquetas, no una prueba de pertenencia ni de autorización.
 
@@ -82,9 +82,22 @@ Para probar permisos, prepara dos cuentas y dos canales: uno compartido y otro r
 
 **Acción:** prueba `/bardo`, `/docs`, `/doc-new`, `/doc-upload`, `/reu-new`, `/reus` y `/ayuda`, junto con los alias que tenga registrada la aplicación de prueba. Abre sus tarjetas desde el canal original. Busca una persona fuera de los primeros 100 miembros del servidor. Cambia de canal y de cuenta. Intenta abrir contenido restringido y un hilo privado sin ser miembro. Repite el acceso principal en Discord móvil.
 
-**Esperado:** cada comando conserva destino y contexto; búsqueda por prefijo encuentra miembros pertinentes; participantes conectados se distinguen del directorio. No aparecen borradores de otra cuenta ni datos de canales prohibidos. Acceso denegado no se resuelve mostrando una copia privada anterior. Errores temporales y rate limits se comunican y permiten reintentar.
+**Esperado:** `/bardo` abre siempre Inicio, incluso tras abrir un documento eliminado; no ofrece opciones de sección. `/ayuda` explica los comandos y su botón abre Inicio. Cada comando conserva su contexto; búsqueda por prefijo encuentra miembros pertinentes; participantes conectados se distinguen del directorio. No aparecen borradores de otra cuenta ni datos de canales prohibidos. Acceso denegado no se resuelve mostrando una copia privada anterior. Errores temporales y rate limits se comunican y permiten reintentar.
 
-**Error reconocible:** token de una cuenta anterior, contenido de otro ámbito, permiso concedido solo por datos del cliente, directorio presentado como completo o comando que abre un módulo incorrecto. El registro de comandos del entorno de prueba debe corresponder a esta rama; no se actualizó el registro real durante esta tarea.
+**Error reconocible:** token de una cuenta anterior, contenido de otro ámbito, permiso concedido solo por datos del cliente, directorio presentado como completo o comando que abre un módulo incorrecto. El registro de comandos del servidor se verificó contra esta rama el 13 de octubre; el comando global de lanzamiento se conservó.
+
+### Función de cada comando
+
+| Comando | Resultado |
+| --- | --- |
+| `/bardo` | Abre Inicio del canal. |
+| `/docs` | Lista documentos del canal con botones para abrirlos. |
+| `/doc-new` | Crea un documento y muestra el botón para editarlo. |
+| `/doc-upload` | Importa un archivo Markdown, TXT, PDF o Word (.docx). |
+| `/upload-docs` | Alias compatible de `/doc-upload`. |
+| `/reus` | Lista reuniones del canal. |
+| `/reu-new` | Crea una reunión con título y opciones de fecha, hora y duración. |
+| `/ayuda` | Muestra una guía privada de los comandos y un botón para Inicio. |
 
 ## Datos antiguos y recuperación
 

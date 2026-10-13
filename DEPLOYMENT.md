@@ -2,6 +2,26 @@
 
 
 
+## Inicio y comandos — 13 de octubre de 2026, 16:54 UTC
+
+- Código desplegado: `a994ad7`.
+- Versión activa al 100%: `ab1ac4f9-5351-402c-9cf6-80e770cd124f`.
+- `/bardo` abre siempre Inicio y ya no ofrece una sección. Guarda el destino antes de lanzar la Activity; Inicio prevalece sobre un identificador de documento obsoleto de una instancia reutilizada. Los identificadores de Discord ajenos a Bardo no se interpretan como documentos.
+- Ayuda y descripciones de comandos aclaradas. Ocho comandos del servidor verificados contra sus definiciones; se conserva el comando global de lanzamiento. No se enviaron mensajes al canal para probarlos.
+- Inicio: Documentos y Reuniones en formato normal, sin textos de apoyo, botones alineados y aviso de copias antiguas breve/desplegable. Se conservan las copias locales y la separación entre cuentas.
+- Validación: 396 pruebas unitarias, lint/tipos/build, 24 E2E de Inicio en 320/768/1024/1280 px (navegación, teclado, zoom, contraste y alineación). Revisión visual adicional con scrollbar de escritorio a 320 px. HTML y ocho assets publicados coinciden con el build; APIs protegidas devuelven 401 sin sesión. No se realizó un recorrido autenticado dentro del cliente real de Discord.
+- Checkpoint: `checkpoint/pre-commands-home-2026-10-13`, commit `6e6880d98bc489de3316ef3851a4cd652a25b0b9`; Worker anterior `0d7e1d2a-d7d3-4bf3-9aca-436588c74eb3`.
+- Registro y copias de las definiciones de Discord: `.wrangler/checkpoints/commands-home-2026-10-13/` (local, excluido de Git). Sin migraciones ni borrado de datos.
+
+Para probar: cerrar la Activity y ejecutar `/bardo`. Debe abrir Inicio sin el aviso de documento eliminado. `/ayuda` describe los comandos y su botón también abre Inicio.
+
+Rollback del Worker y, por separado, de las descripciones/opciones de los comandos (desde la raíz del repositorio, con la configuración local de Discord):
+
+```sh
+node node_modules/wrangler/bin/wrangler.js rollback 0d7e1d2a-d7d3-4bf3-9aca-436588c74eb3 --message 'Restaurar checkpoint previo a Inicio y comandos' --yes
+node --env-file=.env .wrangler/checkpoints/commands-home-2026-10-13/update-commands.mjs --restore
+```
+
 ## MVP sin captura nueva — 13 de octubre de 2026
 
 - Código desplegado: `4f05b05954537c93e684edf2dbffe2a71f75aea8`.
