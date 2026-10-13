@@ -7,6 +7,7 @@ export const DISCORD_PERMISSION = {
   SEND_MESSAGES: 1n << 11n,
   MANAGE_MESSAGES: 1n << 13n,
   MANAGE_EVENTS: 1n << 33n,
+  MANAGE_THREADS: 1n << 34n,
 };
 
 function asPermissionBits(value) {
@@ -83,7 +84,7 @@ export function discordUnavailableResponse(error) {
   });
 }
 
-async function retryAfterFromResponse(response) {
+export async function retryAfterFromResponse(response) {
   const header = Number(response.headers?.get?.('retry-after'));
   let bodySeconds = NaN;
   try {
@@ -171,7 +172,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
 
     const cacheKey = `${botToken}:${guildId}:${userId}:${channelId}`;
     const hit = permissionCache.get(cacheKey);
-    if (hit && hit.expiresAt > Date.now()) return hit.permissions;
+    if (cacheTtlMs > 0 && hit && hit.expiresAt > Date.now()) return hit.permissions;
 
     const permissions = await computeChannelPermissionsUncached(channelId);
     if (cacheTtlMs > 0) {
@@ -200,9 +201,13 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     }
 
     let permissionOverwrites = channel.permission_overwrites || [];
-    if (!permissionOverwrites.length && channel.parent_id) {
+    // Only threads inherit overwrites. Category children have their own
+    // overwrites, including an empty set when deliberately unsynced.
+    if ([10, 11, 12].includes(channel.type)) {
+      if (!channel.parent_id) return 0n;
       const parent = await loadChannel(channel.parent_id);
-      permissionOverwrites = parent?.permission_overwrites || [];
+      if (!parent || String(parent.guild_id) !== String(guildId)) return 0n;
+      permissionOverwrites = parent.permission_overwrites || [];
     }
 
     const everyoneOverwrite = permissionOverwrites.find(
@@ -218,6 +223,14 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     );
     permissions = applyOverwrite(permissions, memberOverwrite);
 
+    if (channel.type === 12 && !(permissions & DISCORD_PERMISSION.MANAGE_THREADS)) {
+      // The bot seeing a private thread does not imply this user joined it.
+      const membership = await readDiscord(
+        `/channels/${encodeURIComponent(channelId)}/thread-members/${encodeURIComponent(userId)}`,
+        botToken, fetchImpl,
+      );
+      if (String(membership?.user_id) !== String(userId)) return 0n;
+    }
     return permissions;
   };
 
@@ -275,6 +288,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
       ]);
 
       const canView = (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
+      if (!canView) return { roles: [], members: [], permissions: { canView: false, canManage: false, isHost: false } };
       const isOwner = String(guild?.owner_id) === String(userId);
       const canManage = isOwner
         || (permissions & DISCORD_PERMISSION.ADMINISTRATOR) !== 0n
@@ -293,39 +307,18 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
         }))
         .sort((a, b) => b.position - a.position);
 
-      // Best effort fetching members with access to channel
-      let members = [];
-      try {
-        const guildMembers = await readDiscord(
-          `/guilds/${encodeURIComponent(guildId)}/members?limit=100`,
-          botToken,
-          fetchImpl,
-        );
-        if (Array.isArray(guildMembers)) {
-          members = guildMembers.map(m => {
-            const user = m.user || {};
-            const displayName = m.nick || user.global_name || user.username || 'Miembro';
-            return {
-              id: user.id,
-              type: 'user',
-              username: user.username,
-              globalName: displayName,
-              tag: `@${displayName}`,
-              avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64` : null,
-              roles: m.roles || [],
-            };
-          });
-        }
-      } catch (error) {
-        if (isDiscordUnavailableError(error)) throw error;
-        // If members intent is restricted, members can be augmented by client
-        members = [];
-      }
+      // Seed only the authenticated member. Searching queries the guild-wide
+      // directory on demand, without requiring a privileged bulk-list intent.
+      const member = await loadMember();
+      const members = member?.user ? [formatDiscordMember(member, guildId)] : [];
 
       return {
         guildId,
         channelId,
         channelName: channel?.name || null,
+        guildName: guild?.name || null,
+        guildIcon: guild?.icon || null,
+        memberDirectory: { mode: 'search', complete: false },
         roles: formattedRoles,
         members,
         permissions: {
@@ -359,3 +352,29 @@ export async function getUserChannelContext(env, guildId, userId, channelId) {
 }
 
 export {asPermissionBits, applyOverwrite, combineRoleOverwrites, applyCombinedRoleOverwrites};
+
+export function formatDiscordMember(member, guildId) {
+  const user = member.user || {};
+  const name = member.nick || user.global_name || user.username || 'Miembro';
+  return {
+    id: user.id, type: 'user', username: user.username, globalName: name,
+    tag: `@${name}`, roles: member.roles || [],
+    avatar: member.avatar
+      ? `https://cdn.discordapp.com/guilds/${guildId}/users/${user.id}/avatars/${member.avatar}.png?size=64`
+      : user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64` : null,
+  };
+}
+
+export async function searchGuildMembers(env, guildId, query) {
+  try {
+    const params = new URLSearchParams({query, limit: '100'});
+    const members = await readDiscord(`/guilds/${encodeURIComponent(guildId)}/members/search?${params}`,
+      env.DISCORD_TOKEN?.trim(), env.DISCORD_FETCH || fetch);
+    return { members: members.filter(member => member?.user?.id).map(member => formatDiscordMember(member, guildId)),
+      truncated: members.length === 100, available: true };
+  } catch (error) {
+    if (isDiscordUnavailableError(error)) throw error;
+    return { members: [], available: false, truncated: false,
+      message: 'Discord no permite consultar el directorio. Puedes elegir participantes conectados o agregar un invitado.' };
+  }
+}

@@ -76,7 +76,7 @@ const bardoCommand = new SlashCommandBuilder()
   .addStringOption((option) =>
     option
       .setName('seccion')
-      .setDescription('Dónde abrir Bardo. Por defecto, Documentos.')
+      .setDescription('Dónde abrir Bardo. Por defecto, Inicio.')
       .addChoices(
         { name: 'Documentos', value: 'docs' },
         { name: 'Reuniones', value: 'reuniones' },

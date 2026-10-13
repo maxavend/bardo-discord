@@ -131,6 +131,7 @@ export function BardoEditor({
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(doc?.description ?? initialDraft?.description ?? '');
   const [isDirty, setIsDirty] = useState(false);
+  const [localSaveFailed, setLocalSaveFailed] = useState(false);
   const [syncState, setSyncState] = useState(() => initialSyncState(doc?.id, remoteSync && !isNew));
   const docId = doc?.id;
   const [isExiting, setIsExiting] = useState(false);
@@ -178,7 +179,22 @@ export function BardoEditor({
     journalTimer.current = null;
     const snap = currentSnapshot();
     if (readOnly) return snap;
-    onAutosaveRef.current?.(snap);
+    let saved = false;
+    try {
+      saved = onAutosaveRef.current?.(snap) !== false;
+    } catch (error) {
+      console.warn('Bardo Docs: no se pudo guardar el documento', error);
+    }
+    if (!saved) {
+      // Keep both the editor and its freshest recovery snapshot alive. A quota
+      // error must not clear dirty state or navigate away from the only copy.
+      try { onJournalRef.current?.(snap); } catch {}
+      dirtyRef.current = true;
+      setIsDirty(true);
+      setLocalSaveFailed(true);
+      return null;
+    }
+    setLocalSaveFailed(false);
     dirtyRef.current = false;
     setIsDirty(false);
     if (remoteSync && !isNew && docId) {
@@ -215,11 +231,20 @@ export function BardoEditor({
     const flushIfDirty = () => {
       if (dirtyRef.current) flushRef.current();
     };
+    // The router invokes this before changing the mounted route (including
+    // browser history). A hashchange listener alone runs too late to stop it.
+    const beforeNavigate = () => !dirtyRef.current || flushRef.current() !== null;
+    const previousBeforeNavigate = window.__bardoBeforeNavigate;
+    window.__bardoBeforeNavigate = beforeNavigate;
     // Al cerrar u ocultar: encolar el último snapshot y enviarlo de inmediato con
     // keepalive. Los listeners van en fase de captura para correr ANTES que los
     // del bridge (que se registraron antes y envían la cola con keepalive).
-    const flushForUnload = () => {
+    const flushForUnload = (event) => {
       flushIfDirty();
+      if (event?.type === 'beforeunload' && dirtyRef.current) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
       try {
         window.__bardoDocsSync?.flushKeepalive?.();
       } catch {}
@@ -232,6 +257,10 @@ export function BardoEditor({
     window.addEventListener('hashchange', flushIfDirty);
     document.addEventListener('visibilitychange', onVisibility, {capture: true});
     return () => {
+      if (window.__bardoBeforeNavigate === beforeNavigate) {
+        if (previousBeforeNavigate) window.__bardoBeforeNavigate = previousBeforeNavigate;
+        else delete window.__bardoBeforeNavigate;
+      }
       window.removeEventListener('pagehide', flushForUnload, {capture: true});
       window.removeEventListener('beforeunload', flushForUnload, {capture: true});
       window.removeEventListener('hashchange', flushIfDirty);
@@ -255,10 +284,14 @@ export function BardoEditor({
   const syncKey = isDirty ? 'saving' : remoteSync ? (syncState?.state || 'saved') : 'saved';
   const saveState = readOnly
     ? (readOnlyMessage ? 'Solo lectura' : 'Procesando…')
+    : localSaveFailed
+      ? 'No se guardó'
     : isNew
       ? (isDirty ? 'Guardando…' : 'Borrador')
       : (SYNC_LABELS[syncKey] || 'Guardado');
-  const saveStateTitle = isNew
+  const saveStateTitle = localSaveFailed
+    ? 'No pudimos guardar en este dispositivo. Conserva esta página abierta y vuelve a pulsar Listo.'
+    : isNew
     ? 'Solo tú ves este borrador, en este dispositivo, hasta que pulses Listo.'
     : (!isDirty && remoteSync && syncState?.message) || SYNC_HINTS[syncKey] || undefined;
 
@@ -267,16 +300,31 @@ export function BardoEditor({
     setIsExiting(true);
     exitTimer.current = setTimeout(() => {
       exitTimer.current = null;
-      callback();
+      let completed = false;
+      try {
+        completed = callback() !== false;
+      } catch (error) {
+        console.warn('Bardo Docs: no se pudo terminar el guardado', error);
+      }
+      if (!completed) {
+        // Publishing a draft can fail after its own autosave succeeded.
+        // Restore the editor so another press of Listo can retry that write.
+        setIsExiting(false);
+        dirtyRef.current = true;
+        setIsDirty(true);
+        setLocalSaveFailed(true);
+      }
     }, 150);
   }, []);
 
   const finish = () => {
+    if (isExiting) return;
     if (readOnly) {
       leaveEditor(onBack);
       return;
     }
     const snap = flushSave();
+    if (!snap) return;
     leaveEditor(() => onFinish(snap));
   };
 
@@ -378,7 +426,7 @@ export function BardoEditor({
             size="sm"
             onClick={() => {
               if (isExiting) return;
-              flushSave();
+              if (!flushSave()) return;
               leaveEditor(onBack);
             }}
             className="back-button"
@@ -392,7 +440,7 @@ export function BardoEditor({
             variant="secondary"
             className="save-state text-xs"
             data-dirty={isDirty ? 'true' : 'false'}
-            data-sync-state={isDirty ? 'dirty' : syncState?.state || 'saved'}
+            data-sync-state={localSaveFailed ? 'error' : isDirty ? 'dirty' : syncState?.state || 'saved'}
             title={saveStateTitle}
             aria-live="polite"
           >
@@ -424,7 +472,7 @@ export function BardoEditor({
             ref={shellRef}
             className="document-shell editor-shell relative"
           >
-            <BardoBlockDragHandle shellRef={shellRef} bodyRef={bodyRef} />
+            {!readOnly && <BardoBlockDragHandle shellRef={shellRef} bodyRef={bodyRef} />}
 
             <header className="doc-intro">
               <div className="doc-meta flex items-center gap-2 flex-wrap">
@@ -476,6 +524,13 @@ export function BardoEditor({
                 onPaste={singleLinePaste}
               />
             </header>
+
+            {localSaveFailed && (
+              <div className="import-pending-banner text-sm" role="alert">
+                No pudimos guardar los cambios. Mantén esta página abierta y pulsa Listo para reintentar.
+                {' '}Puedes usar Copiar texto en la barra para conservar el contenido.
+              </div>
+            )}
 
             {readOnly ? (
               <div className="import-pending-banner text-sm text-muted-foreground" role="status">

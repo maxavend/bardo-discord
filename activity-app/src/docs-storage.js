@@ -1,5 +1,5 @@
 /**
- * Claves de localStorage de Documentos, separadas por servidor + canal.
+ * Claves locales separadas por servidor + canal + usuario autenticado.
  *
  * La Activity de Discord usa el mismo origen en todos los canales, así que sin
  * este prefijo un borrador, la copia local o la cola de sincronización de un
@@ -20,10 +20,11 @@ export const DOCS_KEYS = Object.freeze({
 let currentScope = null;
 
 /** Ámbito `guild:canal`, o null si falta alguno de los dos. */
-export function docsScopeFor(guildId, channelId) {
+export function docsScopeFor(guildId, channelId, userId) {
   const guild = String(guildId || '').trim();
   const channel = String(channelId || '').trim();
-  return guild && channel ? `${guild}:${channel}` : null;
+  const user = String(userId || '').trim();
+  return guild && channel ? `${guild}:${channel}${user ? `:${user}` : ''}` : null;
 }
 
 export function setDocsStorageScope(scope) {
@@ -57,4 +58,15 @@ export function adoptLegacyDocsValue(storage, base, scope = currentScope) {
   } catch {
     return false;
   }
+}
+
+/** Ownerless legacy data is retained byte-for-byte, never adopted by a new account. */
+export function hasUnownedLocalData(storage, guildId, channelId) {
+  const channelScope = docsScopeFor(guildId, channelId);
+  const legacyKeys = [...Object.values(DOCS_KEYS), 'bardo-planner-session-state-v1',
+    'bardo-planner-live-session-v1', 'bardo.planner.pending.v1', 'bardo.planner.pending-live.v1'];
+  try {
+    return legacyKeys.some(key => storage.getItem(key) !== null
+      || (channelScope && storage.getItem(scopedDocsKey(key, channelScope)) !== null));
+  } catch { return false; }
 }

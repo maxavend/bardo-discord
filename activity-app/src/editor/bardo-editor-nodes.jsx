@@ -135,6 +135,7 @@ export function BardoCalloutElement(props) {
  */
 export function BardoChecklistElement(props) {
   const { element, editor, children } = props;
+  const readOnly = useReadOnly();
   const checked = Boolean(element.checked);
   const nestedIndent = Math.max(0, (Number(element.indent) || 1) - 1);
 
@@ -142,14 +143,14 @@ export function BardoChecklistElement(props) {
     (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!editor) return;
+      if (!editor || readOnly) return;
 
       const path = editor.api.findPath(element);
       if (path) {
         editor.tf.setNodes({ checked: !checked }, { at: path });
       }
     },
-    [checked, editor, element]
+    [checked, editor, element, readOnly]
   );
 
   return (
@@ -162,6 +163,7 @@ export function BardoChecklistElement(props) {
       <button
         type="button"
         contentEditable={false}
+        disabled={readOnly}
         className="check-control"
         aria-pressed={checked}
         aria-label={checked ? 'Marcar como pendiente' : 'Marcar como completado'}
@@ -184,19 +186,20 @@ export function BardoChecklistElement(props) {
  */
 export function BardoSpoilerElement(props) {
   const { element, editor, children } = props;
+  const readOnly = useReadOnly();
   const [isOpen, setIsOpen] = useState(true);
   const summary = element.summary ?? 'Detalles';
 
   const handleSummaryChange = useCallback(
     (e) => {
       const nextSummary = e.target.value;
-      if (!editor) return;
+      if (!editor || readOnly) return;
       const path = editor.api.findPath(element);
       if (path) {
         editor.tf.setNodes({ summary: nextSummary }, { at: path });
       }
     },
-    [editor, element]
+    [editor, element, readOnly]
   );
 
   return (
@@ -217,6 +220,7 @@ export function BardoSpoilerElement(props) {
           className="spoiler-title-input"
           aria-label="Título del desplegable"
           value={summary}
+          readOnly={readOnly}
           onChange={handleSummaryChange}
           placeholder="Detalles"
         />

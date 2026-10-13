@@ -12,7 +12,7 @@ import {
 import {normalizePendingImports} from './production-import-normalizer.js';
 import {
   DOCS_KEYS,
-  adoptLegacyDocsValue,
+  hasUnownedLocalData,
   docsScopeFor,
   scopedDocsKey,
   setDocsStorageScope,
@@ -24,7 +24,7 @@ const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 /** Destinos de lanzamiento que no son un documento. */
-const SPECIAL_LAUNCH_TARGETS = new Set(['docs', 'planner', 'new-doc']);
+const SPECIAL_LAUNCH_TARGETS = new Set(['home', 'docs', 'planner', 'new-doc']);
 
 function responseFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || '';
@@ -46,16 +46,6 @@ function triggerBlobDownload(blob, filename) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-}
-
-/** Copia global antigua (sin ámbito) de la biblioteca, solo para rescatar documentos sin enviar. */
-function readLegacyCacheDocs() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(DOCS_KEYS.store) || 'null');
-    return Array.isArray(parsed?.docs) ? parsed.docs.filter(doc => doc?.id) : [];
-  } catch {
-    return [];
-  }
 }
 
 /** Copia local de la biblioteca de ESTE canal (nunca la de otro canal). */
@@ -162,6 +152,14 @@ export async function prepareBardoProduction(options = {}) {
     || null;
 
   window.__BARDO_PRODUCTION__ = true;
+  window.__bardoHomeStatus = {docs: 'error', planner: 'error', context: 'error'};
+  window.__bardoChannelContext = null;
+  window.__bardoLiveParticipants = [];
+  window.__bardoChannelSessions = [];
+  const homeStatus = (module, status) => {
+    window.__bardoHomeStatus = {...window.__bardoHomeStatus, [module]: status};
+    window.dispatchEvent(new CustomEvent('bardo-home-status', {detail: window.__bardoHomeStatus}));
+  };
   if (instanceId) window.__BARDO_INSTANCE_ID__ = instanceId;
 
   const sdk = options.sdk || window.__BARDO_DISCORD_SDK__ || await initSdk();
@@ -170,19 +168,16 @@ export async function prepareBardoProduction(options = {}) {
   // Todo lo que Documentos guarda en este dispositivo queda separado por
   // servidor + canal: un borrador o un cambio sin enviar de un canal (incluso
   // privado) nunca aparece ni se publica en otro.
+  if (!window.__BARDO_USER__?.id) throw new Error('No se pudo verificar la cuenta de Discord para abrir los datos locales.');
   const docsScope = setDocsStorageScope(docsScopeFor(
     options.guildId || window.__BARDO_GUILD_ID__,
     options.channelId || window.__BARDO_CHANNEL_ID__,
+    window.__BARDO_USER__?.id,
   ));
-  // La copia global antigua de la biblioteca (de antes de separar por canal)
-  // puede tener documentos que nunca llegaron al servidor: se rescatan en la
-  // cola antigua y la copia se borra SOLO cuando quedaron guardados ahí.
-  let legacyCacheDocs = [];
-  if (docsScope) {
-    adoptLegacyDocsValue(localStorage, DOCS_KEYS.draft, docsScope);
-    legacyCacheDocs = readLegacyCacheDocs();
-    try { localStorage.removeItem(DOCS_KEYS.lastOpened); } catch {}
-  }
+  // Pre-owner caches cannot safely be attributed to the account that happens
+  // to launch next. Keep them untouched for deliberate recovery, never sync them.
+  window.__BARDO_UNOWNED_LOCAL_DATA__ = hasUnownedLocalData(localStorage,
+    options.guildId || window.__BARDO_GUILD_ID__, options.channelId || window.__BARDO_CHANNEL_ID__);
 
   const headers = {'Accept':'application/json'};
   if (window.__BARDO_SESSION_TOKEN__) headers['Authorization'] = `Bearer ${window.__BARDO_SESSION_TOKEN__}`;
@@ -199,9 +194,12 @@ export async function prepareBardoProduction(options = {}) {
       payload = result.payload;
       libraryLoaded = true;
     } else {
+      if ([401, 403].includes(result.error?.status)) throw result.error;
       console.warn('Bardo Docs: no se pudo hidratar la biblioteca', result.error);
     }
   }
+
+  homeStatus('docs', libraryLoaded ? 'ready' : 'error');
 
   // Slash commands (/bardo) and some mobile clients launch without a
   // custom_id; the server then returns the destination saved by the
@@ -214,22 +212,27 @@ export async function prepareBardoProduction(options = {}) {
     const contextRes = await fetch('/api/discord/channel-context', {headers, cache:'no-store'});
     if (contextRes.ok) {
       window.__bardoChannelContext = await contextRes.json();
+      homeStatus('context', 'ready');
     }
   } catch (err) {
     console.warn('Bardo: no se pudo cargar contexto de canal', err);
   }
 
   if (sdk?.commands?.getInstanceConnectedParticipants) {
-    try {
-      const participants = await sdk.commands.getInstanceConnectedParticipants();
+    const updateParticipants = (participants) => {
       if (participants && Array.isArray(participants.participants)) {
         window.__bardoLiveParticipants = participants.participants.map((p) => ({
           id: p.id,
           username: p.username,
           globalName: p.global_name || p.username,
-          avatar: p.avatar,
+          avatar: p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png?size=64` : null,
         }));
+        window.dispatchEvent(new CustomEvent('bardo-participants-change'));
       }
+    };
+    try {
+      updateParticipants(await sdk.commands.getInstanceConnectedParticipants());
+      if (sdk.subscribe) await sdk.subscribe('ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE', updateParticipants);
     } catch {}
   }
 
@@ -240,13 +243,14 @@ export async function prepareBardoProduction(options = {}) {
     const plannerStore = await import('./planner/planner-store.js');
     const {readPendingPlannerEdits, readPendingLiveStates} = await import('./planner/planner-sync.js');
     const readLocalJson = (key) => {
-      try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
+      try { return JSON.parse(localStorage.getItem(scopedDocsKey(key, docsScope)) || 'null'); } catch { return null; }
     };
     const plannerRes = await fetch('/api/planner/sessions', {headers, cache:'no-store'});
     if (plannerRes.ok) {
       const plannerPayload = await plannerRes.json();
       const sessions = Array.isArray(plannerPayload?.sessions) ? plannerPayload.sessions : [];
       window.__bardoChannelSessions = sessions;
+      homeStatus('planner', 'ready');
       const localPlanner = readLocalJson(PLANNER_STORE_KEY);
       const pendingEdits = readPendingPlannerEdits(localStorage);
       // Launch from a "planner-session:<id>" button: that agenda wins, with the
@@ -256,7 +260,7 @@ export async function prepareBardoProduction(options = {}) {
       const {session: chosen, keepLocal} = plannerStore.choosePlannerBootSession(sessions, localPlanner, pendingEdits, preferredId);
       if (chosen) {
         const plannerForLive = keepLocal ? localPlanner : plannerStore.normalizeServerSession(chosen);
-        if (!keepLocal) localStorage.setItem(PLANNER_STORE_KEY, JSON.stringify(plannerForLive));
+        if (!keepLocal) localStorage.setItem(scopedDocsKey(PLANNER_STORE_KEY, docsScope), JSON.stringify(plannerForLive));
         try {
           const liveRes = await fetch(`/api/planner/sessions/${encodeURIComponent(chosen.id)}/live`, {headers, cache:'no-store'});
           if (liveRes.ok) {
@@ -277,15 +281,15 @@ export async function prepareBardoProduction(options = {}) {
             // own unsent state (other agendas' unsent states stay in the
             // per-agenda pending store).
             if (source === 'remote' || (localBase && localBase !== slotForChosen)) {
-              localStorage.setItem(LIVE_SESSION_STORE_KEY, JSON.stringify(plannerStore.serializeLiveSessionState(state)));
+              localStorage.setItem(scopedDocsKey(LIVE_SESSION_STORE_KEY, docsScope), JSON.stringify(plannerStore.serializeLiveSessionState(state)));
             }
           }
         } catch (err) {
           console.warn('Bardo: no se pudo cargar el estado en vivo del planner', err);
         }
       } else if (plannerStore.isDemoPlannerState(localPlanner)) {
-        localStorage.removeItem(PLANNER_STORE_KEY);
-        localStorage.removeItem(LIVE_SESSION_STORE_KEY);
+        localStorage.removeItem(scopedDocsKey(PLANNER_STORE_KEY, docsScope));
+        localStorage.removeItem(scopedDocsKey(LIVE_SESSION_STORE_KEY, docsScope));
       }
     }
   } catch (err) {
@@ -322,7 +326,7 @@ export async function prepareBardoProduction(options = {}) {
     // Cola por canal; la cola antigua sin ámbito solo se adopta para documentos
     // de este canal y nunca se crea ni se recrea aquí.
     pendingKey: scopedDocsKey(DOCS_PENDING_KEY, docsScope),
-    legacyPendingKey: docsScope ? DOCS_PENDING_KEY : null,
+    legacyPendingKey: null,
   });
   window.__bardoDocsSync = docsSync;
 
@@ -336,10 +340,7 @@ export async function prepareBardoProduction(options = {}) {
     docsSync.registerCached(baseDocs);
     deliverRemote({type: 'offline-boot'});
   }
-  const legacyQueued = docsSync.loadPending({legacyDocs: legacyCacheDocs});
-  if (docsScope && legacyQueued) {
-    try { localStorage.removeItem(DOCS_KEYS.store); } catch {}
-  }
+  docsSync.loadPending();
   // Importaciones que ya fallaron en este dispositivo: se muestran como error
   // (con "Eliminar" / "Descargar original") en vez de "Procesando archivo…".
   const importFailures = readImportFailures();
@@ -406,6 +407,7 @@ export async function prepareBardoProduction(options = {}) {
       const result = await fetchDocsLibrary({headers: docsHeaders(), attempts: 2});
       if (result.ok) {
         libraryLoaded = true;
+        homeStatus('docs', 'ready');
         const items = Array.isArray(result.payload?.documents) ? result.payload.documents : [];
         docsSync.registerRemote(items);
         deliverRemote({
@@ -482,6 +484,9 @@ export async function prepareBardoProduction(options = {}) {
     // Con un borrador sin terminar, la app pregunta "Continuar" / "Empezar uno nuevo".
     if (requestedTitle && !prefillNewDocTitle(requestedTitle)) window.__BARDO_PENDING_NEW_TITLE__ = requestedTitle;
     history.replaceState(null, '', '#new');
+  } else if (explicitCustomId === 'home' || explicitCustomId === 'docs') {
+    window.__BARDO_DOCUMENT_ID__ = null;
+    history.replaceState(null, '', `#${explicitCustomId}`);
   } else if (explicitCustomId === 'planner') {
     history.replaceState(null, '', '#planner');
   } else if (explicitCustomId?.startsWith('planner-session:')) {
@@ -490,7 +495,7 @@ export async function prepareBardoProduction(options = {}) {
     // revert them. Land on its agenda, not on the meetings list.
     let openedPlannerId = null;
     try {
-      openedPlannerId = JSON.parse(localStorage.getItem(PLANNER_STORE_KEY) || 'null')?.id || null;
+      openedPlannerId = JSON.parse(localStorage.getItem(scopedDocsKey(PLANNER_STORE_KEY, docsScope)) || 'null')?.id || null;
     } catch {}
     history.replaceState(null, '', plannerSessionLaunchHash(explicitCustomId.slice('planner-session:'.length), openedPlannerId));
   } else if (contextId && docs.some(doc => doc.id === contextId)) {
@@ -502,7 +507,7 @@ export async function prepareBardoProduction(options = {}) {
     // Tarjeta de un documento archivado o eliminado: la app explica qué pasó.
     if (contextId) window.__BARDO_LAUNCH_MISSING_DOC__ = contextId;
     if (!location.hash || location.hash === '#docs') {
-      history.replaceState(null, '', '#docs');
+      history.replaceState(null, '', contextId || location.hash === '#docs' ? '#docs' : '#home');
     }
   }
 

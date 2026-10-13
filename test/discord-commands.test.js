@@ -83,10 +83,10 @@ test('/bardo abre la Activity (LAUNCH_ACTIVITY) y la biblioteca recibe el destin
   assert.equal(await launchTargetFromLibrary(env), null, 'el destino se consume al leerlo');
 });
 
-test('/bardo sin sección abre la biblioteca; "nuevo" abre el editor', async () => {
+test('/bardo sin sección abre Inicio; "nuevo" abre el editor', async () => {
   const { env, send } = await setup();
   await send(command('bardo'));
-  assert.equal(await launchTargetFromLibrary(env), 'docs');
+  assert.equal(await launchTargetFromLibrary(env), 'home');
   await send(command('bardo', [{ name: 'seccion', value: 'nuevo' }]));
   assert.equal(await launchTargetFromLibrary(env), 'new-doc');
 });

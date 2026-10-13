@@ -167,7 +167,9 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
   expect(audit.headerTargets.map(target => target.name)).toEqual(['Reuniones', 'Subir archivo', 'Crear documento', 'Cambiar a modo claro']);
-  expect(audit.headerTargets.every(({w, h}) => w >= 32 && h >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();
+  // Tolerate only floating-point layout noise (31.999998px), not smaller targets.
+  const layoutEpsilon = 0.001;
+  expect(audit.headerTargets.every(({w, h}) => w + layoutEpsilon >= 32 && h + layoutEpsilon >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();
 
   await search.focus();
   await expect(search).toBeFocused();

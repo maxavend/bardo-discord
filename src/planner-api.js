@@ -3,6 +3,7 @@ import {
   canUserViewChannel,
   discordUnavailableResponse,
   getUserChannelContext,
+  searchGuildMembers,
   isDiscordUnavailableError,
 } from './discord-permissions.js';
 import {
@@ -311,9 +312,10 @@ async function handleSingle(request, env, session, route) {
 
 async function routePlannerApi(request, url, env) {
   const isContextRoute = url.pathname === DISCORD_CONTEXT_PATH;
+  const isMemberSearch = url.pathname === '/api/discord/members';
   const plannerRoute = parsePlannerRoute(url.pathname);
 
-  if (!isContextRoute && !plannerRoute) return null;
+  if (!isContextRoute && !isMemberSearch && !plannerRoute) return null;
   if (plannerRoute?.invalid) return apiError(400, 'invalid_route', 'Identificador de reunión inválido.');
 
   const auth = await requireDocsSession(request, env);
@@ -327,6 +329,13 @@ async function routePlannerApi(request, url, env) {
   const hasAccess = await canUserViewChannel(env, session.guildId, session.userId, session.channelId);
   if (!hasAccess) {
     return apiError(403, 'forbidden', 'No tienes permiso para acceder a este canal de Discord.');
+  }
+
+  if (isMemberSearch) {
+    if (request.method !== 'GET') return methodNotAllowed();
+    const query = (url.searchParams.get('query') || '').trim();
+    if (query.length < 2 || query.length > 100) return apiError(400, 'invalid_query', 'Escribe entre 2 y 100 caracteres para buscar por nombre o apodo.');
+    return json(await searchGuildMembers(env, session.guildId, query));
   }
 
   // 1. Channel Context: roles, members, permissions

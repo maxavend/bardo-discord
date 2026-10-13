@@ -6,10 +6,12 @@ Bardo convierte un canal de Discord en un espacio de trabajo embebido para **cre
 
 Todo ocurre dentro de una **Discord Activity** y se ejecuta sobre una arquitectura serverless con Cloudflare Workers y D1. No requiere un bot conectado permanentemente al Gateway ni un proceso Node ejecutándose 24/7.
 
-Bardo se divide actualmente en dos espacios principales:
+Bardo abre en **Inicio**, con el contexto del canal, documentos recientes, borradores pendientes y reuniones para continuar. Desde allí se accede a dos espacios principales:
 
 - **Docs** — documentación compartida, editor enriquecido, biblioteca y exportación.
 - **Reuniones** — planificación, agenda en vivo, control de tiempos, acuerdos, grabaciones y recap.
+
+La [guía de aceptación](UAT.md) describe los cinco recorridos de prueba, los requisitos de Discord y la recuperación de datos locales anteriores. `/bardo` abre Inicio; los comandos de cada módulo mantienen sus destinos directos.
 
 ---
 

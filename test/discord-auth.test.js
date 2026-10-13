@@ -105,3 +105,19 @@ test('requireDocsSession responde en español con código estable', async () => 
   assert.equal(data.error, 'session_not_found');
   assert.match(data.message, /Tu sesión de Bardo expiró/);
 });
+
+test('OAuth rate limits and outages preserve retryable status instead of logging the user out', async () => {
+  for (const status of [429, 503]) {
+    const req = new Request('https://example.com/api/auth/token', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code: 'code', guildId: 'guild', channelId: 'channel'}),
+    });
+    const res = await handleDiscordAuthApi(req, new URL(req.url), {
+      DB: createAuthMockDb(), DISCORD_CLIENT_SECRET: 'test-only',
+      DISCORD_FETCH: async () => Response.json({retry_after: 4}, {status}),
+    });
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('Retry-After'), '4');
+    assert.equal((await res.json()).retryAfterMs, 4000);
+  }
+});

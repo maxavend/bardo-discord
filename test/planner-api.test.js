@@ -22,7 +22,10 @@ function discordFetchWithMembers() {
         { id: 'role-2', name: 'Devs', color: 5763719, permissions: '0', position: 2, managed: false },
       ]);
     }
-    if (url.pathname === `/api/v10/guilds/${GUILD}/members`) {
+    if (url.pathname === `/api/v10/guilds/${GUILD}/members/user-123`) {
+      return Response.json({ user: { id: 'user-123', username: 'maxi', global_name: 'Maxi' }, roles: ['role-1'] });
+    }
+    if (url.pathname === `/api/v10/guilds/${GUILD}/members/search`) {
       return Response.json([
         { user: { id: 'user-123', username: 'maxi', global_name: 'Maxi' }, roles: ['role-1'] },
         { user: { id: 'user-456', username: 'pau', global_name: 'Paula' }, roles: ['role-1'] },
@@ -83,7 +86,8 @@ test('channel-context devuelve roles y miembros reales de Discord', async () => 
   assert.equal(json.channelId, CHANNEL);
   assert.equal(json.roles.length, 2);
   assert.equal(json.roles[0].name, 'Devs');
-  assert.equal(json.members.length, 2);
+  assert.equal(json.members.length, 1);
+  assert.equal(json.memberDirectory.complete, false);
   assert.equal(json.members[0].globalName, 'Maxi');
 });
 
@@ -349,4 +353,47 @@ test('un id con codificación inválida responde 400 en vez de lanzar', async ()
   const { env } = await setup();
   const { status } = await call(env, '/api/planner/sessions/%E0%A4%A');
   assert.equal(status, 400);
+});
+
+
+test('member search queries Discord across the guild, not a first-100 local snapshot', async () => {
+  const {env} = await setup();
+  const base = env.DISCORD_FETCH;
+  let queried = false;
+  env.DISCORD_FETCH = async input => {
+    const url = new URL(input);
+    if (url.pathname === `/api/v10/guilds/${GUILD}/members/search`) {
+      queried = true;
+      assert.equal(url.searchParams.get('query'), 'Zoe');
+      assert.equal(url.searchParams.get('limit'), '100');
+      return Response.json([{user: {id: 'member-1001', username: 'zoe'}, roles: []}]);
+    }
+    assert.ok(!url.pathname.includes('guild-attacker'));
+    return base(input);
+  };
+  const {status, json} = await call(env, '/api/discord/members?query=Zoe&guildId=guild-attacker');
+  assert.equal(status, 200);
+  assert.equal(queried, true);
+  assert.equal(json.members[0].id, 'member-1001');
+  assert.equal(json.available, true);
+});
+
+test('member search validates query, denies channel access, and surfaces rate limits', async () => {
+  const {env} = await setup();
+  assert.equal((await call(env, '/api/discord/members?query=a')).status, 400);
+  assert.equal((await call(env, '/api/discord/members?query=Alex', {token: 'unknown'})).status, 401);
+  env.DISCORD_FETCH = createDiscordFetch({permissions: '0'});
+  assert.equal((await call(env, '/api/discord/members?query=Alex')).status, 403);
+  const base = createDiscordFetch();
+  env.DISCORD_FETCH = input => new URL(input).pathname.endsWith('/members/search')
+    ? Response.json({retry_after: 3.5}, {status: 429}) : base(input);
+  const limited = await call(env, '/api/discord/members?query=Alex');
+  assert.equal(limited.status, 503);
+  assert.equal(limited.json.retryAfterMs, 3500);
+  env.DISCORD_FETCH = input => new URL(input).pathname.endsWith('/members/search')
+    ? Response.json({}, {status: 403}) : base(input);
+  const restricted = await call(env, '/api/discord/members?query=Alex');
+  assert.equal(restricted.status, 200);
+  assert.equal(restricted.json.available, false);
+  assert.match(restricted.json.message, /invitado/);
 });

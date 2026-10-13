@@ -382,7 +382,7 @@ export function buildDocsListPayload({ documents = [], channelName = null }) {
 
 export const HELP_TEXT = [
   '**Abrir**',
-  '`/bardo` — abre Bardo en este canal (elige sección: documentos, reuniones o nuevo documento).',
+  '`/bardo` — abre Inicio de Bardo en este canal (elige sección: documentos, reuniones o nuevo documento).',
   '',
   '**Documentos**',
   '`/doc-new` — crea un documento nuevo (título opcional).',

@@ -33,6 +33,99 @@ async function openTextPreview(page) {
   return dialog;
 }
 
+test('el menú / vuelve a abrir tras Escape y mantiene visible la opción del teclado', async ({page}) => {
+  const errors = collectRuntimeErrors(page);
+  await seedDocs(page, []);
+  await startNewDocument(page);
+  const body = page.getByRole('textbox', {name: 'Contenido del documento'});
+  await body.click();
+  await page.keyboard.type('/');
+  const menu = page.getByRole('listbox', {name: 'Insertar bloque'});
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(body).toContainText('/');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('/');
+  await expect(menu).toBeVisible();
+
+  // ArrowUp wraps to the last entry; it must scroll inside the popup.
+  await page.keyboard.press('ArrowUp');
+  const last = menu.getByRole('option', {name: /^Desplegable/});
+  await expect(last).toHaveAttribute('aria-selected', 'true');
+  await expect(body).toHaveAttribute('aria-activedescendant', await last.getAttribute('id'));
+  const bounds = await last.boundingBox();
+  const menuBounds = await menu.boundingBox();
+  expect(bounds.y).toBeGreaterThanOrEqual(menuBounds.y - 1);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(menuBounds.y + menuBounds.height + 1);
+
+  // IME confirmation must not insert a block while composing text.
+  await body.dispatchEvent('keydown', {key: 'Enter', isComposing: true});
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect(body.getByLabel('Título del desplegable')).toHaveValue('Detalles');
+  expect(errors).toEqual([]);
+});
+
+test('un fallo de almacenamiento mantiene el borrador abierto y permite reintentar', async ({page}) => {
+  await seedDocs(page, []);
+  await startNewDocument(page);
+  await page.getByLabel('Título', {exact: true}).fill('Borrador que no debe perderse');
+  await page.getByRole('textbox', {name: 'Contenido del documento'}).fill('Contenido recuperable');
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    window.__restoreDocsStorage = () => { Storage.prototype.setItem = original; };
+    Storage.prototype.setItem = function(key, value) {
+      if (String(key).startsWith('bardo.docs.')) throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await page.getByRole('button', {name: 'Listo', exact: true}).click();
+  await expect(page.getByRole('alert')).toContainText('No pudimos guardar los cambios');
+  await expect(page.locator('.save-state')).toHaveText('No se guardó');
+  await expect(page.getByLabel('Título', {exact: true})).toHaveValue('Borrador que no debe perderse');
+  await page.getByRole('button', {name: 'Volver a Documentos'}).click();
+  await expect(page.locator('.editable-body')).toContainText('Contenido recuperable');
+  const editorHash = await page.evaluate(() => window.location.hash);
+  await page.evaluate(() => { window.location.hash = '#home'; });
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe(editorHash);
+  await expect(page.locator('.editable-body')).toContainText('Contenido recuperable');
+
+  await page.evaluate(() => window.__restoreDocsStorage());
+  await finishEditing(page);
+  await page.reload();
+  await expect(page.locator('h1.doc-title')).toHaveText('Borrador que no debe perderse');
+  await expect(page.locator('.doc-body')).toContainText('Contenido recuperable');
+});
+
+test('si solo falla publicar el borrador, Listo permite reintentar sin perder contenido', async ({page}) => {
+  await seedDocs(page, []);
+  await startNewDocument(page);
+  await page.getByLabel('Título', {exact: true}).fill('Publicación pendiente');
+  await page.getByRole('textbox', {name: 'Contenido del documento'}).fill('El borrador sí se conserva');
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    window.__restoreDocsStorage = () => { Storage.prototype.setItem = original; };
+    Storage.prototype.setItem = function(key, value) {
+      if (key === 'bardo.docs.heroui.v1') throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await page.getByRole('button', {name: 'Listo', exact: true}).click();
+  await expect(page.getByRole('alert')).toContainText('No pudimos guardar los cambios');
+  await expect(page.locator('.editing-route')).not.toHaveClass(/editor-transition-is-exiting/);
+  await expect(page.locator('.editable-body')).toContainText('El borrador sí se conserva');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('bardo.docs.heroui.draft.v1')).body))
+    .toContain('El borrador sí se conserva');
+
+  await page.evaluate(() => window.__restoreDocsStorage());
+  await finishEditing(page);
+  await page.reload();
+  await expect(page.locator('h1.doc-title')).toHaveText('Publicación pendiente');
+  await expect(page.locator('.doc-body')).toContainText('El borrador sí se conserva');
+});
+
 test('crear un documento (título y cuerpo) sobrevive a recargar en cada paso', async ({page}) => {
   const errors = collectRuntimeErrors(page);
   await seedDocs(page, []);

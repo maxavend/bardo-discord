@@ -133,6 +133,14 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
+  // Keep Home and a remounted module on the latest channel list, including
+  // meetings created/archived since the initial Discord bootstrap.
+  useEffect(() => {
+    window.__bardoChannelSessions = plannerEvents.map(event => ({...event,
+      id: event.id || event.eventId,
+      status: event.eventStatus === 'in_progress' ? 'live' : event.eventStatus,
+    }));
+  }, [plannerEvents]);
   const [selectedEventId, setSelectedEventId] = useState(() => plannerState.eventId || null);
   const [activeTab, setActiveTab] = useState(initialTab);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
@@ -416,6 +424,27 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     recordingControllerRef.current = controller;
     return () => controller.cleanup({clearContext: true});
   }, []);
+
+  useEffect(() => {
+    const previousGuard = window.__bardoBeforeNavigate;
+    const beforeNavigate = (nextRoute) => {
+      if (nextRoute?.type === 'planner') return true;
+      if (saveRecordingModal.isOpen) {
+        toast('Guarda o descarta la grabación antes de salir de Reuniones.');
+        return false;
+      }
+      const status = recordingControllerRef.current?.getStatus();
+      if ([RECORDING_STATUS.STARTING, RECORDING_STATUS.RECORDING, RECORDING_STATUS.PAUSED, RECORDING_STATUS.FINALIZING].includes(status) || transitionLockRef.current) {
+        toast('Detén y guarda la grabación antes de salir de Reuniones.');
+        return false;
+      }
+      return true;
+    };
+    window.__bardoBeforeNavigate = beforeNavigate;
+    return () => {
+      if (window.__bardoBeforeNavigate === beforeNavigate) window.__bardoBeforeNavigate = previousGuard;
+    };
+  }, [saveRecordingModal.isOpen]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1142,8 +1171,17 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     } else if (initialTab === 'demo' && shouldLoadDemoFixture()) {
       handleLoadDemo();
       handleTabChange('agenda');
+    } else if (initialTab.startsWith('session:')) {
+      const targetId = initialTab.slice('session:'.length);
+      const current = plannerStateRef.current;
+      const event = current?.id === targetId ? current : plannerEvents.find(item => eventIdOf(item) === targetId);
+      if (event) void handleSelectEvent(event);
+      else {
+        toast('Esta reunión ya no está disponible en este canal.');
+        handleTabChange('home');
+      }
     }
-  }, [initialTab, handleCleanSession, handleLoadDemo, handleTabChange]);
+  }, [initialTab, handleCleanSession, handleLoadDemo, handleTabChange, handleSelectEvent, plannerEvents]);
 
   const isEditingRef = useRef(isEditing);
   isEditingRef.current = isEditing;

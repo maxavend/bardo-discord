@@ -512,7 +512,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       return ephemeral('Bardo se abre dentro de un canal de un servidor de Discord.');
     }
     const seccion = (interaction.data?.options || []).find((opt) => opt.name === 'seccion')?.value;
-    return launchActivityToTarget(env, ctx, interaction, BARDO_SECTION_TARGETS[seccion] || 'docs');
+    return launchActivityToTarget(env, ctx, interaction, BARDO_SECTION_TARGETS[seccion] || 'home');
   }
 
   if (commandName === 'docs') {
@@ -613,7 +613,7 @@ async function handleComponentInteraction(interaction, env, ctx) {
 
   // Non-document routes like planner, new document, the library, etc.
   const target = customId.slice(BARDO_OPEN_PREFIX.length);
-  const isSpecialTarget = target === 'docs' || target.startsWith('planner') || target.startsWith('new-doc');
+  const isSpecialTarget = target === 'home' || target === 'docs' || target.startsWith('planner') || target.startsWith('new-doc');
 
   if (isSpecialTarget) {
     // Saved as a launch intent too: some Discord mobile clients don't forward

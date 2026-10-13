@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
@@ -36,10 +36,16 @@ export const DEFAULT_DISCORD_ROLES = [
 
 export const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
+function customParticipantsKey() {
+  if (typeof window === 'undefined' || !isProductionActivity()) return 'bardo_discord_custom_participants';
+  return `bardo_discord_custom_participants@${window.__BARDO_GUILD_ID__}:${window.__BARDO_CHANNEL_ID__}:${window.__BARDO_USER__?.id}`;
+}
+
 export function getSavedCustomParticipants() {
   try {
-    const raw = localStorage.getItem('bardo_discord_custom_participants');
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(customParticipantsKey());
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(item => typeof item?.tag === 'string') : [];
   } catch {
     return [];
   }
@@ -50,7 +56,7 @@ export function saveCustomParticipant(item) {
     const list = getSavedCustomParticipants();
     if (!list.some((existing) => existing.tag.toLowerCase() === item.tag.toLowerCase())) {
       const next = [...list, item];
-      localStorage.setItem('bardo_discord_custom_participants', JSON.stringify(next));
+      localStorage.setItem(customParticipantsKey(), JSON.stringify(next));
     }
   } catch {}
 }
@@ -134,6 +140,69 @@ export function getAllDiscordEntities() {
   return { members, roles };
 }
 
+function useDiscordDirectory(query, active = true) {
+  const [result, setResult] = useState(null);
+  const [revision, setRevision] = useState(0);
+  const [retry, setRetry] = useState(0);
+  const retryAt = useRef(0);
+  const search = query.trim().replace(/^@/, '');
+  const production = isProductionActivity();
+  const scope = production ? `${window.__BARDO_GUILD_ID__}:${window.__BARDO_CHANNEL_ID__}:${window.__BARDO_USER__?.id}` : 'local';
+  useEffect(() => {
+    const update = () => setRevision(value => value + 1);
+    window.addEventListener('bardo-participants-change', update);
+    return () => window.removeEventListener('bardo-participants-change', update);
+  }, []);
+  useEffect(() => {
+    if (!production || !active || search.length < 2 || search.length > 100) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/discord/members?${new URLSearchParams({query: search})}`, {
+          headers: {Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}`},
+          cache: 'no-store', signal: controller.signal,
+        });
+        const payload = await response.json();
+        if (controller.signal.aborted) return;
+        if (!response.ok) {
+          const wait = Math.max(Number(payload.retryAfterMs) || 0, Number(response.headers.get('Retry-After')) * 1000 || 0);
+          retryAt.current = Date.now() + wait;
+          setResult({search, scope, members: [], error: true,
+            message: wait ? `Discord está ocupado. Reintenta en ${Math.ceil(wait / 1000)} segundos.` : (payload.message || 'No pudimos buscar en Discord. Reintenta o agrega un invitado.')});
+          return;
+        }
+        setResult({...payload, search, scope});
+      } catch {
+        if (!controller.signal.aborted) setResult({search, scope, members: [], error: true, message: 'No pudimos conectar con Discord. Reintenta o agrega un invitado.'});
+      }
+    }, Math.max(300, retryAt.current - Date.now()));
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [production, active, search, scope, retry]);
+  // Read local suggestions on render; live participant events trigger revision.
+  void revision;
+  const entities = getAllDiscordEntities();
+  const current = result?.search === search && result?.scope === scope ? result : null;
+  const byId = new Map(entities.members.map(member => [member.id, member]));
+  for (const [index, member] of (current?.members || []).entries()) {
+    byId.set(member.id, {...member, avatarColor: DISCORD_PALETTES[index % DISCORD_PALETTES.length], ...byId.get(member.id)});
+  }
+  const message = !production ? '' : search.length < 2
+    ? 'Escribe al menos 2 caracteres para buscar por nombre o apodo en el servidor.'
+    : search.length > 100 ? 'La búsqueda admite hasta 100 caracteres.'
+    : !current ? 'Buscando en Discord…'
+    : current.message || (current.truncated ? 'Hay más coincidencias. Escribe un nombre más específico.' : 'Resultados del servidor; no confirman acceso al canal.');
+  return {...entities, members: [...byId.values()], message, failed: current?.error,
+    retry: () => { setResult(null); setRetry(value => value + 1); }};
+}
+
+function DirectoryStatus({directory}) {
+  if (!directory.message) return null;
+  return <div className="px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+    {directory.message}
+    {directory.failed && <button type="button" className="ml-2 underline" onClick={directory.retry}>Reintentar</button>}
+  </div>;
+}
+
 function parseMentionsToArray(mentionsStr) {
   if (!mentionsStr) return [];
   const matches = mentionsStr.match(/@[^@\n\r\t,]+/g);
@@ -153,29 +222,11 @@ export function PlannerMemberPicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [entities, setEntities] = useState(() => getAllDiscordEntities());
-  const _inputRef = useRef(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!window.__bardoChannelContext && window.__BARDO_PRODUCTION__) {
-      fetch('/api/discord/channel-context', {
-        headers: window.__BARDO_SESSION_TOKEN__ ? { Authorization: `Bearer ${window.__BARDO_SESSION_TOKEN__}` } : {},
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((ctx) => {
-          if (ctx) {
-            window.__bardoChannelContext = ctx;
-            setEntities(getAllDiscordEntities());
-          }
-        })
-        .catch(() => {});
-    }
-  }, []);
+  const directory = useDiscordDirectory(searchQuery, isOpen);
 
   const selectedTags = parseMentionsToArray(value);
   const selectedSet = new Set(selectedTags.map((t) => (t.startsWith('@') ? t : `@${t}`)));
-  const { members, roles } = entities;
+  const { members, roles } = directory;
 
   const handleToggleTag = (tag) => {
     let cleanTag = tag.trim();
@@ -318,6 +369,7 @@ export function PlannerMemberPicker({
             </div>
           )}
 
+          <DirectoryStatus directory={directory} />
           <CommandList className="max-h-64">
             <CommandEmpty>No se encontraron resultados.</CommandEmpty>
 
@@ -352,12 +404,12 @@ export function PlannerMemberPicker({
             {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
             {members.length > 0 && (
-              <CommandGroup heading="Miembros del servidor y canal">
+              <CommandGroup heading="Personas del servidor e invitados">
                 {members.map((member) => {
                   const isSelected = selectedSet.has(member.tag);
                   return (
                     <CommandItem
-                      key={member.tag}
+                      key={member.id}
                       value={`${member.globalName} ${member.username} ${member.tag}`}
                       onSelect={() => handleToggleTag(member.tag)}
                       data-checked={isSelected}
@@ -372,12 +424,13 @@ export function PlannerMemberPicker({
                             color: member.avatarColor,
                           }}
                         >
+                          {member.avatar && <AvatarImage src={member.avatar} alt="" />}
                           <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
                             {member.globalName.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
-                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{member.tag}</span>
+                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{member.inCall ? 'En la actividad' : member.tag}</span>
                       </div>
                     </CommandItem>
                   );
@@ -402,7 +455,8 @@ export function SearchableParticipantMenu({
   clearLabel = 'Quitar selección',
 }) {
   const [searchValue, setSearchValue] = useState('');
-  const { members, roles } = getAllDiscordEntities();
+  const directory = useDiscordDirectory(searchValue);
+  const { members, roles } = directory;
 
   const handleToggle = (tag) => {
     if (singleSelect) {
@@ -516,6 +570,7 @@ export function SearchableParticipantMenu({
         </div>
       )}
 
+      <DirectoryStatus directory={directory} />
       <CommandList className="max-h-64 mt-1">
         <CommandEmpty>No se encontraron resultados.</CommandEmpty>
 
@@ -572,7 +627,7 @@ export function SearchableParticipantMenu({
         {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
         {members.length > 0 && (
-          <CommandGroup heading="Miembros del servidor y canal">
+          <CommandGroup heading="Personas del servidor e invitados">
             {members.map((member) => {
               const isSelected =
                 selectedKeys.has(member.tag) ||
@@ -587,7 +642,7 @@ export function SearchableParticipantMenu({
 
               return (
                 <CommandItem
-                  key={member.tag}
+                  key={member.id}
                   value={memberItemValue(member)}
                   onSelect={() => handleToggle(singleSelect ? member.globalName : member.tag)}
                   data-checked={isSelected}
@@ -602,7 +657,8 @@ export function SearchableParticipantMenu({
                         color: member.avatarColor,
                       }}
                     >
-                      <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
+                      {member.avatar && <AvatarImage src={member.avatar} alt="" />}
+                          <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
                         {member.globalName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -610,7 +666,7 @@ export function SearchableParticipantMenu({
                       {member.globalName}
                     </span>
                     <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
-                      {member.tag}
+                      {member.inCall ? 'En la actividad' : member.tag}
                     </span>
                   </div>
                 </CommandItem>

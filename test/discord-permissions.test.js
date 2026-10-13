@@ -135,3 +135,46 @@ test('el caché se puede desactivar con DISCORD_PERMISSION_CACHE_TTL_MS=0', asyn
   await canUserViewChannel(env, 'guild-123', 'user-123', 'channel-123');
   assert.equal(calls, afterFirst * 2);
 });
+
+function threadChecker({type = 12, memberStatus = 200, parentGuild = 'guild-123', parentOverwrites = [], roleBits = '1024'} = {}) {
+  const base = createDiscordFetch();
+  return createDiscordPermissionChecker({DISCORD_TOKEN: 'test-token', DISCORD_FETCH: async input => {
+    const path = new URL(input).pathname;
+    if (path.endsWith('/roles')) return Response.json([{id: 'guild-123', permissions: roleBits}]);
+    if (path.endsWith('/channels/channel-123')) return Response.json({id: 'channel-123', guild_id: 'guild-123', type, parent_id: 'parent', permission_overwrites: []});
+    if (path.endsWith('/channels/parent')) return Response.json({guild_id: parentGuild, permission_overwrites: parentOverwrites});
+    if (path.endsWith('/thread-members/user-123')) return Response.json({user_id: 'user-123'}, {status: memberStatus});
+    return base(input);
+  }}, 'guild-123', 'user-123');
+}
+
+test('private thread requires membership or MANAGE_THREADS, and parent visibility', async () => {
+  assert.equal(await threadChecker({memberStatus: 404}).canViewChannel('channel-123'), false);
+  assert.equal(await threadChecker().canViewChannel('channel-123'), true);
+  assert.equal(await threadChecker({memberStatus: 404, roleBits: String(1024n | (1n << 34n))}).canViewChannel('channel-123'), true);
+  assert.equal(await threadChecker({parentOverwrites: [{id: 'guild-123', type: 0, deny: '1024', allow: '0'}]}).canViewChannel('channel-123'), false);
+  await assert.rejects(threadChecker({memberStatus: 429}).canViewChannel('channel-123'), DiscordUnavailableError);
+});
+
+test('public threads inherit parent permissions but unsynced category children do not', async () => {
+  const parentOverwrites = [{id: 'guild-123', type: 0, deny: '1024', allow: '0'}];
+  assert.equal(await threadChecker({type: 11, parentOverwrites}).canViewChannel('channel-123'), false);
+  assert.equal(await threadChecker({type: 0, parentOverwrites}).canViewChannel('channel-123'), true);
+  assert.equal(await threadChecker({type: 11, parentGuild: 'foreign'}).canViewChannel('channel-123'), false);
+});
+
+test('denied channel context does not reveal guild roles or member directory', async () => {
+  const context = await threadChecker({memberStatus: 404}).getChannelContext('channel-123');
+  assert.equal(context.permissions.canView, false);
+  assert.deepEqual(context.roles, []);
+  assert.deepEqual(context.members, []);
+});
+
+test('fresh authentication can bypass a positive cached permission after access is revoked', async () => {
+  let revoked = false;
+  const fetchImpl = input => createDiscordFetch({channelOverwrites: revoked ? [{id: 'user-123', type: 1, deny: '1024', allow: '0'}] : []})(input);
+  const env = {DISCORD_TOKEN: 'test', DISCORD_FETCH: fetchImpl};
+  assert.equal(await canUserViewChannel(env, 'guild-123', 'user-123', 'channel-123'), true);
+  revoked = true;
+  assert.equal(await canUserViewChannel({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, 'guild-123', 'user-123', 'channel-123'), false);
+});
