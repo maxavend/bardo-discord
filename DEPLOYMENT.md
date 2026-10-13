@@ -1,5 +1,20 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+## Actualización de UI — 13 de octubre, 14:42 UTC
+
+- Código: `89d923893d2debc1a4982a47a6d1a21d042efe6a`.
+- Versión desplegada y verificada: `0332284f-0f37-404a-8a3d-89e8be9cdd19`.
+- Botón único de diálogos a todo el ancho; blur de barras corregido en el build; menú `/` con ScrollArea integrado y scroll-fade de 16 px. El fade se desactiva con movimiento reducido.
+- Validación: lint, typecheck y build; teclado del menú en 320 y 1280 px; comprobación visual y geométrica en 390 y 1280 px, arrastre del scrollbar sin perder el foco, modo claro y movimiento reducido. HTML y assets publicados coinciden con el build local.
+- Checkpoint anterior a estos cambios: tag `checkpoint/pre-ui-polish-2026-10-13`, versión Worker `1a25b33c-30c4-40bd-a7e4-1430dd1b80de`. Registro local: `.wrangler/checkpoints/ui-polish-2026-10-13/`. No se aplicaron migraciones.
+- Para volver al estado previo a estos ajustes visuales:
+
+```sh
+node node_modules/wrangler/bin/wrangler.js rollback 1a25b33c-30c4-40bd-a7e4-1430dd1b80de --message 'Restaurar checkpoint previo a ajustes UI' --yes
+```
+
+## Despliegue UAT inicial (histórico)
+
 Desplegado por autorización expresa del usuario en el Worker existente de Discord.
 
 - URL: https://bardo-discord.bardo-discord.workers.dev
