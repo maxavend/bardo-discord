@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,6 +6,7 @@ import { toast } from '@/lib/toast';
 import {
   CheckCircle2,
   Clock,
+  ListChecks,
   Mic,
   MoreVertical,
   Plus,
@@ -27,6 +29,9 @@ import { generateMinutesMarkdown } from './planner-store.js';
 import { todayLocalIso } from './date-utils.js';
 import { formatSpokenDuration, getPlannedSchedule } from './time-engine.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
+
+// Tareas se carga solo al convertir acuerdos.
+const RecapToCardsDialog = lazy(() => import('../kanban/RecapToCardsDialog.jsx'));
 
 /** Clipboard write with a fallback for webviews where the async API is blocked. */
 async function copyTextWithFallback(text) {
@@ -85,6 +90,7 @@ export function SessionRecapView({
   onDeleteRecording,
   onSaveDocToLibrary,
 }) {
+  const [tasksOpen, setTasksOpen] = useState(false);
   const recap = computeSessionRecap(plannerState, sessionState);
   const isInterrupted = recap.isInterrupted;
   const canReopen = recap.isCompleted && (plannerState?.blocks || []).length > 0;
@@ -201,10 +207,15 @@ export function SessionRecapView({
 
           {hasDecisions && (
             <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <CheckCircle2 className="size-3.5 text-primary" />
-                Acuerdos ({recap.decisions.length})
-              </h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-primary" />
+                  Acuerdos ({recap.decisions.length})
+                </h2>
+                <Button variant="secondary" size="sm" onClick={() => setTasksOpen(true)} className="h-7 px-2.5 text-xs gap-1.5">
+                  <ListChecks className="size-3.5" aria-hidden="true" /> Crear tareas
+                </Button>
+              </div>
               <div className="flex flex-col gap-2">
                 {recap.decisions.map((decision, index) => {
                   const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
@@ -313,6 +324,20 @@ export function SessionRecapView({
           )}
 
         </div>
+      {tasksOpen && (
+        <Suspense fallback={null}>
+          <RecapToCardsDialog
+            open={tasksOpen}
+            onClose={() => setTasksOpen(false)}
+            plannerState={plannerState}
+            sessionState={sessionState}
+            onOpenTasks={() => {
+              setTasksOpen(false);
+              location.hash = '#kanban';
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

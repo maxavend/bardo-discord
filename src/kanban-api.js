@@ -513,6 +513,12 @@ async function handleCards(route, request, url, env, ctx, session) {
   }
 }
 
+/** Id propuesto por la Activity (UI optimista): null si no vino, false si es inválido. */
+function clientId(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return typeof value === 'string' && CARD_ID_PATTERN.test(value) ? value : false;
+}
+
 function cleanColumnName(value) {
   const name = String(value ?? '').trim().slice(0, KANBAN_LIMITS.columnName);
   return name || null;
@@ -544,7 +550,18 @@ async function handleColumns(route, request, url, env, session) {
     if (body.error) return body.error;
     const name = cleanColumnName(body.payload.name);
     if (!name) return apiError(422, 'name_required', 'La columna necesita un nombre.');
-    const id = await addKanbanColumn(env.DB, board.id, name, session.userId);
+    const requestedId = clientId(body.payload.id);
+    if (requestedId === false) return apiError(422, 'invalid_id', 'Identificador de columna inválido.');
+    if (requestedId && columns.some(column => column.id === requestedId)) {
+      return json({board: await freshBoardPayload(env, session), columnId: requestedId});
+    }
+    let id;
+    try {
+      id = await addKanbanColumn(env.DB, board.id, name, session.userId, requestedId || undefined);
+    } catch (error) {
+      if (isUniqueError(error)) return apiError(409, 'exists', 'Ese identificador ya está en uso.');
+      throw error;
+    }
     return json({board: await freshBoardPayload(env, session), columnId: id}, 201);
   }
 
@@ -612,8 +629,13 @@ async function handleTags(route, request, env, session) {
     if (body.error) return body.error;
     const parsed = cleanTag(body.payload, {partial: false});
     if (parsed.error) return parsed.error;
+    const requestedId = clientId(body.payload.id);
+    if (requestedId === false) return apiError(422, 'invalid_id', 'Identificador de etiqueta inválido.');
+    if (requestedId && tags.some(tag => tag.id === requestedId)) {
+      return json({board: await freshBoardPayload(env, session), tagId: requestedId});
+    }
     try {
-      const id = await addKanbanTag(env.DB, board.id, parsed.tag, session.userId);
+      const id = await addKanbanTag(env.DB, board.id, parsed.tag, session.userId, requestedId || undefined);
       return json({board: await freshBoardPayload(env, session), tagId: id}, 201);
     } catch (error) {
       if (isUniqueError(error)) return duplicate();

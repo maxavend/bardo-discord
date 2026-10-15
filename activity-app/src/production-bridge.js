@@ -24,7 +24,7 @@ const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 /** Destinos de lanzamiento que no son un documento. */
-const SPECIAL_LAUNCH_TARGETS = new Set(['home', 'docs', 'planner', 'new-doc']);
+const SPECIAL_LAUNCH_TARGETS = new Set(['home', 'docs', 'planner', 'new-doc', 'kanban']);
 
 function responseFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || '';
@@ -84,7 +84,7 @@ export function parseDocsLaunchTarget(target) {
     const id = value.slice('edit:'.length).trim();
     return id ? {type: 'edit', id} : {type: 'none'};
   }
-  if (SPECIAL_LAUNCH_TARGETS.has(value) || value.startsWith('new-doc:') || value.startsWith('planner')) {
+  if (SPECIAL_LAUNCH_TARGETS.has(value) || value.startsWith('new-doc:') || value.startsWith('planner') || value.startsWith('kanban-card:')) {
     return {type: 'section', target: value};
   }
   if (value.includes(':')) return {type: 'none'};
@@ -493,6 +493,11 @@ export async function prepareBardoProduction(options = {}) {
     history.replaceState(null, '', `#${explicitCustomId}`);
   } else if (explicitCustomId === 'planner') {
     history.replaceState(null, '', '#planner');
+  } else if (explicitCustomId === 'kanban') {
+    history.replaceState(null, '', '#kanban');
+  } else if (explicitCustomId?.startsWith('kanban-card:')) {
+    // La tarjeta se busca al abrir Tareas; si ya no existe, Tareas lo explica.
+    history.replaceState(null, '', `#kanban-card:${encodeURIComponent(explicitCustomId.slice('kanban-card:'.length))}`);
   } else if (explicitCustomId?.startsWith('planner-session:')) {
     // The planner bootstrap above already opened this agenda (preferredId),
     // keeping unsynced local edits; writing the raw server row here would

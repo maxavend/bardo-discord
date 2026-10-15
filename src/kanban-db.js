@@ -336,9 +336,8 @@ export async function setKanbanCardMessageId(db, boardId, cardId, messageId) {
 // ---------------------------------------------------------------------------
 // Columnas
 
-export async function addKanbanColumn(db, boardId, name, userId) {
+export async function addKanbanColumn(db, boardId, name, userId, id = crypto.randomUUID()) {
   const now = new Date().toISOString();
-  const id = crypto.randomUUID();
   await db.batch([
     bumpRev(db, boardId, userId, now),
     db.prepare(`INSERT INTO kanban_columns (id, board_id, name, position, is_done, created_at, updated_at)
@@ -410,9 +409,8 @@ export async function countKanbanCardsInColumn(db, boardId, columnId) {
 // ---------------------------------------------------------------------------
 // Etiquetas
 
-export async function addKanbanTag(db, boardId, {name, color}, userId) {
+export async function addKanbanTag(db, boardId, {name, color}, userId, id = crypto.randomUUID()) {
   const now = new Date().toISOString();
-  const id = crypto.randomUUID();
   await db.batch([
     bumpRev(db, boardId, userId, now),
     db.prepare('INSERT INTO kanban_tags (id, board_id, name, color, created_at) VALUES (?, ?, ?, ?, ?)')

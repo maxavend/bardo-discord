@@ -241,3 +241,14 @@ test('sin sesión responde 401 y una ruta desconocida 404', async () => {
   assert.equal((await k.call('/nada')).status, 404);
   assert.equal((await k.call('/cards/x/y/z')).status, 404);
 });
+
+test('columnas y etiquetas aceptan el id propuesto por la Activity (idempotente)', async () => {
+  const k = await setupKanban();
+  const column = await k.call('/columns', {method: 'POST', body: {id: 'col-cliente-1', name: 'Revisión'}});
+  assert.equal(column.json.columnId, 'col-cliente-1');
+  assert.equal((await k.call('/columns', {method: 'POST', body: {id: 'col-cliente-1', name: 'Revisión'}})).status, 200);
+  assert.equal((await k.board()).board.columns.length, 4);
+  const tag = await k.call('/tags', {method: 'POST', body: {id: 'tag-cliente-1', name: 'Bug', color: 'red'}});
+  assert.equal(tag.json.tagId, 'tag-cliente-1');
+  assert.equal((await k.call('/tags', {method: 'POST', body: {id: 'x', name: 'Mal'}})).json.error, 'invalid_id');
+});

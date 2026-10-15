@@ -453,10 +453,16 @@ export function SearchableParticipantMenu({
   placeholder,
   onClear,
   clearLabel = 'Quitar selección',
+  allowGuests = true,
+  onSelectMember,
+  memberFilter,
 }) {
   const [searchValue, setSearchValue] = useState('');
   const directory = useDiscordDirectory(searchValue);
-  const { members, roles } = directory;
+  const { roles } = directory;
+  // Tareas necesita personas reales del servidor (con id), nunca invitados.
+  const members = directory.members.filter((member) => (allowGuests || !String(member.id || '').startsWith('custom-'))
+    && (!memberFilter || memberFilter(member)));
 
   const handleToggle = (tag) => {
     if (singleSelect) {
@@ -555,7 +561,7 @@ export function SearchableParticipantMenu({
         className="text-xs"
       />
 
-      {searchValue.trim() && !hasExactMatch && (
+      {allowGuests && searchValue.trim() && !hasExactMatch && (
         <div className="px-1 py-1 border-b border-border/40">
           <button
             type="button"
@@ -627,7 +633,7 @@ export function SearchableParticipantMenu({
         {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
         {members.length > 0 && (
-          <CommandGroup heading="Personas del servidor e invitados">
+          <CommandGroup heading={allowGuests ? 'Personas del servidor e invitados' : 'Personas del servidor'}>
             {members.map((member) => {
               const isSelected =
                 selectedKeys.has(member.tag) ||
@@ -644,7 +650,7 @@ export function SearchableParticipantMenu({
                 <CommandItem
                   key={member.id}
                   value={memberItemValue(member)}
-                  onSelect={() => handleToggle(singleSelect ? member.globalName : member.tag)}
+                  onSelect={() => (onSelectMember ? onSelectMember(member) : handleToggle(singleSelect ? member.globalName : member.tag))}
                   data-checked={isSelected}
                   className="cursor-pointer"
                 >
@@ -708,6 +714,45 @@ export function SinglePersonPicker({
           onSelectionChange={(keys) => pick(keys[0] ? keys[0].replace(/^@/, '') : '')}
           onClear={value ? () => pick('') : undefined}
           clearLabel={clearLabel}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Una persona del servidor con su id de Discord (responsable de una tarea).
+ * Sin invitados: el aviso y el MD necesitan a alguien real del canal.
+ */
+export function MemberIdPicker({
+  value = null,
+  onChange,
+  renderTrigger,
+  clearLabel = 'Quitar responsable',
+  align = 'start',
+}) {
+  const [open, setOpen] = useState(false);
+  const production = isProductionActivity();
+  const pick = (member) => {
+    onChange?.(member);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={renderTrigger({open})} />
+      <PopoverContent align={align} className="p-0 w-auto overflow-hidden">
+        <SearchableParticipantMenu
+          singleSelect
+          hideRoles
+          allowGuests={false}
+          memberFilter={(member) => !production || /^\d+$/.test(String(member.id || ''))}
+          selectedKeys={value?.name ? new Set([value.name]) : new Set()}
+          onSelectMember={(member) => pick({id: String(member.id), name: member.globalName || member.username || 'Miembro'})}
+          onSelectionChange={() => {}}
+          onClear={value ? () => pick(null) : undefined}
+          clearLabel={clearLabel}
+          placeholder="Buscar persona del servidor..."
         />
       </PopoverContent>
     </Popover>

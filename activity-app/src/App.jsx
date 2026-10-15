@@ -1,5 +1,5 @@
 import { OverlayScrollArea } from "@/components/ui/scroll-area";
-import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
@@ -62,6 +62,7 @@ import {
   File,
   FileArrowUp,
   FileText,
+  LayoutColumns3,
   LinkSlash,
   Magnifier,
   Moon,
@@ -83,6 +84,9 @@ import {PlannerModule} from './planner/PlannerModule.jsx';
 import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
+
+// Tareas carga su propio chunk (con dnd-kit) solo al abrirse.
+const KanbanModule = lazy(() => import('./kanban/KanbanModule.jsx'));
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
 // Claves por servidor + canal (ver docs-storage.js): nada de un canal aparece en otro.
@@ -122,6 +126,8 @@ function parseRoute() {
     const tab = raw.replace(/^planner-?/, '') || 'home';
     return {type: 'planner', tab: tab === 'planner' ? 'home' : tab, key: raw};
   }
+  if (raw === 'kanban') return {type: 'kanban', cardId: null, key: 'kanban'};
+  if (raw.startsWith('kanban-card:')) return {type: 'kanban', cardId: raw.slice('kanban-card:'.length) || null, key: raw};
   if (raw === 'docs' || raw === 'library') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
   if (raw.startsWith('edit-')) return {type: 'edit', id: raw.slice(5), key: raw};
@@ -627,16 +633,42 @@ function ThemeModeMenu() {
 
 const UPLOAD_ACCEPT = '.md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, uploading = false}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, onKanbanNew, docReturn = null, uploading = false}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
+  const isKanban = route.type === 'kanban';
   const isHome = route.type === 'home';
+  const moduleButton = (module, label, Icon) => (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => onNavigateModule?.(module)}
+      aria-label={label}
+      className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+    >
+      <Icon width={14} height={14} aria-hidden="true" /> <span className="header-label">{label}</span>
+    </Button>
+  );
 
   return (
     <DocsHeader
-      className={isHome || isLibrary || isPlanner ? 'library-header' : ''}
-      actions={isPlanner ? (
+      className={isHome || isLibrary || isPlanner || isKanban ? 'library-header' : ''}
+      actions={isKanban ? (
+        <div key="kanban-actions" className="header-slot-enter flex items-center gap-2">
+          {moduleButton('docs', 'Documentos', FileText)}
+          {moduleButton('planner', 'Reuniones', Calendar)}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onKanbanNew}
+            aria-label="Nueva tarea"
+            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+          >
+            <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva tarea</span>
+          </Button>
+        </div>
+      ) : isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {/* Same responsive pattern as the library: labels collapse to icons on narrow phones. */}
           <Button
@@ -648,6 +680,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           >
             <FileText width={14} height={14} aria-hidden="true" /> <span className="header-label">Documentos</span>
           </Button>
+          {route.tab === 'home' && moduleButton('kanban', 'Tareas', LayoutColumns3)}
           {route.tab === 'home' && (
             <Button
               variant="default"
@@ -671,6 +704,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           >
             <Calendar width={14} height={14} aria-hidden="true" /> <span className="header-label">Reuniones</span>
           </Button>
+          {moduleButton('kanban', 'Tareas', LayoutColumns3)}
           <input
             ref={fileInputRef}
             className="library-file-input"
@@ -713,7 +747,11 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : null}
     >
-      {isHome ? <span className="topbar-title font-bold">Bardo</span> : isPlanner ? (
+      {isHome ? <span className="topbar-title font-bold">Bardo</span> : isKanban ? (
+        <a key="kanban-brand" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
+          <span>Bardo</span>
+        </a>
+      ) : isPlanner ? (
         route.tab && route.tab !== 'home' ? (
           <Button
             key="planner-back"
@@ -735,8 +773,8 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <span>Bardo</span>
         </a>
       ) : (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label="Volver a Documentos" className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
-          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">Documentos</span>
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : 'Volver a Documentos'} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
+          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
       )}
     </DocsHeader>
@@ -1231,6 +1269,12 @@ function App() {
   }
   const [store, setStoreState] = useState(() => storeRef.current);
   const [route, setRoute] = useState(parseRoute);
+  // Abrir un documento desde una tarea: "Volver" regresa a esa tarea.
+  const [docReturn, setDocReturn] = useState(null);
+  const [kanbanQuickAdd, setKanbanQuickAdd] = useState(0);
+  useEffect(() => {
+    if (route.type !== 'doc' && route.type !== 'edit') setDocReturn(null);
+  }, [route.type]);
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
   const [linkValue, setLinkValue] = useState('');
@@ -2061,13 +2105,15 @@ function App() {
 
   return (
     <main className="app-root">
-      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || (route.type === 'doc' && currentDoc)) && (
+      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || route.type === 'kanban' || (route.type === 'doc' && currentDoc)) && (
         <PersistentHeader
           route={route}
           doc={currentDoc}
           onBack={() => {
             if (route.type === 'planner' && route.tab && route.tab !== 'home') {
               go('#planner', {skipTransition: true});
+            } else if (route.type === 'doc' && docReturn) {
+              go(docReturn.hash, {skipTransition: true});
             } else {
               go('#docs', {restore: scrollMemory.current.get('library') || 0});
             }
@@ -2078,8 +2124,24 @@ function App() {
           onUpload={uploadDocument}
           uploading={uploading}
           onPlannerNew={() => go('#planner-new')}
-          onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
+          onKanbanNew={() => setKanbanQuickAdd(value => value + 1)}
+          docReturn={route.type === 'doc' ? docReturn : null}
+          onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : mod === 'kanban' ? '#kanban' : '#docs')}
         />
+      )}
+      {route.type === 'kanban' && (
+        <Suspense fallback={<p className="mt-24 text-center text-sm text-muted-foreground" role="status">Cargando tareas…</p>}>
+          <KanbanModule
+            cardId={route.cardId}
+            docs={activeDocs}
+            go={go}
+            quickAddRequest={kanbanQuickAdd}
+            onOpenDoc={(docId, returnHash) => {
+              setDocReturn({hash: returnHash, label: 'Tarea'});
+              go(`#doc-${docId}`);
+            }}
+          />
+        </Suspense>
       )}
       {route.type === 'home' && <Home docs={activeDocs} draft={draft} onNewDoc={startNewDoc} onOpenDoc={openDoc} />}
       {route.type === 'planner' && (
@@ -2200,7 +2262,7 @@ function App() {
         />
       )}
 
-      {route.type !== 'home' && route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
+      {route.type !== 'home' && route.type !== 'library' && route.type !== 'planner' && route.type !== 'kanban' && !currentDoc && route.type !== 'new' && (
         <div className="missing-state flex flex-col items-center justify-center py-20 text-center">
           <p className="text-base text-muted-foreground mb-4">
             Este documento ya no existe o no está compartido en este canal.

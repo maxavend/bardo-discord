@@ -1,7 +1,46 @@
 import {useEffect, useState} from 'react';
 import {Button, buttonVariants} from '@/components/ui/button';
-import {Calendar, FileText, ChevronRight, Plus} from '@gravity-ui/icons';
+import {Calendar, FileText, ChevronRight, LayoutColumns3, Plus} from '@gravity-ui/icons';
 import {loadPlannerEvents, loadPlannerState, loadLiveSessionState, isDefaultEmptySession} from './planner/planner-store.js';
+import {currentUserId, ensureKanbanLoaded, useKanbanSnapshot} from './kanban/kanban-runtime.js';
+import {assignedOpenCards, doneColumnId, todayIso} from './kanban/kanban-store.js';
+import {formatDueDate} from './kanban/kanban-ui.jsx';
+
+function HomeTasks() {
+  const {view, loaded} = useKanbanSnapshot();
+  useEffect(() => {
+    void ensureKanbanLoaded();
+  }, []);
+  const userId = currentUserId();
+  const today = todayIso();
+  const doneId = doneColumnId(view.board);
+  const open = Object.values(view.cards).filter(card => card.columnId !== doneId);
+  const mine = assignedOpenCards(view, userId);
+  const list = userId ? mine : [...open].sort((a, b) => b.number - a.number).slice(0, 4);
+  const columnName = id => view.board?.columns.find(column => column.id === id)?.name || '';
+
+  return (
+    <section className="library-section" aria-labelledby="home-tasks">
+      <div className="home-section-heading">
+        <h2 id="home-tasks" className="section-title"><LayoutColumns3 width={18} height={18} aria-hidden="true" /> Tareas</h2>
+        <a className={buttonVariants({variant: 'secondary', size: 'sm'})} href="#kanban"><Plus aria-hidden="true" /> Nueva tarea</a>
+      </div>
+      {list.length ? <ul className="home-list" aria-label={userId ? 'Tareas asignadas a ti' : 'Tareas abiertas'}>
+        {list.map(card => <li key={card.id}>
+          <a className="home-item" href={`#kanban-card:${encodeURIComponent(card.id)}`}>
+            <span className="continue-copy"><strong>{card.title}</strong><span>#{card.number} · {columnName(card.columnId)}{card.dueDate ? ` · ${card.dueDate < today ? 'Vencida' : 'Vence'} ${formatDueDate(card.dueDate, today).toLowerCase()}` : ''}</span></span>
+            <ChevronRight width={18} height={18} aria-hidden="true" />
+          </a>
+        </li>)}
+      </ul> : <p className="home-empty">{!loaded
+        ? 'Cargando tareas…'
+        : userId && open.length
+          ? `No tienes tareas asignadas. Hay ${open.length === 1 ? '1 tarea abierta' : `${open.length} tareas abiertas`} en el canal.`
+          : 'Todavía no hay tareas. Crea una aquí o con /tarea en Discord.'}</p>}
+      <a className={buttonVariants({variant: 'ghost', size: 'sm'})} href="#kanban">Abrir Tareas <ChevronRight aria-hidden="true" /></a>
+    </section>
+  );
+}
 
 function dateLabel(value) {
   const date = new Date(value);
@@ -100,6 +139,8 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
           </ul> : <p className="home-empty">Todavía no hay reuniones. Crea una agenda para empezar.</p>}
           <a className={buttonVariants({variant: 'ghost', size: 'sm'})} href="#planner">Abrir Reuniones <ChevronRight aria-hidden="true" /></a>
         </section>
+
+        <HomeTasks />
       </div>
     </section>
   );
