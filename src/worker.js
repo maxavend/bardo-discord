@@ -24,6 +24,8 @@ import { handleDocsApi, normalizeDocumentImport } from './docs-api.js';
 import { normalizeExportFormat, verifyExportToken } from './export-token.js';
 import { handlePlannerApi } from './planner-api.js';
 import { handleKanbanApi } from './kanban-api.js';
+import { handleSettingsApi, settingsDefaults } from './settings-api.js';
+import { loadEffectiveSettings } from './settings-db.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
 import { sessionCanAccessDocument } from './document-access.js';
 import {
@@ -390,6 +392,16 @@ export function parseTaskDueDate(value, timeZone = DEFAULT_TIME_ZONE) {
   return isValidIsoDate(text) ? text : false;
 }
 
+/** Ajustes efectivos del canal de la interacción (zona horaria, avisos). */
+async function channelSettings(env, interaction) {
+  try {
+    return await loadEffectiveSettings(env.DB, interaction.guild_id, interaction.channel_id, settingsDefaults(env));
+  } catch (error) {
+    console.error('No se pudieron leer los ajustes del canal:', error);
+    return {...settingsDefaults(env), sources: {}};
+  }
+}
+
 function interactionActor(interaction) {
   const user = interaction.member?.user || interaction.user || {};
   return { id: user.id || null, name: interaction.member?.nick || user.global_name || user.username || 'Alguien' };
@@ -417,7 +429,8 @@ async function createTaskFromCommand(interaction, env, ctx) {
   const title = String(options.find(opt => opt.name === 'titulo')?.value || '').trim().slice(0, TITLE_MAX);
   if (!title) return ephemeral('Escribe qué hay que hacer en `titulo`.');
   const fecha = options.find(opt => opt.name === 'fecha')?.value;
-  const dueDate = parseTaskDueDate(fecha, env.BARDO_TIME_ZONE || DEFAULT_TIME_ZONE);
+  const settings = await channelSettings(env, interaction);
+  const dueDate = parseTaskDueDate(fecha, settings.timeZone);
   if (dueDate === false) {
     return ephemeral(`La fecha «${fecha}» no es válida. Usa AAAA-MM-DD (por ejemplo 2026-10-15), «hoy» o «mañana».`);
   }
@@ -472,23 +485,28 @@ async function createTaskFromCommand(interaction, env, ctx) {
     return ephemeral('No se pudo crear la tarea. Inténtalo de nuevo en unos segundos.');
   }
 
-  const notifyOthers = Boolean(card.assignee && String(card.assignee.id) !== String(actor.id));
-  // La respuesta pública ES el aviso en el canal: se registra para no duplicarlo.
-  if (created && notifyOthers && await claimKanbanNotification(env.DB, card.id, card.assignee.id, 'channel', { status: 'sent' })) {
+  const assignedToOther = Boolean(card.assignee && String(card.assignee.id) !== String(actor.id));
+  // Con los avisos en el canal activos, la respuesta pública ES el aviso: se
+  // registra para no duplicarlo. El MD lo decide notifyAssignment.
+  const mentionInChannel = assignedToOther && settings.taskChannelNotices;
+  if (created && mentionInChannel) {
+    await claimKanbanNotification(env.DB, card.id, card.assignee.id, 'channel', { status: 'sent' });
+  }
+  if (created) {
     ctx.waitUntil((async () => {
       const messageId = await originalResponseMessageId(env, interaction);
-      if (messageId) await finishKanbanNotification(env.DB, board.id, card.id, card.assignee.id, 'channel', { status: 'sent', messageId });
-      await notifyAssignment(env, { board, card: { ...card, messageId }, actor, channelNotice: false });
+      if (messageId && mentionInChannel) {
+        await finishKanbanNotification(env.DB, board.id, card.id, card.assignee.id, 'channel', { status: 'sent', messageId });
+      } else if (messageId) {
+        await setKanbanCardMessageId(env.DB, board.id, card.id, messageId);
+      }
+      if (assignedToOther) await notifyAssignment(env, { board, card: { ...card, messageId }, actor, channelNotice: false });
     })().catch(error => console.error('Kanban /tarea follow-up failed', error)));
-  } else if (created) {
-    ctx.waitUntil(originalResponseMessageId(env, interaction)
-      .then(messageId => messageId && setKanbanCardMessageId(env.DB, board.id, card.id, messageId))
-      .catch(error => console.error('Kanban /tarea message id failed', error)));
   }
 
   return jsonResponse({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-    data: buildKanbanCardPayload({ card, columnName: column?.name, actorName: actor.name, verb: 'creó', mention: notifyOthers }),
+    data: buildKanbanCardPayload({ card, columnName: column?.name, actorName: actor.name, verb: 'creó', mention: mentionInChannel }),
   });
 }
 
@@ -606,7 +624,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       title: titulo || 'Nueva reunión',
       hostId,
       hostName,
-      date: fecha || todayInTimeZone(env.BARDO_TIME_ZONE || DEFAULT_TIME_ZONE),
+      date: fecha || todayInTimeZone((await channelSettings(env, interaction)).timeZone),
       startTime: hora || '10:00',
       targetDuration,
       description: descripcion,
@@ -1177,6 +1195,9 @@ async function routeRequest(request, env, ctx) {
 
   const kanbanApiResponse = await handleKanbanApi(request, url, env, ctx);
   if (kanbanApiResponse) return kanbanApiResponse;
+
+  const settingsApiResponse = await handleSettingsApi(request, url, env);
+  if (settingsApiResponse) return settingsApiResponse;
 
   if (url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
     const route = parseDocumentApiPath(url.pathname);

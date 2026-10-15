@@ -398,16 +398,3 @@ test('member search validates query, denies channel access, and surfaces rate li
   assert.match(restricted.json.message, /invitado/);
 });
 
-test('el nombre del espacio de trabajo se guarda por canal y vacío vuelve al del canal', async () => {
-  const { env } = await setup();
-  assert.equal((await call(env, '/api/discord/channel-context')).json.workspaceName, null);
-  const saved = await call(env, '/api/workspace', { method: 'PATCH', body: { name: '  Equipo   Producto ' } });
-  assert.equal(saved.status, 200);
-  assert.equal(saved.json.workspaceName, 'Equipo Producto');
-  assert.equal((await call(env, '/api/discord/channel-context')).json.workspaceName, 'Equipo Producto');
-  assert.equal((await call(env, '/api/discord/channel-context', { token: 'token-b' })).json.workspaceName, null, 'otro canal no lo ve');
-  assert.equal((await call(env, '/api/workspace', { method: 'PATCH', body: { name: 'x'.repeat(61) } })).status, 422);
-  await call(env, '/api/workspace', { method: 'PATCH', body: { name: '' } });
-  assert.equal((await call(env, '/api/discord/channel-context')).json.workspaceName, null);
-  assert.equal((await call(env, '/api/workspace')).status, 405);
-});

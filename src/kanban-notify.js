@@ -7,6 +7,8 @@ import {
   buildKanbanDmPayload,
 } from './components.js';
 import {postChannelMessage, sendDirectMessage} from './discord-bot.js';
+import {loadEffectiveSettings, loadUserSettings} from './settings-db.js';
+import {settingsDefaults} from './settings-api.js';
 import {
   claimKanbanNotification,
   finishKanbanNotification,
@@ -48,6 +50,25 @@ async function sendDmNotice(env, {board, cards, actor, messageId, channelName, c
   }
 }
 
+/** Qué avisos permite el canal (Ajustes del espacio / servidor). */
+async function noticeSettings(env, board) {
+  try {
+    return await loadEffectiveSettings(env.DB, board.guildId, board.channelId, settingsDefaults(env));
+  } catch (error) {
+    console.error('Kanban notice settings failed', error);
+    return {taskChannelNotices: true, taskDmNotices: true};
+  }
+}
+
+/** La persona puede haber pedido no recibir mensajes directos de Bardo. */
+async function wantsDirectMessages(env, userId) {
+  try {
+    return (await loadUserSettings(env.DB, userId)).taskDmNotices;
+  } catch {
+    return true;
+  }
+}
+
 const firstClaim = env => (cardId, assigneeId, kind) => claimKanbanNotification(env.DB, cardId, assigneeId, kind);
 const retryClaim = env => (cardId, assigneeId, kind) => reclaimKanbanNotification(env.DB, cardId, assigneeId, kind);
 
@@ -59,12 +80,29 @@ export async function notifyAssignment(env, {board, card, actor, columnName = nu
   if (!env?.DB || !card?.assignee?.id || String(card.assignee.id) === String(actor?.id)) return;
   const claim = retry ? retryClaim(env) : firstClaim(env);
   try {
-    const messageId = channelNotice
+    const settings = await noticeSettings(env, board);
+    const messageId = channelNotice && settings.taskChannelNotices
       ? await sendChannelNotice(env, {board, card, actor, columnName, claim})
       : card.messageId;
-    await sendDmNotice(env, {board, cards: [card], actor, messageId, channelName, claim});
+    if (settings.taskDmNotices && await wantsDirectMessages(env, card.assignee.id)) {
+      await sendDmNotice(env, {board, cards: [card], actor, messageId, channelName, claim});
+    }
   } catch (error) {
     console.error('Kanban assignment notice failed', error);
+  }
+}
+
+async function sendBulkDms(env, {board, assigned, actor, messageId, channelName}) {
+  const byAssignee = new Map();
+  for (const card of assigned) {
+    const list = byAssignee.get(card.assignee.id) || [];
+    list.push(card);
+    byAssignee.set(card.assignee.id, list);
+  }
+  // Secuencial y acotado: los MD tienen límites de frecuencia más estrictos.
+  for (const [assigneeId, list] of [...byAssignee.entries()].slice(0, 10)) {
+    if (!(await wantsDirectMessages(env, assigneeId))) continue;
+    await sendDmNotice(env, {board, cards: list, actor, messageId, channelName, claim: firstClaim(env)});
   }
 }
 
@@ -72,7 +110,13 @@ export async function notifyAssignment(env, {board, card, actor, columnName = nu
 export async function notifyBulkAssignment(env, {board, cards, actor, sessionTitle = null, channelName = null}) {
   if (!env?.DB || !cards?.length) return;
   try {
+    const settings = await noticeSettings(env, board);
     const assigned = cards.filter(card => card.assignee?.id && String(card.assignee.id) !== String(actor?.id));
+    if (!settings.taskChannelNotices) {
+      // Sin avisos en el canal: solo los MD (si el canal y cada persona los permiten).
+      if (settings.taskDmNotices) await sendBulkDms(env, {board, assigned, actor, messageId: null, channelName});
+      return;
+    }
     const claimed = [];
     for (const card of assigned) {
       if (await claimKanbanNotification(env.DB, card.id, card.assignee.id, 'channel')) claimed.push(card);
@@ -82,16 +126,7 @@ export async function notifyBulkAssignment(env, {board, cards, actor, sessionTit
       await finishKanbanNotification(env.DB, board.id, card.id, card.assignee.id, 'channel', resultFields(result));
     }
     const messageId = result.ok ? result.data?.id : null;
-    const byAssignee = new Map();
-    for (const card of assigned) {
-      const list = byAssignee.get(card.assignee.id) || [];
-      list.push(card);
-      byAssignee.set(card.assignee.id, list);
-    }
-    // Secuencial y acotado: los MD tienen límites de frecuencia más estrictos.
-    for (const list of [...byAssignee.values()].slice(0, 10)) {
-      await sendDmNotice(env, {board, cards: list, actor, messageId, channelName, claim: firstClaim(env)});
-    }
+    if (settings.taskDmNotices) await sendBulkDms(env, {board, assigned, actor, messageId, channelName});
   } catch (error) {
     console.error('Kanban bulk notice failed', error);
   }

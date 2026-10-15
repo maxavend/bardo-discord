@@ -3,6 +3,7 @@ const DISCORD_API_BASE = 'https://discord.com/api/v10';
 export const DISCORD_PERMISSION = {
   ADMINISTRATOR: 1n << 3n,
   MANAGE_CHANNELS: 1n << 4n,
+  MANAGE_GUILD: 1n << 5n,
   VIEW_CHANNEL: 1n << 10n,
   SEND_MESSAGES: 1n << 11n,
   MANAGE_MESSAGES: 1n << 13n,

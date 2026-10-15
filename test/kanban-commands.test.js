@@ -162,3 +162,18 @@ test('los botones "Abrir tablero" y "Abrir tarjeta" lanzan la Activity con su de
   assert.equal((await send(button('bardo:open:kanban-card:abc-123'))).type, 12);
   assert.equal(await launchTarget(), 'kanban-card:abc-123');
 });
+
+test('/tarea respeta los ajustes del espacio: sin mención si los avisos del canal están apagados y «hoy» en su zona horaria', async () => {
+  const {db, send} = await setup();
+  db.run(`INSERT INTO channel_settings (guild_id, channel_id, time_zone, task_channel_notices, updated_at, updated_by)
+    VALUES (?, ?, 'Pacific/Kiritimati', 0, '2026-10-15', 'admin')`, GUILD, CHANNEL);
+  const res = await send(command('tarea', [
+    {name: 'titulo', value: 'Sin mención'},
+    {name: 'responsable', value: ASSIGNEE},
+    {name: 'fecha', value: 'hoy'},
+  ], member(ASSIGNEE, 'Ana', '1024')));
+  assert.deepEqual(res.data.allowed_mentions.users, []);
+  const expected = new Intl.DateTimeFormat('en-CA', {timeZone: 'Pacific/Kiritimati', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
+  assert.equal(db.row('SELECT due_date FROM kanban_cards').due_date, expected);
+  assert.equal(db.row("SELECT COUNT(*) AS n FROM kanban_notifications WHERE kind = 'channel'").n, 0);
+});

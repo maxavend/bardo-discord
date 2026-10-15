@@ -220,7 +220,7 @@ const PERMISSION_NAMES = {
   SEND_MESSAGES_IN_THREADS: 'Enviar mensajes en hilos',
 };
 
-async function botChannelState(env, session) {
+export async function botChannelState(env, session) {
   const channel = await getChannel(env, session.channelId);
   const channelType = channel.ok ? Number(channel.data?.type ?? 0) : null;
   let permissions = 0n;
