@@ -280,7 +280,7 @@ function MobileColumnMenu({column, index, columnCount, columnActions, onAddColum
     <DropdownMenu>
       <DropdownMenuTrigger
         render={(
-          <Button variant="ghost" size="icon-sm" aria-label={`Opciones de la columna ${column.name}`} className="shrink-0 rounded-full text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="icon" aria-label={`Opciones de la columna ${column.name}`} className="shrink-0 rounded-full text-muted-foreground hover:text-foreground">
             <MoreHorizontal className="size-4" />
           </Button>
         )}

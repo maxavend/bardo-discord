@@ -53,3 +53,7 @@ Usa siempre la misma palabra para lo mismo.
 - Fechas cortas en español: «15 oct», «Hoy», «Mañana».
 - Mensajes completos, sin pegar fragmentos: así se pueden traducir y reordenar.
 - El nombre accesible (`aria-label`) dice lo mismo que se ve, más el objeto si el botón es solo un ícono: «Más acciones de la tarea #12».
+
+## Alturas de controles
+
+Un botón al lado de un campo (o de otro control en la misma fila) tiene el mismo alto. `Input` y `Button` por defecto miden `h-9`; si el campo usa `h-8`, el botón usa `size="sm"`. El e2e `activity-app/tests/geometry.spec.js` lo verifica.

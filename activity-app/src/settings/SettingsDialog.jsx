@@ -263,7 +263,8 @@ function SpaceNameRow({canEdit}) {
           onChange={event => setDraft(event.target.value)}
           className="h-9"
         />
-        <Button type="submit" size="sm" disabled={!canEdit || !dirty || saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+        {/* Mismo alto que el input de al lado (h-9). */}
+        <Button type="submit" disabled={!canEdit || !dirty || saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
       </div>
       <span className="text-xs text-muted-foreground">
         Aparece arriba a la izquierda. Si lo dejas vacío, se usa {workspace.channelName ? 'el nombre del canal' : '«Bardo»'}.

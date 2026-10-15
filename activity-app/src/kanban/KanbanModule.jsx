@@ -245,9 +245,9 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
               size="sm"
               aria-label="Filtrar tareas"
             >
-              <ToggleGroupItem value="all" className="h-7 px-2.5 text-xs">Todas</ToggleGroupItem>
-              <ToggleGroupItem value="mine" className="h-7 px-2.5 text-xs" disabled={!userId}>Mías</ToggleGroupItem>
-              <ToggleGroupItem value="overdue" className="h-7 px-2.5 text-xs">Vencidas</ToggleGroupItem>
+              <ToggleGroupItem value="all" className="h-8 px-3 text-xs">Todas</ToggleGroupItem>
+              <ToggleGroupItem value="mine" className="h-8 px-3 text-xs" disabled={!userId}>Mías</ToggleGroupItem>
+              <ToggleGroupItem value="overdue" className="h-8 px-3 text-xs">Vencidas</ToggleGroupItem>
             </ToggleGroup>
             <DropdownMenu>
               <DropdownMenuTrigger
