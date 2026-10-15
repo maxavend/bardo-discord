@@ -3,11 +3,14 @@ const DISCORD_API_BASE = 'https://discord.com/api/v10';
 export const DISCORD_PERMISSION = {
   ADMINISTRATOR: 1n << 3n,
   MANAGE_CHANNELS: 1n << 4n,
+  MANAGE_GUILD: 1n << 5n,
   VIEW_CHANNEL: 1n << 10n,
   SEND_MESSAGES: 1n << 11n,
   MANAGE_MESSAGES: 1n << 13n,
   MANAGE_EVENTS: 1n << 33n,
   MANAGE_THREADS: 1n << 34n,
+  CREATE_PUBLIC_THREADS: 1n << 35n,
+  SEND_MESSAGES_IN_THREADS: 1n << 38n,
 };
 
 function asPermissionBits(value) {
@@ -71,7 +74,7 @@ export function discordUnavailableResponse(error) {
   const retryAfterMs = error?.retryAfterMs || DEFAULT_RETRY_AFTER_MS;
   return new Response(JSON.stringify({
     error: 'discord_unavailable',
-    message: 'Discord no respondió al verificar tus permisos. Reintentando…',
+    message: 'Discord no respondió al revisar tus permisos. Volviendo a intentar…',
     retryAfterMs,
   }), {
     status: 503,

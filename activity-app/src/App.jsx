@@ -1,5 +1,5 @@
 import { OverlayScrollArea } from "@/components/ui/scroll-area";
-import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
@@ -53,7 +53,6 @@ import {
   Archive,
   ArrowDownToLine,
   ArrowUpRightFromSquare,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -62,6 +61,7 @@ import {
   File,
   FileArrowUp,
   FileText,
+  Gear,
   LinkSlash,
   Magnifier,
   Moon,
@@ -83,6 +83,15 @@ import {PlannerModule} from './planner/PlannerModule.jsx';
 import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
+import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
+import {WorkspaceMenu} from './WorkspaceMenu.jsx';
+import {BetaNotice} from './BetaNotice.jsx';
+import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
+import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
+
+// Tareas carga su propio chunk (con dnd-kit) solo al abrirse.
+const KanbanModule = lazy(() => import('./kanban/KanbanModule.jsx'));
+const SettingsDialog = lazy(() => import('./settings/SettingsDialog.jsx'));
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
 // Claves por servidor + canal (ver docs-storage.js): nada de un canal aparece en otro.
@@ -110,7 +119,7 @@ function rememberMinutesHash(docId, hash) {
   } catch {}
 }
 const STORE_VERSION = 1;
-const SHARE_CARD_HINT = 'Se publicará una tarjeta con una vista previa y un botón para abrirlo.';
+const SHARE_CARD_HINT = 'Todos verán una tarjeta con una vista previa y un botón para abrirlo.';
 
 
 function parseRoute() {
@@ -122,6 +131,8 @@ function parseRoute() {
     const tab = raw.replace(/^planner-?/, '') || 'home';
     return {type: 'planner', tab: tab === 'planner' ? 'home' : tab, key: raw};
   }
+  if (raw === 'kanban') return {type: 'kanban', cardId: null, key: 'kanban'};
+  if (raw.startsWith('kanban-card:')) return {type: 'kanban', cardId: raw.slice('kanban-card:'.length) || null, key: raw};
   if (raw === 'docs' || raw === 'library') return {type: 'library', key: 'library'};
   if (raw === 'new') return {type: 'new', key: 'new'};
   if (raw.startsWith('edit-')) return {type: 'edit', id: raw.slice(5), key: raw};
@@ -317,8 +328,8 @@ function warnStorageFull() {
   if (storageWarningShown) return;
   storageWarningShown = true;
   toast(window.__BARDO_PRODUCTION__
-    ? 'No pudimos guardar la copia local. Mantén Bardo abierto hasta confirmar el guardado o copia tu contenido.'
-    : 'El almacenamiento local está lleno. Exporta o elimina documentos para no perder cambios.');
+    ? 'No pudimos guardar una copia en este dispositivo. Mantén Bardo abierto hasta que veas «Guardado» o copia tu contenido.'
+    : 'Este dispositivo no tiene espacio para guardar más. Descarga o elimina documentos para no perder cambios.');
 }
 
 function saveStore(store) {
@@ -397,7 +408,7 @@ function saveDraft(snapshot) {
 
 // `context="reader"`: the reader header already shows "Editar" (primary) and
 // "Compartir en el canal" (icon button), so the menu doesn't repeat them.
-function DocActionMenu({doc, onAction, triggerLabel = 'Acciones', context = 'row'}) {
+function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context = 'row'}) {
   const inReader = context === 'reader';
   const blocked = isImportBlocked(doc);
   const isProduction = Boolean(window.__BARDO_PRODUCTION__);
@@ -517,7 +528,7 @@ function RichBody({html, onChecklistChange, className = ''}) {
         if (link && ref.current?.contains(link)) {
           e.preventDefault();
           void openExternalUrl(link.getAttribute('href')).then(opened => {
-            if (!opened) toast('No se pudo abrir el enlace.');
+            if (!opened) toast('No se pudo abrir el enlace. Inténtalo de nuevo.');
           });
           return;
         }
@@ -556,7 +567,9 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
         </EmptyTitle>
         <EmptyDescription>
           {query
-            ? `No encontramos documentos con “${query}”${!isArchived && archivedCount > 0 ? ' entre los activos' : ''}.`
+            ? (!isArchived && archivedCount > 0
+              ? `Ningún documento activo coincide con «${query}».`
+              : `Ningún documento coincide con «${query}».`)
             : isArchived
               ? 'Los documentos que archives aparecerán aquí. Puedes restaurarlos cuando quieras.'
               : 'Crea un documento o sube un archivo (Word, PDF o texto) para empezar.'}
@@ -576,9 +589,9 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
           </div>
         ) : !isArchived ? (
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {/* The header's "Nuevo" is this view's single primary action. */}
+            {/* The header's "Nuevo" (named "Nuevo documento") is this view's single primary action. */}
             <Button variant="secondary" size="sm" onClick={onNewDoc}>
-              <Plus width={16} height={16} /> Crear documento
+              <Plus width={16} height={16} /> Nuevo documento
             </Button>
             <Button variant="secondary" size="sm" onClick={onUpload}>
               <File width={16} height={16} /> Subir archivo
@@ -590,12 +603,17 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
   );
 }
 
-function DocsHeader({children, actions, className = ''}) {
+function DocsHeader({children, actions, className = '', onOpenSettings}) {
   return (
     <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
       <div className="topbar-left">{children}</div>
       <div className="topbar-right header-actions">
         {actions}
+        {onOpenSettings && (
+          <IconButton label="Ajustes" onClick={() => onOpenSettings('personal')} className="h-8 w-8">
+            <Gear width={16} height={16} />
+          </IconButton>
+        )}
         <ThemeModeMenu />
       </div>
     </header>
@@ -604,7 +622,8 @@ function DocsHeader({children, actions, className = ''}) {
 
 function ThemeModeMenu() {
   const {theme, setTheme} = useTheme('dark');
-  const isDark = theme === 'dark';
+  const isDark = theme === 'dark'
+    || (theme === 'system' && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
   const toggleTheme = () => {
     const nextTheme = isDark ? 'light' : 'dark';
@@ -627,27 +646,32 @@ function ThemeModeMenu() {
 
 const UPLOAD_ACCEPT = '.md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, uploading = false}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, onKanbanNew, onOpenSettings, docReturn = null, uploading = false}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
+  const isKanban = route.type === 'kanban';
   const isHome = route.type === 'home';
+  const isPlannerSubview = isPlanner && route.tab && route.tab !== 'home';
 
   return (
     <DocsHeader
-      className={isHome || isLibrary || isPlanner ? 'library-header' : ''}
-      actions={isPlanner ? (
-        <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
-          {/* Same responsive pattern as the library: labels collapse to icons on narrow phones. */}
+      onOpenSettings={onOpenSettings}
+      className={isHome || isLibrary || isPlanner || isKanban ? 'library-header' : ''}
+      actions={isKanban ? (
+        <div key="kanban-actions" className="header-slot-enter flex items-center gap-2">
           <Button
-            variant="secondary"
+            variant="default"
             size="sm"
-            onClick={() => onNavigateModule?.('docs')}
-            aria-label="Documentos"
+            onClick={onKanbanNew}
+            aria-label="Nueva tarea"
             className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <FileText width={14} height={14} aria-hidden="true" /> <span className="header-label">Documentos</span>
+            <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva tarea</span>
           </Button>
+        </div>
+      ) : isPlanner ? (
+        <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {route.tab === 'home' && (
             <Button
               variant="default"
@@ -662,21 +686,12 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : isLibrary ? (
         <div key="library-actions" className="header-slot-enter flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigateModule?.('planner')}
-            aria-label="Reuniones"
-            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-          >
-            <Calendar width={14} height={14} aria-hidden="true" /> <span className="header-label">Reuniones</span>
-          </Button>
           <input
             ref={fileInputRef}
             className="library-file-input"
             type="file"
             accept={UPLOAD_ACCEPT}
-            aria-label="Seleccionar documento para subir"
+            aria-label="Elegir archivo para subir"
             onChange={event => {
               const file = event.target.files?.[0];
               event.target.value = '';
@@ -693,7 +708,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           >
             <FileArrowUp width={14} height={14} aria-hidden="true" /> <span className="header-label">{uploading ? 'Subiendo…' : 'Subir archivo'}</span>
           </Button>
-          <Button variant="default" size="sm" onClick={onNew} aria-label="Crear documento" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+          <Button variant="default" size="sm" onClick={onNew} aria-label="Nuevo documento" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
             <Plus width={15} height={15} aria-hidden="true" /> <span className="header-label">Nuevo</span>
           </Button>
         </div>
@@ -713,32 +728,27 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : null}
     >
-      {isHome ? <span className="topbar-title font-bold">Bardo</span> : isPlanner ? (
-        route.tab && route.tab !== 'home' ? (
-          <Button
-            key="planner-back"
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            aria-label="Volver"
-            className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
-          >
-            <ChevronLeft width={15} height={15} /> Volver
-          </Button>
-        ) : (
-          <a key="planner-brand" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
-            <span>Bardo</span>
-          </a>
-        )
-      ) : isLibrary ? (
-        <a key="library-title" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
-          <span>Bardo</span>
-        </a>
-      ) : (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label="Volver a Documentos" className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
-          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">Documentos</span>
+      {/* La marca es siempre el mismo elemento (no se vuelve a montar ni a
+          animar al cambiar de vista); en una subvista la reemplaza "Volver". */}
+      {isPlannerSubview ? (
+        <Button
+          key="planner-back"
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          aria-label="Volver"
+          className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
+        >
+          <ChevronLeft width={15} height={15} /> Volver
         </Button>
+      ) : doc && !isHome && !isLibrary && !isPlanner && !isKanban ? (
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : 'Volver a Documentos'} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
+          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
+        </Button>
+      ) : (
+        <WorkspaceMenu key="brand" onOpenSettings={onOpenSettings} />
       )}
+      <ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />
     </DocsHeader>
   );
 }
@@ -765,6 +775,7 @@ function Library({
 }) {
   const fileInputRef = useRef(null);
   const isArchivedTab = activeTab === 'archived';
+  const parkedNames = `${parkedChanges.slice(0, 3).map(item => `«${item.title}»`).join(', ')}${parkedChanges.length > 3 ? '…' : ''}`;
   const tabClass = selected => `px-3 py-1 rounded-md font-medium transition-all ${
     selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
   }`;
@@ -777,7 +788,7 @@ function Library({
           className="library-file-input"
           type="file"
           accept={UPLOAD_ACCEPT}
-          aria-label="Seleccionar documento para subir"
+          aria-label="Elegir archivo para subir"
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = '';
@@ -814,10 +825,9 @@ function Library({
               <span>
                 <strong>Cambios sin enviar de otro canal</strong>
                 <br />
-                {parkedChanges.length === 1 ? 'Hay 1 cambio guardado en este dispositivo' : `Hay ${parkedChanges.length} cambios guardados en este dispositivo`}
-                {' '}que pertenece{parkedChanges.length === 1 ? '' : 'n'} a otro canal
-                {' '}({parkedChanges.slice(0, 3).map(item => `“${item.title}”`).join(', ')}{parkedChanges.length > 3 ? '…' : ''}).
-                {' '}Se enviarán al abrir Bardo en ese canal.
+                {parkedChanges.length === 1
+                  ? `Hay 1 cambio guardado en este dispositivo que es de otro canal (${parkedNames}). Se enviará cuando abras Bardo en ese canal.`
+                  : `Hay ${parkedChanges.length} cambios guardados en este dispositivo que son de otro canal (${parkedNames}). Se enviarán cuando abras Bardo en ese canal.`}
               </span>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" onClick={onRetryParked}>Reintentar</Button>
@@ -906,7 +916,7 @@ function Library({
                   </button>
                   <DocActionMenu
                     doc={doc}
-                    triggerLabel={`Acciones de ${doc.title || 'documento'}`}
+                    triggerLabel={`Más acciones de ${doc.title || 'este documento'}`}
                     onAction={(action) => onDocAction(action, doc.id)}
                   />
                 </article>
@@ -974,7 +984,7 @@ function Reader({
         <header className="doc-intro">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-xs text-muted-foreground">
-              Último cambio realizado por {changeActorName(doc)} · {formatChangeTime(doc)}
+              Editado por {changeActorName(doc)} · {formatChangeTime(doc)}
             </span>
           </div>
           <h1 className="doc-title">{doc.title || 'Sin título'}</h1>
@@ -987,7 +997,7 @@ function Reader({
           )}
           {showSharePrompt && !doc.archived && (
             <div className="doc-inline-notice" role="status">
-              <span>Documento creado. ¿Quieres avisar en {channelLabel()}? {SHARE_CARD_HINT}</span>
+              <span>Documento creado. ¿Quieres compartirlo en {channelLabel()}? {SHARE_CARD_HINT}</span>
               <div className="flex gap-2">
                 <Button variant="default" size="sm" onClick={onShare}>Compartir en el canal</Button>
                 <Button variant="ghost" size="sm" onClick={onDismissShare}>Ahora no</Button>
@@ -996,7 +1006,7 @@ function Reader({
           )}
           {pending && (
             <p className="import-pending-banner text-sm text-muted-foreground" role="status">
-              Procesando archivo… Bardo está convirtiendo el contenido y lo mostrará aquí en cuanto termine.
+              Procesando archivo… El contenido aparecerá aquí en cuanto Bardo termine de convertirlo.
             </p>
           )}
         </header>
@@ -1018,12 +1028,12 @@ function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {isArchive ? 'Archivar documento' : isFailedImport ? 'Eliminar documento' : 'Eliminar definitivamente'}
+            {isArchive ? '¿Archivar este documento?' : '¿Eliminar este documento?'}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {isArchive
-              ? `“${doc?.title || 'Sin título'}” dejará de aparecer en Activos para todo el canal. Podrás restaurarlo desde Archivados.`
-              : `“${doc?.title || 'Sin título'}” se eliminará para todo el canal. Esta acción no se puede deshacer.`}
+              ? `«${doc?.title || 'Sin título'}» dejará de aparecer en Activos para todo el canal. Podrás restaurarlo desde Archivados.`
+              : `«${doc?.title || 'Sin título'}» se eliminará para todo el canal. Esta acción no se puede deshacer.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1047,14 +1057,14 @@ function ShareConfirmDialog({isOpen, doc, onConfirm, onCancel}) {
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Compartir en el canal</AlertDialogTitle>
+          <AlertDialogTitle>¿Compartir en {channelLabel()}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Se publicará una tarjeta de “{doc?.title || 'Sin título'}” en {channelLabel()} para que todos puedan abrirlo.
+            Todos en el canal verán una tarjeta de «{doc?.title || 'Sin título'}» con un botón para abrirlo.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => onConfirm(doc?.id)}>Publicar</AlertDialogAction>
+          <AlertDialogAction onClick={() => onConfirm(doc?.id)}>Compartir</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1066,9 +1076,9 @@ function MinutesEditedDialog({isOpen, title, onCopy, onReplace, onCancel}) {
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>El acta fue editada en Documentos</AlertDialogTitle>
+          <AlertDialogTitle>¿Reemplazar el acta editada?</AlertDialogTitle>
           <AlertDialogDescription>
-            “{title || 'Acta de reunión'}” tiene cambios hechos en Documentos. Si la reemplazas con el acta de la reunión, esos cambios se pierden.
+            «{title || 'Acta de reunión'}» tiene cambios hechos en Documentos. Si la reemplazas por el acta de la reunión, esos cambios se perderán.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1086,14 +1096,16 @@ function DiscardParkedDialog({isOpen, count, onConfirm, onCancel}) {
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Descartar cambios sin enviar</AlertDialogTitle>
+          <AlertDialogTitle>¿Descartar los cambios sin enviar?</AlertDialogTitle>
           <AlertDialogDescription>
-            Se borrará{count === 1 ? '' : 'n'} de este dispositivo {count === 1 ? '1 cambio' : `${count} cambios`} que no se pudo enviar. Esta acción no se puede deshacer.
+            {count === 1
+              ? 'Se eliminará de este dispositivo 1 cambio que no se pudo enviar. Esta acción no se puede deshacer.'
+              : `Se eliminarán de este dispositivo ${count} cambios que no se pudieron enviar. Esta acción no se puede deshacer.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>Descartar</AlertDialogAction>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>Descartar cambios</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1107,7 +1119,7 @@ function NewDocChoiceDialog({isOpen, draft, onContinue, onStartNew, onCancel}) {
         <AlertDialogHeader>
           <AlertDialogTitle>Tienes un borrador sin terminar</AlertDialogTitle>
           <AlertDialogDescription>
-            “{draft?.title || 'Sin título'}” todavía no se ha creado. Si empiezas uno nuevo, ese borrador se descartará.
+            «{draft?.title || 'Sin título'}» todavía no se ha creado. Si empiezas uno nuevo, ese borrador se descartará.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1128,8 +1140,8 @@ function LaunchNoticeDialog({notice, onRestore, onClose}) {
           <AlertDialogTitle>{archived ? 'Este documento fue archivado' : 'Este documento ya no existe'}</AlertDialogTitle>
           <AlertDialogDescription>
             {archived
-              ? `“${notice?.title || 'Sin título'}” está en Archivados. Puedes restaurarlo para que vuelva a aparecer en Activos.`
-              : 'Pudo haber sido eliminado o no está compartido en este canal. Te mostramos los documentos de este canal.'}
+              ? `«${notice?.title || 'Sin título'}» está en Archivados. Puedes restaurarlo para que vuelva a aparecer en Activos.`
+              : 'Puede que lo hayan eliminado o que no esté compartido en este canal. Aquí tienes los documentos de este canal.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1209,7 +1221,7 @@ function TextPreviewModal({isOpen, doc, onCopy, onCancel}) {
         </OverlayScrollArea>
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            <ChevronLeft width={15} height={15} /> Atrás
+            <ChevronLeft width={15} height={15} /> Volver
           </Button>
           <Button variant="default" size="sm" onClick={() => onCopy(text)}>
             <Copy width={15} height={15} /> Copiar texto
@@ -1231,6 +1243,18 @@ function App() {
   }
   const [store, setStoreState] = useState(() => storeRef.current);
   const [route, setRoute] = useState(parseRoute);
+  // Abrir un documento desde una tarea: "Volver" regresa a esa tarea.
+  const [docReturn, setDocReturn] = useState(null);
+  const [kanbanQuickAdd, setKanbanQuickAdd] = useState(0);
+  const [settingsTab, setSettingsTab] = useState(null);
+  // Recuerda el último módulo (para «Al abrir Bardo: lo último que usaste»).
+  useEffect(() => {
+    const hash = {library: '#docs', doc: '#docs', planner: '#planner', kanban: '#kanban'}[route.type];
+    if (hash) rememberLastModule(hash);
+  }, [route.type]);
+  useEffect(() => {
+    if (route.type !== 'doc' && route.type !== 'edit') setDocReturn(null);
+  }, [route.type]);
   const [query, setQuery] = useState('');
   const [modal, setModal] = useState(null);
   const [linkValue, setLinkValue] = useState('');
@@ -1397,7 +1421,7 @@ function App() {
       });
     }).catch(err => {
       console.error('Bardo Docs: error fetching archived docs', err);
-      if (!cancelled) showToast('No se pudieron cargar los documentos archivados');
+      if (!cancelled) showToast('No se pudieron cargar los documentos archivados. Revisa tu conexión e inténtalo de nuevo.');
     });
     return () => { cancelled = true; };
   }, [commitStore, libraryTab, showToast]);
@@ -1421,6 +1445,19 @@ function App() {
     } else if (location.hash === hash) setRoute(parseRoute());
     else location.hash = hash;
   }, [captureBodyOffset]);
+
+  // Al arrancar: la zona horaria del dispositivo define la del servidor si aún
+  // no tiene una, y «Al abrir Bardo: lo último que usaste» salta a ese módulo.
+  const bootHandled = useRef(false);
+  useEffect(() => {
+    if (bootHandled.current) return;
+    bootHandled.current = true;
+    void reportDetectedTimeZone();
+    if (getStartModulePreference() === 'last' && routeRef.current.type === 'home') {
+      const target = lastModuleHash();
+      if (target) go(target, {replace: true, skipTransition: true});
+    }
+  }, [go]);
 
   // Cambios que llegan del motor de sincronización (conflictos, normalizaciones…).
   useEffect(() => {
@@ -1453,7 +1490,7 @@ function App() {
         conflictCopiesRef.current.set(event.id, copyId);
         bumpRevision([event.id]);
         const editing = routeRef.current.type === 'edit' && routeRef.current.id === event.id;
-        showToast(`Otra persona editó este documento al mismo tiempo. Guardamos tu versión como “${copyTitle}”.`);
+        showToast(`Otra persona editó este documento al mismo tiempo. Guardamos tu versión como «${copyTitle}».`);
         if (editing) go(`#edit-${copyId}`, {skipTransition: true});
         return;
       }
@@ -1517,7 +1554,7 @@ function App() {
           };
           return {...prev, docs: [recreated, ...prev.docs.filter(d => d.id !== event.oldId)]};
         });
-        showToast('No tenías acceso a ese documento; guardamos tus cambios como un documento nuevo.');
+        showToast('Ya no tienes acceso a ese documento. Guardamos tus cambios en un documento nuevo.');
         const viewing = routeRef.current.id === event.oldId;
         if (viewing) go(`#${routeRef.current.type === 'edit' ? 'edit' : 'doc'}-${event.newId}`, {skipTransition: true});
         return;
@@ -1547,7 +1584,7 @@ function App() {
         return;
       }
       if (event?.type === 'offline-boot') {
-        showToast('Sin conexión con Bardo. Mostramos tu copia local y reintentaremos en segundo plano.');
+        showToast('Sin conexión con Bardo. Te mostramos lo guardado en este dispositivo y seguiremos intentando conectar.');
         return;
       }
       if (event?.type === 'storage-warning') warnStorageFull();
@@ -1563,7 +1600,7 @@ function App() {
       if (detail.state === 'saved') offlineNotified = false;
       if (detail.state === 'offline' && !offlineNotified) {
         offlineNotified = true;
-        showToast('Sin conexión con Bardo. Tus cambios quedan guardados y se enviarán al reconectar.');
+        showToast('Sin conexión con Bardo. Tus cambios quedan guardados en este dispositivo y se enviarán cuando vuelva la conexión.');
       }
       if (detail.state === 'error' && detail.message) showToast(detail.message);
     };
@@ -1721,13 +1758,13 @@ function App() {
   const uploadingRef = useRef(false);
   const uploadDocument = useCallback(async file => {
     if (uploadingRef.current) {
-      showToast('Ya estamos convirtiendo un archivo. Espera a que termine.');
+      showToast('Ya se está subiendo un archivo. Espera a que termine para subir otro.');
       return;
     }
     uploadingRef.current = true;
     setUploading(true);
     try {
-      showToast(`Convirtiendo “${file?.name || 'archivo'}”… puede tardar unos segundos.`);
+      showToast(`Subiendo «${file?.name || 'archivo'}»… Puede tardar unos segundos.`);
       const imported = await convertDocumentFile(file);
       const now = new Date().toISOString();
       const doc = {
@@ -1774,7 +1811,7 @@ function App() {
       }
       try {
         const settled = await window.__bardoSettleDocument?.(id);
-        if (settled === false) throw new Error('No pudimos conectar con Bardo. El documento quedó archivado; vuelve a intentarlo desde Archivados.');
+        if (settled === false) throw new Error('No pudimos conectar con Bardo. El documento quedó archivado: vuelve a intentarlo desde Archivados.');
         await window.__bardoDeleteDocumentPermanent(id);
         commitStore(prev => ({
           ...prev,
@@ -1785,7 +1822,7 @@ function App() {
       } catch (error) {
         showToast(error?.status === 403
           ? 'Lo archivamos, pero solo quien subió el archivo o quien modera el canal puede eliminarlo definitivamente.'
-          : (error?.message || 'No se pudo eliminar el documento.'));
+          : (error?.message || 'No se pudo eliminar el documento. Inténtalo de nuevo.'));
       }
       return;
     }
@@ -1795,7 +1832,7 @@ function App() {
           await window.__bardoDeleteDocumentPermanent(id);
         } catch (error) {
           console.error('Bardo Docs: no se pudo eliminar definitivamente', error);
-          showToast(error?.message || 'No se pudo eliminar el documento');
+          showToast(error?.message || 'No se pudo eliminar el documento. Inténtalo de nuevo.');
           return;
         }
       }
@@ -1810,7 +1847,7 @@ function App() {
         next.delete(id);
         return next;
       });
-      showToast('Documento eliminado definitivamente');
+      showToast('Documento eliminado');
       if (routeRef.current.id === id) go('#docs');
       return;
     }
@@ -1875,7 +1912,7 @@ function App() {
     } catch {}
     setDraft(null);
     setNewDocNonce(n => n + 1);
-    showToast('Borrador descartado. Empezaste un documento nuevo.');
+    showToast('Borrador descartado');
     go('#new');
   }, [go, showToast]);
 
@@ -1893,7 +1930,7 @@ function App() {
   const publishDoc = useCallback(async id => {
     setModal(null);
     if (!window.__bardoPublishDocument) {
-      showToast('Compartir en el canal solo está disponible dentro de Discord.');
+      showToast('Para compartir en el canal, abre Bardo en Discord.');
       return;
     }
     try {
@@ -1902,7 +1939,7 @@ function App() {
       showToast(`Documento compartido en ${channelLabel()}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo enviar el documento al canal', error);
-      showToast(error?.message || 'No se pudo compartir el documento en el canal.');
+      showToast(error?.message || 'No se pudo compartir el documento en el canal. Inténtalo de nuevo.');
     }
   }, [showToast]);
 
@@ -1912,9 +1949,9 @@ function App() {
       // Fuera de Discord (desarrollo): solo el texto con formato, generado aquí.
       if (format === 'md') {
         downloadFile(`${documentFileStem(doc)}.md`, 'text/markdown;charset=utf-8', documentMarkdown(doc));
-        showToast('Se generó el archivo .md');
+        showToast('Archivo .md descargado');
       } else {
-        showToast('Las descargas en PDF y Word están disponibles dentro de Discord.');
+        showToast('Para descargar en PDF o Word, abre Bardo en Discord.');
       }
       return;
     }
@@ -1927,13 +1964,13 @@ function App() {
         : 'Discord no abrió el navegador. Vuelve a intentarlo y acepta el aviso de enlace externo.');
     } catch (error) {
       console.error(`Bardo Docs: no se pudo exportar ${format}`, error);
-      showToast(error?.message || `No pudimos preparar ${label}.`);
+      showToast(error?.message || `No pudimos preparar ${label}. Inténtalo de nuevo.`);
     }
   }, [showToast]);
 
   const downloadOriginal = useCallback(async id => {
     if (!window.__bardoDownloadOriginal) {
-      showToast('La descarga del archivo original está disponible dentro de Discord.');
+      showToast('Para descargar el archivo original, abre Bardo en Discord.');
       return;
     }
     try {
@@ -1942,10 +1979,10 @@ function App() {
         const opened = await openExternalUrl(result.url);
         showToast(opened ? 'Abriendo el archivo original en tu navegador…' : 'Discord no abrió el navegador. Vuelve a intentarlo.');
       } else {
-        showToast('Iniciamos la descarga del archivo original.');
+        showToast('Descargando el archivo original…');
       }
     } catch (error) {
-      showToast(error?.message || 'No pudimos descargar el archivo original.');
+      showToast(error?.message || 'No pudimos descargar el archivo original. Inténtalo de nuevo.');
     }
   }, [showToast]);
 
@@ -1974,26 +2011,28 @@ function App() {
     rememberMinutesHash(doc.id, minutesContentHash(doc.body));
     setModal(null);
     showToast(decision === 'copy'
-      ? 'Guardamos el acta como un documento nuevo; tu versión editada no cambió.'
+      ? 'Guardamos el acta como un documento nuevo. Tu versión editada sigue igual.'
       : existing ? 'Acta actualizada en Documentos' : 'Acta guardada en Documentos');
     go(`#doc-${doc.id}`);
   }, [commitStore, go, showToast]);
 
   const retryParkedChanges = useCallback(async () => {
     if (!window.__bardoRetryParked) return;
-    showToast('Reintentando…');
+    showToast('Enviando cambios…');
     const remaining = await window.__bardoRetryParked();
     setParkedChanges(window.__bardoParkedChanges?.() || []);
     showToast(remaining
-      ? `${remaining === 1 ? 'Queda 1 cambio' : `Quedan ${remaining} cambios`} sin enviar: abre Bardo en el canal donde está ese documento.`
-      : 'Cambios enviados.');
+      ? (remaining === 1
+        ? 'Queda 1 cambio sin enviar. Se enviará cuando abras Bardo en el canal de ese documento.'
+        : `Quedan ${remaining} cambios sin enviar. Se enviarán cuando abras Bardo en el canal de esos documentos.`)
+      : 'Cambios enviados');
   }, [showToast]);
 
   const discardParkedChanges = useCallback(() => {
     setModal(null);
     const discarded = window.__bardoDiscardParked?.() || 0;
     setParkedChanges(window.__bardoParkedChanges?.() || []);
-    if (discarded) showToast(discarded === 1 ? 'Se descartó 1 cambio sin enviar.' : `Se descartaron ${discarded} cambios sin enviar.`);
+    if (discarded) showToast(discarded === 1 ? 'Se descartó 1 cambio sin enviar' : `Se descartaron ${discarded} cambios sin enviar`);
   }, [showToast]);
 
   const restoreFromNotice = useCallback(() => {
@@ -2044,7 +2083,7 @@ function App() {
       }
     }
     if (action === 'publish') {
-      if (!window.__bardoPublishDocument) showToast('Compartir en el canal solo está disponible dentro de Discord.');
+      if (!window.__bardoPublishDocument) showToast('Para compartir en el canal, abre Bardo en Discord.');
       else setModal({type: 'share', docId: doc.id});
     }
     if (action === 'text-preview') setModal({type: 'text-preview', docId: doc.id});
@@ -2061,13 +2100,15 @@ function App() {
 
   return (
     <main className="app-root">
-      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || (route.type === 'doc' && currentDoc)) && (
+      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || route.type === 'kanban' || (route.type === 'doc' && currentDoc)) && (
         <PersistentHeader
           route={route}
           doc={currentDoc}
           onBack={() => {
             if (route.type === 'planner' && route.tab && route.tab !== 'home') {
               go('#planner', {skipTransition: true});
+            } else if (route.type === 'doc' && docReturn) {
+              go(docReturn.hash, {skipTransition: true});
             } else {
               go('#docs', {restore: scrollMemory.current.get('library') || 0});
             }
@@ -2078,8 +2119,43 @@ function App() {
           onUpload={uploadDocument}
           uploading={uploading}
           onPlannerNew={() => go('#planner-new')}
-          onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : '#docs')}
+          onKanbanNew={() => setKanbanQuickAdd(value => value + 1)}
+          onOpenSettings={tab => setSettingsTab(tab || 'personal')}
+          docReturn={route.type === 'doc' ? docReturn : null}
+          onNavigateModule={href => go(href, {skipTransition: true})}
         />
+      )}
+      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || route.type === 'kanban' || (route.type === 'doc' && currentDoc)) && (
+        <BetaNotice />
+      )}
+      {settingsTab && (
+        <Suspense fallback={null}>
+          <SettingsDialog
+            open
+            initialTab={settingsTab}
+            remote={isPlannerRemoteEnabled()}
+            onClose={() => setSettingsTab(null)}
+          />
+        </Suspense>
+      )}
+      <ModuleBar
+        active={moduleForRoute(route)}
+        visible={routeShowsHubBar(route)}
+        onNavigate={href => go(href, {skipTransition: true})}
+      />
+      {route.type === 'kanban' && (
+        <Suspense fallback={<p className="mt-24 text-center text-sm text-muted-foreground" role="status">Cargando tareas…</p>}>
+          <KanbanModule
+            cardId={route.cardId}
+            docs={activeDocs}
+            go={go}
+            quickAddRequest={kanbanQuickAdd}
+            onOpenDoc={(docId, returnHash) => {
+              setDocReturn({hash: returnHash, label: 'Tarea'});
+              go(`#doc-${docId}`);
+            }}
+          />
+        </Suspense>
       )}
       {route.type === 'home' && <Home docs={activeDocs} draft={draft} onNewDoc={startNewDoc} onOpenDoc={openDoc} />}
       {route.type === 'planner' && (
@@ -2200,7 +2276,7 @@ function App() {
         />
       )}
 
-      {route.type !== 'home' && route.type !== 'library' && route.type !== 'planner' && !currentDoc && route.type !== 'new' && (
+      {route.type !== 'home' && route.type !== 'library' && route.type !== 'planner' && route.type !== 'kanban' && !currentDoc && route.type !== 'new' && (
         <div className="missing-state flex flex-col items-center justify-center py-20 text-center">
           <p className="text-base text-muted-foreground mb-4">
             Este documento ya no existe o no está compartido en este canal.
@@ -2235,7 +2311,7 @@ function App() {
         onOpenLink={() => {
           const raw = linkValue.trim();
           void openExternalUrl(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).then(opened => {
-            if (!opened) showToast('No se pudo abrir el enlace.');
+            if (!opened) showToast('No se pudo abrir el enlace. Inténtalo de nuevo.');
           });
         }}
         onCancel={() => {

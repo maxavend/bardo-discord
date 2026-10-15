@@ -306,7 +306,7 @@ export function PlannerHomeView({
               </button>
             </div>
             <span className="text-[11px] text-muted-foreground self-center">
-              {eventsTab === 'active' ? 'Toca una reunión para abrirla' : 'Puedes restaurarlas o eliminarlas'}
+              {eventsTab === 'active' ? 'Elige una reunión para abrirla' : 'Puedes restaurarlas o eliminarlas'}
             </span>
           </div>
 
@@ -369,7 +369,7 @@ export function PlannerHomeView({
               </div>
             ) : (
               <div className="p-6 text-center text-xs text-muted-foreground rounded-xl border border-dashed border-border/60">
-                No hay reuniones programadas en este canal.
+                No hay reuniones activas en este canal. Crea una con «Nueva reunión».
               </div>
             )
           ) : (
@@ -420,7 +420,7 @@ export function PlannerHomeView({
                               className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                             >
                               <TrashIcon className="size-4" />
-                              <span>Eliminar definitivamente</span>
+                              <span>Eliminar reunión</span>
                             </DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>

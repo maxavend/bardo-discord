@@ -47,17 +47,17 @@ export function friendlyAuthError(error) {
   const code = error?.code;
   const message = String(error?.message || '');
   if (code === 'timeout') {
-    return 'Discord tardó demasiado en responder. Revisa tu conexión e intenta de nuevo.';
+    return 'Discord tardó demasiado en responder. Revisa tu conexión e inténtalo de nuevo.';
   }
   if (code === 5000 || code === 4002 || /cancel|denied|reject/i.test(message)) {
-    return 'Bardo necesita tu permiso de Discord para abrirse. Vuelve a intentarlo y pulsa "Autorizar".';
+    return 'Bardo necesita tu permiso de Discord para abrirse. Vuelve a intentarlo y pulsa «Autorizar».';
   }
   if (code === 'token_exchange') {
-    return `${message} Intenta de nuevo en unos segundos.`;
+    return `${message} Inténtalo de nuevo en unos segundos.`;
   }
   // Mensajes propios (en español) se muestran tal cual; los del SDK, no.
-  if (/^(Discord no|La identidad|Bardo )/.test(message)) return `${message} Intenta de nuevo.`;
-  return 'No pudimos conectar tu sesión de Discord con Bardo. Intenta de nuevo.';
+  if (/^(Discord no|La identidad|Bardo )/.test(message)) return `${message} Inténtalo de nuevo.`;
+  return 'No pudimos conectar tu sesión de Discord con Bardo. Inténtalo de nuevo.';
 }
 
 function withTimeout(promise, ms, label) {
@@ -114,7 +114,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
         guildId: null,
         channelId: null,
         user: null,
-        message: 'Bardo debe abrirse desde un canal de un servidor de Discord para ver los documentos de ese canal.',
+        message: 'Abre Bardo desde un canal de un servidor de Discord para ver su contenido.',
       };
     }
     logBreadcrumb('guild_context_ready', {guildId});

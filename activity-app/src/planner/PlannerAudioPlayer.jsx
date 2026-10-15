@@ -110,7 +110,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
             <span>{recording?.sourcesLabel || 'Micrófono'}</span>
             {segmentsCount > 1 && <><span>·</span><span>{segmentsCount} segmentos</span></>}
             {isPending && <><span>·</span><span>Recuperando audio…</span></>}
-            {hasPersistenceError && <><span>·</span><span className="text-destructive">Audio no persistido</span></>}
+            {hasPersistenceError && <><span>·</span><span className="text-destructive">Audio no guardado</span></>}
           </div>
         </div>
 
@@ -155,7 +155,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
                   try {
                     await downloadPointAudio(recording.name || recording.pointTitle || 'Grabación', recording);
                   } catch (error) {
-                    toast(error?.message || 'No se pudo descargar el audio.');
+                    toast(error?.message || 'No se pudo descargar el audio. Inténtalo de nuevo.');
                   }
                 }}>
                   <Download className="size-4" />
@@ -203,7 +203,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Formato</span><span className="font-mono text-foreground text-right">{recording?.mimeType || 'audio/webm'}</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Tamaño</span><span className="font-semibold text-foreground">{fileSizeKb} KB</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Segmentos</span><span className="font-semibold text-foreground">{segmentsCount}</span></div>
-            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Persistencia</span><span className="font-semibold text-foreground">{recording?.binaryStorage === 'indexeddb' ? 'IndexedDB' : 'No persistida'}</span></div>
+            <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Guardado</span><span className="font-semibold text-foreground">{recording?.binaryStorage === 'indexeddb' ? 'En este dispositivo' : 'No guardado'}</span></div>
             <div className="flex justify-between gap-3 py-1.5"><span className="text-muted-foreground">Estado</span><span className="font-semibold text-foreground">{recording?.status || 'desconocido'}</span></div>
           </div>
           <DialogFooter>
@@ -218,7 +218,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
           <DialogHeader>
             <DialogTitle>¿Eliminar esta grabación?</DialogTitle>
             <DialogDescription>
-              Se borrará “{recording?.name || 'Grabación'}” de este dispositivo y no se podrá recuperar.
+              Se eliminará «{recording?.name || 'Grabación'}» de este dispositivo. No se puede deshacer.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -242,7 +242,7 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Renombrar grabación</DialogTitle>
-            <DialogDescription>Cambia sólo el nombre visible. El tema asociado no se modifica.</DialogDescription>
+            <DialogDescription>Solo cambia el nombre de la grabación; su tema sigue igual.</DialogDescription>
           </DialogHeader>
           <Input
             value={renameValue}

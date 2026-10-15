@@ -193,7 +193,7 @@ export async function convertDocumentFile(file) {
 
   if (/\.(?:md|markdown|txt)$/i.test(lowerName)) {
     const text = decodeTextFile(await file.arrayBuffer());
-    if (!text.trim()) throw new ImportError('empty', 'El archivo está vacío.');
+    if (!text.trim()) throw new ImportError('empty', 'Este archivo está vacío. Elige uno que tenga texto.');
     return {title, markdown: assertImportSize(ensureDocumentTitle(text, title)), sourceName:name};
   }
   if (/\.pdf$/i.test(lowerName)) {
@@ -205,7 +205,7 @@ export async function convertDocumentFile(file) {
   if (/\.doc$/i.test(lowerName)) {
     throw new ImportError('unsupported', 'El formato Word antiguo (.doc) no es compatible. Ábrelo en Word, guárdalo como .docx y vuelve a subirlo.');
   }
-  throw new ImportError('unsupported', 'Bardo puede leer archivos .md, .txt, .pdf y .docx.');
+  throw new ImportError('unsupported', 'Bardo no puede leer este tipo de archivo. Sube un archivo .md, .txt, .pdf o .docx.');
 }
 
 /**

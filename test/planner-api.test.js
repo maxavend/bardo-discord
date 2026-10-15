@@ -397,3 +397,4 @@ test('member search validates query, denies channel access, and surfaces rate li
   assert.equal(restricted.json.available, false);
   assert.match(restricted.json.message, /invitado/);
 });
+

@@ -18,7 +18,7 @@ export const BLOCK_LABELS = Object.freeze({
   h3: 'Título 3',
   ul: 'Lista',
   ol: 'Lista numerada',
-  checklist: 'Lista de tareas',
+  checklist: 'Lista de pendientes',
   blockquote: 'Cita',
   code_block: 'Bloque de código',
   callout: 'Nota destacada',

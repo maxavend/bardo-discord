@@ -10,9 +10,9 @@ import './keyboard-sticky.css';
 import './keyboard-sticky.js';
 
 const BOOT_PERSONALITY_MESSAGES = [
-  'Ponemos tus ideas en su sitio…',
-  'Bardo está preparando la mesa…',
-  'Ya casi: abrimos tu espacio…',
+  'Conectando con Discord…',
+  'Cargando tu espacio…',
+  'Ya casi está…',
 ];
 
 const appModulePromise = import('./App.jsx');
@@ -49,9 +49,9 @@ function ActivityBootShell({leaving = false}) {
             <span key={messageIndex} className="boot-stage">{BOOT_PERSONALITY_MESSAGES[messageIndex]}</span>
             <p
               className="boot-hint t-shimmer"
-              data-text="Estamos preparando todo para que puedas continuar"
+              data-text="Documentos, reuniones y tareas de tu canal"
             >
-              Estamos preparando todo para que puedas continuar
+              Documentos, reuniones y tareas de tu canal
             </p>
           </div>
         </div>
@@ -85,8 +85,8 @@ function ActivityErrorShell({message, onRetry}) {
   return (
     <main className="boot-screen" aria-live="polite">
       <section className="boot-content boot-content--error" aria-label="Error al cargar Bardo">
-        <p className="boot-eyebrow">No pudimos abrir tu espacio</p>
-        <h1>Algo se interrumpió</h1>
+        <p className="boot-eyebrow">Error al abrir Bardo</p>
+        <h1>No pudimos abrir tu espacio</h1>
         <p className="boot-error-message">{message}</p>
         <button className="boot-retry-button" type="button" onClick={onRetry}>
           Intentar de nuevo
@@ -116,7 +116,7 @@ function DocumentOnlyUnavailable({message, onRetry}) {
 
 function ThemedApp({productionState, onRetry}) {
   if (productionState?.active && !productionState?.ready) {
-    return <DocumentOnlyUnavailable message={productionState.message || 'No se pudo cargar el documento.'} onRetry={onRetry} />;
+    return <DocumentOnlyUnavailable message={productionState.message || 'No se pudo cargar Bardo. Inténtalo de nuevo.'} onRetry={onRetry} />;
   }
   return <App />;
 }
@@ -155,10 +155,10 @@ function ActivityRoot() {
           active: true,
           ready: false,
           documentId: null,
-          message: auth.message || 'No pudimos autenticar tu sesión de Discord.',
+          message: auth.message || 'No pudimos verificar tu sesión de Discord. Inténtalo de nuevo.',
         });
         setStatus('error');
-        setErrorMessage(auth.message || 'No pudimos autenticar tu sesión de Discord.');
+        setErrorMessage(auth.message || 'No pudimos verificar tu sesión de Discord. Inténtalo de nuevo.');
         return;
       }
 

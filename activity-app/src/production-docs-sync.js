@@ -28,7 +28,7 @@ import {DOCS_KEYS} from './docs-storage.js';
 export const DOCS_STORE_KEY = DOCS_KEYS.store;
 export const DOCS_PENDING_KEY = DOCS_KEYS.pending;
 export const MAX_CHECKLIST_REBASES = 2;
-export const NETWORK_ERROR_MESSAGE = 'Sin conexión con Bardo. Revisa tu conexión e intenta de nuevo.';
+export const NETWORK_ERROR_MESSAGE = 'Sin conexión con Bardo. Revisa tu conexión e inténtalo de nuevo.';
 // La cuota de keepalive (~64 KB) se comparte con el planner: los envíos de
 // documentos al cerrar se limitan a ~60 KB en total, medidos en bytes UTF-8.
 export const KEEPALIVE_MAX_BYTES = 60_000;
@@ -149,26 +149,26 @@ function documentFrom(data) {
 export function errorMessage(error) {
   const status = Number(error?.status ?? 0);
   const code = error?.data?.error;
-  if (!status) return 'Sin conexión, reintentando';
+  if (!status) return 'Sin conexión. Reintentando…';
   if (status === 401) return 'Tu sesión de Discord expiró. Vuelve a abrir Bardo para guardar.';
   if (status === 403) return 'No tienes permiso para guardar este documento en este canal.';
-  if (status === 413) return 'El documento supera el tamaño máximo permitido.';
+  if (status === 413) return 'El documento es demasiado largo para guardarse. Divídelo en documentos más cortos.';
   if (status === 409 && code === 'import_pending') return 'El archivo aún se está procesando. Reintentaremos en unos segundos.';
-  if (status === 400) return error?.data?.message || 'El servidor rechazó el documento.';
-  if (status === 429 || status >= 500) return 'Sin conexión, reintentando';
-  return error?.data?.message || `No se pudo guardar (HTTP ${status}).`;
+  if (status === 400) return error?.data?.message || 'No se pudo guardar el documento. Revisa su contenido e inténtalo de nuevo.';
+  if (status === 429 || status >= 500) return 'Sin conexión. Reintentando…';
+  return error?.data?.message || 'No se pudo guardar. Inténtalo de nuevo.';
 }
 
 /**
  * Mensaje en español para mostrar al usuario ante un error de una acción
  * (publicar, eliminar, exportar…). Nunca expone "Failed to fetch" ni "HTTP 500".
  */
-export function userFacingError(error, fallback = 'No se pudo completar la acción. Intenta de nuevo.') {
+export function userFacingError(error, fallback = 'No se pudo completar la acción. Inténtalo de nuevo.') {
   if (!error || typeof error !== 'object' || !('status' in error)) return fallback;
   const status = Number(error.status ?? 0);
   if (!status) return NETWORK_ERROR_MESSAGE;
   if (status === 401) return 'Tu sesión de Discord expiró. Cierra y vuelve a abrir Bardo.';
-  if (status === 429 || status >= 500) return 'Bardo no responde en este momento. Intenta de nuevo en unos segundos.';
+  if (status === 429 || status >= 500) return 'Bardo no responde en este momento. Inténtalo de nuevo en unos segundos.';
   const message = error.data?.message;
   return typeof message === 'string' && message.trim() ? message : fallback;
 }
@@ -610,7 +610,7 @@ export function createDocsSync({
     const doc = {...entry.doc, id: newId, archived: false, archivedAt: null, importStatus: 'ready', hasSource: false};
     pending.set(newId, {doc, baseUpdatedAt: null, version: 1, failed: null, recreatedFrom: id});
     persist();
-    setState(id, 'error', 'No tenías acceso a ese documento; guardamos tus cambios como un documento nuevo.');
+    setState(id, 'error', 'Ya no tienes acceso a ese documento. Guardamos tus cambios en un documento nuevo.');
     onRemote({type: 'recreated', oldId: id, newId, doc});
     return 'again';
   }
@@ -785,7 +785,7 @@ export function createDocsSync({
         registerRemote([current]);
         conflicted.add(id);
       }
-      setState(id, 'error', 'Otra persona cambió este documento al mismo tiempo y no pudimos guardar la tarea. Revisa la lista y vuelve a marcarla.');
+      setState(id, 'error', 'Otra persona cambió este documento al mismo tiempo y no pudimos guardar lo que marcaste. Revisa la lista y vuelve a marcarlo.');
       if (serverLocal) onRemote({type: 'replace', docs: [serverLocal]});
       return 'conflict';
     }
@@ -848,7 +848,7 @@ export function createDocsSync({
     persist();
     if (serverDocument) registerRemote([serverDocument]);
     conflicted.add(id);
-    setState(id, 'conflict', 'Otra persona editó este documento. Guardamos tu versión como copia.');
+    setState(id, 'conflict', 'Otra persona editó este documento al mismo tiempo. Guardamos tu versión como copia.');
     onRemote({
       type: 'conflict',
       id,

@@ -971,14 +971,40 @@ export async function cleanupExpiredRecords(db, now = new Date()) {
   const nowIso = now.toISOString();
   const intentCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const contextCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const noticeCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const results = await db.batch([
     db.prepare('DELETE FROM docs_sessions WHERE expires_at <= ?').bind(nowIso),
     db.prepare('DELETE FROM docs_launch_intents WHERE created_at < ?').bind(intentCutoff),
     db.prepare('DELETE FROM activity_contexts WHERE created_at < ?').bind(contextCutoff),
+    // Solo el registro de avisos ya resueltos; las tareas nunca se borran solas.
+    db.prepare("DELETE FROM kanban_notifications WHERE updated_at < ? AND status != 'pending'").bind(noticeCutoff),
   ]);
   return {
     sessions: Number(results?.[0]?.meta?.changes || 0),
     launchIntents: Number(results?.[1]?.meta?.changes || 0),
     activityContexts: Number(results?.[2]?.meta?.changes || 0),
+    kanbanNotifications: Number(results?.[3]?.meta?.changes || 0),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Espacio de trabajo (nombre visible del canal en Bardo)
+
+export const WORKSPACE_NAME_MAX = 60;
+
+export async function loadWorkspaceName(db, guildId, channelId) {
+  return db.prepare('SELECT name FROM workspaces WHERE guild_id = ? AND channel_id = ?')
+    .bind(guildId, channelId).first('name');
+}
+
+/** Guarda el nombre; uno vacío vuelve al nombre del canal. */
+export async function saveWorkspaceName(db, guildId, channelId, name, userId) {
+  if (!name) {
+    await db.prepare('DELETE FROM workspaces WHERE guild_id = ? AND channel_id = ?').bind(guildId, channelId).run();
+    return null;
+  }
+  await db.prepare(`INSERT INTO workspaces (guild_id, channel_id, name, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(guild_id, channel_id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
+    .bind(guildId, channelId, name, new Date().toISOString(), userId).run();
+  return name;
 }

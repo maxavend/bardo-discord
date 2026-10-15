@@ -55,10 +55,10 @@ export function describeMicrophoneError(error, {isMobile = false} = {}) {
     return `Bardo no tiene permiso para usar tu micrófono. ${howToAllow}`;
   }
   if (name === 'NotFoundError' || name === 'OverconstrainedError' || /not found|no device/i.test(message)) {
-    return 'No encontramos un micrófono conectado. Conecta uno (o elige otro en Discord: Ajustes de usuario → Voz y video) y vuelve a intentarlo.';
+    return 'No encontramos un micrófono conectado. Conecta uno (o elige otro en Discord: Ajustes de usuario → Voz y video) e inténtalo de nuevo.';
   }
   if (name === 'NotReadableError' || name === 'AbortError' || /in use|could not start|not readable/i.test(message)) {
-    return 'Tu micrófono está ocupado por otra aplicación o no responde. Ciérrala o desconecta y vuelve a conectar el micrófono, y vuelve a intentarlo.';
+    return 'Tu micrófono está ocupado por otra aplicación o no responde. Cierra esa aplicación o vuelve a conectar el micrófono e inténtalo de nuevo.';
   }
   if (/no soporta/i.test(message)) {
     return 'Este dispositivo no permite grabar audio desde la actividad. Prueba desde Discord en el computador.';
@@ -168,7 +168,7 @@ export class RecordingController {
       return this.currentRecordingId;
     }
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      const error = new Error('Tu navegador no soporta grabación de micrófono.');
+      const error = new Error('Este navegador no permite grabar con el micrófono.');
       this.setStatus(RECORDING_STATUS.ERROR);
       this.onError(error);
       throw error;
@@ -226,7 +226,7 @@ export class RecordingController {
     };
     recorder.onstop = () => this.handleRecorderStop(recorder);
     recorder.onerror = (event) => {
-      const error = event?.error || new Error('El grabador de audio falló.');
+      const error = event?.error || new Error('La grabación de audio dejó de funcionar.');
       this.lastRecorderError = error;
       this.onError(error);
       try {
@@ -497,7 +497,7 @@ export class RecordingController {
       const meta = this.snapshotMeta(Date.now());
       entity = this.buildEntity(meta, {
         interrupted: true,
-        interruptionReason: this.lastRecorderError?.message || 'La captura de audio se detuvo inesperadamente.',
+        interruptionReason: this.lastRecorderError?.message || 'La grabación se detuvo de forma inesperada.',
       });
     } catch (error) {
       this.onError(error);

@@ -98,6 +98,29 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Scrollbars: un solo lenguaje en toda la app. Los nativos (página, tablero,
+   listas) usan el mismo thumb que OverlayScrollArea: fino, redondeado, sin
+   carril visible y más notorio al pasar el cursor. Los colores salen de los
+   tokens, así que funcionan igual en tema claro y oscuro. */
+:root {
+  --scrollbar-thumb: color-mix(in oklab, var(--muted-foreground) 32%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}
+@supports (scrollbar-color: auto) {
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
+}
 html, body, #root {
   margin: 0;
   width: 100%;
@@ -146,6 +169,40 @@ button { font-size: 14px; }
 .app-root, .route-active {
   min-height: 100dvh;
   background-color: var(--background);
+}
+/* Una vista bajo el header no debe sumar su alto: si no, una página vacía
+   ya tiene scroll vertical. */
+.app-host-header ~ .route-active {
+  min-height: calc(100dvh - var(--bardo-topbar, 52px) - var(--bardo-notice-height, 0px) - var(--bardo-safe-top, 0px) - var(--bardo-safe-bottom, 0px));
+}
+/* Aviso de beta: una línea discreta bajo el header, que se puede cerrar.
+   El contenedor da el aire con padding (no margen) para medir su alto exacto. */
+.beta-notice-wrap { padding-top: 8px; }
+.beta-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+@media (max-width: 1511px) { .beta-notice { width: calc(100% - 32px); } }
+.beta-notice-text { margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.beta-notice-badge {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--primary) 18%, transparent);
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 600;
 }
 .app-root {
   color: var(--foreground);
@@ -490,6 +547,73 @@ button { font-size: 14px; }
 /* Library: centered column with consistent gutters */
 .library { width: 100%; padding: 0 0 max(84px, calc(var(--bardo-safe-bottom) + 68px)); }
 .library-inner { width: min(100%, 760px); margin: 0 auto; padding-inline: 16px; }
+/* Tareas (Kanban): el encabezado usa el ancho del contenido; en escritorio
+   el tablero ocupa todo el ancho y el alto restantes (overflow visible hasta
+   el borde de la pantalla) y la barra horizontal queda al borde inferior. */
+.kanban-page { width: 100%; padding: 8px 0 max(84px, calc(var(--bardo-safe-bottom) + 68px)); }
+.kanban-inner { width: min(100%, 1480px); margin: 0 auto; padding-inline: 16px; }
+.kanban-card { touch-action: manipulation; }
+/* El tablero ocupa todo el alto disponible y cada columna hace scroll por
+   dentro: la página no se desplaza. */
+.app-host-header ~ .kanban-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--bardo-topbar, 52px) - var(--bardo-notice-height, 0px) - var(--bardo-safe-top, 0px) - var(--bardo-safe-bottom, 0px));
+  min-height: 0;
+  padding-bottom: 0;
+}
+html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: hidden; }
+.kanban-board-region { flex: 1 1 auto; min-height: 0; display: flex; margin-top: 16px; }
+.kanban-board {
+  --kanban-gutter: max(16px, calc((100% - 1480px) / 2 + 16px));
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Aire para anillos de foco y de "soltar aquí"; la barra va pegada abajo. */
+  padding: 4px var(--kanban-gutter) 12px;
+  scroll-padding-inline: var(--kanban-gutter);
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+}
+/* Mientras se arrastra, el snap no pelea con el auto-scroll. */
+.kanban-board[data-dragging] { scroll-snap-type: none; }
+/* El margen derecho dentro de un contenedor con scroll requiere un elemento. */
+.kanban-board::after { content: ""; flex: 0 0 calc(var(--kanban-gutter) - 12px); }
+.kanban-column-slot { flex: 0 0 272px; max-height: 100%; display: flex; flex-direction: column; scroll-snap-align: start; }
+.kanban-add-column-slot { flex: 0 0 220px; scroll-snap-align: start; }
+.kanban-column-slot > .kanban-column { flex: 0 1 auto; min-height: 0; max-height: 100%; }
+/* Cada columna hace scroll por dentro; el margen negativo evita cortar el foco. */
+.kanban-column-list { flex: 1 1 auto; min-height: 3rem; overflow-y: auto; overscroll-behavior: contain; padding: 2px; margin: -2px; }
+@media (max-width: 767px) {
+  /* Móvil: carrusel. Una columna casi completa y un borde de la siguiente a la
+     vista para que se entienda que se puede deslizar. */
+  .kanban-board-region { margin-top: 12px; }
+  .kanban-board {
+    --kanban-gutter: 16px;
+    gap: 10px;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .kanban-board::-webkit-scrollbar { display: none; }
+  .kanban-column-slot { flex-basis: calc(100% - 28px); }
+  .kanban-add-column-slot { flex-basis: 60%; }
+  /* La tab bar flotante queda sobre el borde inferior: el tablero termina antes. */
+  :root[data-hub-bar="visible"] .app-host-header ~ .kanban-page { padding-bottom: calc(62px + 10px + var(--bardo-safe-bottom, 0px) + 4px); }
+}
+@media (hover: hover) and (pointer: fine) {
+  .kanban-card .kanban-card-handle, .kanban-card .kanban-card-menu { opacity: 0; transition: opacity 120ms ease; }
+  .kanban-card:hover .kanban-card-handle, .kanban-card:hover .kanban-card-menu,
+  .kanban-card:focus-within .kanban-card-handle, .kanban-card:focus-within .kanban-card-menu,
+  .kanban-card .kanban-card-menu[data-popup-open] { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kanban-card, .kanban-card-handle, .kanban-card-menu { transition: none !important; }
+}
 .library-header { width: 100%; margin: 0; }
 .home-intro { padding-block: 28px 8px; }
 .home-intro h1 { font-size: 24px; font-weight: 700; line-height: 1.3; text-wrap: balance; }
@@ -500,9 +624,16 @@ button { font-size: 14px; }
 .home .section-title { text-transform: none; letter-spacing: normal; }
 .home-section-heading .section-title { display: flex; align-items: center; gap: 8px; margin: 0; }
 .home-list { list-style: none; padding: 0; margin-block: 0 8px; }
-.home-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px; border-bottom: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; }
+.home-item { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px; border-radius: var(--radius); text-decoration: none; transition: background-color 150ms ease, box-shadow 150ms ease; }
+/* Separador recto que no llega a las esquinas redondeadas; con hover, el
+   contorno completo reemplaza al separador. */
+.home-item::after { content: ""; position: absolute; inset-inline: var(--radius); bottom: 0; height: 1px; background: var(--border); transition: opacity 150ms ease; }
+.home-list > li:last-child > .home-item::after { display: none; }
 .home-item > svg { flex-shrink: 0; }
 .home-item:hover, .home-brand:hover { background: var(--accent); }
+.home-item:hover { box-shadow: inset 0 0 0 1px var(--border); }
+.home-item:hover::after,
+.home-list > li:has(+ li > .home-item:hover) > .home-item::after { opacity: 0; }
 .home-item:focus-visible, .home-brand:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .home-brand { min-height: 32px; padding-inline: 4px; border-radius: var(--radius); text-decoration: none; }
 .home-notice { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-block: 16px; }
@@ -626,6 +757,124 @@ button { font-size: 14px; }
   border-bottom: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Hub de módulos. Escritorio: pestañas en el header, mismo lenguaje que
+   TabsList (cápsula muted, activa en background). Móvil: barra inferior. */
+.workspace-trigger {
+  gap: 4px;
+  max-width: min(46vw, 240px);
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.workspace-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.workspace-trigger[data-popup-open] { background: var(--accent); }
+.workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.module-hub-tabs { display: none; }
+@media (min-width: 768px) {
+  .module-hub-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+    margin-inline-start: 8px;
+    padding: 4px;
+    border-radius: 9999px;
+    background: var(--muted);
+  }
+}
+.module-hub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding-inline: 12px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  color: color-mix(in oklab, var(--foreground) 60%, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color var(--duration-fast, 150ms) var(--ease-smooth-out, ease), background-color var(--duration-fast, 150ms) var(--ease-smooth-out, ease);
+}
+.module-hub-tab:hover { color: var(--foreground); }
+.module-hub-tab[aria-current="page"] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 0.06); }
+.dark .module-hub-tab[aria-current="page"] { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
+.module-hub-tab:focus-visible, .module-hub-bar-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet: ícono + nombre, con menos aire para dejar sitio a las acciones. */
+  .module-hub-tab { padding-inline: 9px; gap: 5px; }
+}
+.module-hub-bar {
+  /* Cápsula flotante de vidrio, como la tab bar nativa (iOS 26 / Material 3). */
+  --hub-bar-height: 62px;
+  --hub-bar-inset: 4px;
+  position: fixed;
+  inset-inline: calc(16px + var(--bardo-safe-left, 0px)) calc(16px + var(--bardo-safe-right, 0px));
+  bottom: calc(10px + var(--bardo-safe-bottom, 0px));
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: var(--hub-bar-height);
+  padding: var(--hub-bar-inset);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--background) 70%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  box-shadow:
+    0 10px 30px -8px oklch(0 0 0 / 0.45),
+    inset 0 1px 0 color-mix(in oklab, var(--foreground) 8%, transparent);
+  transition: height 260ms cubic-bezier(0.32, 0.72, 0, 1), inset-inline 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (min-width: 768px) { .module-hub-bar { display: none; } }
+.module-hub-bar[data-minimized] { --hub-bar-height: 48px; inset-inline: calc(48px + var(--bardo-safe-left, 0px)) calc(48px + var(--bardo-safe-right, 0px)); }
+/* Indicador de vidrio que se desliza a la pestaña activa. */
+.module-hub-bar-indicator {
+  position: absolute;
+  top: var(--hub-bar-inset);
+  bottom: var(--hub-bar-inset);
+  left: var(--hub-bar-inset);
+  width: calc((100% - 2 * var(--hub-bar-inset)) / 4);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground) 10%, transparent);
+  transform: translateX(calc(var(--hub-index, 0) * 100%));
+  transition: transform 380ms cubic-bezier(0.34, 1.36, 0.64, 1);
+  pointer-events: none;
+}
+.module-hub-bar-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 9999px;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 200ms ease, transform 160ms ease;
+}
+.module-hub-bar-item:active { transform: scale(0.94); }
+.module-hub-bar-item[aria-current="page"] { color: var(--primary); }
+.dark .module-hub-bar-item[aria-current="page"] { color: color-mix(in oklab, var(--primary) 70%, white); }
+.module-hub-bar-label { line-height: 1.1; max-height: 14px; transition: opacity 200ms ease, max-height 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+.module-hub-bar[data-minimized] .module-hub-bar-label { opacity: 0; max-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .module-hub-bar, .module-hub-bar-indicator, .module-hub-bar-item, .module-hub-bar-label { transition: none; }
+}
+/* Avisos flotantes sobre la barra inferior, nunca debajo. */
+@media (max-width: 767px) {
+  :root[data-hub-bar="visible"] .bardo-toaster { bottom: calc(62px + 10px + var(--bardo-safe-bottom, 0px) + 12px); }
+  :root[data-hub-bar="visible"] .library,
+  :root[data-hub-bar="visible"] .planner-module-root { padding-bottom: calc(96px + var(--bardo-safe-bottom, 0px)); }
+}
 .topbar-center { color: var(--muted); font-size: 12px; line-height: 1.3; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .icon-button-circle { border-radius: 9999px !important; }

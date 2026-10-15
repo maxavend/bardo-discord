@@ -19,7 +19,7 @@ test('library spacing and row geometry stay aligned', async ({page}) => {
     const docsList = rect('.docs-list');
     const rows = [...document.querySelectorAll('.doc-row')].map(row => {
       const box = row.getBoundingClientRect();
-      const kebab = row.querySelector('[aria-label^="Acciones de"]').getBoundingClientRect();
+      const kebab = row.querySelector('[aria-label^="Más acciones de"]').getBoundingClientRect();
       return {left: box.left, right: box.right, top: box.top, bottom: box.bottom, kebab: {left: kebab.left, right: kebab.right, top: kebab.top, bottom: kebab.bottom, w: kebab.width, h: kebab.height}};
     });
     return {

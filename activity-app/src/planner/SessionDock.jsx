@@ -121,8 +121,8 @@ export function SessionDock({
         <div className="col-start-1 row-start-1 flex items-center gap-2.5 min-w-0 sm:flex-1 sm:order-1">
           <span
             className={`inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-mono font-semibold tabular-nums shrink-0 ${clockClass}`}
-            aria-label={leftOpen ? 'Reunión abierta hace días' : clock.mode === 'overtime' ? `Tiempo excedido ${clock.label}` : clock.label}
-            title={isPaused ? 'Reunión en pausa: el tiempo está detenido' : clock.mode === 'overtime' ? 'Tiempo del bloque excedido' : 'Tiempo restante del bloque'}
+            aria-label={leftOpen ? 'Reunión abierta hace días' : clock.mode === 'overtime' ? `El bloque se pasó ${formatMsToClock(clock.ms)} de su tiempo` : clock.label}
+            title={isPaused ? 'Reunión en pausa: el tiempo está detenido' : clock.mode === 'overtime' ? 'El bloque se pasó de su tiempo' : 'Tiempo restante del bloque'}
           >
             {isPaused && <Pause className="size-2.5 fill-current" />}
             {leftOpen ? 'Abierta' : clock.label}
@@ -245,11 +245,11 @@ export function SessionDock({
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!activeBlock} onClick={() => activeBlock && onExtendBlock?.(activeBlock.id, 5)}>
                   <Timer className="size-4 text-muted-foreground" />
-                  <span>+5 min al bloque</span>
+                  <span>Sumar 5 min al bloque</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={!activeBlock || isUnlimited} onClick={() => activeBlock && onSetUnlimited?.(activeBlock.id)}>
                   <InfinityIcon className="size-4 text-muted-foreground" />
-                  <span>Sin límite de tiempo</span>
+                  <span>Quitar límite de tiempo</span>
                 </DropdownMenuItem>
                 {onOpenDecisionCapture && (
                   <DropdownMenuItem onClick={() => onOpenDecisionCapture()}>

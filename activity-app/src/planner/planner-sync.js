@@ -181,13 +181,26 @@ export function utf8ByteLength(text) {
   return unescape(encodeURIComponent(value)).length;
 }
 
-export function describeSyncError(error) {
+/**
+ * Reason + next step for a failed request, as a full sentence. `retrying`:
+ * the sync engine retries saves on its own; one-off actions (archive,
+ * restore, delete) ask the person to try again instead.
+ */
+export function describeSyncError(error, {retrying = true} = {}) {
   const status = error?.status ?? 0;
-  if (status === 0) return 'Sin conexión. Reintentando…';
-  if (status === 413) return 'La reunión es demasiado grande para guardarse.';
-  if (status === 401 || status === 403) return 'No tienes permiso para guardar en este canal.';
-  if (status === 429 || status === 503) return 'Discord no está disponible. Reintentando…';
-  return error?.message || 'No se pudo guardar.';
+  if (status === 0) {
+    return retrying
+      ? 'Sin conexión. Lo intentaremos de nuevo en un momento.'
+      : 'Revisa tu conexión e inténtalo de nuevo.';
+  }
+  if (status === 413) return 'La reunión tiene demasiado contenido para guardarse. Acorta la agenda o sus descripciones.';
+  if (status === 401 || status === 403) return 'No tienes permiso para hacer cambios en este canal.';
+  if (status === 429 || status === 503) {
+    return retrying
+      ? 'El servicio está ocupado. Lo intentaremos de nuevo en un momento.'
+      : 'El servicio está ocupado. Inténtalo de nuevo en unos minutos.';
+  }
+  return error?.message || (retrying ? 'No se pudo guardar.' : 'Inténtalo de nuevo.');
 }
 
 function defaultStorage() {
@@ -332,7 +345,7 @@ export function createPlannerSyncEngine({
           onPlannerSaved(server, localPayload);
           return;
         }
-        onStatus(id, 'conflict', 'Otra persona modificó esta reunión.');
+        onStatus(id, 'conflict', 'Otra persona editó esta reunión al mismo tiempo.');
         onPlannerConflict({id, local: localPayload, server});
         return;
       }

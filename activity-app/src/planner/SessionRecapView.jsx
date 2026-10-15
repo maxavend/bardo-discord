@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,6 +6,7 @@ import { toast } from '@/lib/toast';
 import {
   CheckCircle2,
   Clock,
+  ListChecks,
   Mic,
   MoreVertical,
   Plus,
@@ -23,10 +25,13 @@ import {
   FileTextIcon,
 } from '@/components/ui/animated-icons';
 import { computeSessionRecap } from './session-assistant-engine.js';
-import { generateMinutesMarkdown } from './planner-store.js';
+import { formatMeetingDateLong, generateMinutesMarkdown } from './planner-store.js';
 import { todayLocalIso } from './date-utils.js';
 import { formatSpokenDuration, getPlannedSchedule } from './time-engine.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
+
+// Tareas se carga solo al convertir acuerdos.
+const RecapToCardsDialog = lazy(() => import('../kanban/RecapToCardsDialog.jsx'));
 
 /** Clipboard write with a fallback for webviews where the async API is blocked. */
 async function copyTextWithFallback(text) {
@@ -85,6 +90,7 @@ export function SessionRecapView({
   onDeleteRecording,
   onSaveDocToLibrary,
 }) {
+  const [tasksOpen, setTasksOpen] = useState(false);
   const recap = computeSessionRecap(plannerState, sessionState);
   const isInterrupted = recap.isInterrupted;
   const canReopen = recap.isCompleted && (plannerState?.blocks || []).length > 0;
@@ -97,7 +103,7 @@ export function SessionRecapView({
       id: `minutes-${plannerState.id || plannerState.eventId || Date.now().toString(36)}`,
       plannerSessionId: plannerState.id || null,
       title: `Acta: ${plannerState.title || 'Reunión'}`,
-      description: `Acta y acuerdos de la reunión del ${plannerState.date || todayLocalIso()}`,
+      description: `Acta y acuerdos de la reunión del ${formatMeetingDateLong(plannerState.date || todayLocalIso())}`,
       body: md,
     });
   };
@@ -105,8 +111,8 @@ export function SessionRecapView({
   const handleCopyRecap = async () => {
     let text = `📋 **Resumen · ${recap.recapTitle}**\n`;
     text += recap.leftOpen
-      ? `⏱ **Tiempo:** no medible (la reunión quedó abierta) · ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados\n`
-      : `⏱ **Tiempo:** ${formatSpokenDuration(recap.actualDurationMinutes)} de ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados\n`;
+      ? `⏱ **Duración:** no se pudo medir porque la reunión quedó abierta · ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados\n`
+      : `⏱ **Duración:** ${formatSpokenDuration(recap.actualDurationMinutes)} de ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados\n`;
     text += `📚 **Bloques:** ${recap.completedCount} de ${recap.totalBlocksCount} completados`;
     if (recap.skippedCount > 0) text += ` · ${recap.skippedCount} saltados`;
     text += '\n';
@@ -123,7 +129,7 @@ export function SessionRecapView({
       });
     }
     const copied = await copyTextWithFallback(text);
-    toast(copied ? 'Resumen copiado' : 'No se pudo copiar el resumen. Intenta de nuevo.');
+    toast(copied ? 'Resumen copiado. Pégalo en el canal de Discord.' : 'No se pudo copiar el resumen. Inténtalo de nuevo.');
   };
 
   const schedule = getPlannedSchedule(plannerState || {});
@@ -201,10 +207,15 @@ export function SessionRecapView({
 
           {hasDecisions && (
             <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <CheckCircle2 className="size-3.5 text-primary" />
-                Acuerdos ({recap.decisions.length})
-              </h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-primary" />
+                  Acuerdos ({recap.decisions.length})
+                </h2>
+                <Button variant="secondary" size="sm" onClick={() => setTasksOpen(true)} className="h-7 px-2.5 text-xs gap-1.5">
+                  <ListChecks className="size-3.5" aria-hidden="true" /> Crear tareas
+                </Button>
+              </div>
               <div className="flex flex-col gap-2">
                 {recap.decisions.map((decision, index) => {
                   const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
@@ -239,7 +250,7 @@ export function SessionRecapView({
                 label={recap.timeEffectiveLabel}
                 value={recap.leftOpen ? '—' : formatSpokenDuration(recap.actualDurationMinutes)}
                 hint={recap.leftOpen
-                  ? `Quedó abierta ${formatSpokenDuration(recap.actualDurationMinutes)}; no se puede medir`
+                  ? `Quedó abierta ${formatSpokenDuration(recap.actualDurationMinutes)}, así que no se puede medir`
                   : `de ${formatSpokenDuration(recap.plannedDurationMinutes)} planificados`}
               />
               <Stat
@@ -273,7 +284,7 @@ export function SessionRecapView({
                 <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <Mic className="size-3.5 text-primary" /> Grabaciones
                 </h2>
-                <span className="text-xs text-muted-foreground">{recap.totalRecordedMinutes} min en total</span>
+                <span className="text-xs text-muted-foreground">{formatSpokenDuration(recap.totalRecordedMinutes)} en total</span>
               </div>
 
               <div className="flex flex-col gap-5">
@@ -313,6 +324,20 @@ export function SessionRecapView({
           )}
 
         </div>
+      {tasksOpen && (
+        <Suspense fallback={null}>
+          <RecapToCardsDialog
+            open={tasksOpen}
+            onClose={() => setTasksOpen(false)}
+            plannerState={plannerState}
+            sessionState={sessionState}
+            onOpenTasks={() => {
+              setTasksOpen(false);
+              location.hash = '#kanban';
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

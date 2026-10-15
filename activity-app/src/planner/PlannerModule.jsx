@@ -271,7 +271,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       setSyncStatus({state: detail.state, message: detail.message || null});
       if ((detail.state === 'error' || detail.state === 'offline') && Date.now() - lastErrorToastAt > 15000) {
         lastErrorToastAt = Date.now();
-        toast(detail.message ? `No se pudo guardar la reunión: ${detail.message}` : 'No se pudo guardar la reunión. Reintentaremos automáticamente.');
+        toast(detail.message ? `No se pudo guardar la reunión. ${detail.message}` : 'No se pudo guardar la reunión. Lo intentaremos de nuevo en un momento.');
       }
     };
     window.addEventListener('bardo-sync-status', handleStatus);
@@ -313,22 +313,22 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       engine?.setBaseVersion(id, server.updatedAt);
     }
     if (!local || !engine) {
-      toast('Otra persona modificó esta reunión. Se cargó la versión más reciente.');
+      toast('Otra persona editó esta reunión al mismo tiempo. Ahora ves la versión más reciente.');
       return;
     }
     const copyId = createClientSessionId();
     engine.createConflictCopy(local, copyId)
       .then((copy) => {
         if (copy) savedHandlerRef.current?.(copy);
-        toast(`Otra persona modificó esta reunión. Se cargó la versión más reciente y tus cambios quedaron en “${local.title || 'Reunión'} (copia en conflicto)”.`);
+        toast(`Otra persona editó esta reunión al mismo tiempo. Ahora ves la versión más reciente; tus cambios quedaron en «${local.title || 'Reunión'} (copia en conflicto)».`);
       })
-      .catch((error) => {
+      .catch(() => {
         try {
           localStorage.setItem(`bardo.planner.conflict.${id}.${Date.now()}`, JSON.stringify(local));
         } catch {
           // ignore
         }
-        toast(`Otra persona modificó esta reunión. No se pudo crear la copia de tus cambios (${describeSyncError(error)}); quedaron respaldados en este dispositivo.`);
+        toast('Otra persona editó esta reunión al mismo tiempo. No se pudo crear una copia con tus cambios, pero quedaron guardados en este dispositivo.');
       });
   };
 
@@ -412,7 +412,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     recordingPausedBySessionRef.current = false;
     commitSessionState(saveFinalizedRecording(sessionStateRef.current, persisted));
     toast(persisted.status === 'saved'
-      ? `La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo grabado: ${formatMsToClock(persisted.durationMs || 0)}.`
+      ? `La grabación se detuvo porque el micrófono dejó de responder. Se guardó lo que alcanzó a grabarse (${formatMsToClock(persisted.durationMs || 0)}).`
       : 'El micrófono dejó de responder. El audio sigue en esta pestaña: descárgalo antes de salir.');
   };
 
@@ -521,8 +521,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         for (const recording of recovered) next = saveFinalizedRecording(next, recording);
         commitSessionState(next);
         toast(recovered.length === 1
-          ? `Se recuperó una grabación interrumpida: ${recovered[0].name}`
-          : `Se recuperaron ${recovered.length} grabaciones interrumpidas`);
+          ? `Se recuperó la grabación interrumpida «${recovered[0].name}».`
+          : `Se recuperaron ${recovered.length} grabaciones interrumpidas.`);
       })
       .catch((error) => console.warn('Bardo Planner: no se pudieron recuperar grabaciones', error));
     return () => {
@@ -558,7 +558,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       !warned5MinBlockIdsRef.current.has(assistantEvaluation.activeBlock.id)
     ) {
       warned5MinBlockIdsRef.current.add(assistantEvaluation.activeBlock.id);
-      toast(`⏱ Quedan 5 minutos en “${assistantEvaluation.activeBlock.title}”`);
+      toast(`⏱ Quedan 5 min en «${assistantEvaluation.activeBlock.title}».`);
     }
   }, [assistantEvaluation]);
 
@@ -593,7 +593,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     const recording = await finalizeActiveRecording();
     if (recording) {
       commitSessionState(saveFinalizedRecording(sessionStateRef.current, recording));
-      if (recording.status === 'saved') toast(`${recording.name} · ${formatMsToClock(recording.durationMs)} guardados`);
+      if (recording.status === 'saved') toast(`Se guardó la grabación «${recording.name}» (${formatMsToClock(recording.durationMs)}).`);
     }
   }, [commitSessionState, finalizeActiveRecording]);
 
@@ -616,7 +616,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (recordingControllerRef.current?.isRecording()) {
       recordingControllerRef.current.pauseRecording();
       recordingPausedBySessionRef.current = true;
-      toast('Reunión en pausa · grabación en pausa');
+      toast('Reunión y grabación en pausa');
     } else {
       toast('Reunión en pausa');
     }
@@ -631,7 +631,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     // Resume the recording only if it was paused together with the session.
     if (recordingPausedBySessionRef.current && recordingControllerRef.current?.isPaused()) {
       recordingControllerRef.current.resumeRecording();
-      toast('Reunión reanudada · grabación reanudada');
+      toast('Reunión y grabación reanudadas');
     } else {
       toast('Reunión reanudada');
     }
@@ -689,14 +689,14 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
 
     if (next.status === SESSION_STATUS.COMPLETED) {
       handleTabChange('recap');
-      if (recording?.status !== 'error') toast(recording ? `Reunión terminada. Se guardó la grabación “${recording.name}”.` : 'Reunión terminada. Este es el resumen.');
+      if (recording?.status !== 'error') toast(recording ? `Reunión terminada. Se guardó la grabación «${recording.name}».` : 'Reunión terminada. Este es el resumen.');
       return next;
     }
     const target = nextPoint?.title || nextBlock?.title || 'la reunión';
     if (continued && recording?.status !== 'error') {
-      toast(`Se guardó “${recording?.name || 'la grabación'}” · sigue grabando en “${target}”`);
+      toast(`Se guardó «${recording?.name || 'la grabación'}». La grabación sigue en «${target}».`);
     } else if (recording?.status === 'saved') {
-      toast(`Se guardó la grabación “${recording.name}” (${formatMsToClock(recording.durationMs)})`);
+      toast(`Se guardó la grabación «${recording.name}» (${formatMsToClock(recording.durationMs)}).`);
     }
     return next;
   }), [commitSessionState, finalizeActiveRecording, handleTabChange, persistCapturedRecording, runAtomicTransition]);
@@ -743,13 +743,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const handleExtendBlock = useCallback((blockId, minutes = 5) => {
     const next = extendActiveBlock(sessionStateRef.current, blockId, minutes);
     commitSessionState(next);
-    toast(`+${minutes} min para este bloque`);
+    toast(`Se sumaron ${minutes} min a este bloque`);
   }, [commitSessionState]);
 
   const handleSetUnlimited = useCallback((blockId) => {
     const next = setUnlimitedActiveBlock(sessionStateRef.current, blockId);
     commitSessionState(next);
-    toast('Este bloque ahora no tiene límite de tiempo');
+    toast('Este bloque ya no tiene límite de tiempo');
   }, [commitSessionState]);
 
   // Ending always goes through a confirmation (decision 1).
@@ -827,7 +827,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!persisted) return;
     const next = saveFinalizedRecording(sessionStateRef.current, persisted);
     commitSessionState(next);
-    toast(persisted.status === 'saved' ? 'Grabación guardada en la reunión' : 'La grabación terminó, pero no se pudo guardar en este dispositivo');
+    toast(persisted.status === 'saved' ? 'Grabación guardada en la reunión' : 'La grabación terminó, pero no se pudo guardar en este dispositivo. Descárgala desde sus opciones antes de salir.');
   }, [commitSessionState, persistCapturedRecording]);
 
   const handleDiscardRecording = useCallback(() => {
@@ -864,7 +864,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     try {
       await recordingStorage.delete(recordingId);
     } catch {
-      toast('No se pudo borrar el audio de este dispositivo, pero se quitó de la reunión.');
+      toast('Se quitó la grabación de la reunión, pero su audio no se pudo eliminar de este dispositivo.');
     }
     if (recording?.blobUrl && typeof URL !== 'undefined') URL.revokeObjectURL(recording.blobUrl);
     const next = deleteRecordingFromSession(sessionStateRef.current, recordingId);
@@ -925,7 +925,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       decisions: [...(liveSession.decisions || []), decision],
     });
     const targetBlock = plannerStateRef.current.blocks.find((b) => b.id === resolvedBlockId);
-    toast(`Acuerdo agregado al bloque "${targetBlock?.title || 'seleccionado'}"`);
+    toast(targetBlock?.title ? `Acuerdo agregado a «${targetBlock.title}»` : 'Acuerdo agregado');
   }, [commitSessionState, updatePlanner]);
 
   // ── Undo for deletions of bloque / tema / acuerdo (no confirm dialog) ──────
@@ -985,12 +985,12 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     const copied = await copyTextToClipboard(generateDiscordAnnouncement(plannerStateRef.current));
     toast(copied
       ? 'Anuncio copiado. Pégalo en el canal de Discord.'
-      : 'No se pudo copiar el anuncio en este dispositivo. Intenta de nuevo.');
+      : 'No se pudo copiar el anuncio. Inténtalo de nuevo.');
   }, []);
 
   const _handleCopyMinutes = useCallback(async () => {
     const copied = await copyTextToClipboard(generateMinutesMarkdown(plannerStateRef.current, sessionStateRef.current));
-    toast(copied ? 'Acta copiada' : 'No se pudo copiar el acta en este dispositivo. Intenta de nuevo.');
+    toast(copied ? 'Acta copiada' : 'No se pudo copiar el acta. Inténtalo de nuevo.');
   }, []);
 
   const handleLoadDemo = useCallback(() => {
@@ -1029,7 +1029,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     clearUndo();
     setIsEditing(false);
     handleTabChange('agenda');
-    toast(`Reunión abierta: ${event.title || 'Reunión sin título'}`);
+    toast(`Reunión abierta: «${event.title || 'Reunión sin título'}»`);
   }), [clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange, replacePlannerLocally, runAtomicTransition, upsertPlannerEvent]);
 
   const [archivedPlannerEvents, setArchivedPlannerEvents] = useState([]);
@@ -1097,7 +1097,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     } catch (error) {
       setPlannerEvents((prev) => prev.filter((ev) => eventIdOf(ev) !== targetId));
       setArchivedPlannerEvents((prev) => [sessionToRestore, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
-      toast(`No se pudo restaurar la reunión: ${describeSyncError(error)}`);
+      toast(`No se pudo restaurar la reunión. ${describeSyncError(error, {retrying: false})}`);
     }
   }, []);
 
@@ -1117,11 +1117,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           await deletePlannerSessionPermanentlyById(targetId);
         } catch (error) {
           setArchivedPlannerEvents((prev) => [target, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
-          toast(`No se pudo eliminar la reunión: ${describeSyncError(error)}`);
+          toast(`No se pudo eliminar la reunión. ${describeSyncError(error, {retrying: false})}`);
           return;
         }
       }
-      toast('Reunión eliminada definitivamente');
+      toast('Reunión eliminada');
       return;
     }
 
@@ -1143,7 +1143,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       } catch (error) {
         setArchivedPlannerEvents((prev) => prev.filter((ev) => eventIdOf(ev) !== targetId));
         setPlannerEvents((prev) => [previousEvent, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
-        toast(`No se pudo archivar la reunión: ${describeSyncError(error)}`);
+        toast(`No se pudo archivar la reunión. ${describeSyncError(error, {retrying: false})}`);
         return;
       }
     }
@@ -1162,7 +1162,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       handleTabChange('home');
     }
 
-    toast('Reunión archivada. Puedes restaurarla desde “Archivadas”.');
+    toast('Reunión archivada. Puedes restaurarla desde «Archivadas».');
   }, [deleteSessionModal.session, deleteSessionModal.action, plannerEvents, clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange]);
 
   const handledInitialTabRef = useRef(null);
@@ -1211,7 +1211,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     if (!id || !engine.hasPendingPlanner(id)) return;
     await engine.flushPlanner(id);
     toast(engine.hasPendingPlanner(id)
-      ? 'Todavía no se pudieron guardar los cambios. Reintentaremos automáticamente.'
+      ? 'Los cambios aún no se guardaron. Lo intentaremos de nuevo en un momento.'
       : 'Cambios guardados');
   }, []);
 
@@ -1372,14 +1372,14 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   })();
 
   return (
-    <div className="planner-module-root w-full px-4 pt-[calc(var(--bardo-topbar,52px)+12px)] relative min-h-screen">
+    <div className="planner-module-root w-full px-4 pt-2 relative min-h-[calc(100dvh-var(--bardo-topbar,52px)-var(--bardo-notice-height,0px))]">
       {syncStatus && (syncStatus.state === 'error' || syncStatus.state === 'offline') && (
         <div
           role="status"
           className="fixed left-1/2 -translate-x-1/2 z-50 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive shadow-sm backdrop-blur"
           style={{top: 'calc(var(--bardo-topbar,52px) + 6px)'}}
         >
-          {syncStatus.state === 'offline' ? 'Sin conexión · los cambios se guardarán al reconectar' : (syncStatus.message || 'No se pudo guardar la reunión')}
+          {syncStatus.state === 'offline' ? 'Sin conexión. Los cambios se guardarán cuando vuelvas a conectarte.' : (syncStatus.message || 'No se pudo guardar la reunión.')}
         </div>
       )}
 
@@ -1541,13 +1541,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           <AlertDialogHeader>
             <AlertDialogTitle>
               {deleteSessionModal.action === 'permanent-delete'
-                ? 'Eliminar reunión definitivamente'
-                : 'Archivar reunión'}
+                ? '¿Eliminar esta reunión?'
+                : '¿Archivar esta reunión?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteSessionModal.action === 'permanent-delete'
-                ? `“${deleteSessionModal.session?.title || 'Esta reunión'}” se eliminará para todos, con su agenda y sus acuerdos. Esta acción no se puede deshacer.`
-                : `“${deleteSessionModal.session?.title || 'Esta reunión'}” se moverá a “Archivadas”. Desde ahí puedes restaurarla o eliminarla definitivamente.`}
+                ? `«${deleteSessionModal.session?.title || 'Esta reunión'}» se eliminará para todo el canal, con su agenda y sus acuerdos. No se puede deshacer.`
+                : `«${deleteSessionModal.session?.title || 'Esta reunión'}» pasará a «Archivadas». Desde ahí puedes restaurarla o eliminarla.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1558,7 +1558,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
               variant={deleteSessionModal.action === 'permanent-delete' ? 'destructive' : 'default'}
               onClick={handleConfirmDeleteSession}
             >
-              {deleteSessionModal.action === 'permanent-delete' ? 'Eliminar definitivamente' : 'Archivar'}
+              {deleteSessionModal.action === 'permanent-delete' ? 'Eliminar reunión' : 'Archivar reunión'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

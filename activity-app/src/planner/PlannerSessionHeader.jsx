@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/animated-icons';
 import { toast } from '@/lib/toast';
 import { SESSION_STATUS } from './session-runner.js';
-import { durationUntil, formatShortDuration, getPlannedSchedule } from './time-engine.js';
+import { durationUntil, getPlannedSchedule } from './time-engine.js';
 import { formatMeetingDuration, MEETING_COPY } from './copy-tokens.js';
 import {
   getAllDiscordEntities,
@@ -56,7 +56,7 @@ function parseMentions(mentionsStr = '') {
 }
 
 function formatDisplayDate(dateStr) {
-  if (!dateStr) return 'Sin fecha';
+  if (!dateStr) return 'Elegir fecha';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -157,7 +157,7 @@ export function PlannerSessionHeader({
                   rows={1}
                   value={description}
                   onChange={(e) => onUpdateHeaderField?.('description', e.target.value)}
-                  placeholder="Agregar objetivo o contexto de la reunión..."
+                  placeholder="Agrega el objetivo o el contexto de la reunión…"
                   className="doc-description bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 text-muted-foreground placeholder:text-muted-foreground/60 field-sizing-content max-h-[9rem] overflow-y-hidden"
                   aria-label="Objetivo de la reunión"
                 />
@@ -351,7 +351,7 @@ export function PlannerSessionHeader({
                   onChange={(newEnd) => {
                     const minutes = durationUntil(startTime, newEnd);
                     if (minutes == null) {
-                      toast('El término tiene que ser después de la hora de inicio. Revisa a.m. / p.m.');
+                      toast('El término debe ser después de la hora de inicio. Revisa si elegiste a.m. o p.m.');
                       return;
                     }
                     // The booked time; changing the start later keeps this duration.
@@ -363,7 +363,7 @@ export function PlannerSessionHeader({
               <div>
                 <span id={`${fieldId}-duration`} className="text-xs font-semibold text-foreground mb-1.5 block">Duración</span>
                 <div aria-labelledby={`${fieldId}-duration`} className="w-full h-9 px-1 flex items-center justify-start text-xs font-medium text-foreground">
-                  {formatShortDuration(totalPlannedMinutes)}
+                  {formatMeetingDuration(totalPlannedMinutes)}
                 </div>
               </div>
             </div>
@@ -375,8 +375,8 @@ export function PlannerSessionHeader({
                 className={`-mt-1 text-xs ${schedule.overMinutes > 0 ? 'text-warning' : 'text-muted-foreground'}`}
               >
                 {schedule.overMinutes > 0
-                  ? `Los bloques suman ${formatShortDuration(schedule.blocksMinutes)}, ${formatShortDuration(schedule.overMinutes)} más de lo reservado: terminaría a las ${formatTimeDisplay(schedule.plannedEnd)}. Acorta los bloques o mueve el término.`
-                  : `Bloques: ${formatShortDuration(schedule.blocksMinutes)} de ${formatShortDuration(schedule.targetMinutes)} · quedan ${formatShortDuration(schedule.freeMinutes)} libres`}
+                  ? `Los bloques suman ${formatMeetingDuration(schedule.blocksMinutes)}, ${formatMeetingDuration(schedule.overMinutes)} más de lo reservado, así que la reunión terminaría a las ${formatTimeDisplay(schedule.plannedEnd)}. Acorta algún bloque o cambia el término.`
+                  : `Bloques: ${formatMeetingDuration(schedule.blocksMinutes)} de ${formatMeetingDuration(schedule.targetMinutes)} · quedan ${formatMeetingDuration(schedule.freeMinutes)} libres`}
               </p>
             )}
 

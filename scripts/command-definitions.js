@@ -17,51 +17,51 @@ const docUploadCommand = new SlashCommandBuilder()
       .setDescription('Markdown, TXT, PDF o Word (.docx)')
       .setRequired(true),
   )
-  .addStringOption(titleOption('Título opcional para el documento.'));
+  .addStringOption(titleOption('Título del documento (opcional).'));
 
 const legacyUploadCommand = new SlashCommandBuilder()
   .setName('upload-docs')
-  .setDescription('Sube un archivo a Documentos de este canal (igual que /doc-upload).')
+  .setDescription('Sube un archivo a Documentos de este canal. Es el nombre antiguo de /doc-upload.')
   .addAttachmentOption((option) =>
     option
       .setName('archivo')
       .setDescription('Markdown, TXT, PDF o Word (.docx)')
       .setRequired(true),
   )
-  .addStringOption(titleOption('Título opcional para el documento.'));
+  .addStringOption(titleOption('Título del documento (opcional).'));
 
 const docNewCommand = new SlashCommandBuilder()
   .setName('doc-new')
   .setDescription('Crea un documento en este canal y muestra un botón para editarlo.')
-  .addStringOption(titleOption('Título opcional para el nuevo documento.'));
+  .addStringOption(titleOption('Título del documento (opcional).'));
 
 const reuNewCommand = new SlashCommandBuilder()
   .setName('reu-new')
-  .setDescription('Crea y agenda una nueva reunión con orden del día y tiempos para este canal.')
+  .setDescription('Agenda una reunión en este canal y prepara sus temas y tiempos en Bardo.')
   .addStringOption(titleOption('Título o tema de la reunión.', true))
   .addStringOption((option) =>
     option
       .setName('fecha')
-      .setDescription('Fecha en formato YYYY-MM-DD (ej: 2026-09-15). Por defecto hoy.')
+      .setDescription('Fecha en formato AAAA-MM-DD, por ejemplo 2026-09-15. Si la omites, será hoy.')
       .setMaxLength(10),
   )
   .addStringOption((option) =>
     option
       .setName('hora')
-      .setDescription('Hora en formato HH:MM (ej: 15:30). Por defecto 10:00.')
+      .setDescription('Hora de inicio en formato HH:MM de 24 horas, por ejemplo 15:30. Si la omites, 10:00.')
       .setMaxLength(5),
   )
   .addIntegerOption((option) =>
     option
       .setName('duracion')
-      .setDescription('Duración estimada en minutos (ej: 45, 60). Por defecto 60.')
+      .setDescription('Duración en minutos, por ejemplo 45. Si la omites, 60.')
       .setMinValue(1)
       .setMaxValue(REU_DURATION_MAX_MINUTES),
   )
   .addStringOption((option) =>
     option
       .setName('descripcion')
-      .setDescription('Descripción u objetivo general de la reunión.')
+      .setDescription('Objetivo o contexto de la reunión.')
       // Keeps the Components V2 card under Discord's 4000-character limit.
       .setMaxLength(REU_DESCRIPTION_MAX),
   );
@@ -69,6 +69,31 @@ const reuNewCommand = new SlashCommandBuilder()
 const reusCommand = new SlashCommandBuilder()
   .setName('reus')
   .setDescription('Muestra las reuniones programadas, en curso y terminadas de este canal.');
+
+const tareaCommand = new SlashCommandBuilder()
+  .setName('tarea')
+  .setDescription('Crea una tarea en el tablero de este canal y avisa a la persona responsable.')
+  .addStringOption(titleOption('Qué hay que hacer.', true))
+  .addUserOption((option) =>
+    option
+      .setName('responsable')
+      .setDescription('Quién se hace cargo (recibe una mención y un mensaje directo).'),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('fecha')
+      .setDescription('Fecha límite: AAAA-MM-DD, «hoy» o «mañana».')
+      .setMaxLength(10),
+  );
+
+const tareasCommand = new SlashCommandBuilder()
+  .setName('tareas')
+  .setDescription('Te muestra (solo a ti) las tareas abiertas de este canal.')
+  .addBooleanOption((option) =>
+    option
+      .setName('mias')
+      .setDescription('Muestra solo las tareas en las que eres responsable.'),
+  );
 
 const bardoCommand = new SlashCommandBuilder()
   .setName('bardo')
@@ -80,7 +105,7 @@ const docsCommand = new SlashCommandBuilder()
 
 const helpCommand = new SlashCommandBuilder()
   .setName('ayuda')
-  .setDescription('Explica qué hace cada comando y permite abrir Inicio.');
+  .setDescription('Muestra qué hace cada comando de Bardo.');
 
 export const allCommands = [
   bardoCommand,
@@ -89,6 +114,8 @@ export const allCommands = [
   docsCommand,
   reuNewCommand,
   reusCommand,
+  tareaCommand,
+  tareasCommand,
   helpCommand,
   legacyUploadCommand,
 ];

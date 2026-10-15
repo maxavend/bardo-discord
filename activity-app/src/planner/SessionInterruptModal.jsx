@@ -46,10 +46,10 @@ export function FinishMeetingDialog({
             {recordingsCount > 0 && <><strong className="text-foreground font-semibold">{recordingsCount} {recordingsCount === 1 ? 'grabación' : 'grabaciones'}</strong> y{' '}</>}
             <strong className="text-foreground font-semibold">{decisionsCount} {decisionsCount === 1 ? 'acuerdo' : 'acuerdos'}</strong>.
             {hasActiveRecording && (
-              <> La grabación en curso de <strong className="text-foreground font-semibold">“{activeRecordingName || 'este tema'}”</strong> se detendrá y se guardará.</>
+              <> La grabación en curso de <strong className="text-foreground font-semibold">«{activeRecordingName || 'este tema'}»</strong> se detendrá y se guardará.</>
             )}
             {pendingTemasCount > 0 && (
-              <> Quedan <strong className="text-foreground font-semibold">{pendingTemasCount} {pendingTemasCount === 1 ? 'tema pendiente' : 'temas pendientes'}</strong> sin tratar.</>
+              <> Quedan <strong className="text-foreground font-semibold">{pendingTemasCount} {pendingTemasCount === 1 ? 'tema' : 'temas'}</strong> sin tratar.</>
             )}
             {' '}Si te equivocas, podrás reabrirla desde el resumen.
           </DialogDescription>

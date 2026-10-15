@@ -24,7 +24,7 @@ const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
 const LIVE_SESSION_STORE_KEY = 'bardo-planner-live-session-v1';
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 /** Destinos de lanzamiento que no son un documento. */
-const SPECIAL_LAUNCH_TARGETS = new Set(['home', 'docs', 'planner', 'new-doc']);
+const SPECIAL_LAUNCH_TARGETS = new Set(['home', 'docs', 'planner', 'new-doc', 'kanban']);
 
 function responseFileName(response, fallback) {
   const disposition = response.headers.get('content-disposition') || '';
@@ -84,7 +84,7 @@ export function parseDocsLaunchTarget(target) {
     const id = value.slice('edit:'.length).trim();
     return id ? {type: 'edit', id} : {type: 'none'};
   }
-  if (SPECIAL_LAUNCH_TARGETS.has(value) || value.startsWith('new-doc:') || value.startsWith('planner')) {
+  if (SPECIAL_LAUNCH_TARGETS.has(value) || value.startsWith('new-doc:') || value.startsWith('planner') || value.startsWith('kanban-card:')) {
     return {type: 'section', target: value};
   }
   if (value.includes(':')) return {type: 'none'};
@@ -168,7 +168,7 @@ export async function prepareBardoProduction(options = {}) {
   // Todo lo que Documentos guarda en este dispositivo queda separado por
   // servidor + canal: un borrador o un cambio sin enviar de un canal (incluso
   // privado) nunca aparece ni se publica en otro.
-  if (!window.__BARDO_USER__?.id) throw new Error('No se pudo verificar la cuenta de Discord para abrir los datos locales.');
+  if (!window.__BARDO_USER__?.id) throw new Error('No pudimos verificar tu cuenta de Discord. Cierra y vuelve a abrir Bardo.');
   const docsScope = setDocsStorageScope(docsScopeFor(
     options.guildId || window.__BARDO_GUILD_ID__,
     options.channelId || window.__BARDO_CHANNEL_ID__,
@@ -493,6 +493,11 @@ export async function prepareBardoProduction(options = {}) {
     history.replaceState(null, '', `#${explicitCustomId}`);
   } else if (explicitCustomId === 'planner') {
     history.replaceState(null, '', '#planner');
+  } else if (explicitCustomId === 'kanban') {
+    history.replaceState(null, '', '#kanban');
+  } else if (explicitCustomId?.startsWith('kanban-card:')) {
+    // La tarjeta se busca al abrir Tareas; si ya no existe, Tareas lo explica.
+    history.replaceState(null, '', `#kanban-card:${encodeURIComponent(explicitCustomId.slice('kanban-card:'.length))}`);
   } else if (explicitCustomId?.startsWith('planner-session:')) {
     // The planner bootstrap above already opened this agenda (preferredId),
     // keeping unsynced local edits; writing the raw server row here would
@@ -524,7 +529,7 @@ export async function prepareBardoProduction(options = {}) {
 
   const request = (path, init = {}) => docsRequest(path, init);
 
-  const UNSAVED_MESSAGE = 'El documento tiene cambios sin guardar. Revisa tu conexión e intenta de nuevo.';
+  const UNSAVED_MESSAGE = 'Este documento tiene cambios que aún no se guardan. Revisa tu conexión e inténtalo de nuevo.';
 
   window.__bardoPublishDocument = async documentId => {
     // Publicar la versión guardada más reciente.
@@ -535,7 +540,7 @@ export async function prepareBardoProduction(options = {}) {
     } catch (error) {
       const message = error?.status === 403 && error?.data?.error === 'publish_failed'
         ? 'Bardo no tiene permiso para escribir en este canal. Pide a quien administra el servidor que le permita enviar mensajes aquí.'
-        : userFacingError(error, 'No se pudo compartir el documento en el canal.');
+        : userFacingError(error, 'No se pudo compartir el documento en el canal. Inténtalo de nuevo.');
       throw new Error(message);
     }
   };
@@ -552,9 +557,9 @@ export async function prepareBardoProduction(options = {}) {
     try {
       data = await request(`/api/docs/${encodeURIComponent(documentId)}/export-link`, {method:'POST', body:{format}});
     } catch (error) {
-      throw new Error(userFacingError(error, 'No pudimos preparar la descarga. Intenta de nuevo.'));
+      throw new Error(userFacingError(error, 'No pudimos preparar la descarga. Inténtalo de nuevo.'));
     }
-    if (!data?.url) throw new Error('No pudimos preparar la descarga. Intenta de nuevo.');
+    if (!data?.url) throw new Error('No pudimos preparar la descarga. Inténtalo de nuevo.');
     return data;
   };
 
@@ -569,7 +574,7 @@ export async function prepareBardoProduction(options = {}) {
       if (data?.url) return {url: data.url};
     } catch (error) {
       if (error?.status === 401 || error?.status === 403 || !error?.status) {
-        throw new Error(userFacingError(error, 'No pudimos descargar el archivo original.'));
+        throw new Error(userFacingError(error, 'No pudimos descargar el archivo original. Inténtalo de nuevo.'));
       }
     }
     let response;
@@ -584,7 +589,7 @@ export async function prepareBardoProduction(options = {}) {
     if (!response.ok) {
       throw new Error(response.status === 404
         ? 'El archivo original ya no está disponible.'
-        : 'No pudimos descargar el archivo original.');
+        : 'No pudimos descargar el archivo original. Inténtalo de nuevo.');
     }
     const blob = await response.blob();
     triggerBlobDownload(blob, responseFileName(response, 'archivo-original'));
@@ -626,10 +631,10 @@ export async function prepareBardoProduction(options = {}) {
       }
       const code = error?.data?.error;
       const message = error?.status === 403
-        ? 'Solo quien creó el documento o alguien con permisos de moderación puede eliminarlo definitivamente.'
+        ? 'Solo quien creó el documento o quien modera el canal puede eliminarlo definitivamente.'
         : error?.status === 409 && code === 'not_archived'
           ? 'Archiva el documento antes de eliminarlo definitivamente.'
-          : userFacingError(error, 'No se pudo eliminar el documento.');
+          : userFacingError(error, 'No se pudo eliminar el documento. Inténtalo de nuevo.');
       const wrapped = new Error(message);
       wrapped.status = error?.status;
       throw wrapped;

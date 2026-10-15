@@ -124,7 +124,7 @@ function BlockDurationControl({ minutes, presets, onChange, label = 'Duración d
         />
         <span className="text-xs text-muted-foreground">min</span>
         {invalid && (
-          <span role="alert" className="text-[11px] text-destructive">Entre 1 y {CUSTOM_DURATION_MAX_MINUTES}</span>
+          <span role="alert" className="text-[11px] text-destructive">Usa entre 1 y {CUSTOM_DURATION_MAX_MINUTES} min</span>
         )}
       </span>
     );
@@ -225,12 +225,14 @@ export function PlannerAgendaView({
   const reportExportResult = (result) => {
     if (!result) return;
     if (result.mode === 'zip' && result.reason === 'long') {
-      toast('El bloque es muy largo para unirlo en un solo archivo: se descargó un ZIP con cada grabación original.');
+      toast('El bloque es demasiado largo para unirlo en un solo archivo, así que se descargó un ZIP con cada grabación.');
     } else if (result.mode === 'zip' && result.reason === 'decode') {
-      toast('Algunas grabaciones no se pudieron unir: se descargó un ZIP con los archivos originales completos.');
+      toast('Algunas grabaciones no se pudieron unir, así que se descargó un ZIP con los archivos originales.');
     }
     if (result.missing > 0) {
-      toast(`${result.missing} grabación(es) no están disponibles en este dispositivo y no se incluyeron.`);
+      toast(result.missing === 1
+        ? '1 grabación no está disponible en este dispositivo y no se incluyó.'
+        : `${result.missing} grabaciones no están disponibles en este dispositivo y no se incluyeron.`);
     }
   };
 
@@ -238,7 +240,7 @@ export function PlannerAgendaView({
     try {
       reportExportResult(await operation());
     } catch (error) {
-      toast(error?.message || 'No se pudo exportar el audio.');
+      toast(error?.message || 'No se pudo descargar el audio. Inténtalo de nuevo.');
     }
   };
 
@@ -265,7 +267,7 @@ export function PlannerAgendaView({
         const blob = await getRecordingBlob(firstPointRecording || { pointTitle: point.title, durationMs }, audioOptions);
         audioEl.src = URL.createObjectURL(blob);
       } catch (error) {
-        toast(error?.message || 'El audio de esta grabación no está disponible.');
+        toast(error?.message || 'El audio de esta grabación no está disponible en este dispositivo.');
         return;
       }
     }
@@ -363,7 +365,7 @@ export function PlannerAgendaView({
                   </div>
                 ) : (
                   <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                    Asignar facilitador
+                    Elegir quién facilita
                   </span>
                 )}
               </button>
@@ -451,7 +453,7 @@ export function PlannerAgendaView({
                   </div>
                 ) : (
                   <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                    Asignar participantes
+                    Elegir participantes
                   </span>
                 )}
               </button>
@@ -676,7 +678,7 @@ export function PlannerAgendaView({
                       {blockStart}
                     </span>
                     <span className="text-[9px] sm:text-[10px] text-muted-foreground/40 font-normal">
-                      {blockDuration}m
+                      {blockDuration} min
                     </span>
                   </div>
 
@@ -711,7 +713,7 @@ export function PlannerAgendaView({
                       ) : isCompleted ? (
                         <div className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 select-none">
                           <Check className="size-3 text-emerald-500 stroke-[2]" />
-                          <span>Completado</span>
+                          <span>Terminado</span>
                         </div>
                       ) : (
                         <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hidden sm:block" />
@@ -833,7 +835,7 @@ export function PlannerAgendaView({
                       rows={1}
                       value={block.introDesc || ''}
                       onChange={(e) => onUpdateBlock?.(block.id, { introDesc: fieldValue(e.target.value) })}
-                      placeholder="Contexto o descripción del bloque..."
+                      placeholder="Agrega el contexto o la descripción del bloque…"
                       aria-label="Descripción del bloque"
                       className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 field-sizing-content max-h-[9rem] overflow-y-hidden"
                     />
@@ -907,7 +909,7 @@ export function PlannerAgendaView({
                                 type="text"
                                 value={point.title}
                                 onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { title: fieldValue(e.target.value) })}
-                                placeholder="Título del tema..."
+                                placeholder="Título del tema…"
                                 aria-label="Título del tema"
                                 className="text-sm font-semibold text-foreground bg-transparent border-0 outline-none p-0 flex-1 min-w-[140px] focus:ring-0 rounded px-1 -mx-1 transition-all leading-normal placeholder:font-semibold placeholder:text-muted-foreground/40 font-inherit"
                                 style={{ fontWeight: 600 }}
@@ -947,7 +949,7 @@ export function PlannerAgendaView({
                               rows={1}
                               value={point.description || ''}
                               onChange={(e) => onUpdateSubpoint?.(block.id, point.id, { description: fieldValue(e.target.value) })}
-                              placeholder="Agregar descripción o detalle..."
+                              placeholder="Agrega una descripción o un detalle…"
                               aria-label="Descripción del tema"
                               className="text-xs text-muted-foreground bg-transparent border-0 outline-none p-0 w-full resize-none leading-relaxed focus:ring-0 field-sizing-content max-h-[9rem] overflow-y-hidden"
                             />
@@ -991,7 +993,7 @@ export function PlannerAgendaView({
                                         </div>
                                       ) : (
                                         <span className="text-muted-foreground group-hover:text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
-                                          Asignar responsable
+                                          Elegir responsable
                                         </span>
                                       )}
                                     </button>
@@ -1112,7 +1114,7 @@ export function PlannerAgendaView({
                                   type="button"
                                   role="checkbox"
                                   aria-checked={isDone}
-                                  aria-label={isDone ? `Marcar “${point.title || 'tema'}” como pendiente` : `Marcar “${point.title || 'tema'}” como tratado`}
+                                  aria-label={isDone ? `Marcar «${point.title || 'tema'}» como pendiente` : `Marcar «${point.title || 'tema'}» como tratado`}
                                   title={isDone ? 'Marcar como pendiente' : 'Marcar como tratado'}
                                   onClick={() => onToggleSubpointStatus(block.id, point.id, !isDone)}
                                   className={`size-4.5 shrink-0 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
@@ -1357,7 +1359,7 @@ export function PlannerAgendaView({
                       className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-1 px-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer font-medium select-none"
                     >
                       <PlusIcon className="size-3.5 text-muted-foreground/80" />
-                      <span>Acuerdo</span>
+                      <span>Nuevo acuerdo</span>
                     </button>
 
                     {/* No primary button here: the sticky live dock is the single place to advance. */}
@@ -1386,7 +1388,7 @@ export function PlannerAgendaView({
                       {blockEnd}
                     </span>
                     <span className="text-[10px] text-muted-foreground/50 font-normal">
-                      {block.durationMinutes || 30}m
+                      {block.durationMinutes || 30} min
                     </span>
                   </div>
 

@@ -303,7 +303,7 @@ test('si la tarea sigue chocando tras 2 intentos se muestra un error y se adopta
   assert.equal(server.calls.length, sync.MAX_CHECKLIST_REBASES + 1);
   assert.ok(!events.some(e => e.type === 'conflict'));
   assert.equal(statuses.at(-1).state, 'error');
-  assert.match(statuses.at(-1).message, /no pudimos guardar la tarea/);
+  assert.match(statuses.at(-1).message, /no pudimos guardar lo que marcaste/);
   assert.equal(engine.pending.size, 0);
 });
 
@@ -501,7 +501,7 @@ test('la barra y el menú "/" usan los mismos nombres de bloques', async () => {
   const {BLOCK_LABELS} = await import('../activity-app/src/editor/bardo-editor-commands.js');
   assert.deepEqual(
     [BLOCK_LABELS.h1, BLOCK_LABELS.ul, BLOCK_LABELS.ol, BLOCK_LABELS.checklist, BLOCK_LABELS.code_block, BLOCK_LABELS.callout, BLOCK_LABELS.spoiler],
-    ['Título 1', 'Lista', 'Lista numerada', 'Lista de tareas', 'Bloque de código', 'Nota destacada', 'Desplegable'],
+    ['Título 1', 'Lista', 'Lista numerada', 'Lista de pendientes', 'Bloque de código', 'Nota destacada', 'Desplegable'],
   );
 });
 
