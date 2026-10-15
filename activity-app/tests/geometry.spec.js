@@ -40,6 +40,9 @@ function rowHeights(selector) {
 }
 
 test.beforeEach(async ({page}) => {
+  await page.addInitScript(() => {
+    window.__bardoChannelContext = {roles: [], members: [{id: 'u0', username: 'ana', globalName: 'Ana'}]};
+  });
   await page.goto('/?theme=dark#docs');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -60,6 +63,18 @@ test('campos y botones vecinos tienen el mismo alto', async ({page}) => {
 
   await page.getByRole('button', {name: /Abrir tarea #1/}).click();
   const dialog = page.getByRole('dialog', {name: /Tarea #1/});
+  await dialog.getByRole('button', {name: 'Elegir responsable'}).click();
+  await page.getByRole('option').first().click();
+  await dialog.getByRole('button', {name: 'Listo'}).click();
+  // El avatar del responsable queda pegado al borde derecho del contenido de la tarjeta.
+  const avatar = await page.locator('.kanban-card').first().evaluate(card => {
+    const style = getComputedStyle(card);
+    const contentRight = card.getBoundingClientRect().right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+    const avatarRight = card.querySelector('[data-slot=avatar]')?.getBoundingClientRect().right;
+    return {contentRight, avatarRight};
+  });
+  expect(Math.abs(avatar.avatarRight - avatar.contentRight), JSON.stringify(avatar)).toBeLessThanOrEqual(1);
+  await page.getByRole('button', {name: /Abrir tarea #1/}).click();
   await dialog.getByLabel('Nueva subtarea').fill('Paso');
   expect(await page.evaluate(auditAdjacentHeights), 'Detalle de tarea').toEqual([]);
   await dialog.getByRole('button', {name: 'Listo'}).click();
