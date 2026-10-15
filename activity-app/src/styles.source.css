@@ -741,9 +741,8 @@ button { font-size: 14px; }
 .dark .module-hub-tab[aria-current="page"] { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
 .module-hub-tab:focus-visible, .module-hub-bar-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 @media (min-width: 768px) and (max-width: 1023px) {
-  /* Tablet: el nombre del módulo importa más que el ícono; se quita el ícono. */
-  .module-hub-tab { padding-inline: 10px; }
-  .module-hub-tab > svg { display: none; }
+  /* Tablet: ícono + nombre, con menos aire para dejar sitio a las acciones. */
+  .module-hub-tab { padding-inline: 9px; gap: 5px; }
 }
 .module-hub-bar {
   /* Cápsula flotante de vidrio, como la tab bar nativa (iOS 26 / Material 3). */
