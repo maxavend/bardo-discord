@@ -266,3 +266,13 @@ test('reconcile keeps the local run sessionId while captures are in progress', (
   assert.equal(reconcileLiveState(PLANNER, local, remote).state.sessionId, 'session-remote');
   assert.equal(reconcileLiveState(PLANNER, local, remote, {keepLocalSessionId: true}).state.sessionId, local.sessionId);
 });
+
+test('los datos de demostración se reconocen por su huella, no por el título', async () => {
+  const {isDemoPlannerState, DEMO_PLANNER_FIXTURE, DEMO_PLANNER_EVENTS} = await import('../activity-app/src/planner/planner-store.js');
+  assert.equal(isDemoPlannerState({...DEMO_PLANNER_FIXTURE, id: 'cualquier-id'}), true);
+  assert.equal(isDemoPlannerState({id: 'demo-session-weekly-design'}), true);
+  for (const event of DEMO_PLANNER_EVENTS) assert.equal(isDemoPlannerState(event), true, event.title);
+  // Una reunión real con el mismo título no es demo.
+  assert.equal(isDemoPlannerState({id: 'sess-real', title: DEMO_PLANNER_FIXTURE.title, description: 'Nuestra weekly', mentions: '@equipo'}), false);
+  assert.equal(isDemoPlannerState({id: 'sess-real', title: 'Nueva reunión'}), false);
+});

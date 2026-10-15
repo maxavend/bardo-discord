@@ -188,3 +188,28 @@ test('reunión en vivo: tiempo restante, pausa congela el reloj, terminar pide c
   await expect(page.getByRole('region', {name: 'Controles de la reunión en curso'})).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('abrir otra reunión no deja en la lista un borrador vacío que no se puede archivar', async ({page}) => {
+  await createMeeting(page);
+  await page.getByPlaceholder('Nombre de la reunión').fill('Planificación');
+  await page.getByRole('button', {name: 'Listo', exact: true}).click();
+  // Otra reunión nueva, y se archiva: queda abierto un borrador sin guardar.
+  await page.getByRole('button', {name: 'Más opciones de la reunión'}).click();
+  await page.getByRole('menuitem', {name: 'Nueva reunión'}).click();
+  await page.getByRole('button', {name: 'Listo', exact: true}).click();
+  await page.getByRole('button', {name: 'Más opciones de la reunión'}).click();
+  await page.getByRole('menuitem', {name: 'Archivar reunión'}).click();
+  await page.getByRole('alertdialog').getByRole('button', {name: 'Sí, archivar'}).click();
+  // Al abrir la primera, el borrador vacío no debe aparecer en la lista.
+  await expect(page.getByRole('button', {name: 'Reuniones (1)'})).toBeVisible();
+  await page.getByRole('button', {name: 'Abrir la reunión Planificación'}).first().click();
+  await expect(page.getByRole('heading', {name: 'Planificación'}).first()).toBeVisible();
+  // Volver al inicio de Reuniones sin recargar (la lista vive en memoria).
+  if (page.viewportSize().width >= 768) {
+    await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Reuniones'}).click();
+  } else {
+    await page.evaluate(() => { window.location.hash = '#planner'; });
+  }
+  await expect(page.getByRole('button', {name: 'Reuniones (1)'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Abrir la reunión Nueva reunión'})).toHaveCount(0);
+});

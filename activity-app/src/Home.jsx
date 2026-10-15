@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 import {Button, buttonVariants} from '@/components/ui/button';
 import {Calendar, FileText, ChevronRight, LayoutColumns3, Plus} from '@gravity-ui/icons';
-import {loadPlannerEvents, loadPlannerState, loadLiveSessionState, isDefaultEmptySession} from './planner/planner-store.js';
+import {loadPlannerEvents, loadPlannerState, loadLiveSessionState, isDefaultEmptySession, isDemoPlannerState, shouldLoadDemoFixture} from './planner/planner-store.js';
 import {currentUserId, ensureKanbanLoaded, useKanbanSnapshot} from './kanban/kanban-runtime.js';
 import {assignedOpenCards, doneColumnId, todayIso} from './kanban/kanban-store.js';
 import {formatDueDate} from './kanban/kanban-ui.jsx';
@@ -53,7 +53,8 @@ function readMeetings() {
   const current = loadPlannerState();
   const live = loadLiveSessionState(current);
   const byId = new Map(events.map(event => [event.id || event.eventId, event]));
-  if (current?.id && (!isDefaultEmptySession(current) || byId.has(current.id))) {
+  const demoAllowed = shouldLoadDemoFixture();
+  if (current?.id && (demoAllowed || !isDemoPlannerState(current)) && (!isDefaultEmptySession(current) || byId.has(current.id))) {
     byId.set(current.id, {...byId.get(current.id), ...current,
       eventStatus: live?.status === 'running' || live?.status === 'paused' ? 'in_progress' : live?.status === 'completed' ? 'finished' : byId.get(current.id)?.eventStatus,
     });
