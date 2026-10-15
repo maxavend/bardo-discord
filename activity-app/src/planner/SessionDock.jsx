@@ -284,7 +284,7 @@ export function SessionDock({
         <div role="note" className="w-full max-w-4xl mx-auto mt-2 flex items-center gap-2 rounded-2xl border border-border/70 bg-card/95 backdrop-blur-md pl-3 pr-1.5 py-1.5 text-xs shadow-2xs animate-in fade-in duration-200">
           <MicIcon className="size-3.5 text-destructive shrink-0" />
           <p className="flex-1 min-w-0 py-1 text-muted-foreground leading-relaxed">
-            Toca <strong className="font-semibold text-foreground">Grabar</strong> para capturar tu micrófono en este dispositivo. Continúa al cambiar de tema; no captura las voces del canal de Discord.
+            <strong className="font-semibold text-foreground">Grabar</strong> solo captura tu micrófono, no las voces del canal de Discord.
           </p>
           <IconButton label="Ahora no" size="icon-sm" onClick={onDismissRecordingPrompt} className="shrink-0">
             <X className="size-3.5" />

@@ -49,6 +49,8 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { toast } from '@/lib/toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useTheme } from '@/lib/theme';
+import {MoonIcon, SettingsIcon, SunIcon, UploadIcon} from '@/components/ui/animated-icons';
+import {useIconAnimation} from '@/components/ui/animated-icons/use-icon-animation.js';
 import {
   Archive,
   ArrowDownToLine,
@@ -61,13 +63,10 @@ import {
   File,
   FileArrowUp,
   FileText,
-  Gear,
   LinkSlash,
   Magnifier,
-  Moon,
   Pencil,
   Plus,
-  Sun,
   TrashBin,
   TriangleExclamation,
   Xmark,
@@ -84,7 +83,7 @@ import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} 
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
-import {WorkspaceMenu} from './WorkspaceMenu.jsx';
+import {WorkspaceName} from './WorkspaceName.jsx';
 import {BetaNotice} from './BetaNotice.jsx';
 import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
 import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
@@ -119,7 +118,6 @@ function rememberMinutesHash(docId, hash) {
   } catch {}
 }
 const STORE_VERSION = 1;
-const SHARE_CARD_HINT = 'Todos verán una tarjeta con una vista previa y un botón para abrirlo.';
 
 
 function parseRoute() {
@@ -565,15 +563,15 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
               ? 'No hay documentos archivados'
               : 'Todavía no hay documentos'}
         </EmptyTitle>
-        <EmptyDescription>
-          {query
-            ? (!isArchived && archivedCount > 0
-              ? `Ningún documento activo coincide con «${query}».`
-              : `Ningún documento coincide con «${query}».`)
-            : isArchived
-              ? 'Los documentos que archives aparecerán aquí. Puedes restaurarlos cuando quieras.'
-              : 'Crea un documento o sube un archivo (Word, PDF o texto) para empezar.'}
-        </EmptyDescription>
+        {(query || !isArchived) && (
+          <EmptyDescription>
+            {query
+              ? (!isArchived && archivedCount > 0
+                ? `Ningún documento activo coincide con «${query}».`
+                : `Ningún documento coincide con «${query}».`)
+              : 'Crea uno o sube un archivo Word, PDF o de texto.'}
+          </EmptyDescription>
+        )}
       </EmptyHeader>
       <EmptyContent>
         {query ? (
@@ -603,17 +601,37 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
   );
 }
 
+/** Botón del header con ícono animado: anima al pasar el cursor por el botón o con foco. */
+function HeaderButton({Icon, iconSize = 14, children, ...props}) {
+  const {iconRef, handlers} = useIconAnimation();
+  return (
+    <Button
+      size="sm"
+      className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+      {...handlers}
+      {...props}
+    >
+      <Icon ref={iconRef} size={iconSize} aria-hidden="true" /> {children}
+    </Button>
+  );
+}
+
+function SettingsButton({onOpenSettings}) {
+  const {iconRef, handlers} = useIconAnimation();
+  return (
+    <IconButton label="Ajustes" onClick={() => onOpenSettings('personal')} className="h-8 w-8" {...handlers}>
+      <SettingsIcon ref={iconRef} size={16} aria-hidden="true" />
+    </IconButton>
+  );
+}
+
 function DocsHeader({children, actions, className = '', onOpenSettings}) {
   return (
     <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
       <div className="topbar-left">{children}</div>
       <div className="topbar-right header-actions">
         {actions}
-        {onOpenSettings && (
-          <IconButton label="Ajustes" onClick={() => onOpenSettings('personal')} className="h-8 w-8">
-            <Gear width={16} height={16} />
-          </IconButton>
-        )}
+        {onOpenSettings && <SettingsButton onOpenSettings={onOpenSettings} />}
         <ThemeModeMenu />
       </div>
     </header>
@@ -622,6 +640,7 @@ function DocsHeader({children, actions, className = '', onOpenSettings}) {
 
 function ThemeModeMenu() {
   const {theme, setTheme} = useTheme('dark');
+  const {iconRef, handlers} = useIconAnimation();
   const isDark = theme === 'dark'
     || (theme === 'system' && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
@@ -638,8 +657,9 @@ function ThemeModeMenu() {
       className="theme-mode-trigger icon-button-circle h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
       aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      {...handlers}
     >
-      {isDark ? <Sun width={16} height={16} /> : <Moon width={16} height={16} />}
+      {isDark ? <SunIcon ref={iconRef} size={16} aria-hidden="true" /> : <MoonIcon ref={iconRef} size={16} aria-hidden="true" />}
     </Button>
   );
 }
@@ -660,26 +680,14 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       className={isHome || isLibrary || isPlanner || isKanban ? 'library-header' : ''}
       actions={isKanban ? (
         <div key="kanban-actions" className="header-slot-enter flex items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onKanbanNew}
-            aria-label="Nueva tarea"
-            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-          >
+          <Button variant="default" size="sm" onClick={onKanbanNew} aria-label="Nueva tarea" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
             <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva tarea</span>
           </Button>
         </div>
       ) : isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {route.tab === 'home' && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={onPlannerNew}
-              aria-label="Nueva reunión"
-              className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-            >
+            <Button variant="default" size="sm" onClick={onPlannerNew} aria-label="Nueva reunión" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
               <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva reunión</span>
             </Button>
           )}
@@ -698,16 +706,15 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               if (file) onUpload(file);
             }}
           />
-          <Button
+          <HeaderButton
+            Icon={UploadIcon}
             variant="secondary"
-            size="sm"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
             aria-label={uploading ? 'Subiendo archivo…' : 'Subir archivo'}
-            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
           >
-            <FileArrowUp width={14} height={14} aria-hidden="true" /> <span className="header-label">{uploading ? 'Subiendo…' : 'Subir archivo'}</span>
-          </Button>
+            <span className="header-label">{uploading ? 'Subiendo…' : 'Subir archivo'}</span>
+          </HeaderButton>
           <Button variant="default" size="sm" onClick={onNew} aria-label="Nuevo documento" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
             <Plus width={15} height={15} aria-hidden="true" /> <span className="header-label">Nuevo</span>
           </Button>
@@ -746,7 +753,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
       ) : (
-        <WorkspaceMenu key="brand" onOpenSettings={onOpenSettings} />
+        <WorkspaceName key="brand" />
       )}
       <ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />
     </DocsHeader>
@@ -826,8 +833,8 @@ function Library({
                 <strong>Cambios sin enviar de otro canal</strong>
                 <br />
                 {parkedChanges.length === 1
-                  ? `Hay 1 cambio guardado en este dispositivo que es de otro canal (${parkedNames}). Se enviará cuando abras Bardo en ese canal.`
-                  : `Hay ${parkedChanges.length} cambios guardados en este dispositivo que son de otro canal (${parkedNames}). Se enviarán cuando abras Bardo en ese canal.`}
+                  ? `1 cambio en ${parkedNames} se enviará cuando abras Bardo en su canal.`
+                  : `${parkedChanges.length} cambios en ${parkedNames} se enviarán cuando abras Bardo en su canal.`}
               </span>
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" onClick={onRetryParked}>Reintentar</Button>
@@ -844,7 +851,7 @@ function Library({
               <span className="continue-accent" aria-hidden="true" />
               <span className="continue-copy">
                 <strong>{draft.title || 'Sin título'}</strong>
-                <span>Solo tú lo ves, en este dispositivo · Pulsa Listo para crearlo</span>
+                <span>Solo tú lo ves, en este dispositivo</span>
               </span>
               <ChevronRight width={16} height={16} className="text-muted-foreground" />
             </button>
@@ -991,13 +998,13 @@ function Reader({
           {doc.description && <p className="doc-description">{doc.description}</p>}
           {doc.archived && (
             <div className="doc-inline-notice" role="status">
-              <span>Este documento está archivado. Solo aparece en la pestaña Archivados.</span>
+              <span>Este documento está archivado.</span>
               <Button variant="secondary" size="sm" onClick={onRestore}>Restaurar</Button>
             </div>
           )}
           {showSharePrompt && !doc.archived && (
             <div className="doc-inline-notice" role="status">
-              <span>Documento creado. ¿Quieres compartirlo en {channelLabel()}? {SHARE_CARD_HINT}</span>
+              <span>Documento creado. ¿Quieres compartirlo en {channelLabel()}?</span>
               <div className="flex gap-2">
                 <Button variant="default" size="sm" onClick={onShare}>Compartir en el canal</Button>
                 <Button variant="ghost" size="sm" onClick={onDismissShare}>Ahora no</Button>
@@ -1006,7 +1013,7 @@ function Reader({
           )}
           {pending && (
             <p className="import-pending-banner text-sm text-muted-foreground" role="status">
-              Procesando archivo… El contenido aparecerá aquí en cuanto Bardo termine de convertirlo.
+              Procesando archivo…
             </p>
           )}
         </header>
@@ -1022,7 +1029,6 @@ function Reader({
 
 function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel}) {
   const isArchive = action === 'archive';
-  const isFailedImport = action === 'remove-failed-import';
   return (
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
@@ -1044,7 +1050,7 @@ function DeleteAlertDialog({isOpen, doc, action = 'archive', onConfirm, onCancel
             variant={isArchive ? 'default' : 'destructive'}
             onClick={() => onConfirm(doc?.id, action)}
           >
-            {isArchive ? 'Archivar' : isFailedImport ? 'Eliminar' : 'Eliminar definitivamente'}
+            {isArchive ? 'Sí, archivar' : 'Sí, eliminar'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1059,7 +1065,7 @@ function ShareConfirmDialog({isOpen, doc, onConfirm, onCancel}) {
         <AlertDialogHeader>
           <AlertDialogTitle>¿Compartir en {channelLabel()}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Todos en el canal verán una tarjeta de «{doc?.title || 'Sin título'}» con un botón para abrirlo.
+            Todos en el canal verán una tarjeta de «{doc?.title || 'Sin título'}».
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1078,13 +1084,13 @@ function MinutesEditedDialog({isOpen, title, onCopy, onReplace, onCancel}) {
         <AlertDialogHeader>
           <AlertDialogTitle>¿Reemplazar el acta editada?</AlertDialogTitle>
           <AlertDialogDescription>
-            «{title || 'Acta de reunión'}» tiene cambios hechos en Documentos. Si la reemplazas por el acta de la reunión, esos cambios se perderán.
+            Si la reemplazas, se perderán los cambios hechos a «{title || 'Acta de reunión'}» en Documentos.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
           <Button variant="outline" onClick={onReplace}>Reemplazar</Button>
-          <AlertDialogAction autoFocus onClick={onCopy}>Guardar como copia nueva</AlertDialogAction>
+          <AlertDialogAction autoFocus onClick={onCopy}>Guardar copia</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1105,7 +1111,7 @@ function DiscardParkedDialog({isOpen, count, onConfirm, onCancel}) {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>Descartar cambios</AlertDialogAction>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>Sí, descartar</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1119,12 +1125,12 @@ function NewDocChoiceDialog({isOpen, draft, onContinue, onStartNew, onCancel}) {
         <AlertDialogHeader>
           <AlertDialogTitle>Tienes un borrador sin terminar</AlertDialogTitle>
           <AlertDialogDescription>
-            «{draft?.title || 'Sin título'}» todavía no se ha creado. Si empiezas uno nuevo, ese borrador se descartará.
+            Si empiezas uno nuevo, se descartará «{draft?.title || 'Sin título'}».
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onStartNew}>Empezar uno nuevo</AlertDialogCancel>
-          <AlertDialogAction onClick={onContinue}>Continuar borrador</AlertDialogAction>
+          <AlertDialogCancel onClick={onStartNew}>Empezar otro</AlertDialogCancel>
+          <AlertDialogAction onClick={onContinue}>Continuar</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1140,15 +1146,15 @@ function LaunchNoticeDialog({notice, onRestore, onClose}) {
           <AlertDialogTitle>{archived ? 'Este documento fue archivado' : 'Este documento ya no existe'}</AlertDialogTitle>
           <AlertDialogDescription>
             {archived
-              ? `«${notice?.title || 'Sin título'}» está en Archivados. Puedes restaurarlo para que vuelva a aparecer en Activos.`
-              : 'Puede que lo hayan eliminado o que no esté compartido en este canal. Aquí tienes los documentos de este canal.'}
+              ? `«${notice?.title || 'Sin título'}» está en Archivados.`
+              : 'Puede que lo hayan eliminado o que no esté compartido en este canal.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           {archived ? (
             <>
               <AlertDialogCancel onClick={onClose}>Cerrar</AlertDialogCancel>
-              <AlertDialogAction onClick={onRestore}>Restaurar y abrir</AlertDialogAction>
+              <AlertDialogAction onClick={onRestore}>Restaurar</AlertDialogAction>
             </>
           ) : (
             <AlertDialogAction onClick={onClose}>Entendido</AlertDialogAction>
@@ -1167,7 +1173,7 @@ function InsertLinkModal({isOpen, isEditing = false, linkValue, setLinkValue, on
           <DialogTitle>{isEditing ? 'Editar enlace' : 'Agregar enlace'}</DialogTitle>
         </DialogHeader>
         <Field className="w-full">
-          <FieldLabel htmlFor="bardo-link-url">Dirección del enlace</FieldLabel>
+          <FieldLabel htmlFor="bardo-link-url" className="sr-only">Dirección del enlace</FieldLabel>
           <Input
             id="bardo-link-url"
             autoFocus
@@ -1745,7 +1751,7 @@ function App() {
     uploadingRef.current = true;
     setUploading(true);
     try {
-      showToast(`Subiendo «${file?.name || 'archivo'}»… Puede tardar unos segundos.`);
+      showToast(`Subiendo «${file?.name || 'archivo'}»…`);
       const imported = await convertDocumentFile(file);
       const now = new Date().toISOString();
       const doc = {

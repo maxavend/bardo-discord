@@ -7,7 +7,7 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import {ToggleGroup, ToggleGroupItem} from '@/components/ui/toggle-group';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from '@/components/ui/command';
-import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
+import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {OverlayScrollArea} from '@/components/ui/scroll-area';
 import {SHEET_DIALOG_CLASS, SHEET_DIALOG_SCROLL_CLASS} from '@/components/sheet-dialog.js';
 import {useTheme} from '@/lib/theme';
@@ -187,7 +187,7 @@ function PersonalTab({snapshot, remote, onPatch, saving}) {
             <ToggleGroupItem value="system" className="h-7 px-3 text-xs">Sistema</ToggleGroupItem>
           </ToggleGroup>
         </Row>
-        <Row label="Al abrir Bardo" hint="Con /bardo o desde el lanzador de actividades.">
+        <Row label="Al abrir Bardo">
           <ToggleGroup
             value={[startModule]}
             onValueChange={value => {
@@ -205,10 +205,10 @@ function PersonalTab({snapshot, remote, onPatch, saving}) {
           </ToggleGroup>
         </Row>
       </Section>
-      <Section title="Avisos" description="Para ti en todos los servidores donde está Bardo.">
+      <Section title="Avisos">
         <Row
           label="Mensaje directo cuando te asignan una tarea"
-          hint={remote ? 'Si lo apagas, igual verás la mención en el canal.' : 'Disponible al abrir Bardo en Discord.'}
+          hint={remote ? null : 'Disponible en Discord.'}
           htmlFor="settings-personal-dm"
         >
           <Switch
@@ -247,7 +247,7 @@ function NoticeSwitches({level, values, effective, sources, canEdit, saving, onP
               )}
             </>
           )
-          : 'Vale para los canales que no eligieron otra cosa.'}
+          : null}
       >
         <Switch id={id} checked={Boolean(value)} disabled={!canEdit || saving} onCheckedChange={checked => onPatch(level, {[key]: Boolean(checked)})} />
       </Row>
@@ -291,7 +291,7 @@ function SpaceNameRow({canEdit}) {
         <Button type="submit" disabled={!canEdit || !dirty || saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
       </div>
       <span className="text-xs text-muted-foreground">
-        Aparece arriba a la izquierda. Si lo dejas vacío, se usa {workspace.channelName ? 'el nombre del canal' : '«Bardo»'}.
+        Si lo dejas vacío, se usa {workspace.channelName ? 'el nombre del canal' : '«Bardo»'}.
       </span>
     </form>
   );
@@ -303,13 +303,13 @@ function SpaceTab({snapshot, remote, onPatch, saving}) {
   const serverZone = snapshot?.server?.timeZone || snapshot?.defaults?.timeZone;
   return (
     <div className="flex flex-col gap-6">
-      {remote && !canEdit && <LockedNotice>Solo quien gestiona este canal en Discord puede cambiar estos ajustes. Puedes verlos igual.</LockedNotice>}
+      {remote && !canEdit && <LockedNotice>Solo quien gestiona este canal puede cambiarlos.</LockedNotice>}
       <Section title="Este canal" description={remote ? 'Lo ve todo el canal.' : 'Solo en este dispositivo.'}>
         <SpaceNameRow canEdit={canEdit} />
         <Row
           label="Zona horaria"
           htmlFor="settings-space-tz"
-          hint={remote ? `Define «hoy», las tareas vencidas y las fechas de /tarea y /reu-new. ${SOURCE_TEXT[effective?.sources?.timeZone] || ''}.` : 'Sin Discord se usa la de este dispositivo.'}
+          hint={remote ? SOURCE_TEXT[effective?.sources?.timeZone] : 'La de este dispositivo'}
         >
           {remote ? (
             <TimeZonePicker
@@ -325,12 +325,12 @@ function SpaceTab({snapshot, remote, onPatch, saving}) {
         </Row>
       </Section>
       {remote && effective && (
-        <Section title="Avisos de Tareas" description="Qué hace Bardo cuando alguien recibe una tarea en este canal.">
+        <Section title="Avisos de Tareas">
           <NoticeSwitches level="space" values={snapshot.space} effective={effective} sources={effective.sources} canEdit={canEdit} saving={saving} onPatch={onPatch} />
         </Section>
       )}
       {remote && (
-        <Section title="Bardo en este canal" description="Lo que el bot puede hacer aquí, según sus permisos de Discord.">
+        <Section title="Bardo en este canal">
           <BotChecks bot={snapshot?.bot} />
         </Section>
       )}
@@ -347,12 +347,12 @@ function ServerTab({snapshot, remote, onPatch, saving}) {
   const defaults = snapshot?.defaults || {};
   return (
     <div className="flex flex-col gap-6">
-      {!canEdit && <LockedNotice>Solo quien administra el servidor en Discord puede cambiar estos ajustes. Puedes verlos igual.</LockedNotice>}
-      <Section title="Para todo el servidor" description="Valores por defecto de los canales que no eligieron otra cosa.">
+      {!canEdit && <LockedNotice>Solo quien administra el servidor puede cambiarlos.</LockedNotice>}
+      <Section title="Para todo el servidor" description="Se aplica a los canales sin ajuste propio.">
         <Row
           label="Zona horaria"
           htmlFor="settings-server-tz"
-          hint={server.timeZoneDetected ? 'Detectada en el dispositivo de la primera persona que abrió Bardo.' : server.timeZone ? null : `Valor de Bardo: ${describeTimeZone(defaults.timeZone)}.`}
+          hint={server.timeZoneDetected ? 'Detectada automáticamente' : server.timeZone ? null : 'Valor de Bardo'}
         >
           <TimeZonePicker
             id="settings-server-tz"
@@ -420,7 +420,6 @@ export function SettingsDialog({open, initialTab = 'personal', onClose, remote})
         <OverlayScrollArea className={SHEET_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
           <DialogHeader>
             <DialogTitle>Ajustes</DialogTitle>
-            <DialogDescription>Cada sección dice a quién afecta: solo a ti, a este canal o a todo el servidor.</DialogDescription>
           </DialogHeader>
           <Tabs value={tab} onValueChange={setTab} className="gap-5">
             <TabsList className="w-full">

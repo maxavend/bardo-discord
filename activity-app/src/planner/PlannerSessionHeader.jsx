@@ -26,11 +26,11 @@ import {
   Calendar,
   ChevronDown,
   Archive,
+  Plus,
 } from 'lucide-react';
 import {
   FileTextIcon,
   CopyIcon,
-  PlusIcon,
   PlayIcon,
   CircleCheckIcon as CheckIcon,
 } from '@/components/ui/animated-icons';
@@ -282,7 +282,7 @@ export function PlannerSessionHeader({
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={onNewCleanSession}>
-                    <PlusIcon className="size-4 text-muted-foreground" />
+                    <Plus className="size-4 text-muted-foreground" />
                     <span>Nueva reunión</span>
                   </DropdownMenuItem>
                   {onDeleteSession && (
@@ -375,7 +375,7 @@ export function PlannerSessionHeader({
                 className={`-mt-1 text-xs ${schedule.overMinutes > 0 ? 'text-warning' : 'text-muted-foreground'}`}
               >
                 {schedule.overMinutes > 0
-                  ? `Los bloques suman ${formatMeetingDuration(schedule.blocksMinutes)}, ${formatMeetingDuration(schedule.overMinutes)} más de lo reservado, así que la reunión terminaría a las ${formatTimeDisplay(schedule.plannedEnd)}. Acorta algún bloque o cambia el término.`
+                  ? `Los bloques se pasan ${formatMeetingDuration(schedule.overMinutes)} de lo reservado: la reunión terminaría a las ${formatTimeDisplay(schedule.plannedEnd)}.`
                   : `Bloques: ${formatMeetingDuration(schedule.blocksMinutes)} de ${formatMeetingDuration(schedule.targetMinutes)} · quedan ${formatMeetingDuration(schedule.freeMinutes)} libres`}
               </p>
             )}

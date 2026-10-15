@@ -67,7 +67,7 @@ export function RecordingSaveModal({
             <DialogTitle>Grabación terminada</DialogTitle>
           </div>
           <DialogDescription>
-            Revisa el nombre de la grabación antes de guardarla. Si cierras esta ventana, se guardará igual.
+            Si cierras esta ventana, se guardará igual.
           </DialogDescription>
         </DialogHeader>
 

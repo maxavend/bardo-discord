@@ -91,7 +91,7 @@ function AlertDialogFooter({
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end [&>button:only-child]:col-span-full [&>button:only-child]:w-full [&>button]:min-w-0 [&>button]:h-auto [&>button]:min-h-9 [&>button]:whitespace-normal [&>button]:py-2 [&>button:last-child:nth-child(odd)]:col-span-full",
+        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end [&>button:only-child]:col-span-full [&>button:only-child]:w-full [&>button]:whitespace-nowrap [&>button:last-child:nth-child(odd)]:col-span-full",
         className
       )}
       {...props}

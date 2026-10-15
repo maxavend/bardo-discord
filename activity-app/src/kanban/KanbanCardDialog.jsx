@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
-import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
+import {Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {Field, FieldLabel} from '@/components/ui/field';
 import {Input} from '@/components/ui/input';
 import {Textarea} from '@/components/ui/textarea';
@@ -356,7 +356,7 @@ function ThreadSection({card, board, capabilities, remote, onOpenThread, busy}) 
       >
         <MessagesSquare className="size-3.5" aria-hidden="true" /> {busy || card.threadPending ? 'Creando hilo…' : 'Crear hilo en Discord'}
       </Button>
-      <p className="text-[11px] text-muted-foreground">{reason || 'Crea un hilo en el canal para hablar de esta tarea.'}</p>
+      {reason && <p className="text-[11px] text-muted-foreground">{reason}</p>}
     </div>
   );
 }
@@ -409,7 +409,6 @@ export function KanbanCardDialog({
       <DialogContent
         scrollable={false}
         className={KANBAN_DIALOG_CLASS}
-        aria-describedby={descriptionId}
       >
         <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
         <DialogHeader className="gap-2">
@@ -461,7 +460,6 @@ export function KanbanCardDialog({
           </div>
           <DialogTitle className="sr-only">Tarea #{card.number}: {card.title}</DialogTitle>
           <TitleField card={card} onCommit={title => patch({title})} />
-          <DialogDescription id={descriptionId} className="sr-only">Los cambios se guardan solos.</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
@@ -573,8 +571,8 @@ export function KanbanCardDialog({
           <ThreadSection card={card} board={board} capabilities={capabilities} remote={remote} onOpenThread={openThread} busy={threadBusy} />
         </div>
 
-        <DialogFooter className="items-center sm:justify-between">
-          <p className="text-[11px] text-muted-foreground">{card.pending ? 'Guardando…' : 'Los cambios se guardan solos.'}</p>
+        <DialogFooter className="items-center sm:justify-end">
+          {card.pending && <p className="text-[11px] text-muted-foreground" role="status">Guardando…</p>}
           <Button onClick={onClose} className="h-9 px-5">Listo</Button>
         </DialogFooter>
         </OverlayScrollArea>

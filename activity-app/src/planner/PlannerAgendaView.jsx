@@ -26,11 +26,11 @@ import {
   Pause,
   ChevronUp,
   ChevronDown,
+  Plus,
 } from 'lucide-react';
 import {
   CoffeeIcon,
   DownloadIcon,
-  PlusIcon,
   DeleteIcon as TrashIcon,
 } from '@/components/ui/animated-icons';
 import { clockToMinutes, minutesToClock, isBreakBlock, parseCustomDurationMinutes, CUSTOM_DURATION_MAX_MINUTES } from './time-engine.js';
@@ -532,7 +532,7 @@ export function PlannerAgendaView({
               onClick={() => (isEditing || !onAddFirstBlock ? onAddBlock?.() : onAddFirstBlock())}
               className="mt-2"
             >
-              <PlusIcon className="size-3.5" /> Agregar bloque
+              <Plus className="size-3.5" /> Agregar bloque
             </Button>
           )}
         </Card>
@@ -1272,7 +1272,7 @@ export function PlannerAgendaView({
                         onClick={() => onAddSubpoint?.(block.id)}
                         className="text-xs text-muted-foreground/70 hover:text-foreground flex items-center gap-1.5 py-1 px-1 transition-colors self-start mt-0.5 cursor-pointer font-medium"
                       >
-                        <PlusIcon className="size-3 text-primary" /> <span>Agregar tema</span>
+                        <Plus className="size-3 text-primary" /> <span>Agregar tema</span>
                       </button>
                     )}
                   </div>
@@ -1358,7 +1358,7 @@ export function PlannerAgendaView({
                       onClick={() => onOpenCapture('decision', block.id)}
                       className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-1 px-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer font-medium select-none"
                     >
-                      <PlusIcon className="size-3.5 text-muted-foreground/80" />
+                      <Plus className="size-3.5 text-muted-foreground/80" />
                       <span>Nuevo acuerdo</span>
                     </button>
 
@@ -1453,7 +1453,7 @@ export function PlannerAgendaView({
                 onClick={() => onAddBlock?.()}
                 className="flex-1 py-3 px-4 rounded-2xl border-2 border-dashed border-border/70 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
               >
-                <PlusIcon className="size-3.5 text-primary" />
+                <Plus className="size-3.5 text-primary" />
                 <span>Agregar bloque</span>
               </button>
 

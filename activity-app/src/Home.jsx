@@ -93,7 +93,7 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
           <h1 id="home-title" tabIndex={-1}>Lo último en tu espacio</h1>
           <p className="home-context">{isDiscord
             ? placeLabel
-            : 'Solo en este dispositivo. Abre Bardo desde un canal de Discord para trabajar con tu equipo.'}</p>
+            : 'Solo en este dispositivo.'}</p>
         </div>
 
         {errors.length > 0 && <div className="home-notice" role="status">
@@ -104,7 +104,7 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
         {draft && <section className="library-section continue-section" aria-labelledby="home-draft">
           <h2 id="home-draft" className="section-title">Borrador sin terminar</h2>
           <a className="continue-row" href="#new">
-            <span className="continue-copy"><strong>{draft.title || 'Documento sin título'}</strong><span>Sigue escribiendo · Solo tú lo ves, en este dispositivo</span></span>
+            <span className="continue-copy"><strong>{draft.title || 'Documento sin título'}</strong><span>Solo tú lo ves, en este dispositivo</span></span>
             <ChevronRight width={18} height={18} aria-hidden="true" />
           </a>
         </section>}
@@ -123,7 +123,7 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
                 <ChevronRight width={18} height={18} aria-hidden="true" />
               </a>
             </li>)}
-          </ul> : <p className="home-empty">Todavía no hay documentos. Crea el primero o sube un archivo desde Documentos.</p>}
+          </ul> : <p className="home-empty">Todavía no hay documentos.</p>}
           <a className={buttonVariants({variant: 'ghost', size: 'sm'})} href="#docs">Abrir Documentos <ChevronRight aria-hidden="true" /></a>
         </section>
 
@@ -139,7 +139,7 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
                 <ChevronRight width={18} height={18} aria-hidden="true" />
               </a>
             </li>)}
-          </ul> : <p className="home-empty">Todavía no hay reuniones. Crea la primera y prepara su agenda.</p>}
+          </ul> : <p className="home-empty">Todavía no hay reuniones.</p>}
           <a className={buttonVariants({variant: 'ghost', size: 'sm'})} href="#planner">Abrir Reuniones <ChevronRight aria-hidden="true" /></a>
         </section>
 

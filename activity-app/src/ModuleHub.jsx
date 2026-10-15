@@ -2,13 +2,14 @@
 // Un solo lugar, siempre el mismo, para moverse entre Inicio, Documentos,
 // Reuniones y Tareas.
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
-import {Calendar, FileText, House, LayoutColumns3} from '@gravity-ui/icons';
+import {CalendarDaysIcon, Columns3Icon, FileTextIcon, HomeIcon} from '@/components/ui/animated-icons';
+import {useIconAnimation} from '@/components/ui/animated-icons/use-icon-animation.js';
 
 export const HUB_MODULES = [
-  {id: 'home', label: 'Inicio', href: '#home', Icon: House},
-  {id: 'docs', label: 'Documentos', shortLabel: 'Docs', href: '#docs', Icon: FileText},
-  {id: 'planner', label: 'Reuniones', href: '#planner', Icon: Calendar},
-  {id: 'kanban', label: 'Tareas', href: '#kanban', Icon: LayoutColumns3},
+  {id: 'home', label: 'Inicio', href: '#home', Icon: HomeIcon},
+  {id: 'docs', label: 'Documentos', shortLabel: 'Docs', href: '#docs', Icon: FileTextIcon},
+  {id: 'planner', label: 'Reuniones', href: '#planner', Icon: CalendarDaysIcon},
+  {id: 'kanban', label: 'Tareas', href: '#kanban', Icon: Columns3Icon},
 ];
 
 export function moduleForRoute(route) {
@@ -30,6 +31,33 @@ function navigate(event, href, onNavigate) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
   onNavigate(href);
+}
+
+/**
+ * Una pestaña del Hub. El ícono anima al pasar el cursor o con foco, y hace
+ * una pasada completa cuando la pestaña queda activa.
+ */
+function HubLink({module, active, onNavigate, className, iconClassName, ariaLabel, children}) {
+  const {iconRef, play, handlers} = useIconAnimation();
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) play();
+    wasActive.current = active;
+  }, [active, play]);
+  const {Icon, href} = module;
+  return (
+    <a
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      aria-label={ariaLabel}
+      onClick={event => navigate(event, href, onNavigate)}
+      className={className}
+      {...handlers}
+    >
+      <Icon ref={iconRef} className={iconClassName} aria-hidden="true" />
+      {children}
+    </a>
+  );
 }
 
 /** Pestañas del header (≥ 768 px). Con el módulo activo, vuelve a su inicio. */
@@ -58,17 +86,17 @@ export function ModuleTabs({active, onNavigate}) {
   return (
     <nav ref={navRef} aria-label="Módulos de Bardo" className="module-hub-tabs">
       <span className="module-hub-tabs-indicator" aria-hidden="true" />
-      {HUB_MODULES.map(({id, label, href, Icon}) => (
-        <a
-          key={id}
-          href={href}
-          aria-current={active === id ? 'page' : undefined}
-          onClick={event => navigate(event, href, onNavigate)}
+      {HUB_MODULES.map(module => (
+        <HubLink
+          key={module.id}
+          module={module}
+          active={active === module.id}
+          onNavigate={onNavigate}
           className="module-hub-tab"
+          iconClassName="size-3.5"
         >
-          <Icon width={14} height={14} aria-hidden="true" />
-          <span>{label}</span>
-        </a>
+          <span>{module.label}</span>
+        </HubLink>
       ))}
     </nav>
   );
@@ -140,18 +168,18 @@ export function ModuleBar({active, visible, onNavigate}) {
       style={{'--hub-index': activeIndex}}
     >
       <span className="module-hub-bar-indicator" aria-hidden="true" />
-      {HUB_MODULES.map(({id, label, shortLabel, href, Icon}) => (
-        <a
-          key={id}
-          href={href}
-          aria-current={active === id ? 'page' : undefined}
-          aria-label={label}
-          onClick={event => navigate(event, href, onNavigate)}
+      {HUB_MODULES.map(module => (
+        <HubLink
+          key={module.id}
+          module={module}
+          active={active === module.id}
+          onNavigate={onNavigate}
+          ariaLabel={module.label}
           className="module-hub-bar-item"
+          iconClassName="size-[22px]"
         >
-          <Icon width={22} height={22} aria-hidden="true" />
-          <span className="module-hub-bar-label" aria-hidden="true">{shortLabel || label}</span>
-        </a>
+          <span className="module-hub-bar-label" aria-hidden="true">{module.shortLabel || module.label}</span>
+        </HubLink>
       ))}
     </nav>
   );

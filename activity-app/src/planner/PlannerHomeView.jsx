@@ -20,8 +20,9 @@ import {
   Archive,
   MoreVertical,
   RotateCcw,
+  Plus,
 } from 'lucide-react';
-import { PlusIcon, DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
+import { DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
 import { SESSION_STATUS, getPointCounts } from './session-runner.js';
 import { getPlannedSchedule } from './time-engine.js';
 import { getHomeTopSection } from './planner-store.js';
@@ -117,7 +118,6 @@ export function PlannerHomeView({
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Todavía no hay reuniones</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Arma la agenda, guía la reunión y anota los acuerdos.</p>
             </div>
             <div className="flex items-center justify-center gap-2 w-full sm:w-auto">
               {/* The header's "Nueva reunión" is this view's single primary action. */}
@@ -127,7 +127,7 @@ export function PlannerHomeView({
                 onClick={onNewCleanSession}
                 className="text-xs font-semibold h-8 px-4 flex items-center justify-center gap-1.5"
               >
-                <PlusIcon className="size-3.5" /> Nueva reunión
+                <Plus className="size-3.5" /> Nueva reunión
               </Button>
             </div>
           </Card>

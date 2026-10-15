@@ -38,10 +38,9 @@ export function ColumnNameDialog({open, title, submitLabel, initialName = '', on
         >
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>Ejemplos: «Revisión», «Bloqueado», «Para QA».</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="kanban-column-name">Nombre</FieldLabel>
+            <FieldLabel htmlFor="kanban-column-name" className="sr-only">Nombre</FieldLabel>
             <Input id="kanban-column-name" autoFocus value={name} maxLength={KANBAN_LIMITS.columnName} onChange={event => setName(event.target.value)} />
           </Field>
           <DialogFooter>
@@ -119,10 +118,9 @@ export function ArchivedCardsDialog({open, loadArchived, onRestore, onClose, rem
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Tareas archivadas</DialogTitle>
-          <DialogDescription>Restaura una tarea para devolverla a su columna.</DialogDescription>
         </DialogHeader>
         {!remote ? (
-          <p className="text-sm text-muted-foreground">En este dispositivo, una tarea archivada solo se recupera con «Deshacer», en el aviso que aparece al archivarla.</p>
+          <p className="text-sm text-muted-foreground">En este dispositivo, archivar solo se puede deshacer en el momento.</p>
         ) : state.loading ? (
           <p className="text-sm text-muted-foreground" role="status">Cargando tareas archivadas…</p>
         ) : state.error ? (
@@ -166,7 +164,7 @@ export function TagsDialog({open, tags, onAdd, onUpdate, onDelete, onClose}) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Etiquetas del tablero</DialogTitle>
-          <DialogDescription>Puedes tener hasta {KANBAN_LIMITS.tags} etiquetas. Si eliminas una, se quita de todas sus tareas.</DialogDescription>
+          <DialogDescription>Borrar una etiqueta la quita de sus tareas.</DialogDescription>
         </DialogHeader>
         {tags.length > 0 ? (
           <ul className="flex flex-col gap-1">
@@ -194,7 +192,7 @@ export function TagsDialog({open, tags, onAdd, onUpdate, onDelete, onClose}) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Todavía no hay etiquetas. Crea la primera aquí abajo.</p>
+          <p className="text-sm text-muted-foreground">Todavía no hay etiquetas.</p>
         )}
         <form
           className="flex flex-col gap-2"

@@ -307,7 +307,6 @@ export function BardoSlashMenu() {
               </span>
               <div className="flex flex-col min-w-0">
                 <span className="truncate leading-tight text-xs font-semibold">{item.label}</span>
-                <span className="truncate text-[11px] text-muted-foreground">{item.description}</span>
               </div>
             </button>
           );

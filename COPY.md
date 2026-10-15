@@ -12,6 +12,14 @@ Guía corta para escribir textos de interfaz, avisos de Discord y errores. Sirve
 - **Mayúscula solo al inicio** de títulos, botones y etiquetas, salvo nombres propios (Discord, Bardo).
 - **Sin jerga interna.** Nada de «sync», «payload», «409», «ID», «local storage». Si hace falta, se dice «en este dispositivo».
 
+## Mínimo por defecto
+
+- **No sobreexplicar.** Si el título o el control ya lo dicen, no hay descripción ni texto de ayuda.
+- **Sin ejemplos ni instrucciones obvias.** Nada de «Ejemplos: …», «Haz clic para…», «Aquí puedes…».
+- **Sin etiqueta visible si repite el título.** Un diálogo «Renombrar columna» con un solo campo no necesita la etiqueta «Nombre» (queda como etiqueta accesible, oculta).
+- **Ayuda solo para lo que cambia una decisión**: una consecuencia (se borra, lo ve todo el canal), un límite o un estado. Una frase corta.
+- **Estados, no promesas.** «Guardando…» cuando pasa; no «Los cambios se guardan solos» fijo.
+
 ## Tono según el momento
 
 | Momento | Cómo suena | Ejemplo |
@@ -57,6 +65,8 @@ Usa siempre la misma palabra para lo mismo.
 ## Alturas de controles
 
 Un botón al lado de un campo (o de otro control en la misma fila) tiene el mismo alto. `Input` y `Button` por defecto miden `h-9`; si el campo usa `h-8`, el botón usa `size="sm"`. El e2e `activity-app/tests/geometry.spec.js` lo verifica.
+
+Un botón siempre cabe en una línea: nunca se parte ni se corta. Si no cabe, se acorta la etiqueta. Al confirmar, «Sí, archivar», «Sí, eliminar» o «Sí, descartar»: el título ya dice qué se archiva. El mismo e2e lo verifica.
 
 ## Movimiento
 

@@ -96,7 +96,7 @@ async function botChecks(env, session) {
           id: 'dm',
           label: 'Enviar mensajes directos',
           ok: null,
-          detail: 'Depende de la privacidad de cada persona: si tiene los mensajes directos cerrados, el aviso queda solo en el canal.',
+          detail: 'Si alguien tiene los mensajes directos cerrados, solo verá la mención.',
         },
       ],
     };

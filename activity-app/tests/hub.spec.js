@@ -19,7 +19,7 @@ test.beforeEach(async ({page}) => {
 test('el Hub lleva a cada módulo, marca el actual y la marca no se mueve', async ({page}) => {
   const hub = page.getByRole('navigation', {name: 'Módulos de Bardo'});
   await expect(hub).toHaveCount(1);
-  const brand = page.getByRole('button', {name: /^Espacio: /});
+  const brand = page.locator('.workspace-name');
   const positions = new Set();
   for (const [label, url] of MODULES) {
     await hub.getByRole('link', {name: label}).click();
@@ -53,24 +53,28 @@ test('la barra móvil solo aparece en la vista principal de cada módulo', async
 });
 
 test('Ajustes: el nombre del espacio se cambia en Espacio y vacío vuelve al predeterminado', async ({page}) => {
-  const trigger = page.getByRole('button', {name: /^Espacio: /});
-  await expect(trigger).toHaveText('Bardo');
-  await trigger.click();
+  const name = page.locator('.workspace-name');
+  await expect(name).toHaveText('Bardo');
+  await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveCount(0);
+  const openSpaceSettings = async () => {
+    await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
+    await page.getByRole('dialog', {name: 'Ajustes'}).getByRole('tab', {name: 'Espacio'}).click();
+  };
+  await openSpaceSettings();
   const dialog = page.getByRole('dialog', {name: 'Ajustes'});
-  await expect(dialog.getByRole('tab', {name: 'Espacio'})).toHaveAttribute('aria-selected', 'true');
   await dialog.getByLabel('Nombre del espacio').fill('Equipo Producto');
   await dialog.getByRole('button', {name: 'Guardar'}).click();
   await expect(dialog.getByRole('button', {name: 'Guardar'})).toBeDisabled();
   await page.keyboard.press('Escape');
-  await expect(trigger).toHaveText('Equipo Producto');
+  await expect(name).toHaveText('Equipo Producto');
   await page.reload();
-  await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveText('Equipo Producto');
-  await page.getByRole('button', {name: /^Espacio: /}).click();
+  await expect(name).toHaveText('Equipo Producto');
+  await openSpaceSettings();
   await page.getByRole('dialog', {name: 'Ajustes'}).getByLabel('Nombre del espacio').fill('');
   await page.getByRole('dialog', {name: 'Ajustes'}).getByRole('button', {name: 'Guardar'}).click();
   await expect(page.getByRole('dialog', {name: 'Ajustes'}).getByRole('button', {name: 'Guardar'})).toBeDisabled();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveText('Bardo');
+  await expect(name).toHaveText('Bardo');
 });
 
 test('Ajustes personales: tema y «Al abrir Bardo» se recuerdan', async ({page}) => {

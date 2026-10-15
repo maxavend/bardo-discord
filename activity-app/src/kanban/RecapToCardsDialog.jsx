@@ -120,9 +120,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
         <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
         <DialogHeader>
           <DialogTitle>Crear tareas desde los acuerdos</DialogTitle>
-          <DialogDescription>
-            Cada acuerdo que marques se convierte en una tarea del tablero de este canal. Las personas responsables reciben un aviso.
-          </DialogDescription>
+          <DialogDescription>Cada responsable recibe un aviso.</DialogDescription>
         </DialogHeader>
 
         {state.done !== null ? (

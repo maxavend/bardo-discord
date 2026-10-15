@@ -276,7 +276,7 @@ test('archivar actualiza el contador de Archivados sin abrir la pestaña, y rest
   await page.getByRole('menuitem', {name: 'Archivar documento'}).click();
   const confirm = page.getByRole('alertdialog', {name: '¿Archivar este documento?'});
   await expect(confirm).toBeVisible();
-  await confirm.getByRole('button', {name: 'Archivar', exact: true}).click();
+  await confirm.getByRole('button', {name: 'Sí, archivar'}).click();
 
   const archivedTab = page.getByRole('button', {name: 'Archivados (1)'});
   await expect(archivedTab).toBeVisible();
@@ -319,10 +319,10 @@ test('"Nuevo documento" con un borrador sin terminar pregunta si continuarlo o e
   const choice = page.getByRole('alertdialog', {name: 'Tienes un borrador sin terminar'});
   await expect(choice).toBeVisible();
   await expect(choice).toContainText('Borrador pendiente');
-  await expect(choice.getByRole('button', {name: 'Continuar borrador'})).toBeVisible();
-  await expect(choice.getByRole('button', {name: 'Empezar uno nuevo'})).toBeVisible();
+  await expect(choice.getByRole('button', {name: 'Continuar', exact: true})).toBeVisible();
+  await expect(choice.getByRole('button', {name: 'Empezar otro'})).toBeVisible();
 
-  await choice.getByRole('button', {name: 'Continuar borrador'}).click();
+  await choice.getByRole('button', {name: 'Continuar', exact: true}).click();
   await expect(page.getByLabel('Título', {exact: true})).toHaveValue('Borrador pendiente');
   await expect(page.locator('.editable-body')).toContainText('Ideas a medio escribir');
   await page.getByRole('button', {name: 'Volver a Documentos'}).click();
@@ -330,7 +330,7 @@ test('"Nuevo documento" con un borrador sin terminar pregunta si continuarlo o e
 
   await page.getByRole('button', {name: 'Nuevo documento'}).first().click();
   await page.getByRole('alertdialog', {name: 'Tienes un borrador sin terminar'})
-    .getByRole('button', {name: 'Empezar uno nuevo'}).click();
+    .getByRole('button', {name: 'Empezar otro'}).click();
   await expect(page.getByLabel('Título', {exact: true})).toHaveValue('');
   await expect(page.locator('.editable-body')).not.toContainText('Ideas a medio escribir');
   await page.getByRole('button', {name: 'Volver a Documentos'}).click();

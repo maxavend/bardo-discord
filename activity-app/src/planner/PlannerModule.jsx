@@ -1064,7 +1064,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     clearUndo();
     handleTabChange('agenda');
     setIsEditing(true);
-    toast('Reunión creada. Los cambios se guardan solos mientras editas.');
+    toast('Reunión creada');
   }), [clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange, runAtomicTransition, upsertPlannerEvent]);
 
   // Open meetings are only archived (restorable); "Eliminar definitivamente"
@@ -1550,7 +1550,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
             <AlertDialogDescription>
               {deleteSessionModal.action === 'permanent-delete'
                 ? `«${deleteSessionModal.session?.title || 'Esta reunión'}» se eliminará para todo el canal, con su agenda y sus acuerdos. No se puede deshacer.`
-                : `«${deleteSessionModal.session?.title || 'Esta reunión'}» pasará a «Archivadas». Desde ahí puedes restaurarla o eliminarla.`}
+                : `«${deleteSessionModal.session?.title || 'Esta reunión'}» pasará a «Archivadas», donde podrás restaurarla.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1561,7 +1561,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
               variant={deleteSessionModal.action === 'permanent-delete' ? 'destructive' : 'default'}
               onClick={handleConfirmDeleteSession}
             >
-              {deleteSessionModal.action === 'permanent-delete' ? 'Eliminar reunión' : 'Archivar reunión'}
+              {deleteSessionModal.action === 'permanent-delete' ? 'Sí, eliminar' : 'Sí, archivar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
