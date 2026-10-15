@@ -86,6 +86,14 @@ Para probar permisos, prepara dos cuentas y dos canales: uno compartido y otro r
 
 **Error reconocible:** token de una cuenta anterior, contenido de otro ámbito, permiso concedido solo por datos del cliente, directorio presentado como completo o comando que abre un módulo incorrecto. El registro de comandos del servidor se verificó contra esta rama el 13 de octubre; el comando global de lanzamiento se conservó.
 
+### 6. Tareas (Kanban)
+
+**Acción:** con dos cuentas en el mismo canal de texto, crea tareas con `/tarea` (con y sin `responsable` y `fecha:mañana`) y desde el tablero. Muévelas con mouse, con teclado (Espacio en el asa, flechas, Espacio) y en el teléfono con «Mover a». Edita la misma tarjeta desde las dos cuentas: una cambia el título y la otra la descripción; luego ambas el título. Asigna a alguien con los MD cerrados y a alguien que no ve un canal privado. Abre un hilo desde una tarjeta y repítelo en un canal de voz. Termina una reunión con acuerdos y usa «Crear tareas» dos veces.
+
+**Esperado:** los cambios propios aparecen al instante y los ajenos en menos de 5 segundos. Editar campos distintos conserva ambos; el mismo campo conserva el primero y avisa a la otra cuenta. Un aviso por persona y tarjeta, con mención en el canal y un MD sin descripción; si falla, la tarjeta explica por qué y ofrece «Reintentar aviso». Quien no ve el canal no puede ser responsable. El hilo se crea una sola vez; en voz el botón explica que no está disponible. Los acuerdos no se duplican y el botón «Abrir tarjeta» del aviso abre esa tarjeta, también en móvil.
+
+**Error reconocible:** tarjetas que saltan de posición tras soltarlas, avisos repetidos, una tarea visible en otro canal, un hilo duplicado o un cambio perdido sin aviso.
+
 ### Función de cada comando
 
 | Comando | Resultado |
@@ -97,6 +105,8 @@ Para probar permisos, prepara dos cuentas y dos canales: uno compartido y otro r
 | `/upload-docs` | Alias compatible de `/doc-upload`. |
 | `/reus` | Lista reuniones del canal. |
 | `/reu-new` | Crea una reunión con título y opciones de fecha, hora y duración. |
+| `/tarea` | Crea una tarea en el tablero del canal y avisa a quien la recibe (mención + MD). |
+| `/tareas` | Muestra solo a quien lo pide las tareas abiertas del canal. |
 | `/ayuda` | Muestra una guía privada de los comandos y un botón para Inicio. |
 
 ## Datos antiguos y recuperación
@@ -125,4 +135,4 @@ La revisión técnica siguió [Web Interface Guidelines](https://raw.githubuserc
 
 - Integración E2E final: **172 aprobadas, 56 omisiones condicionales preexistentes, 0 fallos** en 320, 390, 768, 1024, 1280 y 1440 px. Se ejecutó `npm --prefix activity-app run test:e2e -- --project=mobile-narrow --project=mobile-standard --project=tablet --project=desktop-compact --project=laptop --project=desktop --workers=4 --forbid-only`. Ninguna prueba nueva se omite. Capturas de Home inspeccionadas en móvil y escritorio; cobertura automatizada adicional de texto largo, contraste, foco, reduced motion y aumento de texto.
 
-**Próxima acción:** cerrar y volver a abrir Bardo con `/bardo` en Discord para ejecutar los cinco recorridos sobre la versión desplegada.
+**Próxima acción:** cerrar y volver a abrir Bardo con `/bardo` en Discord para ejecutar los seis recorridos sobre la versión desplegada.

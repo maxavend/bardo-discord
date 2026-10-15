@@ -1,17 +1,18 @@
 # Bardo
 
-**Documentos y reuniones, sin salir de Discord.**
+**Documentos, reuniones y tareas, sin salir de Discord.**
 
-Bardo convierte un canal de Discord en un espacio de trabajo embebido para **crear, importar, leer y compartir documentación**, además de **planificar y conducir reuniones con agenda, tiempos y acuerdos**.
+Bardo convierte un canal de Discord en un espacio de trabajo embebido para **crear, importar, leer y compartir documentación**, además de **planificar y conducir reuniones con agenda, tiempos y acuerdos** y **organizar el trabajo del canal en un tablero de tareas**.
 
 Todo ocurre dentro de una **Discord Activity** y se ejecuta sobre una arquitectura serverless con Cloudflare Workers y D1. No requiere un bot conectado permanentemente al Gateway ni un proceso Node ejecutándose 24/7.
 
-Bardo abre en **Inicio**, con el contexto del canal, documentos recientes, borradores pendientes y reuniones para continuar. Desde allí se accede a dos espacios principales:
+Bardo abre en **Inicio**, con el contexto del canal, documentos recientes, borradores pendientes y reuniones para continuar. Desde allí se accede a tres espacios principales:
 
 - **Docs** — documentación compartida, editor enriquecido, biblioteca y exportación.
 - **Reuniones** — planificación, agenda en vivo, control de tiempos, acuerdos y recap, con descarga de audios anteriores.
+- **Tareas** — un tablero Kanban por canal, integrado con los miembros, los hilos y los avisos de Discord.
 
-La [guía de aceptación](UAT.md) describe los cinco recorridos de prueba, los requisitos de Discord y la recuperación de datos locales anteriores. `/bardo` abre Inicio; los comandos de cada módulo mantienen sus destinos directos.
+La [guía de aceptación](UAT.md) describe los seis recorridos de prueba, los requisitos de Discord y la recuperación de datos locales anteriores. `/bardo` abre Inicio; los comandos de cada módulo mantienen sus destinos directos.
 
 ---
 
@@ -272,6 +273,26 @@ Las reuniones archivadas pueden restaurarse o eliminarse definitivamente.
 
 ---
 
+## Tareas
+
+Cada canal tiene un tablero Kanban compartido. Se abre desde Inicio, desde el header de Documentos o Reuniones, o con:
+
+```text
+/tarea titulo:"Enviar la minuta" responsable:@Ana fecha:mañana
+/tareas
+```
+
+- **Columnas:** parten como *Por hacer*, *En curso* y *Hecho*; se pueden renombrar, agregar (hasta 6), reordenar y eliminar (sus tareas se mueven a la columna que elijas). Siempre hay una columna «Hecho»: lo que llega ahí cuenta como terminado.
+- **Tarjetas:** título, descripción, responsable (un miembro del servidor que pueda ver el canal), prioridad, etiquetas (hasta 8 por tablero), subtareas, fecha límite y documentos de Bardo enlazados.
+- **Discord:** al asignar una tarea el bot avisa en el canal mencionando a la persona y le envía un mensaje directo sin la descripción. Cada persona recibe a lo más un aviso por tarjeta. Si Discord rechaza el aviso (permisos, MD cerrados), la tarjeta lo muestra y permite reintentar. Cada tarjeta puede abrir un hilo en el canal para conversarla.
+- **Reuniones → tareas:** desde el resumen de una reunión, «Crear tareas» convierte los acuerdos en tarjetas; repetirlo no crea duplicados.
+- **Colaboración:** los cambios propios se ven al instante y los de otras personas llegan en unos segundos. Mover y editar a la vez nunca choca; si dos personas cambian el mismo campo, se conserva la versión guardada primero y se avisa a la otra. Sin conexión, los cambios quedan en el dispositivo y se envían al volver.
+- **Teclado y móvil:** el asa de cada tarjeta se toma con Espacio y se mueve con las flechas; en el teléfono se ve una columna por pestaña y se mueve con «Mover a».
+
+Para los avisos y los hilos, el bot necesita en el canal: **Ver canal**, **Enviar mensajes**, **Crear hilos públicos** y **Enviar mensajes en hilos**. Los hilos solo se abren en canales de texto o de anuncios (no en canales de voz).
+
+---
+
 ## Comandos de Discord
 
 Bardo registra actualmente los siguientes comandos:
@@ -284,6 +305,8 @@ Bardo registra actualmente los siguientes comandos:
 | `/docs` | Lista los documentos del canal con botones para abrir los cinco más recientes |
 | `/reu-new` | Agenda una reunión (`fecha` AAAA-MM-DD y `hora` HH:MM se validan; sin fecha, hoy en America/Santiago) |
 | `/reus` | Muestra las reuniones programadas, en curso y pasadas del canal |
+| `/tarea` | Crea una tarea en el tablero del canal (`responsable` y `fecha` opcionales: AAAA-MM-DD, «hoy» o «mañana»); avisa a quien la recibe |
+| `/tareas` | Muestra solo a ti las tareas abiertas del canal; `mias:true` filtra las tuyas |
 | `/ayuda` | Muestra los comandos y las indicaciones de recuperación de contenido anterior (mensaje privado) |
 | `/upload-docs` | Alias legado de `/doc-upload` |
 
@@ -493,6 +516,8 @@ Esto registra:
 /docs
 /reu-new
 /reus
+/tarea
+/tareas
 /ayuda
 /upload-docs
 ```
