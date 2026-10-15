@@ -73,7 +73,7 @@ export function discordUnavailableResponse(error) {
   const retryAfterMs = error?.retryAfterMs || DEFAULT_RETRY_AFTER_MS;
   return new Response(JSON.stringify({
     error: 'discord_unavailable',
-    message: 'Discord no respondió al verificar tus permisos. Reintentando…',
+    message: 'Discord no respondió al revisar tus permisos. Volviendo a intentar…',
     retryAfterMs,
   }), {
     status: 503,

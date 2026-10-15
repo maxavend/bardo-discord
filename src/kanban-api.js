@@ -98,10 +98,10 @@ async function readJsonBody(request) {
   try {
     text = await request.text();
   } catch {
-    return {error: apiError(400, 'invalid_json', 'No se pudo leer el cuerpo de la solicitud.')};
+    return {error: apiError(400, 'invalid_json', 'No se pudo leer la solicitud. Inténtalo de nuevo.')};
   }
   if (encoder.encode(text).byteLength > MAX_KANBAN_JSON_BYTES) {
-    return {error: apiError(413, 'too_large', 'La tarea supera el tamaño máximo permitido (64 KB).')};
+    return {error: apiError(413, 'too_large', 'La tarea es demasiado larga para guardarla. Acorta la descripción o las subtareas.')};
   }
   if (!text.trim()) return {payload: {}};
   try {
@@ -109,7 +109,7 @@ async function readJsonBody(request) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('not an object');
     return {payload};
   } catch {
-    return {error: apiError(400, 'invalid_json', 'El cuerpo de la solicitud no es JSON válido.')};
+    return {error: apiError(400, 'invalid_json', 'No se pudo leer la solicitud. Inténtalo de nuevo.')};
   }
 }
 
@@ -151,12 +151,12 @@ async function cardFieldsFromPayload(env, session, payload, structure, {partial}
   }
   if (has('description')) fields.description = String(payload.description ?? '').slice(0, KANBAN_LIMITS.description);
   if (has('priority')) {
-    if (!KANBAN_PRIORITIES.includes(payload.priority)) return {error: apiError(422, 'invalid_priority', 'Prioridad no válida.')};
+    if (!KANBAN_PRIORITIES.includes(payload.priority)) return {error: apiError(422, 'invalid_priority', 'Elige una prioridad: baja, normal, alta o urgente.')};
     fields.priority = payload.priority;
   }
   if (has('dueDate')) {
     const dueDate = payload.dueDate || null;
-    if (dueDate !== null && !isIsoDate(dueDate)) return {error: apiError(422, 'invalid_date', 'La fecha límite debe tener el formato AAAA-MM-DD.')};
+    if (dueDate !== null && !isIsoDate(dueDate)) return {error: apiError(422, 'invalid_date', 'La fecha límite no es válida. Elige una fecha en el calendario.')};
     fields.dueDate = dueDate;
   }
   if (has('tagIds')) {
@@ -167,17 +167,17 @@ async function cardFieldsFromPayload(env, session, payload, structure, {partial}
   }
   if (has('subtasks')) {
     const subtasks = normalizeSubtasks(payload.subtasks);
-    if (subtasks === null) return {error: apiError(422, 'invalid_subtasks', 'Las subtareas no son válidas.')};
+    if (subtasks === null) return {error: apiError(422, 'invalid_subtasks', 'No se pudieron guardar las subtareas. Revísalas e inténtalo de nuevo.')};
     if (subtasks === false) return {error: apiError(422, 'subtask_limit', `Una tarea puede tener hasta ${KANBAN_LIMITS.subtasks} subtareas.`)};
     fields.subtasks = subtasks;
   }
   if (has('docIds')) {
     const docIds = normalizeIdList(payload.docIds, KANBAN_LIMITS.docs);
-    if (docIds === null) return {error: apiError(422, 'invalid_docs', 'Los documentos no son válidos.')};
+    if (docIds === null) return {error: apiError(422, 'invalid_docs', 'No se pudieron guardar los documentos enlazados. Inténtalo de nuevo.')};
     if (docIds === false) return {error: apiError(422, 'doc_limit', `Puedes enlazar hasta ${KANBAN_LIMITS.docs} documentos.`)};
     for (const docId of docIds) {
       if (!(await documentHasChannelAccess(env.DB, docId, session.guildId, session.channelId))) {
-        return {error: apiError(422, 'doc_not_in_channel', 'Ese documento no está compartido en este canal.')};
+        return {error: apiError(422, 'doc_not_in_channel', 'Ese documento no está compartido en este canal. Elige otro.')};
       }
     }
     fields.docIds = docIds;
@@ -199,7 +199,7 @@ async function cardFieldsFromPayload(env, session, payload, structure, {partial}
 async function assigneeAccessError(env, session, assignee) {
   if (!assignee || String(assignee.id) === String(session.userId)) return null;
   const canView = await createDiscordPermissionChecker(env, session.guildId, assignee.id).canViewChannel(session.channelId);
-  return canView ? null : apiError(422, 'assignee_no_access', 'Esa persona no puede ver este canal.');
+  return canView ? null : apiError(422, 'assignee_no_access', 'Esa persona no puede ver este canal. Elige a alguien que sí pueda.');
 }
 
 function defaultColumnId(structure) {
@@ -285,13 +285,13 @@ async function createCard(request, env, ctx, session, board, structure) {
   const payload = body.payload;
 
   const id = typeof payload.id === 'string' && payload.id.trim() ? payload.id.trim() : crypto.randomUUID();
-  if (!CARD_ID_PATTERN.test(id)) return apiError(422, 'invalid_id', 'Identificador de tarea inválido.');
+  if (!CARD_ID_PATTERN.test(id)) return apiError(422, 'invalid_id', 'No se reconoce esa tarea. Recarga el tablero e inténtalo de nuevo.');
   const owner = await loadKanbanCardOwner(env.DB, id);
   if (owner && owner !== board.id) return apiError(409, 'exists', 'Ya existe una tarea con ese identificador en otro canal.');
   if (owner) return json({card: await loadKanbanCard(env.DB, board.id, id)});
 
   if (await countActiveKanbanCards(env.DB, board.id) >= KANBAN_LIMITS.activeCards) {
-    return apiError(422, 'board_full', `El tablero llegó a ${KANBAN_LIMITS.activeCards} tareas activas. Archiva algunas para seguir.`);
+    return apiError(422, 'board_full', `El tablero llegó al máximo de ${KANBAN_LIMITS.activeCards} tareas activas. Archiva las que ya no necesites para crear más.`);
   }
 
   const parsed = await cardFieldsFromPayload(env, session, payload, structure, {partial: false});
@@ -320,11 +320,11 @@ async function createCardsBulk(request, env, ctx, session, board, structure) {
   if (body.error) return body.error;
   const {source, cards: items} = body.payload;
   const sessionId = source?.type === 'planner' ? String(source.sessionId || '').trim().slice(0, 128) : '';
-  if (!sessionId) return apiError(422, 'invalid_source', 'Indica la reunión de origen.');
+  if (!sessionId) return apiError(422, 'invalid_source', 'No se encontró la reunión de origen. Ábrela de nuevo e inténtalo otra vez.');
   if (!Array.isArray(items) || !items.length) return apiError(422, 'no_cards', 'Elige al menos un acuerdo.');
   if (items.length > 30) return apiError(422, 'too_many_cards', 'Puedes crear hasta 30 tareas a la vez.');
   if (await countActiveKanbanCards(env.DB, board.id) + items.length > KANBAN_LIMITS.activeCards) {
-    return apiError(422, 'board_full', `El tablero llegó a ${KANBAN_LIMITS.activeCards} tareas activas. Archiva algunas para seguir.`);
+    return apiError(422, 'board_full', `El tablero llegó al máximo de ${KANBAN_LIMITS.activeCards} tareas activas. Archiva las que ya no necesites para crear más.`);
   }
 
   const prefix = `planner:${sessionId}:`;
@@ -336,7 +336,7 @@ async function createCardsBulk(request, env, ctx, session, board, structure) {
   const checkedAssignees = new Set();
   for (const item of items) {
     const sourceRef = String(item?.sourceRef || '');
-    if (!sourceRef.startsWith(prefix) || sourceRef.length > 300) return apiError(422, 'invalid_source', 'Acuerdo de origen inválido.');
+    if (!sourceRef.startsWith(prefix) || sourceRef.length > 300) return apiError(422, 'invalid_source', 'Uno de los acuerdos no pertenece a esta reunión. Cierra la ventana e inténtalo de nuevo.');
     const parsed = await cardFieldsFromPayload(env, session, item, structure, {partial: false});
     if (parsed.error) return parsed.error;
     const assignee = parsed.fields.assignee;
@@ -367,11 +367,11 @@ async function patchCard(request, env, ctx, session, board, structure, card) {
   const body = await readJsonBody(request);
   if (body.error) return body.error;
   const payload = body.payload;
-  if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea fue archivada.', {card});
+  if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card});
 
   const baseVersion = Number.isInteger(payload.baseVersion) ? payload.baseVersion : null;
   if (baseVersion !== null && baseVersion !== card.version) {
-    return apiError(409, 'conflict', 'Otra persona cambió esta tarea.', {card});
+    return apiError(409, 'conflict', 'Otra persona cambió esta tarea al mismo tiempo. Revisa sus cambios e inténtalo de nuevo.', {card});
   }
   const parsed = await cardFieldsFromPayload(env, session, payload, structure, {partial: true});
   if (parsed.error) return parsed.error;
@@ -386,8 +386,8 @@ async function patchCard(request, env, ctx, session, board, structure, card) {
   const refreshed = await loadKanbanCard(env.DB, board.id, card.id);
   if (!written) {
     if (!refreshed) return cardNotFound();
-    if (refreshed.archivedAt) return apiError(410, 'archived', 'Esta tarea fue archivada.', {card: refreshed});
-    return apiError(409, 'conflict', 'Otra persona cambió esta tarea.', {card: refreshed});
+    if (refreshed.archivedAt) return apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card: refreshed});
+    return apiError(409, 'conflict', 'Otra persona cambió esta tarea al mismo tiempo. Revisa sus cambios e inténtalo de nuevo.', {card: refreshed});
   }
   if (assigneeChanged && refreshed.assignee) {
     ctx.waitUntil(notifyAssignment(env, {board, card: refreshed, actor: actorFrom(session), columnName: columnName(structure, refreshed.columnId)}));
@@ -399,7 +399,7 @@ async function moveCard(request, env, session, board, structure, card) {
   if (request.method !== 'POST') return methodNotAllowed();
   const body = await readJsonBody(request);
   if (body.error) return body.error;
-  if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea fue archivada.', {card});
+  if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card});
   const {columnId, afterId = null, beforeId = null} = body.payload;
   if (!structure.columns.some(column => column.id === columnId)) {
     return apiError(404, 'column_not_found', 'Esa columna ya no existe.', {card});
@@ -408,7 +408,7 @@ async function moveCard(request, env, session, board, structure, card) {
   const moved = await moveKanbanCard(env.DB, board.id, card.id, columnId, rank, session.userId);
   if (!moved) {
     const refreshed = await loadKanbanCard(env.DB, board.id, card.id);
-    return refreshed ? apiError(410, 'archived', 'Esta tarea fue archivada.', {card: refreshed}) : cardNotFound();
+    return refreshed ? apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card: refreshed}) : cardNotFound();
   }
   if (needsRebalance) await rebalanceKanbanColumn(env.DB, board.id, columnId, session.userId);
   return json({card: await loadKanbanCard(env.DB, board.id, card.id)});
@@ -418,7 +418,7 @@ async function archiveCard(request, env, session, board, card, archived) {
   if (request.method !== 'POST') return methodNotAllowed();
   if (!archived && card.archivedAt
     && await countActiveKanbanCards(env.DB, board.id) >= KANBAN_LIMITS.activeCards) {
-    return apiError(422, 'board_full', `El tablero llegó a ${KANBAN_LIMITS.activeCards} tareas activas. Archiva algunas para seguir.`);
+    return apiError(422, 'board_full', `El tablero llegó al máximo de ${KANBAN_LIMITS.activeCards} tareas activas. Archiva las que ya no necesites para crear más.`);
   }
   await setKanbanCardArchived(env.DB, board.id, card.id, archived, session.userId);
   return json({card: await loadKanbanCard(env.DB, board.id, card.id)});
@@ -427,15 +427,15 @@ async function archiveCard(request, env, session, board, card, archived) {
 async function openThread(request, env, ctx, session, board, card) {
   if (request.method !== 'POST') return methodNotAllowed();
   if (card.threadId) return json({card});
-  if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea fue archivada.', {card});
+  if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card});
 
   const state = await botChannelState(env, session);
   if (!state.threadsSupported) {
-    return apiError(409, 'threads_unsupported', 'Los hilos solo se pueden abrir en canales de texto, no en canales de voz ni dentro de otro hilo.');
+    return apiError(409, 'threads_unsupported', 'Los hilos solo se pueden crear en canales de texto, no en canales de voz ni dentro de otro hilo.');
   }
   if (state.missingThreadPermissions.length) {
     return apiError(403, 'bot_missing_permissions',
-      `Bardo necesita estos permisos en el canal: ${state.missingThreadPermissions.join(', ')}.`,
+      `Bardo necesita estos permisos en el canal: ${state.missingThreadPermissions.join(', ')}. Pídeselos a quien administra el servidor.`,
       {missing: state.missingThreadPermissions});
   }
 
@@ -452,13 +452,13 @@ async function openThread(request, env, ctx, session, board, card) {
   if (!result.ok) {
     await releaseKanbanThreadClaim(env.DB, board.id, card.id);
     if (result.code === 'rate_limited' || result.code === 'discord_unavailable') {
-      return apiError(503, 'discord_unavailable', 'Discord no pudo crear el hilo ahora. Inténtalo en unos segundos.',
+      return apiError(503, 'discord_unavailable', 'Discord no pudo crear el hilo. Inténtalo de nuevo en unos segundos.',
         {retryAfterMs: result.retryAfterMs || 2000});
     }
     if (result.code === 'missing_permissions') {
-      return apiError(403, 'bot_missing_permissions', 'Bardo no tiene permiso para crear hilos en este canal.', {missing: []});
+      return apiError(403, 'bot_missing_permissions', 'Bardo no tiene permiso para crear hilos en este canal. Pídeselo a quien administra el servidor.', {missing: []});
     }
-    return apiError(502, 'thread_failed', 'Bardo no pudo crear el hilo de esta tarea.');
+    return apiError(502, 'thread_failed', 'No se pudo crear el hilo de esta tarea. Inténtalo de nuevo en unos segundos.');
   }
 
   const threadId = result.data?.id;
@@ -471,7 +471,7 @@ async function openThread(request, env, ctx, session, board, card) {
 
 async function retryNotice(request, env, ctx, session, board, structure, card) {
   if (request.method !== 'POST') return methodNotAllowed();
-  if (!card.assignee) return apiError(422, 'no_assignee', 'Esta tarea no tiene responsable.');
+  if (!card.assignee) return apiError(422, 'no_assignee', 'Esta tarea no tiene responsable a quien avisar.');
   ctx.waitUntil(notifyAssignment(env, {
     board, card, actor: actorFrom(session), columnName: columnName(structure, card.columnId), retry: true,
   }));
@@ -489,7 +489,7 @@ async function handleCards(route, request, url, env, ctx, session) {
     if (request.method !== 'GET') return methodNotAllowed();
     const source = url.searchParams.get('source');
     if (source) {
-      if (!/^planner:[^:]{1,128}$/.test(source)) return apiError(400, 'invalid_source', 'Origen inválido.');
+      if (!/^planner:[^:]{1,128}$/.test(source)) return apiError(400, 'invalid_source', 'No se encontró la reunión de origen.');
       return json({cards: await listKanbanCardsBySource(env.DB, board.id, `${source}:`)});
     }
     if (url.searchParams.get('archived') === '1') return json({cards: await listArchivedKanbanCards(env.DB, board.id)});
@@ -535,7 +535,7 @@ async function handleColumns(route, request, url, env, session) {
     const order = Array.isArray(body.payload.order) ? body.payload.order.map(String) : [];
     const known = columns.map(column => column.id);
     if (order.length !== known.length || new Set(order).size !== order.length || !order.every(id => known.includes(id))) {
-      return apiError(409, 'columns_changed', 'Las columnas cambiaron. Vuelve a intentarlo.', {board: await freshBoardPayload(env, session)});
+      return apiError(409, 'columns_changed', 'Otra persona cambió las columnas. Revisa el tablero e inténtalo de nuevo.', {board: await freshBoardPayload(env, session)});
     }
     await reorderKanbanColumns(env.DB, board.id, order, session.userId);
     return json({board: await freshBoardPayload(env, session)});
@@ -551,7 +551,7 @@ async function handleColumns(route, request, url, env, session) {
     const name = cleanColumnName(body.payload.name);
     if (!name) return apiError(422, 'name_required', 'La columna necesita un nombre.');
     const requestedId = clientId(body.payload.id);
-    if (requestedId === false) return apiError(422, 'invalid_id', 'Identificador de columna inválido.');
+    if (requestedId === false) return apiError(422, 'invalid_id', 'No se reconoce esa columna. Recarga el tablero e inténtalo de nuevo.');
     if (requestedId && columns.some(column => column.id === requestedId)) {
       return json({board: await freshBoardPayload(env, session), columnId: requestedId});
     }
@@ -579,18 +579,18 @@ async function handleColumns(route, request, url, env, session) {
     }
     if (payload.isDone === true && !column.isDone) await setKanbanDoneColumn(env.DB, board.id, column.id, session.userId);
     if (payload.isDone === false && column.isDone) {
-      return apiError(422, 'done_required', 'Siempre hay una columna "Hecho". Marca otra como "Hecho" en su lugar.');
+      return apiError(422, 'done_required', 'El tablero siempre necesita una columna «Hecho». Para cambiarla, marca otra columna como «Hecho».');
     }
     return json({board: await freshBoardPayload(env, session)});
   }
 
   if (request.method === 'DELETE') {
-    if (column.isDone) return apiError(422, 'done_required', 'No puedes eliminar la columna "Hecho". Marca otra como "Hecho" primero.');
+    if (column.isDone) return apiError(422, 'done_required', 'No puedes eliminar la columna «Hecho». Primero marca otra columna como «Hecho».');
     if (columns.length <= 1) return apiError(422, 'last_column', 'El tablero necesita al menos una columna.');
     const moveTo = url.searchParams.get('moveTo');
     const hasCards = await countKanbanCardsInColumn(env.DB, board.id, column.id) > 0;
     const target = columns.find(item => item.id === moveTo && item.id !== column.id);
-    if (hasCards && !target) return apiError(422, 'move_target_required', 'Elige a qué columna mover sus tareas.');
+    if (hasCards && !target) return apiError(422, 'move_target_required', 'Elige a qué columna mover las tareas de esta columna.');
     await deleteKanbanColumn(env.DB, board.id, column.id, hasCards ? target.id : null, session.userId);
     return json({board: await freshBoardPayload(env, session)});
   }
@@ -607,7 +607,7 @@ function cleanTag(payload, {partial}) {
   }
   if (!partial || 'color' in payload) {
     const color = payload.color ?? 'gray';
-    if (!KANBAN_TAG_COLORS.includes(color)) return {error: apiError(422, 'invalid_color', 'Color de etiqueta no válido.')};
+    if (!KANBAN_TAG_COLORS.includes(color)) return {error: apiError(422, 'invalid_color', 'Elige uno de los colores disponibles para la etiqueta.')};
     tag.color = color;
   }
   return {tag};
@@ -630,7 +630,7 @@ async function handleTags(route, request, env, session) {
     const parsed = cleanTag(body.payload, {partial: false});
     if (parsed.error) return parsed.error;
     const requestedId = clientId(body.payload.id);
-    if (requestedId === false) return apiError(422, 'invalid_id', 'Identificador de etiqueta inválido.');
+    if (requestedId === false) return apiError(422, 'invalid_id', 'No se reconoce esa etiqueta. Recarga el tablero e inténtalo de nuevo.');
     if (requestedId && tags.some(tag => tag.id === requestedId)) {
       return json({board: await freshBoardPayload(env, session), tagId: requestedId});
     }
@@ -667,14 +667,14 @@ async function handleTags(route, request, env, session) {
 async function routeKanbanApi(request, url, env, ctx) {
   const route = parseKanbanRoute(url.pathname);
   if (!route) return null;
-  if (route.invalid) return apiError(404, 'invalid_route', 'Esta dirección de Tareas no existe.');
+  if (route.invalid) return apiError(404, 'invalid_route', 'Esta dirección de Tareas no existe. Vuelve al tablero desde Bardo.');
 
   const auth = await requireDocsSession(request, env);
   if (auth.error) return auth.error;
   const {session} = auth;
   if (!session.guildId || !session.channelId) return apiError(403, 'channel_required', 'Abre Bardo desde un canal de Discord.');
   if (!(await canUserViewChannel(env, session.guildId, session.userId, session.channelId))) {
-    return apiError(403, 'forbidden', 'No tienes permiso para acceder a este canal de Discord.');
+    return apiError(403, 'forbidden', 'No tienes acceso a este canal en Discord.');
   }
 
   if (route.resource === 'board') return handleBoard(request, url, env, session);

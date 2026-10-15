@@ -43,7 +43,7 @@ function apiError(status, error, message, extra = {}) {
   return json({ error, ...(message ? { message } : {}), ...extra }, status);
 }
 
-const notFound = () => apiError(404, 'not_found', 'No se encontró la reunión en este canal.');
+const notFound = () => apiError(404, 'not_found', 'Esta reunión ya no existe en este canal.');
 const methodNotAllowed = () => apiError(405, 'method_not_allowed', 'Esta acción no está disponible.');
 
 function parsePlannerRoute(pathname) {
@@ -79,14 +79,14 @@ async function readJsonBody(request) {
     return { error: apiError(400, 'invalid_json', 'No se pudo leer el cuerpo de la solicitud.') };
   }
   if (encoder.encode(text).byteLength > MAX_PLANNER_JSON_BYTES) {
-    return { error: apiError(413, 'too_large', 'La reunión supera el tamaño máximo permitido (512 KB).') };
+    return { error: apiError(413, 'too_large', 'La reunión es demasiado grande para guardarla. Acorta la agenda o el acta e inténtalo de nuevo.') };
   }
   try {
     const payload = JSON.parse(text);
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('not an object');
     return { payload, text };
   } catch {
-    return { error: apiError(400, 'invalid_json', 'El cuerpo de la solicitud no es JSON válido.') };
+    return { error: apiError(400, 'invalid_json', 'No se pudo leer la solicitud. Inténtalo de nuevo.') };
   }
 }
 
@@ -152,7 +152,7 @@ async function handleCollection(request, url, env, session) {
   if (body.error) return body.error;
   const payload = body.payload;
   if (jsonFieldTooLarge(payload.blocks, payload.decisions)) {
-    return apiError(413, 'too_large', 'La reunión supera el tamaño máximo permitido (512 KB).');
+    return apiError(413, 'too_large', 'La reunión es demasiado grande para guardarla. Acorta la agenda o el acta e inténtalo de nuevo.');
   }
 
   const id = (typeof payload.id === 'string' && payload.id.trim())
@@ -161,7 +161,7 @@ async function handleCollection(request, url, env, session) {
 
   const owner = await loadPlannerSessionOwner(env.DB, id);
   if (owner && (owner.guildId !== session.guildId || owner.channelId !== session.channelId)) {
-    return apiError(409, 'exists', 'Ya existe una reunión con ese identificador en otro canal.');
+    return apiError(409, 'exists', 'Esta reunión pertenece a otro canal. Ábrela desde ese canal.');
   }
 
   const existing = owner ? await loadPlannerSession(env.DB, id, session.guildId, session.channelId) : null;
@@ -178,7 +178,7 @@ async function handleCollection(request, url, env, session) {
   };
 
   const written = await savePlannerSession(env.DB, record);
-  if (!written) return apiError(409, 'exists', 'Ya existe una reunión con ese identificador en otro canal.');
+  if (!written) return apiError(409, 'exists', 'Esta reunión pertenece a otro canal. Ábrela desde ese canal.');
 
   const saved = await loadPlannerSession(env.DB, id, session.guildId, session.channelId);
   // `session` is the canonical key; the flat fields are kept for older clients.
@@ -227,7 +227,7 @@ async function handleLive(request, env, session, sessionId) {
   if (typeof payload.updatedAt !== 'string' || !payload.updatedAt) payload.updatedAt = new Date().toISOString();
   const stateJson = JSON.stringify(payload);
   if (encoder.encode(stateJson).byteLength > MAX_PLANNER_JSON_BYTES) {
-    return apiError(413, 'too_large', 'El estado de la reunión supera el tamaño máximo permitido (512 KB).');
+    return apiError(413, 'too_large', 'La reunión en curso es demasiado grande para guardarla. Acorta el acta e inténtalo de nuevo.');
   }
 
   const columns = legacyLiveColumns(payload);
@@ -277,14 +277,14 @@ async function handleSingle(request, env, session, route) {
     if (body.error) return body.error;
     const payload = body.payload;
     if (jsonFieldTooLarge(payload.blocks, payload.decisions)) {
-      return apiError(413, 'too_large', 'La reunión supera el tamaño máximo permitido (512 KB).');
+      return apiError(413, 'too_large', 'La reunión es demasiado grande para guardarla. Acorta la agenda o el acta e inténtalo de nuevo.');
     }
 
     const baseUpdatedAt = typeof payload.baseUpdatedAt === 'string' && payload.baseUpdatedAt.trim()
       ? payload.baseUpdatedAt.trim()
       : null;
     if (baseUpdatedAt && baseUpdatedAt !== existing.updatedAt) {
-      return apiError(409, 'conflict', 'Otra persona guardó cambios en esta reunión.', { session: existing });
+      return apiError(409, 'conflict', 'Otra persona guardó cambios en esta reunión al mismo tiempo.', { session: existing });
     }
 
     const updated = {
@@ -300,7 +300,7 @@ async function handleSingle(request, env, session, route) {
     const refreshed = await loadPlannerSession(env.DB, sessionId, session.guildId, session.channelId);
     if (!written) {
       if (!refreshed) return notFound();
-      return apiError(409, 'conflict', 'Otra persona guardó cambios en esta reunión.', { session: refreshed });
+      return apiError(409, 'conflict', 'Otra persona guardó cambios en esta reunión al mismo tiempo.', { session: refreshed });
     }
     return json({ session: refreshed });
   }
@@ -320,7 +320,7 @@ async function routePlannerApi(request, url, env) {
   const plannerRoute = parsePlannerRoute(url.pathname);
 
   if (!isContextRoute && !isMemberSearch && !isWorkspaceRoute && !plannerRoute) return null;
-  if (plannerRoute?.invalid) return apiError(400, 'invalid_route', 'Identificador de reunión inválido.');
+  if (plannerRoute?.invalid) return apiError(400, 'invalid_route', 'La dirección de esta reunión no es válida. Ábrela de nuevo desde Reuniones.');
 
   const auth = await requireDocsSession(request, env);
   if (auth.error) return auth.error;
@@ -353,7 +353,7 @@ async function routePlannerApi(request, url, env) {
   // Nombre del espacio de trabajo del canal: lo puede cambiar cualquiera que vea el canal.
   if (isWorkspaceRoute) {
     if (request.method !== 'PATCH') return methodNotAllowed();
-    if (!env.DB) return apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible.');
+    if (!env.DB) return apiError(503, 'database_unavailable', 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
     const body = await readJsonBody(request);
     if (body.error) return body.error;
     const name = String(body.payload.name ?? '').replace(/\s+/g, ' ').trim();
@@ -365,7 +365,7 @@ async function routePlannerApi(request, url, env) {
   }
 
   if (!env.DB) {
-    return apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible.');
+    return apiError(503, 'database_unavailable', 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
   }
 
   if (plannerRoute.collection) return handleCollection(request, url, env, session);

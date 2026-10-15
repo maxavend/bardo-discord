@@ -110,7 +110,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
       });
       setState({busy: false, error: null, done: (result?.created || []).length});
     } catch (error) {
-      setState({busy: false, error: error?.message || 'No se pudieron crear las tareas.', done: null});
+      setState({busy: false, error: error?.message || 'No se pudieron crear las tareas. Revisa tu conexión e inténtalo de nuevo.', done: null});
     }
   };
 
@@ -121,18 +121,18 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
         <DialogHeader>
           <DialogTitle>Crear tareas desde los acuerdos</DialogTitle>
           <DialogDescription>
-            Cada acuerdo se convierte en una tarea del tablero de este canal. Quien la recibe recibe un aviso.
+            Cada acuerdo que marques se convierte en una tarea del tablero de este canal. Las personas responsables reciben un aviso.
           </DialogDescription>
         </DialogHeader>
 
         {state.done !== null ? (
           <div className="flex flex-col gap-2" role="status">
             <p className="text-sm text-foreground">
-              {state.done === 0 ? 'Esos acuerdos ya eran tareas.' : state.done === 1 ? 'Se creó 1 tarea.' : `Se crearon ${state.done} tareas.`}
+              {state.done === 0 ? 'Esos acuerdos ya estaban en Tareas. No se creó ninguna tarea nueva.' : state.done === 1 ? 'Se creó 1 tarea.' : `Se crearon ${state.done} tareas.`}
             </p>
           </div>
         ) : !loaded ? (
-          <p className="text-sm text-muted-foreground" role="status">Cargando el tablero…</p>
+          <p className="text-sm text-muted-foreground" role="status">Cargando tareas…</p>
         ) : (
           <>
             <ul className="flex flex-col gap-1.5" aria-label="Acuerdos">
@@ -165,7 +165,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
                             </Button>
                           )}
                         />
-                        {!row.assignee && ownerHint && <span className="text-[11px] text-muted-foreground">Sugerido: {ownerHint}</span>}
+                        {!row.assignee && ownerHint && <span className="text-[11px] text-muted-foreground">Responsable sugerido: {ownerHint}</span>}
                       </div>
                     )}
                   </li>
@@ -177,7 +177,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={(
-                    <Button variant="secondary" size="sm" className="h-8 gap-1 text-xs" aria-label={`Columna: ${targetColumn?.name || ''}. Cambiar`}>
+                    <Button variant="secondary" size="sm" className="h-8 gap-1 text-xs" aria-label={`En ${targetColumn?.name || 'columna'}. Cambiar columna`}>
                       En {targetColumn?.name || 'columna'} <ChevronDown className="size-3.5" aria-hidden="true" />
                     </Button>
                   )}
@@ -223,7 +223,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
             <>
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
               <Button onClick={submit} disabled={!selected.length || !targetColumn || state.busy}>
-                {state.busy ? 'Creando…' : selected.length === 1 ? 'Crear 1 tarea' : `Crear ${selected.length} tareas`}
+                {state.busy ? 'Creando tareas…' : selected.length === 1 ? 'Crear 1 tarea' : `Crear ${selected.length} tareas`}
               </Button>
             </>
           )}

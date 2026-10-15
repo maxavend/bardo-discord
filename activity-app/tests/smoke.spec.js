@@ -13,7 +13,7 @@ import {
 const monsterTitle = testDocument.title;
 const TOOLBAR_NAME = 'Barra de herramientas del editor';
 // Acciones opcionales de la barra, en el orden en que la barra adaptable las deja a la vista.
-const OPTIONAL_ACTIONS = ['Lista', 'Lista numerada', 'Lista de tareas', 'Cursiva', 'Enlace', 'Rehacer', 'Subrayado', 'Tachado', 'Código en línea', 'Cita'];
+const OPTIONAL_ACTIONS = ['Lista', 'Lista numerada', 'Lista de pendientes', 'Cursiva', 'Enlace', 'Rehacer', 'Subrayado', 'Tachado', 'Código en línea', 'Cita'];
 // Inserciones y utilidades que siempre viven en "Ver más".
 const ALWAYS_IN_MORE = ['Tabla', 'Nota destacada', 'Desplegable', 'Separador', 'Copiar texto', 'Limpiar formato'];
 const TEXT_TYPES = ['Texto', 'Título 1', 'Título 2', 'Título 3', 'Cita', 'Bloque de código'];
@@ -31,7 +31,7 @@ function editorToolbar(page) {
 }
 
 async function startNewDocument(page) {
-  await page.getByRole('button', {name: 'Crear documento'}).first().click();
+  await page.getByRole('button', {name: 'Nuevo documento'}).first().click();
   await expect(editorToolbar(page)).toBeVisible();
   await expect(page.locator('.editable-body')).toBeVisible();
 }
@@ -166,7 +166,7 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(Math.abs(audit.contentInset - audit.contentRightInset)).toBeLessThanOrEqual(1);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
-  expect(audit.headerTargets.map(target => target.name)).toEqual(['Espacio: Bardo. Cambiar nombre', 'Subir archivo', 'Crear documento', 'Cambiar a modo claro']);
+  expect(audit.headerTargets.map(target => target.name)).toEqual(['Espacio: Bardo. Cambiar nombre', 'Subir archivo', 'Nuevo documento', 'Cambiar a modo claro']);
   // Tolerate only floating-point layout noise (31.999998px), not smaller targets.
   const layoutEpsilon = 0.001;
   expect(audit.headerTargets.every(({w, h}) => w + layoutEpsilon >= 32 && h + layoutEpsilon >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();
@@ -341,7 +341,7 @@ test('editor history covers deletion, formatting and inserted blocks', async ({p
   await expect(body.locator('strong')).toHaveCount(1);
 
   await placeCaretAfter(page, 'historial');
-  await runToolbarAction(page, 'Lista de tareas');
+  await runToolbarAction(page, 'Lista de pendientes');
   await expect(body.locator('.slate-action_item')).toHaveCount(1);
   await page.keyboard.press('ControlOrMeta+Z');
   await expect(body.locator('.slate-action_item')).toHaveCount(0);
@@ -393,7 +393,7 @@ test('selected text drives block types and lists; "Ver más" inserts callout and
 
   // Una selección parcial convierte el bloque completo.
   await selectEditorText(page, 'Tarea');
-  await runToolbarAction(page, 'Lista de tareas');
+  await runToolbarAction(page, 'Lista de pendientes');
   await expect(body.locator('.slate-action_item')).toHaveText('Tarea seleccionada.');
 
   await selectEditorText(page, 'Paso');
@@ -426,7 +426,7 @@ test('editor renders checklist, callout and disclosure blocks with their own con
   await startNewDocument(page);
   const body = page.locator('.editable-body');
   await body.click();
-  await runToolbarAction(page, 'Lista de tareas');
+  await runToolbarAction(page, 'Lista de pendientes');
   await page.keyboard.type('Tarea en el editor');
   const task = body.locator('.checklist-item').filter({hasText: 'Tarea en el editor'});
   await expect(task.getByRole('button', {name: 'Marcar como completado'})).toBeVisible();
@@ -600,7 +600,7 @@ test('document actions: text preview, markdown download and share outside Discor
 
   const row = page.locator('.doc-row').filter({hasText: monsterTitle});
   const openRowActions = async () => {
-    await row.getByRole('button', {name: /^Acciones de Stress test/}).click();
+    await row.getByRole('button', {name: /^Más acciones de Stress test/}).click();
     await expect(page.getByRole('menuitem', {name: 'Abrir'})).toBeVisible();
   };
 
@@ -618,7 +618,7 @@ test('document actions: text preview, markdown download and share outside Discor
   await expect(preview.getByLabel('Texto del documento')).toContainText(monsterTitle);
   await expect(preview.getByLabel('Texto del documento')).toContainText('Sección 30:');
   await expect(preview.getByRole('button', {name: 'Copiar texto'})).toBeVisible();
-  await preview.getByRole('button', {name: 'Atrás'}).click();
+  await preview.getByRole('button', {name: 'Volver'}).click();
   await expect(preview).toBeHidden();
 
   await openRowActions();
@@ -634,7 +634,7 @@ test('document actions: text preview, markdown download and share outside Discor
 
   await openRowActions();
   await page.getByRole('menuitem', {name: 'Compartir en el canal'}).click();
-  await expect(page.getByText('Compartir en el canal solo está disponible dentro de Discord.')).toBeVisible();
+  await expect(page.getByText('Para compartir en el canal, abre Bardo en Discord.')).toBeVisible();
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
@@ -663,7 +663,7 @@ test('complete editing and CRUD flow remains functional', async ({page}, testInf
   await page.getByLabel('Descripción', {exact: true}).fill('Documento creado por el smoke test');
   await page.locator('.editable-body').click();
   await page.keyboard.type('Texto nuevo para validar edición y persistencia.');
-  await runToolbarAction(page, 'Lista de tareas');
+  await runToolbarAction(page, 'Lista de pendientes');
   await expect(page.locator('.editable-body .slate-action_item')).toHaveCount(1);
 
   await finishEditing(page);
@@ -675,21 +675,21 @@ test('complete editing and CRUD flow remains functional', async ({page}, testInf
   await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
 
   const row = page.locator('.doc-row').filter({hasText: 'Prueba de documento'});
-  await row.getByRole('button', {name: 'Acciones de Prueba de documento'}).click();
+  await row.getByRole('button', {name: 'Más acciones de Prueba de documento'}).click();
   await page.getByRole('menuitem', {name: 'Duplicar'}).click();
   await expect(page.locator('h1.doc-title')).toHaveText('Prueba de documento (copia)');
 
-  await page.getByRole('button', {name: 'Acciones del documento'}).click();
+  await page.getByRole('button', {name: 'Más acciones del documento'}).click();
   await page.getByRole('menuitem', {name: 'Archivar documento'}).click();
-  await page.getByRole('alertdialog', {name: 'Archivar documento'}).getByRole('button', {name: 'Archivar', exact: true}).click();
+  await page.getByRole('alertdialog', {name: '¿Archivar este documento?'}).getByRole('button', {name: 'Archivar', exact: true}).click();
   await expect(page.getByRole('button', {name: 'Archivados (1)'})).toBeVisible();
   await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
 
   await page.getByRole('button', {name: 'Archivados (1)'}).click();
   const archived = page.locator('.doc-row').filter({hasText: 'Prueba de documento (copia)'});
-  await archived.getByRole('button', {name: 'Acciones de Prueba de documento (copia)'}).click();
+  await archived.getByRole('button', {name: 'Más acciones de Prueba de documento (copia)'}).click();
   await page.getByRole('menuitem', {name: 'Eliminar definitivamente'}).click();
-  const confirmDelete = page.getByRole('alertdialog', {name: 'Eliminar definitivamente'});
+  const confirmDelete = page.getByRole('alertdialog', {name: '¿Eliminar este documento?'});
   await expect(confirmDelete).toContainText('no se puede deshacer');
   await confirmDelete.getByRole('button', {name: 'Eliminar definitivamente'}).click();
   await expect(page.getByRole('button', {name: 'Archivados (0)'})).toBeVisible();

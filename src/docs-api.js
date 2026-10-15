@@ -101,7 +101,7 @@ function normalizeEditorPayload(payload, existing = null) {
 
   if (!markdown) return { error: 'content_required', message: 'El contenido del documento es obligatorio.', status: 400 };
   if (encoder.encode(markdown).byteLength > MAX_DOCUMENT_BYTES) {
-    return { error: 'too_large', message: 'El documento supera el tamaño máximo permitido (1,8 MB).', status: 413 };
+    return { error: 'too_large', message: 'El documento supera el máximo de 1,8 MB de texto. Divídelo en documentos más cortos.', status: 413 };
   }
 
   const extracted = extractDocumentTitle(markdown, title);
@@ -136,7 +136,7 @@ async function readJson(request) {
   try {
     return { payload: await request.json() };
   } catch {
-    return { error: apiError(400, 'invalid_json', 'El cuerpo de la solicitud no es JSON válido.') };
+    return { error: apiError(400, 'invalid_json', 'No pudimos leer la solicitud. Inténtalo de nuevo.') };
   }
 }
 
@@ -179,7 +179,7 @@ async function requireDocumentAccess(env, documentId, session) {
   const allowed = await sessionCanAccessDocument(env, session, documentId);
   if (!allowed) return { error: apiError(403, 'forbidden', 'Este documento no está compartido en este canal de Discord.') };
   const document = await loadDocument(env.DB, documentId);
-  if (!document) return { error: apiError(404, 'not_found', 'No se encontró el documento.') };
+  if (!document) return { error: apiError(404, 'not_found', 'Este documento ya no existe o fue eliminado.') };
   return { document };
 }
 
@@ -280,7 +280,7 @@ export async function normalizeDocumentImport(env, session, document, payload) {
   const markdown = typeof payload?.markdown === 'string' ? payload.markdown.trim() : '';
   if (!markdown) return apiError(400, 'content_required', 'Falta el contenido normalizado.');
   if (encoder.encode(markdown).byteLength > MAX_DOCUMENT_BYTES) {
-    return apiError(413, 'too_large', 'El documento importado supera el tamaño máximo permitido (1,8 MB).');
+    return apiError(413, 'too_large', 'El archivo importado supera el máximo de 1,8 MB de texto. Divídelo en partes más pequeñas.');
   }
 
   const {body} = extractDocumentTitle(markdown, document.title);
@@ -314,7 +314,7 @@ async function handleMessage(route, request, env, session) {
   if (!session.channelId) return apiError(403, 'channel_required', 'Abre Bardo desde un canal de Discord.');
 
   const botToken = String(env.DISCORD_TOKEN || '').trim();
-  if (!botToken) return apiError(503, 'bot_not_configured', 'El bot de Bardo no está configurado para publicar.');
+  if (!botToken) return apiError(503, 'bot_not_configured', 'Bardo no está configurado para compartir en el canal. Avisa a quien administra el bot.');
 
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
@@ -336,9 +336,9 @@ async function handleMessage(route, request, env, session) {
     const detail = await response.text().catch(() => '');
     console.error('Discord publish failed', response.status, detail.slice(0, 500));
     if (response.status === 429 || response.status >= 500) {
-      return apiError(503, 'discord_unavailable', 'Discord no aceptó el mensaje ahora. Inténtalo de nuevo.', { retryAfterMs: 2000 });
+      return apiError(503, 'discord_unavailable', 'Discord está ocupado en este momento. Inténtalo de nuevo en unos segundos.', { retryAfterMs: 2000 });
     }
-    return apiError(response.status === 403 ? 403 : 502, 'publish_failed', 'Bardo no pudo enviar el documento a este canal.');
+    return apiError(response.status === 403 ? 403 : 502, 'publish_failed', 'Bardo no pudo compartir el documento en este canal.');
   }
 
   const message = await response.json().catch(() => null);
@@ -467,7 +467,7 @@ async function handleUpdate(route, request, env, session, existing) {
   const payload = body.payload;
 
   if (existing.importStatus === 'pending') {
-    return apiError(409, 'import_pending', 'Bardo todavía está importando este archivo. Espera unos segundos.', {
+    return apiError(409, 'import_pending', 'Bardo todavía está importando este archivo. Espera unos segundos e inténtalo de nuevo.', {
       document: serialize(existing),
     });
   }
@@ -476,7 +476,7 @@ async function handleUpdate(route, request, env, session, existing) {
     ? payload.baseUpdatedAt.trim()
     : null;
   if (baseUpdatedAt && baseUpdatedAt !== existing.updatedAt) {
-    return apiError(409, 'conflict', 'Otra persona guardó cambios en este documento.', { document: serialize(existing) });
+    return apiError(409, 'conflict', 'Otra persona guardó cambios en este documento al mismo tiempo.', { document: serialize(existing) });
   }
 
   const normalized = normalizeEditorPayload(payload, existing);
@@ -493,7 +493,7 @@ async function handleUpdate(route, request, env, session, existing) {
   if (!written) {
     // Someone saved (or an import started) between our read and our write.
     const code = current?.importStatus === 'pending' ? 'import_pending' : 'conflict';
-    return apiError(409, code, 'Otra persona guardó cambios en este documento.', { document: current ? serialize(current) : null });
+    return apiError(409, code, 'Otra persona guardó cambios en este documento al mismo tiempo.', { document: current ? serialize(current) : null });
   }
   return json({ document: serialize(current) });
 }
@@ -511,7 +511,7 @@ async function handlePermanentDelete(route, env, session, existing) {
   }
 
   const deleted = await deleteDocumentPermanently(env.DB, route.id);
-  if (!deleted) return apiError(409, 'not_archived', 'El documento fue restaurado antes de eliminarse.');
+  if (!deleted) return apiError(409, 'not_archived', 'Alguien restauró este documento, así que no se eliminó.');
   return json({ ok: true, deleted: true, id: route.id });
 }
 

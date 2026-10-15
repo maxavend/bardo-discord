@@ -282,14 +282,14 @@ export function getAssistantContextDetails(plannerState, sessionState, now = Dat
   } else if (isExpired) {
     stateVariant = 'expired';
     contextualHelperText = activePoint
-      ? `Tiempo del bloque cumplido. El tema “${activePoint.title}” sigue activo.`
-      : 'Tiempo del bloque cumplido. Puedes extenderlo o continuar.';
+      ? `Se acabó el tiempo del bloque. El tema «${activePoint.title}» sigue activo.`
+      : 'Se acabó el tiempo del bloque. Puedes sumarle minutos o seguir.';
   } else if (is5MinWarning) {
     stateVariant = 'warning';
     contextualHelperText = 'Quedan menos de 5 minutos en este bloque.';
   } else if (isExtended) {
     stateVariant = 'extended';
-    contextualHelperText = `Extensión del bloque: +${extensionMinutes} min`;
+    contextualHelperText = `Se sumaron ${extensionMinutes} min al bloque`;
   } else if (isUnlimited) {
     stateVariant = 'unlimited';
     contextualHelperText = 'Este bloque continúa sin límite de tiempo.';
@@ -361,7 +361,7 @@ export function computeSessionRecap(plannerState, sessionState) {
   // The meeting's own name is the heading; the status lives in the badge.
   const recapTitle = plannerState?.title || 'Reunión';
   const recapDescription = isInterrupted
-    ? 'El avance se conservó en el bloque y tema donde quedó.'
+    ? 'El avance quedó guardado en el bloque y el tema donde se detuvo.'
     : '';
 
   const groupedRecordings = blocks.map((block) => {
@@ -403,7 +403,7 @@ export function computeSessionRecap(plannerState, sessionState) {
     plannedDurationMinutes,
     leftOpen,
     sessionStartedAt: sessionState?.sessionStartedAt || null,
-    timeEffectiveLabel: isInterrupted ? 'Tiempo transcurrido' : 'Tiempo efectivo',
+    timeEffectiveLabel: isInterrupted ? 'Tiempo transcurrido' : 'Duración real',
     timeEffectiveSubtext: `de ${plannedDurationMinutes} min planificados`,
     completedCount,
     skippedCount,

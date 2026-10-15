@@ -53,14 +53,15 @@ export function PlannerCaptureModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md rounded-4xl">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-foreground">Agregar acuerdo</DialogTitle>
+          <DialogTitle className="text-base font-bold text-foreground">Nuevo acuerdo</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Escribe el acuerdo al que llegaron en este bloque..."
+            placeholder={targetBlock?.title ? `Escribe el acuerdo al que llegaron en «${targetBlock.title}»…` : 'Escribe el acuerdo al que llegaron…'}
+            aria-label="Acuerdo"
             autoFocus
             rows={4}
             required
@@ -76,7 +77,7 @@ export function PlannerCaptureModal({
               onChange={setOwner}
               singleSelect
               hideRoles
-              placeholder="Seleccionar responsable (opcional)..."
+              placeholder="Elegir responsable"
             />
           </div>
 

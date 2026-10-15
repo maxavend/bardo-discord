@@ -64,7 +64,7 @@ export function RecordingSaveModal({
             <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
               <MicIcon className="size-4" />
             </div>
-            <DialogTitle>Grabación finalizada</DialogTitle>
+            <DialogTitle>Grabación terminada</DialogTitle>
           </div>
           <DialogDescription>
             Revisa el nombre de la grabación antes de guardarla. Si cierras esta ventana, se guardará igual.
@@ -113,7 +113,7 @@ export function RecordingSaveModal({
             onClick={() => (confirmDiscard ? onDiscard() : setConfirmDiscard(true))}
             className="text-xs"
           >
-            {confirmDiscard ? 'Confirmar descarte' : 'Descartar'}
+            {confirmDiscard ? 'Descartar sin guardar' : 'Descartar'}
           </Button>
 
           <Button

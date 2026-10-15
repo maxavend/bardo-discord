@@ -133,7 +133,7 @@ function ColumnMenu({column, index, columnCount, onRename, onMoveColumn, onSetDo
           variant="destructive"
         >
           <Trash2 className="size-4" />
-          <span>{column.isDone ? 'La columna «Hecho» no se elimina' : 'Eliminar columna'}</span>
+          <span>{column.isDone ? 'La columna «Hecho» no se puede eliminar' : 'Eliminar columna'}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -186,7 +186,7 @@ function KanbanColumnImpl({
             {column.isDone && <CheckCircle2 className="size-3.5 shrink-0 text-primary" aria-label="Columna «Hecho»" />}
             <span className="truncate">{column.name}</span>
           </h2>
-          <span className="text-xs tabular-nums text-muted-foreground" aria-label={`${totalCount} tareas`}>{totalCount}</span>
+          <span className="text-xs tabular-nums text-muted-foreground" aria-label={totalCount === 1 ? '1 tarea' : `${totalCount} tareas`}>{totalCount}</span>
           <span className="ml-auto">
             <ColumnMenu column={column} index={index} columnCount={columnCount} {...columnActions} />
           </span>
@@ -211,7 +211,7 @@ function KanbanColumnImpl({
           ))}
           {cardIds.length === 0 && (
             <li className="kanban-column-empty rounded-xl border border-dashed border-border/70 px-3 py-4 text-center text-xs text-muted-foreground">
-              {filtered && totalCount > 0 ? 'Ninguna tarea coincide con el filtro.' : column.isDone ? 'Arrastra aquí lo terminado.' : 'Sin tareas.'}
+              {filtered && totalCount > 0 ? 'Ninguna tarea coincide con el filtro.' : column.isDone ? 'Arrastra aquí las tareas terminadas.' : 'Sin tareas por ahora.'}
             </li>
           )}
         </ul>

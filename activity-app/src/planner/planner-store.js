@@ -9,6 +9,7 @@ import {
   normalizeLegacyLiveShape,
 } from './session-runner.js';
 import {todayLocalIso, toLocalDateIso, parseLocalDateIso} from './date-utils.js';
+import {formatMeetingDuration} from './copy-tokens.js';
 import {plannerRequest, isPlannerRemoteEnabled} from './planner-sync.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
@@ -416,7 +417,7 @@ function normalizeReloadedRecording(recording) {
     ...metadata,
     blobUrl: '',
     status: 'error',
-    persistenceError: metadata.persistenceError || 'El audio de esta grabación no fue persistido y no puede recuperarse tras recargar.',
+    persistenceError: metadata.persistenceError || 'El audio de esta grabación no se guardó en este dispositivo y no se puede recuperar.',
   };
 }
 
@@ -756,11 +757,11 @@ export function generateDiscordAnnouncement(plannerState) {
   const mentions = (computed.mentions || '').trim();
   const dateStr = computed.date ? formatMeetingDateLong(computed.date) : 'Fecha por confirmar';
   const startStr = computed.startTime || '10:00';
-  const totalMin = getPlannedSchedule(computed).plannedMinutes;
+  const schedule = getPlannedSchedule(computed);
 
-  let text = `📢 **Convocatoria: ${computed.title}**\n`;
+  let text = `📢 **Reunión: ${computed.title}**\n`;
   if (mentions) text += `👥 ${mentions}\n`;
-  text += `📅 **Fecha:** ${dateStr} · ⏰ **Hora:** ${startStr} (${totalMin} min)\n`;
+  text += `📅 **Fecha:** ${dateStr} · ⏰ **Hora:** ${startStr} a ${schedule.plannedEnd} (${formatMeetingDuration(schedule.plannedMinutes)})\n`;
   if (computed.host) text += `👤 **Facilita:** ${computed.host}\n`;
   if (computed.description) text += `\n> ${computed.description}\n`;
 
@@ -824,14 +825,14 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
   const ownerTag = (owner) => `@${String(owner).replace(/^@/, '')}`;
 
   let markdown = `# Acta: ${computed.title}\n\n`;
-  markdown += `> **Fecha:** ${computed.date ? formatMeetingDateLong(computed.date) : 'Sin fecha'} | **Facilita:** ${computed.host || 'Sin asignar'} | **Duración total:** ${computed.totalCalculatedDuration || 0} min | **Acuerdos:** ${agreements.length}\n\n`;
+  markdown += `> **Fecha:** ${computed.date ? formatMeetingDateLong(computed.date) : 'Sin fecha'} | **Facilita:** ${computed.host || 'Sin asignar'} | **Duración total:** ${formatMeetingDuration(computed.totalCalculatedDuration || 0)} | **Acuerdos:** ${agreements.length}\n\n`;
   markdown += `---\n\n`;
 
   markdown += '## 📋 Resumen de acuerdos\n\n';
   if (agreements.length > 0) {
     for (const agreement of agreements) {
       const ownerStr = agreement.owner ? ` | 👤 **Responsable:** ${ownerTag(agreement.owner)}` : '';
-      markdown += `- ✅ **${agreement.content}**\n  *📌 Origen: ${agreement.origin}${ownerStr}*\n\n`;
+      markdown += `- ✅ **${agreement.content}**\n  *📌 Surgió en: ${agreement.origin}${ownerStr}*\n\n`;
     }
   } else {
     markdown += '*No se registraron acuerdos en esta reunión.*\n\n';
@@ -846,7 +847,7 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
     for (const [idx, block] of computed.blocks.entries()) {
       markdown += `### ${idx + 1}. ${block.title || (block.isBreak ? 'Descanso' : 'Bloque sin título')} (${block.durationMinutes} min)\n`;
       if (block.leader) markdown += `* **Facilita:** ${block.leader}\n`;
-      if (block.introDesc) markdown += `* **Objetivo:** ${block.introDesc}\n`;
+      if (block.introDesc) markdown += `* **Contexto:** ${block.introDesc}\n`;
       markdown += '\n';
 
       const blockAgreements = agreements.filter((agreement) => agreement.blockId === block.id);

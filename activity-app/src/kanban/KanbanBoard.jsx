@@ -82,7 +82,10 @@ export function KanbanBoard({
     useSensor(KeyboardSensor, {coordinateGetter: sortableKeyboardCoordinates}),
   );
 
-  const columnName = useCallback(id => columns.find(column => column.id === id)?.name || 'la columna', [columns]);
+  const columnName = useCallback(id => {
+    const name = columns.find(column => column.id === id)?.name;
+    return name ? `la columna «${name}»` : 'una columna';
+  }, [columns]);
   const cardLabel = useCallback(id => {
     const card = cards[id];
     return card ? `#${card.number} «${card.title}»` : 'la tarea';
@@ -143,13 +146,13 @@ export function KanbanBoard({
   };
 
   const announcements = {
-    onDragStart: ({active}) => `Tomaste la tarea ${cardLabel(active.id)}. Usa las flechas para moverla y Espacio para soltarla.`,
+    onDragStart: ({active}) => `Tomaste la tarea ${cardLabel(active.id)}. Usa las flechas para moverla, Espacio para soltarla y Escape para cancelar.`,
     onDragOver: ({active, over}) => (over
       ? `La tarea ${cardLabel(active.id)} está sobre ${columnName(containerOf(over.id, items))}.`
       : `La tarea ${cardLabel(active.id)} no está sobre ninguna columna.`),
     onDragEnd: ({active, over}) => (over
       ? `Soltaste la tarea ${cardLabel(active.id)} en ${columnName(containerOf(over.id, items))}.`
-      : `Soltaste la tarea ${cardLabel(active.id)} fuera del tablero; vuelve a su lugar.`),
+      : `Soltaste la tarea ${cardLabel(active.id)} fuera de las columnas. Volvió a su lugar.`),
     onDragCancel: ({active}) => `Movimiento cancelado. La tarea ${cardLabel(active.id)} volvió a su lugar.`,
   };
 
@@ -197,7 +200,7 @@ export function KanbanBoard({
       accessibility={{
         announcements,
         screenReaderInstructions: {
-          draggable: 'Para mover una tarea, presiona Espacio o Enter en su asa. Usa las flechas para moverla entre tareas y columnas, y Espacio para soltarla. Escape cancela.',
+          draggable: 'Para mover una tarea, presiona Espacio o Enter en su botón «Mover». Usa las flechas para cambiarla de lugar o de columna, Espacio para soltarla y Escape para cancelar.',
         },
       }}
     >
@@ -266,7 +269,7 @@ function AddColumnButton({count, onAddColumn}) {
   return (
     <Tooltip>
       <TooltipTrigger render={button} />
-      <TooltipContent side="bottom">Máximo {KANBAN_LIMITS.columns} columnas por tablero</TooltipContent>
+      <TooltipContent side="bottom">El tablero ya tiene el máximo de {KANBAN_LIMITS.columns} columnas</TooltipContent>
     </Tooltip>
   );
 }
@@ -299,7 +302,7 @@ function MobileColumnMenu({column, index, columnCount, columnActions, onAddColum
             onClick={() => columnActions.onDelete(column)}
             className="cursor-pointer"
           >
-            {column.isDone ? 'La columna «Hecho» no se elimina' : 'Eliminar columna'}
+            {column.isDone ? 'La columna «Hecho» no se puede eliminar' : 'Eliminar columna'}
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

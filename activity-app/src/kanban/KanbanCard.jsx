@@ -86,7 +86,7 @@ function KanbanCardMenu({card, columns, onMove, onArchive, onOpenThread}) {
           {onOpenThread && (
             <DropdownMenuItem onClick={() => onOpenThread(card)} className="cursor-pointer">
               <MessagesSquare className="size-4 text-muted-foreground" />
-              <span>{card.threadId ? 'Ver hilo en Discord' : 'Abrir hilo en Discord'}</span>
+              <span>{card.threadId ? 'Ver hilo en Discord' : 'Crear hilo en Discord'}</span>
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={() => onArchive(card.id)} className="cursor-pointer">

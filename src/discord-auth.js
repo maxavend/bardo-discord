@@ -162,10 +162,10 @@ function authError(status, code, message) {
   return json({ error: message, code, message }, status);
 }
 
-const SESSION_EXPIRED_MESSAGE = 'Tu sesión de Bardo expiró. Cierra y vuelve a abrir la actividad para continuar.';
+const SESSION_EXPIRED_MESSAGE = 'Tu sesión de Bardo expiró. Cierra y vuelve a abrir Bardo para continuar.';
 
 export async function requireDocsSession(request, env) {
-  if (!env.DB) return { error: apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible. Inténtalo de nuevo en unos minutos.') };
+  if (!env.DB) return { error: apiError(503, 'database_unavailable', 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.') };
   const authorization = request.headers.get('authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { error: apiError(401, 'auth_required', 'Abre Bardo desde Discord para iniciar sesión.') };

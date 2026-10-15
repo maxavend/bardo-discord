@@ -289,7 +289,7 @@ export async function exportBlockRecordingsCombined(blockTitle, recordings, opti
     return {...result, mode: 'zip', reason: 'decode'};
   }
   const cleanTitle = sanitizeFileName(blockTitle, 'Bloque');
-  downloadBlob(mergedBlob, `${cleanTitle} - Bloque Completo.${extensionForMimeType(mergedBlob.type)}`);
+  downloadBlob(mergedBlob, `${cleanTitle} - Bloque completo.${extensionForMimeType(mergedBlob.type)}`);
   return {mode: 'combined', missing: missing.length};
 }
 

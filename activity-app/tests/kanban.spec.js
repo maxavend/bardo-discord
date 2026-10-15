@@ -93,7 +93,7 @@ test('mover con el teclado desde el asa (escritorio) y con "Mover a" (móvil)', 
     await page.keyboard.press('Space');
     await page.waitForTimeout(150);
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByText(/está sobre En curso/)).toBeAttached();
+    await expect(page.getByText(/está sobre la columna «En curso»/)).toBeAttached();
     await page.keyboard.press('Space');
   }
   await openColumn(page, 'En curso');
@@ -129,7 +129,7 @@ test('columnas: hasta 6, renombrar y eliminar moviendo sus tareas', async ({page
   await openColumn(page, 'Por hacer');
   await page.getByRole('button', {name: 'Opciones de la columna Por hacer'}).click();
   await page.getByRole('menuitem', {name: /Renombrar/}).click();
-  await page.getByLabel('Nombre').fill('Pendiente');
+  await page.getByLabel('Nombre', {exact: true}).fill('Pendiente');
   await page.getByRole('button', {name: 'Guardar'}).click();
 
   await openColumn(page, 'Pendiente');
@@ -183,7 +183,7 @@ test('acuerdos de una reunión → tareas, sin duplicar al repetir', async ({pag
   await page.getByRole('button', {name: 'Nueva reunión'}).last().click();
   await page.getByRole('button', {name: 'Listo'}).click();
   await page.getByRole('button', {name: 'Iniciar reunión'}).first().click();
-  await page.getByRole('button', {name: 'Acuerdo', exact: true}).first().click();
+  await page.getByRole('button', {name: 'Nuevo acuerdo', exact: true}).first().click();
   await page.getByPlaceholder(/Escribe el acuerdo/).fill('Enviar la minuta al equipo');
   await page.getByRole('button', {name: 'Guardar acuerdo'}).click();
   await page.getByRole('button', {name: 'Más acciones de la reunión'}).click();

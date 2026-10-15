@@ -86,7 +86,7 @@ test('hora de inicio, término y facilitador se guardan y sobreviven a recargar'
   // Término cerrando con clic afuera (antes se descartaba).
   await setTime(page, 'Término', '03', '30', 'PM', {commit: 'outside'});
   await expect(page.getByRole('button', {name: 'Término'})).toContainText('03:30 p.m.');
-  await expect(page.getByText('quedan 1h 15m libres')).toBeVisible();
+  await expect(page.getByText('quedan 1 h 15 min libres')).toBeVisible();
 
   // Mover el inicio conserva la duración reservada.
   await setTime(page, 'Hora de inicio', '04', '00', 'PM');
@@ -99,7 +99,7 @@ test('hora de inicio, término y facilitador se guardan y sobreviven a recargar'
   // Facilitador: una sola persona, el menú se cierra al elegir y se puede quitar.
   await page.getByRole('button', {name: 'Facilita', exact: true}).click();
   await page.getByRole('option', {name: /Anderson/}).click();
-  await expect(page.getByPlaceholder('Buscar persona...')).toBeHidden();
+  await expect(page.getByPlaceholder('Buscar persona…')).toBeHidden();
   await expect(page.getByRole('button', {name: 'Facilita', exact: true})).toContainText('Anderson');
   await page.getByRole('button', {name: 'Facilita', exact: true}).click();
   await expect(page.locator('[role="option"][data-checked="true"]')).toHaveCount(1);

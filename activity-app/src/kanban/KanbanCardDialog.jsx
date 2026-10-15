@@ -48,18 +48,18 @@ import {KANBAN_DIALOG_CLASS, KANBAN_DIALOG_SCROLL_CLASS, AssigneeAvatar, TAG_COL
 import {newKanbanId} from './kanban-sync.js';
 
 const NOTICE_ERRORS = {
-  missing_permissions: 'Bardo no tiene permiso para enviar mensajes aquí.',
-  dm_closed: 'la persona tiene los mensajes directos cerrados.',
+  missing_permissions: 'Bardo no tiene permiso para enviar mensajes en este canal.',
+  dm_closed: 'La persona tiene cerrados los mensajes directos.',
   rate_limited: 'Discord pidió esperar un momento.',
   discord_unavailable: 'Discord no respondió.',
-  bot_not_configured: 'el bot de Bardo no está configurado.',
+  bot_not_configured: 'El bot de Bardo no está configurado.',
 };
 
 function noticeProblems(card) {
   const problems = [];
   const {channel, dm} = card.notifications || {};
-  if (channel?.status === 'failed') problems.push(`No pudimos avisar en el canal: ${NOTICE_ERRORS[channel.errorCode] || 'Discord rechazó el mensaje.'}`);
-  if (dm?.status === 'failed') problems.push(`No pudimos enviar el mensaje directo: ${NOTICE_ERRORS[dm.errorCode] || 'Discord rechazó el mensaje.'}`);
+  if (channel?.status === 'failed') problems.push(`No se pudo avisar en el canal. ${NOTICE_ERRORS[channel.errorCode] || 'Discord rechazó el mensaje.'}`);
+  if (dm?.status === 'failed') problems.push(`No se pudo enviar el mensaje directo a la persona responsable. ${NOTICE_ERRORS[dm.errorCode] || 'Discord rechazó el mensaje.'}`);
   return problems;
 }
 
@@ -302,9 +302,9 @@ function DocLinks({card, docs, onChange, onOpenDoc}) {
         />
         <PopoverContent align="start" className="w-72 p-0">
           <Command>
-            <CommandInput placeholder="Buscar documento del canal..." className="text-xs" />
+            <CommandInput placeholder="Buscar documento del canal…" className="text-xs" />
             <CommandList className="max-h-60">
-              <CommandEmpty>{docs.length ? 'No hay coincidencias.' : 'Este canal todavía no tiene documentos.'}</CommandEmpty>
+              <CommandEmpty>{docs.length ? 'Ningún documento coincide con la búsqueda.' : 'Este canal todavía no tiene documentos.'}</CommandEmpty>
               <CommandGroup>
                 {available.map(doc => (
                   <CommandItem
@@ -341,9 +341,9 @@ function ThreadSection({card, board, capabilities, remote, onOpenThread, busy}) 
   const reason = !remote
     ? 'Disponible al abrir Bardo en Discord.'
     : capabilities?.threadsSupported === false
-      ? 'Los hilos solo se abren en canales de texto, no en canales de voz.'
+      ? 'Los hilos solo se pueden crear en canales de texto, no en canales de voz.'
       : capabilities?.canCreateThreads === false && capabilities?.missingPermissions?.length
-        ? `Bardo necesita: ${capabilities.missingPermissions.join(', ')}.`
+        ? `Bardo necesita estos permisos en el canal: ${capabilities.missingPermissions.join(', ')}. Pídeselos a quien administra el servidor.`
         : null;
   return (
     <div className="flex flex-col gap-1">
@@ -354,9 +354,9 @@ function ThreadSection({card, board, capabilities, remote, onOpenThread, busy}) 
         disabled={Boolean(reason) || busy || card.threadPending || card.pending}
         onClick={() => onOpenThread(card)}
       >
-        <MessagesSquare className="size-3.5" aria-hidden="true" /> {busy || card.threadPending ? 'Abriendo hilo…' : 'Abrir hilo en Discord'}
+        <MessagesSquare className="size-3.5" aria-hidden="true" /> {busy || card.threadPending ? 'Creando hilo…' : 'Crear hilo en Discord'}
       </Button>
-      <p className="text-[11px] text-muted-foreground">{reason || 'Crea un hilo en el canal para conversar esta tarea.'}</p>
+      <p className="text-[11px] text-muted-foreground">{reason || 'Crea un hilo en el canal para hablar de esta tarea.'}</p>
     </div>
   );
 }
@@ -418,7 +418,7 @@ export function KanbanCardDialog({
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={(
-                  <Button variant="secondary" size="sm" className="h-7 gap-1 px-2.5 text-xs" aria-label={`Columna: ${column?.name || ''}. Cambiar`}>
+                  <Button variant="secondary" size="sm" className="h-7 gap-1 px-2.5 text-xs" aria-label={`Columna: ${column?.name || 'sin columna'}. Cambiar`}>
                     {column?.name || 'Sin columna'} <ChevronDown className="size-3.5" aria-hidden="true" />
                   </Button>
                 )}
@@ -438,7 +438,7 @@ export function KanbanCardDialog({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={(
-                    <Button variant="ghost" size="icon-sm" aria-label="Más acciones de la tarea" className="rounded-full text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="icon-sm" aria-label={`Más acciones de la tarea #${card.number}`} className="rounded-full text-muted-foreground hover:text-foreground">
                       <MoreHorizontal className="size-4" />
                     </Button>
                   )}
@@ -447,7 +447,7 @@ export function KanbanCardDialog({
                   {card.assignee && remote && problems.length > 0 && (
                     <>
                       <DropdownMenuItem onClick={() => onRetryNotice(card.id)} className="cursor-pointer">
-                        <RotateCcw className="size-4 text-muted-foreground" /> Reintentar aviso
+                        <RotateCcw className="size-4 text-muted-foreground" /> Reenviar aviso
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                     </>
@@ -508,7 +508,7 @@ export function KanbanCardDialog({
         {problems.length > 0 && (
           <div className="flex flex-col gap-1 rounded-xl border border-border/70 bg-muted/50 px-3 py-2 text-xs text-muted-foreground" role="status">
             {problems.map(problem => <p key={problem}>{problem}</p>)}
-            {remote && <Button variant="ghost" size="sm" className="h-7 w-fit px-2 text-xs" onClick={() => onRetryNotice(card.id)}>Reintentar aviso</Button>}
+            {remote && <Button variant="ghost" size="sm" className="h-7 w-fit px-2 text-xs" onClick={() => onRetryNotice(card.id)}>Reenviar aviso</Button>}
           </div>
         )}
 

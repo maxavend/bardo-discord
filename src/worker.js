@@ -128,14 +128,14 @@ function ephemeral(content) {
 async function launchActivityToTarget(env, _ctx, interaction, target) {
   const userId = interaction.member?.user?.id || interaction.user?.id || null;
   if (!env.DB || !userId || !interaction.guild_id || !interaction.channel_id) {
-    return ephemeral('No pudimos preparar Bardo. Vuelve a intentarlo desde un canal del servidor.');
+    return ephemeral('No se pudo preparar Bardo. Vuelve a intentarlo desde un canal de un servidor de Discord.');
   }
   try {
     // Persist before Discord can boot the Activity and read the destination.
     await saveDocsLaunchIntent(env.DB, userId, interaction.guild_id, `${LAUNCH_TARGET_PREFIX}${target}`, interaction.channel_id);
   } catch (error) {
     console.error('Error guardando el destino de Bardo:', error);
-    return ephemeral('No pudimos abrir Bardo. Vuelve a intentarlo en unos segundos.');
+    return ephemeral('No se pudo abrir Bardo. Inténtalo de nuevo en unos segundos.');
   }
   return jsonResponse({ type: 12 });
 }
@@ -157,7 +157,7 @@ function attachmentName(attachment) {
 }
 
 function tooLargeError() {
-  return new Error('El archivo supera 1,8 MB. Por ahora Bardo limita los documentos a ese tamaño para mantener el almacenamiento gratuito.');
+  return new Error('El archivo supera 1,8 MB, el máximo que acepta Bardo. Prueba con un archivo más liviano o divídelo en partes.');
 }
 
 function validateAttachment(attachment) {
@@ -168,7 +168,7 @@ function validateAttachment(attachment) {
     if (name.toLowerCase().endsWith('.doc')) {
       throw new Error('El formato Word antiguo `.doc` todavía no es compatible. Guárdalo como `.docx` y vuelve a subirlo.');
     }
-    throw new Error('Usa un archivo `.md`, `.markdown`, `.txt`, `.pdf` o `.docx`.');
+    throw new Error('Bardo no puede leer ese tipo de archivo. Usa uno `.md`, `.markdown`, `.txt`, `.pdf` o `.docx`.');
   }
 
   // Early rejection only; the real limit is enforced on the downloaded bytes.
@@ -184,7 +184,7 @@ function validateAttachment(attachment) {
 export async function downloadAttachment(attachment, sourceType, fetchImpl = fetch) {
   const response = await fetchImpl(attachment.url);
   if (!response.ok) {
-    throw new Error(`Discord devolvió HTTP ${response.status} al leer el archivo.`);
+    throw new Error(`No se pudo descargar el archivo desde Discord (código ${response.status}). Vuelve a subirlo con \`/doc-upload\`.`);
   }
 
   const declaredLength = Number(response.headers.get('content-length'));
@@ -206,7 +206,7 @@ function firstPreviewPage(markdown) {
 
 function pendingImportPreview(sourceType) {
   const label = sourceLabel(sourceType);
-  return `**${label} recibido.**\n\nBardo convertirá su contenido al formato de Documentos la primera vez que pulses **Abrir documento**.`;
+  return `**${label} recibido.**\n\nBardo lo convertirá en un documento la primera vez que pulses **Abrir documento**.`;
 }
 
 async function processAndSaveDocument(env, interaction, attachment, explicitTitle) {
@@ -220,7 +220,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     const sourceType = validateAttachment(attachment);
 
     if (!env.DB) {
-      throw new Error('La base de datos de Bardo no está disponible.');
+      throw new Error('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
     }
 
     if (!interaction.guild_id || !interaction.channel_id) {
@@ -245,7 +245,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       pages = firstPreviewPage(extracted.body);
 
       if (pages.length === 0) {
-        throw new Error('El archivo está vacío.');
+        throw new Error('El archivo está vacío. Revisa que tenga contenido y vuelve a subirlo.');
       }
     } else {
       title = (explicitTitle?.trim() || fileStem(sourceName)).slice(0, 200);
@@ -311,7 +311,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     const message = saved
       ? `El documento se guardó y ya aparece en **Documentos** de este canal, pero Discord no aceptó la tarjeta del mensaje. No hace falta volver a subirlo.\n\n${detail.slice(0, MAX_ERROR_DETAIL)}`
       : detail.slice(0, 1500);
-    const errorPayload = buildErrorPayload(message);
+    const errorPayload = buildErrorPayload(message, saved ? 'El documento se guardó, pero no se pudo mostrar aquí' : 'No se pudo subir el documento');
 
     await discordFetch(originalMessageUrl, {
       method: 'PATCH',
@@ -334,9 +334,9 @@ function interactionUser(interaction) {
  * guild + channel, and posts a card whose button opens it in the editor.
  */
 async function createDocumentFromCommand(interaction, env) {
-  if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible. Inténtalo de nuevo en unos minutos.');
+  if (!env.DB) return ephemeral('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
   if (!interaction.guild_id || !interaction.channel_id) {
-    return ephemeral('Los documentos se crean dentro de un canal de un servidor de Discord.');
+    return ephemeral('Usa `/doc-new` dentro de un canal de un servidor de Discord.');
   }
 
   const titulo = (interaction.data?.options || []).find((opt) => opt.name === 'titulo')?.value;
@@ -409,9 +409,9 @@ async function originalResponseMessageId(env, interaction) {
 }
 
 async function createTaskFromCommand(interaction, env, ctx) {
-  if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible.');
+  if (!env.DB) return ephemeral('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
   if (!interaction.guild_id || !interaction.channel_id) {
-    return ephemeral('Las tareas se crean dentro de un canal de un servidor de Discord.');
+    return ephemeral('Usa `/tarea` dentro de un canal de un servidor de Discord.');
   }
   const options = interaction.data?.options || [];
   const title = String(options.find(opt => opt.name === 'titulo')?.value || '').trim().slice(0, TITLE_MAX);
@@ -455,7 +455,7 @@ async function createTaskFromCommand(interaction, env, ctx) {
     const { columns } = await loadKanbanStructure(env.DB, board.id);
     column = columns.find(item => !item.isDone) || columns[0];
     if (await countActiveKanbanCards(env.DB, board.id) >= KANBAN_LIMITS.activeCards) {
-      return ephemeral(`El tablero de este canal llegó a ${KANBAN_LIMITS.activeCards} tareas activas. Archiva algunas desde Bardo.`);
+      return ephemeral(`El tablero de este canal llegó al máximo de ${KANBAN_LIMITS.activeCards} tareas activas. Archiva en Bardo las que ya no necesites y vuelve a intentarlo.`);
     }
     const { rank } = await rankForPosition(env.DB, board.id, column.id);
     ({ card, created } = await insertKanbanCard(env.DB, board, {
@@ -493,9 +493,9 @@ async function createTaskFromCommand(interaction, env, ctx) {
 }
 
 async function listTasksFromCommand(interaction, env) {
-  if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible.');
+  if (!env.DB) return ephemeral('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
   if (!interaction.guild_id || !interaction.channel_id) {
-    return ephemeral('Las tareas de Bardo solo están disponibles dentro de un canal de servidor.');
+    return ephemeral('Usa `/tareas` dentro de un canal de un servidor de Discord.');
   }
   const mine = Boolean((interaction.data?.options || []).find(opt => opt.name === 'mias')?.value);
   const userId = interactionActor(interaction).id;
@@ -514,7 +514,7 @@ async function listTasksFromCommand(interaction, env) {
     });
   } catch (error) {
     console.error('Error listando tareas:', error);
-    return ephemeral('No se pudieron cargar las tareas de este canal. Intenta de nuevo en unos segundos.');
+    return ephemeral('No se pudieron cargar las tareas de este canal. Inténtalo de nuevo en unos segundos.');
   }
 }
 
@@ -537,9 +537,9 @@ async function handleCommandInteraction(interaction, env, ctx) {
     // Everything that can be checked without downloading is answered right
     // away (ephemeral, only for the person) instead of a public "pensando…"
     // message that later turns into an error.
-    if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible. Inténtalo de nuevo en unos minutos.');
+    if (!env.DB) return ephemeral('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
     if (!interaction.guild_id || !interaction.channel_id) {
-      return ephemeral('Los documentos se suben desde un canal de un servidor de Discord.');
+      return ephemeral('Sube documentos desde un canal de un servidor de Discord.');
     }
     try {
       validateAttachment(resolvedAttachment);
@@ -563,7 +563,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'La base de datos de Bardo no está disponible.',
+          content: 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.',
           flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
@@ -573,7 +573,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'Las reuniones de Bardo solo se pueden crear dentro de un canal de servidor de Discord.',
+          content: 'Usa `/reu-new` dentro de un canal de un servidor de Discord.',
           flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
@@ -628,7 +628,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'No se pudo crear la reunión en la base de datos.',
+          content: 'No se pudo crear la reunión. Inténtalo de nuevo en unos segundos.',
           flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
@@ -646,7 +646,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'La base de datos de Bardo no está disponible.',
+          content: 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.',
           flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
@@ -656,7 +656,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: 'Las reuniones de Bardo solo están disponibles dentro de un canal de servidor.',
+          content: 'Usa `/reus` dentro de un canal de un servidor de Discord.',
           flags: InteractionResponseFlags.EPHEMERAL,
         },
       });
@@ -686,22 +686,22 @@ async function handleCommandInteraction(interaction, env, ctx) {
 
   if (commandName === 'bardo') {
     if (!interaction.guild_id || !interaction.channel_id) {
-      return ephemeral('Bardo se abre dentro de un canal de un servidor de Discord.');
+      return ephemeral('Usa `/bardo` dentro de un canal de un servidor de Discord.');
     }
     return launchActivityToTarget(env, ctx, interaction, 'home');
   }
 
   if (commandName === 'docs') {
-    if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible.');
+    if (!env.DB) return ephemeral('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
     if (!interaction.guild_id || !interaction.channel_id) {
-      return ephemeral('Los documentos de Bardo solo están disponibles dentro de un canal de servidor.');
+      return ephemeral('Usa `/docs` dentro de un canal de un servidor de Discord.');
     }
     let documents = [];
     try {
       documents = await listDocumentsForChannel(env.DB, interaction.guild_id, interaction.channel_id, { limit: 10, summary: true });
     } catch (err) {
       console.error('Error consultando documentos del canal:', err);
-      return ephemeral('No se pudieron cargar los documentos de este canal. Intenta de nuevo en unos segundos.');
+      return ephemeral('No se pudieron cargar los documentos de este canal. Inténtalo de nuevo en unos segundos.');
     }
     return jsonResponse({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -719,7 +719,7 @@ async function handleCommandInteraction(interaction, env, ctx) {
   return jsonResponse({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
-      content: `Comando desconocido: ${commandName}`,
+      content: `Bardo no reconoce el comando /${commandName}. Usa \`/ayuda\` para ver los comandos disponibles.`,
       flags: InteractionResponseFlags.EPHEMERAL,
     },
   });
@@ -779,7 +779,7 @@ async function handleComponentInteraction(interaction, env, ctx) {
     return jsonResponse({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        content: 'Acción no reconocida.',
+        content: 'Este botón ya no funciona. Usa `/bardo` para abrir Bardo.',
         flags: InteractionResponseFlags.EPHEMERAL,
       },
     });
@@ -807,7 +807,7 @@ async function handleComponentInteraction(interaction, env, ctx) {
       ? normalizeDocumentId(target.slice(EDIT_DOC_TARGET_PREFIX.length))
       : normalizeDocumentId(customId);
   if (!documentId || !env.DB) {
-    return ephemeral('No pude abrir este documento.');
+    return ephemeral('No se pudo abrir este documento. Usa `/docs` para ver los documentos del canal.');
   }
 
   const persistLaunchContext = async () => {
@@ -913,7 +913,7 @@ async function handleDocumentExportApi(request, url, documentId, env) {
   if (!env.DB) {
     return token
       ? downloadErrorPage(503, 'Bardo no está disponible', 'Inténtalo de nuevo en unos minutos.')
-      : jsonResponse({ error: 'database_unavailable', message: 'La base de datos de Bardo no está disponible.' }, 503);
+      : jsonResponse({ error: 'database_unavailable', message: 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.' }, 503);
   }
 
   if (token) {
@@ -1075,7 +1075,7 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
   try {
     payload = await request.json();
   } catch {
-    return jsonResponse({ error: 'invalid_json', message: 'El cuerpo de la solicitud no es JSON válido.' }, 400);
+    return jsonResponse({ error: 'invalid_json', message: 'No se pudo leer la solicitud. Inténtalo de nuevo.' }, 400);
   }
 
   return normalizeDocumentImport(env, access.session, document, payload);
@@ -1157,7 +1157,7 @@ async function handleDiscordInteraction(request, env, ctx) {
   return jsonResponse({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
-      content: 'Interacción no soportada.',
+      content: 'Bardo no puede responder a esta acción. Usa `/ayuda` para ver lo que puede hacer.',
       flags: InteractionResponseFlags.EPHEMERAL,
     },
   });

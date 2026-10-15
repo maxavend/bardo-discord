@@ -51,13 +51,13 @@ function useIsMobile() {
 
 const STATUS_TEXT = {
   saving: 'Guardando…',
-  offline: 'Sin conexión · tus cambios se enviarán al reconectar',
-  error: 'No se pudo sincronizar',
+  offline: 'Sin conexión · tus cambios se guardarán al reconectar',
+  error: 'No se pudieron guardar los cambios',
 };
 
 const THREAD_ERRORS = {
-  threads_unsupported: 'Los hilos solo se pueden abrir en canales de texto, no en canales de voz.',
-  bot_missing_permissions: 'Bardo necesita permiso para crear hilos públicos en este canal.',
+  threads_unsupported: 'Los hilos solo se pueden crear en canales de texto, no en canales de voz.',
+  bot_missing_permissions: 'Bardo necesita permiso para crear hilos públicos en este canal. Pídeselo a quien administra el servidor.',
 };
 
 export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddRequest = 0}) {
@@ -116,13 +116,13 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
     missingNotified.current = cardId;
     const close = () => go('#kanban', {replace: true, skipTransition: true});
     if (!remote) {
-      toast('Esa tarea ya no existe o fue archivada.');
+      toast('Esa tarea ya no existe o está archivada.');
       close();
       return;
     }
     engine.fetchCard(cardId).then(data => {
       if (data?.card?.archivedAt) {
-        toast(`La tarea #${data.card.number} está archivada. Puedes restaurarla desde «Tareas archivadas».`);
+        toast(`La tarea #${data.card.number} está archivada. Puedes restaurarla desde «Tareas archivadas», en el menú del tablero.`);
         close();
       }
     }).catch(() => {
@@ -167,16 +167,16 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
       toast(data?.card?.threadId ? 'Hilo creado en el canal.' : 'Creando el hilo…');
       if (link) void openExternalUrl(link);
     } catch (error) {
-      toast(THREAD_ERRORS[error?.code] || error?.message || 'No se pudo crear el hilo.');
+      toast(THREAD_ERRORS[error?.code] || error?.message || 'No se pudo crear el hilo. Inténtalo de nuevo en unos segundos.');
     }
   }, [engine, board]);
 
   const retryNotice = useCallback(async id => {
     try {
       await engine.retryNotice(id);
-      toast('Reintentando el aviso…');
+      toast('Reenviando el aviso…');
     } catch (error) {
-      toast(error?.message || 'No se pudo reintentar el aviso.');
+      toast(error?.message || 'No se pudo reenviar el aviso. Inténtalo de nuevo en unos segundos.');
     }
   }, [engine]);
 
@@ -207,8 +207,8 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
           {loadError ? (
             <Empty className="mt-10">
               <EmptyHeader>
-                <EmptyTitle>No pudimos cargar las tareas</EmptyTitle>
-                <EmptyDescription>{loadError.status === 403 ? 'No tienes acceso a este canal.' : 'Revisa tu conexión e inténtalo de nuevo.'}</EmptyDescription>
+                <EmptyTitle>No se pudieron cargar las tareas</EmptyTitle>
+                <EmptyDescription>{loadError.status === 403 ? 'No tienes acceso a este canal en Discord.' : 'Revisa tu conexión e inténtalo de nuevo.'}</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
                 <Button variant="secondary" size="sm" onClick={() => void reloadKanban()}>Reintentar</Button>
@@ -231,7 +231,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
           <div className="min-w-0">
             <h1 id="kanban-title" tabIndex={-1} className="text-lg font-bold tracking-tight text-foreground">Tareas</h1>
             <p className="text-xs text-muted-foreground">
-              {remote ? 'Tablero de este canal · también con /tarea en Discord' : 'Tablero local · abre Bardo en Discord para compartirlo con tu canal'}
+              {remote ? 'Tablero de este canal · también puedes crear tareas con /tarea' : 'Solo en este dispositivo · abre Bardo en Discord para compartir el tablero con tu canal'}
             </p>
           </div>
           {STATUS_TEXT[status] && (
@@ -292,7 +292,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
         {isFiltered && (
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" role="status">
             <span>
-              {filter === 'mine' ? 'Solo tus tareas' : filter === 'overdue' ? 'Solo vencidas' : 'Filtrado'}
+              {filter === 'mine' ? 'Solo tus tareas' : filter === 'overdue' ? 'Solo tareas vencidas' : 'Filtrado por etiqueta'}
               {tagFilter && <> · <TagChip tag={tags.find(tag => tag.id === tagFilter)} /></>}
             </span>
             <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setFilter('all'); setTagFilter(null); }}>

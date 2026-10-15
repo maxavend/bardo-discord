@@ -145,7 +145,7 @@ test('si las dos cambian el mismo campo, gana el servidor y se avisa', async () 
   await settle(a.timers, a.engine, 1000);
   await settle(b.timers, b.engine, 1000);
   assert.equal(k.db.row('SELECT title FROM kanban_cards').title, 'De A');
-  assert.match(b.notices[0], /Otra persona cambió el título de #1/);
+  assert.match(b.notices[0], /Otra persona cambió el título de la tarea #1 al mismo tiempo que tú/);
   assert.equal(viewCards(b.engine)[0].title, 'De A');
 });
 

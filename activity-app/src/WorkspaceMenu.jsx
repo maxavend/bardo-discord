@@ -32,7 +32,7 @@ export function WorkspaceMenu() {
       await renameWorkspace(draft);
       setOpen(false);
     } catch (error) {
-      setState({saving: false, error: error?.message || 'No se pudo guardar el nombre. Inténtalo de nuevo.'});
+      setState({saving: false, error: error?.message || 'No se pudo guardar el nombre. Revisa tu conexión e inténtalo de nuevo.'});
     }
   };
 

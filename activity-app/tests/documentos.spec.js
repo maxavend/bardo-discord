@@ -15,7 +15,7 @@ import {
 // Flujos de Documentos de punta a punta en modo standalone (localStorage).
 
 async function startNewDocument(page) {
-  await page.getByRole('button', {name: 'Crear documento'}).first().click();
+  await page.getByRole('button', {name: 'Nuevo documento'}).first().click();
   await expect(page.locator('.editable-body')).toBeVisible();
 }
 
@@ -25,7 +25,7 @@ async function finishEditing(page) {
 }
 
 async function openTextPreview(page) {
-  await page.getByRole('button', {name: 'Acciones del documento'}).click();
+  await page.getByRole('button', {name: 'Más acciones del documento'}).click();
   await page.getByRole('menuitem', {name: 'Descargar'}).click();
   await page.getByRole('menuitem', {name: 'Ver como texto'}).click();
   const dialog = page.getByRole('dialog', {name: 'Texto del documento'});
@@ -272,9 +272,9 @@ test('archivar actualiza el contador de Archivados sin abrir la pestaña, y rest
   await expect(page.getByRole('button', {name: 'Archivados (0)'})).toBeVisible();
 
   const row = page.locator('.doc-row').filter({hasText: 'Informe trimestral'});
-  await row.getByRole('button', {name: 'Acciones de Informe trimestral'}).click();
+  await row.getByRole('button', {name: 'Más acciones de Informe trimestral'}).click();
   await page.getByRole('menuitem', {name: 'Archivar documento'}).click();
-  const confirm = page.getByRole('alertdialog', {name: 'Archivar documento'});
+  const confirm = page.getByRole('alertdialog', {name: '¿Archivar este documento?'});
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', {name: 'Archivar', exact: true}).click();
 
@@ -291,7 +291,7 @@ test('archivar actualiza el contador de Archivados sin abrir la pestaña, y rest
   await page.getByRole('button', {name: 'Archivados (1)'}).click();
   const archivedRow = page.locator('.doc-row').filter({hasText: 'Informe trimestral'});
   await expect(archivedRow).toContainText('Archivado');
-  await archivedRow.getByRole('button', {name: 'Acciones de Informe trimestral'}).click();
+  await archivedRow.getByRole('button', {name: 'Más acciones de Informe trimestral'}).click();
   await page.getByRole('menuitem', {name: 'Restaurar documento'}).click();
   await expect(page.getByRole('button', {name: 'Archivados (0)'})).toBeVisible();
   await expect(page.getByText('No hay documentos archivados')).toBeVisible();
@@ -301,7 +301,7 @@ test('archivar actualiza el contador de Archivados sin abrir la pestaña, y rest
   expect(errors).toEqual([]);
 });
 
-test('"Nuevo" con un borrador sin terminar pregunta si continuarlo o empezar uno nuevo', async ({page}) => {
+test('"Nuevo documento" con un borrador sin terminar pregunta si continuarlo o empezar uno nuevo', async ({page}) => {
   const errors = collectRuntimeErrors(page);
   await seedDocs(page, [makeDoc({title: 'Documento existente', body: '<p>Hola.</p>'})]);
   await expectLibrary(page, 1);
@@ -315,7 +315,7 @@ test('"Nuevo" con un borrador sin terminar pregunta si continuarlo o empezar uno
   await expect(page.getByText('Borrador sin terminar')).toBeVisible();
   await expect(page.locator('.continue-row').filter({hasText: 'Borrador pendiente'})).toBeVisible();
 
-  await page.getByRole('button', {name: 'Crear documento'}).first().click();
+  await page.getByRole('button', {name: 'Nuevo documento'}).first().click();
   const choice = page.getByRole('alertdialog', {name: 'Tienes un borrador sin terminar'});
   await expect(choice).toBeVisible();
   await expect(choice).toContainText('Borrador pendiente');
@@ -328,7 +328,7 @@ test('"Nuevo" con un borrador sin terminar pregunta si continuarlo o empezar uno
   await page.getByRole('button', {name: 'Volver a Documentos'}).click();
   await expectLibrary(page, 1);
 
-  await page.getByRole('button', {name: 'Crear documento'}).first().click();
+  await page.getByRole('button', {name: 'Nuevo documento'}).first().click();
   await page.getByRole('alertdialog', {name: 'Tienes un borrador sin terminar'})
     .getByRole('button', {name: 'Empezar uno nuevo'}).click();
   await expect(page.getByLabel('Título', {exact: true})).toHaveValue('');
@@ -337,7 +337,7 @@ test('"Nuevo" con un borrador sin terminar pregunta si continuarlo o empezar uno
   await expectLibrary(page, 1);
   await expect(page.getByText('Borrador sin terminar')).toHaveCount(0);
 
-  // Sin borrador, "Nuevo" abre directamente el editor.
+  // Sin borrador, "Nuevo documento" abre directamente el editor.
   await startNewDocument(page);
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -360,7 +360,7 @@ test('sin desborde horizontal en la biblioteca ni en el editor (incluido 320 px)
   await expectLibrary(page, 2);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
-  await page.locator('.doc-row').first().getByRole('button', {name: /^Acciones de/}).click();
+  await page.locator('.doc-row').first().getByRole('button', {name: /^Más acciones de/}).click();
   await expect(page.getByRole('menuitem', {name: 'Abrir'})).toBeVisible();
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   await page.keyboard.press('Escape');
@@ -391,7 +391,7 @@ async function startNewDocumentFromEditor(page) {
   await page.getByRole('button', {name: 'Volver a Documentos'}).click();
   await expectLibrary(page);
   await startNewDocument(page);
-  await runToolbarAction(page, 'Lista de tareas');
+  await runToolbarAction(page, 'Lista de pendientes');
   await page.keyboard.type('Primera tarea en una pantalla angosta');
 }
 

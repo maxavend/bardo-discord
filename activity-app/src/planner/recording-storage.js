@@ -19,7 +19,7 @@ export class RecordingStorageError extends Error {
 
 function openDatabase(indexedDBImpl) {
   if (!indexedDBImpl) {
-    return Promise.reject(new RecordingStorageError('IndexedDB no está disponible en este navegador.'));
+    return Promise.reject(new RecordingStorageError('Este navegador no permite guardar audio en el dispositivo.'));
   }
 
   return new Promise((resolve, reject) => {
@@ -30,7 +30,7 @@ function openDatabase(indexedDBImpl) {
       const scope = getDocsStorageScope();
       request = indexedDBImpl.open(scope ? `${DB_NAME}@${scope}` : DB_NAME, DB_VERSION);
     } catch (error) {
-      reject(new RecordingStorageError('No se pudo abrir el almacenamiento de audio.', error));
+      reject(new RecordingStorageError('No se pudo abrir el espacio de audio de este dispositivo.', error));
       return;
     }
 
@@ -47,7 +47,7 @@ function openDatabase(indexedDBImpl) {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(new RecordingStorageError('No se pudo abrir el almacenamiento de audio.', request.error));
+    request.onerror = () => reject(new RecordingStorageError('No se pudo abrir el espacio de audio de este dispositivo.', request.error));
   });
 }
 
@@ -264,7 +264,7 @@ export async function persistRecordingBinary(recording, storage = recordingStora
     return {
       ...metadata,
       status: 'error',
-      persistenceError: 'La grabación no contiene audio binario para persistir.',
+      persistenceError: 'La grabación no tiene audio para guardar.',
     };
   }
 
@@ -282,7 +282,7 @@ export async function persistRecordingBinary(recording, storage = recordingStora
       ...metadata,
       status: 'error',
       binaryStorage: null,
-      persistenceError: error?.message || 'No se pudo persistir el audio.',
+      persistenceError: error?.message || 'No se pudo guardar el audio en este dispositivo.',
       blobUrl: blobUrl || '',
     };
   }
@@ -304,7 +304,7 @@ export async function hydrateRecordingBinary(
       ...recording,
       blobUrl: '',
       status: 'error',
-      persistenceError: recording.persistenceError || 'Esta grabación es anterior a la persistencia binaria y no puede recuperarse tras recargar.',
+      persistenceError: recording.persistenceError || 'Esta grabación es de una versión anterior de Bardo y su audio no se puede recuperar.',
     };
   }
 
@@ -315,7 +315,7 @@ export async function hydrateRecordingBinary(
         ...recording,
         blobUrl: '',
         status: 'error',
-        persistenceError: 'El audio guardado no se encontró en el almacenamiento local.',
+        persistenceError: 'El audio de esta grabación ya no está en este dispositivo.',
       };
     }
     return {
@@ -329,7 +329,7 @@ export async function hydrateRecordingBinary(
       ...recording,
       blobUrl: '',
       status: 'error',
-      persistenceError: error?.message || 'No se pudo recuperar el audio guardado.',
+      persistenceError: error?.message || 'No se pudo recuperar el audio de esta grabación.',
     };
   }
 }

@@ -219,7 +219,7 @@ export function createKanbanEngine({
       });
     }
     if (lost.length) {
-      onNotice({message: `Otra persona cambió ${describeLostFields(lost)} de #${serverCard.number}. Se mantuvo su versión.`, cardId: serverCard.id});
+      onNotice({message: `Otra persona cambió ${describeLostFields(lost)} de la tarea #${serverCard.number} al mismo tiempo que tú. Quedó su cambio; revisa la tarea si quieres volver a aplicar el tuyo.`, cardId: serverCard.id});
     }
   }
 
@@ -259,16 +259,16 @@ export function createKanbanEngine({
         dropOp(op);
         if (error.status === 410 && data.card) {
           server = applyServerCard(server, {...data.card, archivedAt: data.card.archivedAt || 'archived'});
-          onNotice({message: `La tarea #${data.card.number} fue archivada por otra persona.`, cardId: data.card.id});
+          onNotice({message: `Otra persona archivó la tarea #${data.card.number}.`, cardId: data.card.id});
         } else if (error.status === 404 && (op.type === 'patch' || op.type === 'move' || op.type === 'archive')) {
           const cards = {...server.cards};
           delete cards[op.id];
           server = {...server, cards};
           onNotice({message: data.message || 'Esa tarea ya no existe en este canal.'});
         } else if (error.status === 401) {
-          onNotice({message: data.message || 'Tu sesión de Bardo expiró. Cierra y vuelve a abrir la actividad.'});
+          onNotice({message: data.message || 'Tu sesión de Bardo expiró. Cierra Bardo y vuelve a abrirlo desde Discord.'});
         } else {
-          onNotice({message: data.message || 'No se pudo guardar el cambio.', cardId: op.id});
+          onNotice({message: data.message || 'No se pudo guardar el cambio. Inténtalo de nuevo.', cardId: op.id});
         }
       }
       setStatus(error.status === 401 ? 'error' : 'idle');

@@ -168,12 +168,12 @@ function useDiscordDirectory(query, active = true) {
           const wait = Math.max(Number(payload.retryAfterMs) || 0, Number(response.headers.get('Retry-After')) * 1000 || 0);
           retryAt.current = Date.now() + wait;
           setResult({search, scope, members: [], error: true,
-            message: wait ? `Discord está ocupado. Reintenta en ${Math.ceil(wait / 1000)} segundos.` : (payload.message || 'No pudimos buscar en Discord. Reintenta o agrega un invitado.')});
+            message: wait ? `Discord está ocupado. Inténtalo de nuevo en ${Math.ceil(wait / 1000)} segundos.` : (payload.message || 'No se pudo buscar en Discord. Inténtalo de nuevo o agrega a la persona como invitada.')});
           return;
         }
         setResult({...payload, search, scope});
       } catch {
-        if (!controller.signal.aborted) setResult({search, scope, members: [], error: true, message: 'No pudimos conectar con Discord. Reintenta o agrega un invitado.'});
+        if (!controller.signal.aborted) setResult({search, scope, members: [], error: true, message: 'No se pudo conectar con Discord. Inténtalo de nuevo o agrega a la persona como invitada.'});
       }
     }, Math.max(300, retryAt.current - Date.now()));
     return () => { clearTimeout(timer); controller.abort(); };
@@ -187,10 +187,10 @@ function useDiscordDirectory(query, active = true) {
     byId.set(member.id, {...member, avatarColor: DISCORD_PALETTES[index % DISCORD_PALETTES.length], ...byId.get(member.id)});
   }
   const message = !production ? '' : search.length < 2
-    ? 'Escribe al menos 2 caracteres para buscar por nombre o apodo en el servidor.'
+    ? 'Escribe al menos 2 letras para buscar a alguien del servidor por nombre o apodo.'
     : search.length > 100 ? 'La búsqueda admite hasta 100 caracteres.'
     : !current ? 'Buscando en Discord…'
-    : current.message || (current.truncated ? 'Hay más coincidencias. Escribe un nombre más específico.' : 'Resultados del servidor; no confirman acceso al canal.');
+    : current.message || (current.truncated ? 'Hay más coincidencias. Escribe un nombre más completo.' : 'Personas del servidor. Puede que no todas tengan acceso a este canal.');
   return {...entities, members: [...byId.values()], message, failed: current?.error,
     retry: () => { setResult(null); setRetry(value => value + 1); }};
 }
@@ -199,7 +199,7 @@ function DirectoryStatus({directory}) {
   if (!directory.message) return null;
   return <div className="px-3 py-2 text-xs text-muted-foreground" role="status" aria-live="polite">
     {directory.message}
-    {directory.failed && <button type="button" className="ml-2 underline" onClick={directory.retry}>Reintentar</button>}
+    {directory.failed && <button type="button" className="ml-2 underline" onClick={directory.retry}>Reintentar búsqueda</button>}
   </div>;
 }
 
@@ -218,7 +218,7 @@ export function PlannerMemberPicker({
   _variant = 'secondary',
   singleSelect = false,
   hideRoles = false,
-  placeholder = 'Buscar personas o roles...',
+  placeholder = 'Buscar personas o roles…',
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -333,7 +333,7 @@ export function PlannerMemberPicker({
                       type="button"
                       onClick={(e) => handleRemoveTag(tag, e)}
                       className="text-muted-foreground hover:text-foreground p-0.5 rounded-sm cursor-pointer ml-0.5"
-                      aria-label={`Eliminar ${label}`}
+                      aria-label={`Quitar a ${label}`}
                     >
                       <XIcon className="size-3" />
                     </button>
@@ -350,7 +350,7 @@ export function PlannerMemberPicker({
       <PopoverContent align="start" className="w-[300px] p-0 overflow-hidden">
         <Command className="w-full">
           <CommandInput 
-            placeholder="Buscar..." 
+            placeholder="Buscar…" 
             value={searchQuery} 
             onValueChange={setSearchQuery} 
           />
@@ -363,7 +363,7 @@ export function PlannerMemberPicker({
               >
                 <PlusIcon className="size-3.5 shrink-0" />
                 <span className="truncate">
-                  Agregar invitado "<strong>{searchQuery.trim()}</strong>"
+                  Agregar a «<strong>{searchQuery.trim()}</strong>» como invitado
                 </span>
               </button>
             </div>
@@ -371,7 +371,7 @@ export function PlannerMemberPicker({
 
           <DirectoryStatus directory={directory} />
           <CommandList className="max-h-64">
-            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+            <CommandEmpty>No hay resultados para esta búsqueda.</CommandEmpty>
 
             {!hideRoles && roles.length > 0 && (
               <CommandGroup heading="Roles del servidor">
@@ -557,7 +557,7 @@ export function SearchableParticipantMenu({
       <CommandInput
         value={searchValue}
         onValueChange={setSearchValue}
-        placeholder={placeholder || (hideRoles ? 'Buscar persona...' : 'Buscar miembro o rol...')}
+        placeholder={placeholder || (hideRoles ? 'Buscar persona…' : 'Buscar persona o rol…')}
         className="text-xs"
       />
 
@@ -570,7 +570,7 @@ export function SearchableParticipantMenu({
           >
             <PlusIcon className="size-3.5 shrink-0" />
             <span className="truncate">
-              Agregar "<strong>{searchValue.trim()}</strong>"
+              Agregar a «<strong>{searchValue.trim()}</strong>»
             </span>
           </button>
         </div>
@@ -578,7 +578,7 @@ export function SearchableParticipantMenu({
 
       <DirectoryStatus directory={directory} />
       <CommandList className="max-h-64 mt-1">
-        <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+        <CommandEmpty>No hay resultados para esta búsqueda.</CommandEmpty>
 
         {onClear && selectedKeys.size > 0 && !searchValue.trim() && (
           <CommandGroup>
@@ -752,7 +752,7 @@ export function MemberIdPicker({
           onSelectionChange={() => {}}
           onClear={value ? () => pick(null) : undefined}
           clearLabel={clearLabel}
-          placeholder="Buscar persona del servidor..."
+          placeholder="Buscar persona del servidor…"
         />
       </PopoverContent>
     </Popover>
