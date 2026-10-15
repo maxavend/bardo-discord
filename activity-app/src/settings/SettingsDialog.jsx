@@ -23,6 +23,8 @@ import {
   listTimeZones,
   patchSettings,
   setStartModulePreference,
+  SUGGESTED_TIME_ZONES,
+  timeZoneRegion,
 } from './settings-client.js';
 
 const SOURCE_TEXT = {
@@ -61,9 +63,31 @@ function LockedNotice({children}) {
   return <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground" role="note">{children}</p>;
 }
 
+function TimeZoneItem({zone, selected, onPick}) {
+  const region = timeZoneRegion(zone);
+  return (
+    <CommandItem
+      value={`${zone} ${describeTimeZone(zone)} ${region}`}
+      onSelect={() => onPick(zone)}
+      data-checked={selected}
+      className="cursor-pointer text-xs"
+    >
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate">{describeTimeZone(zone)}</span>
+        {region && <span className="text-[11px] font-normal text-muted-foreground">{region}</span>}
+      </span>
+    </CommandItem>
+  );
+}
+
 function TimeZonePicker({value, inheritLabel, onChange, disabled, id}) {
   const [open, setOpen] = useState(false);
   const zones = useMemo(() => listTimeZones(), []);
+  const suggested = useMemo(() => {
+    const device = deviceTimeZone();
+    return [...new Set([value, device, ...SUGGESTED_TIME_ZONES].filter(zone => zone && zones.includes(zone)))];
+  }, [zones, value]);
+  const rest = useMemo(() => zones.filter(zone => !suggested.includes(zone)), [zones, suggested]);
   const label = value ? describeTimeZone(value) : inheritLabel;
   const pick = next => {
     onChange(next);
@@ -79,24 +103,24 @@ function TimeZonePicker({value, inheritLabel, onChange, disabled, id}) {
           </Button>
         )}
       />
-      <PopoverContent align="end" className="w-72 p-0">
-        <Command>
+      {/* Bajo el botón, alineado a su borde derecho; el alto se adapta al espacio disponible. */}
+      <PopoverContent align="end" sideOffset={6} className="w-80 overflow-hidden p-0">
+        <Command className="flex max-h-[min(22rem,var(--available-height,22rem))] flex-col">
           <CommandInput placeholder="Buscar ciudad o región…" className="text-xs" />
-          <CommandList className="max-h-64">
+          <CommandList className="max-h-none min-h-0 flex-1">
             <CommandEmpty>No encontramos esa zona horaria.</CommandEmpty>
             {inheritLabel && (
               <CommandGroup>
-                <CommandItem value={`__inherit__ ${inheritLabel}`} onSelect={() => pick(null)} className="cursor-pointer text-xs">
+                <CommandItem value={`__inherit__ ${inheritLabel}`} onSelect={() => pick(null)} data-checked={!value} className="cursor-pointer text-xs">
                   {inheritLabel}
                 </CommandItem>
               </CommandGroup>
             )}
-            <CommandGroup heading="Zonas horarias">
-              {zones.map(zone => (
-                <CommandItem key={zone} value={zone} onSelect={() => pick(zone)} data-checked={zone === value} className="cursor-pointer text-xs">
-                  {describeTimeZone(zone)}
-                </CommandItem>
-              ))}
+            <CommandGroup heading="Sugeridas">
+              {suggested.map(zone => <TimeZoneItem key={zone} zone={zone} selected={zone === value} onPick={pick} />)}
+            </CommandGroup>
+            <CommandGroup heading="Todas">
+              {rest.map(zone => <TimeZoneItem key={zone} zone={zone} selected={zone === value} onPick={pick} />)}
             </CommandGroup>
           </CommandList>
         </Command>

@@ -1392,6 +1392,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         />
       )}
 
+      {/* Cada vista de Reuniones entra con la misma animación que los módulos. */}
+      <div key={activeTab} className="view-enter">
       {/* ── Home del Planner ──────────────────────────────────────────────── */}
       {activeTab === 'home' && (
         <PlannerHomeView
@@ -1503,6 +1505,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           onSaveDocToLibrary={onSaveDocToLibrary}
         />
       )}
+      </div>
 
       <PlannerCaptureModal
         isOpen={captureModal.isOpen}

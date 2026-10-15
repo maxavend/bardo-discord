@@ -1622,29 +1622,10 @@ function App() {
         if (lastOpenedRef.current) setLastOpened(lastOpenedRef.current);
         setDraft(readDraft());
       }
-      const applyRoute = () => setRoute(nextRoute);
-      const currentRoute = routeRef.current;
-      const isDocumentModeSwitch = currentRoute.id
-        && nextRoute.id
-        && currentRoute.id === nextRoute.id
-        && ((currentRoute.type === 'doc' && nextRoute.type === 'edit')
-          || (currentRoute.type === 'edit' && nextRoute.type === 'doc'));
-      const shouldAnimateRoute = !skipNextRouteAnimation.current
-        && !isDocumentModeSwitch
-        && typeof document.startViewTransition === 'function'
-        && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (shouldAnimateRoute) {
-        try {
-          const transition = document.startViewTransition(applyRoute);
-          // Una transición interrumpida rechaza estas promesas ("Transition was
-          // aborted because of invalid state"); no es un error de la app.
-          transition?.ready?.catch?.(() => {});
-          transition?.finished?.catch?.(() => {});
-          transition?.updateCallbackDone?.catch?.(() => {});
-        } catch {
-          applyRoute();
-        }
-      } else applyRoute();
+      // Una sola animación para todo cambio de vista: la vista que entra hace
+      // route-enter (CSS). Sin View Transitions: fundían también el header y se
+      // sumaban a la animación de la vista.
+      setRoute(nextRoute);
     };
     window.addEventListener('hashchange', onHash);
     if (!location.hash) history.replaceState(null, '', '#home');
@@ -2163,7 +2144,7 @@ function App() {
           initialTab={route.tab || 'home'}
           onSwitchTab={(tab) => {
             // An action URL is consumed once; Back must not create/open again.
-            const options = {skipTransition: true, replace: route.tab === 'new' || route.tab?.startsWith('session:')};
+            const options = {replace: route.tab === 'new' || route.tab?.startsWith('session:')};
             if (tab === 'home') go('#planner', options);
             else if (tab === 'agenda') go('#planner-agenda', options);
             else go(`#planner-${tab}`, options);

@@ -1,7 +1,7 @@
 // Hub de módulos: pestañas en el header (escritorio) y barra inferior (móvil).
 // Un solo lugar, siempre el mismo, para moverse entre Inicio, Documentos,
 // Reuniones y Tareas.
-import {useEffect, useState} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Calendar, FileText, House, LayoutColumns3} from '@gravity-ui/icons';
 
 export const HUB_MODULES = [
@@ -34,8 +34,30 @@ function navigate(event, href, onNavigate) {
 
 /** Pestañas del header (≥ 768 px). Con el módulo activo, vuelve a su inicio. */
 export function ModuleTabs({active, onNavigate}) {
+  const navRef = useRef(null);
+  // Fondo de la pestaña activa: se mide y se desliza (como la barra móvil).
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return undefined;
+    const place = () => {
+      const tab = nav.querySelector('[aria-current="page"]');
+      if (!tab || !tab.offsetWidth) {
+        delete nav.dataset.ready;
+        return;
+      }
+      nav.style.setProperty('--hub-tab-left', `${tab.offsetLeft}px`);
+      nav.style.setProperty('--hub-tab-width', `${tab.offsetWidth}px`);
+      nav.dataset.ready = '';
+    };
+    place();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+    observer?.observe(nav);
+    return () => observer?.disconnect();
+  }, [active]);
+
   return (
-    <nav aria-label="Módulos de Bardo" className="module-hub-tabs">
+    <nav ref={navRef} aria-label="Módulos de Bardo" className="module-hub-tabs">
+      <span className="module-hub-tabs-indicator" aria-hidden="true" />
       {HUB_MODULES.map(({id, label, href, Icon}) => (
         <a
           key={id}

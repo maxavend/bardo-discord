@@ -733,10 +733,23 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   overscroll-behavior-y: auto;
   overscroll-behavior-x: none;
 }
+/* Movimiento de Bardo (ver COPY.md › Movimiento):
+   - Vista que entra (módulo, subvista): route-enter, 250 ms, sin animación de salida.
+   - Indicadores de pestaña: deslizan con --ease-bounce en --duration-medium.
+   - Paneles de pestañas: panel-enter, 150 ms.
+   - Diálogos/menús: fundido + escala (componentes shadcn); hojas móviles suben. */
 @media (prefers-reduced-motion: no-preference) {
-  .route-active {
+  .route-active,
+  .view-enter {
     animation: route-enter var(--duration-fast) var(--ease-smooth-out);
   }
+  [data-slot="tabs-content"] {
+    animation: panel-enter var(--duration-quick) var(--ease-smooth-out);
+  }
+}
+@keyframes panel-enter {
+  from { opacity: 0; transform: translateY(var(--distance-micro)); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes route-enter {
   from { opacity: 0; transform: translateY(var(--distance-base)); filter: blur(var(--blur-medium)); }
@@ -783,7 +796,27 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
     background: var(--muted);
   }
 }
+.module-hub-tabs { position: relative; }
+/* Fondo de la pestaña activa: se desliza igual que en la barra móvil. */
+.module-hub-tabs-indicator {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: 28px;
+  width: var(--hub-tab-width, 0px);
+  transform: translateX(var(--hub-tab-left, 0px));
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: var(--background);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.06);
+  transition: transform var(--duration-medium) var(--ease-bounce), width var(--duration-medium) var(--ease-bounce);
+  pointer-events: none;
+}
+.dark .module-hub-tabs-indicator { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
+.module-hub-tabs[data-ready] .module-hub-tab[aria-current="page"] { background: transparent; border-color: transparent; box-shadow: none; }
 .module-hub-tab {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -841,7 +874,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground) 10%, transparent);
   transform: translateX(calc(var(--hub-index, 0) * 100%));
-  transition: transform 380ms cubic-bezier(0.34, 1.36, 0.64, 1);
+  transition: transform var(--duration-medium) var(--ease-bounce);
   pointer-events: none;
 }
 .module-hub-bar-item {
@@ -867,7 +900,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 .module-hub-bar-label { line-height: 1.1; max-height: 14px; transition: opacity 200ms ease, max-height 260ms cubic-bezier(0.32, 0.72, 0, 1); }
 .module-hub-bar[data-minimized] .module-hub-bar-label { opacity: 0; max-height: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .module-hub-bar, .module-hub-bar-indicator, .module-hub-bar-item, .module-hub-bar-label { transition: none; }
+  .module-hub-bar, .module-hub-bar-indicator, .module-hub-bar-item, .module-hub-bar-label, .module-hub-tabs-indicator { transition: none; }
 }
 /* Avisos flotantes sobre la barra inferior, nunca debajo. */
 @media (max-width: 767px) {
