@@ -35,6 +35,31 @@ function auditAdjacentHeights() {
   return problems;
 }
 
+// Un botón nunca parte su texto en dos líneas ni lo deja cortado.
+function auditWrappedButtons() {
+  const problems = [];
+  for (const button of document.querySelectorAll('button, a[data-slot=button]')) {
+    const rect = button.getBoundingClientRect();
+    if (!rect.width || !rect.height || button.closest('[inert],[aria-hidden="true"]')) continue;
+    const label = button.textContent.trim();
+    if (!label) continue;
+    // Solo el texto (no los íconos): una línea nueva empieza bajo la anterior.
+    const rects = [];
+    const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      rects.push(...[...range.getClientRects()].filter(r => r.width > 0));
+    }
+    rects.sort((a, b) => a.top - b.top);
+    const lines = rects.reduce((count, r, i) => (i && r.top >= rects[i - 1].top + rects[i - 1].height * 0.6 ? count + 1 : count), rects.length ? 1 : 0);
+    if (lines > 1) problems.push(`${label}: ${lines} líneas`);
+    else if (button.scrollWidth > button.clientWidth + 1) problems.push(`${label}: texto cortado`);
+  }
+  return problems;
+}
+
 function rowHeights(selector) {
   return [...document.querySelectorAll(selector)].map(el => Math.round(el.getBoundingClientRect().height)).filter(Boolean);
 }
@@ -84,7 +109,20 @@ test('campos y botones vecinos tienen el mismo alto', async ({page}) => {
   expect(await page.evaluate(auditAdjacentHeights), 'Etiquetas').toEqual([]);
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', {name: /^Espacio: /}).click();
+  await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
   await expect(page.getByRole('dialog', {name: 'Ajustes'})).toBeVisible();
   expect(await page.evaluate(auditAdjacentHeights), 'Ajustes').toEqual([]);
+});
+
+test('ningún botón parte su texto en dos líneas', async ({page}) => {
+  expect(await page.evaluate(auditWrappedButtons), 'Documentos').toEqual([]);
+
+  await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Reuniones'}).click();
+  await page.getByRole('button', {name: 'Nueva reunión'}).last().click();
+  await expect(page.getByPlaceholder('Nombre de la reunión')).toBeVisible();
+  await page.getByRole('button', {name: 'Más opciones de la reunión'}).click();
+  await page.getByRole('menuitem', {name: 'Archivar reunión'}).click();
+  const confirm = page.getByRole('alertdialog', {name: '¿Archivar esta reunión?'});
+  await expect(confirm.getByRole('button', {name: 'Sí, archivar'})).toBeVisible();
+  expect(await page.evaluate(auditWrappedButtons), 'Archivar reunión').toEqual([]);
 });

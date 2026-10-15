@@ -38,8 +38,7 @@ const SYNC_LABELS = {
 };
 
 const SYNC_HINTS = {
-  saved: 'Los cambios se guardan solos mientras escribes.',
-  offline: 'Sin conexión con Bardo. Tus cambios quedan en este dispositivo y se enviarán cuando vuelva la conexión.',
+  offline: 'Tus cambios se enviarán cuando vuelva la conexión.',
 };
 
 
@@ -292,7 +291,7 @@ export function BardoEditor({
   const saveStateTitle = localSaveFailed
     ? 'No pudimos guardar en este dispositivo. Mantén esta página abierta y vuelve a pulsar Listo.'
     : isNew
-    ? 'Solo tú ves este borrador, en este dispositivo, hasta que pulses Listo.'
+    ? 'Solo tú lo ves hasta que pulses Listo.'
     : (!isDirty && remoteSync && syncState?.message) || SYNC_HINTS[syncKey] || undefined;
 
   const leaveEditor = useCallback((callback) => {
@@ -479,11 +478,7 @@ export function BardoEditor({
                 <Badge variant="secondary" className="text-xs">
                   {isNew ? 'Borrador privado' : `Creado por ${createdActorName(doc)}`}
                 </Badge>
-                {isNew ? (
-                  <span className="text-xs text-muted-foreground">
-                    Solo tú lo ves hasta que pulses Listo.
-                  </span>
-                ) : (
+                {!isNew && (
                   <span className="text-xs text-muted-foreground">
                     Editado por {changeActorName(doc)} · {formatChangeTime(doc)}
                   </span>
@@ -527,14 +522,13 @@ export function BardoEditor({
 
             {localSaveFailed && (
               <div className="import-pending-banner text-sm" role="alert">
-                No pudimos guardar los cambios. Mantén esta página abierta y pulsa Listo para reintentar.
-                {' '}Mientras tanto, puedes copiar el contenido con «Copiar texto» en el menú «Ver más» de la barra.
+                No pudimos guardar los cambios. Mantén esta página abierta y pulsa Listo para reintentar, o copia el texto desde «Ver más».
               </div>
             )}
 
             {readOnly ? (
               <div className="import-pending-banner text-sm text-muted-foreground" role="status">
-                {readOnlyMessage || 'Procesando archivo… Podrás editarlo en cuanto Bardo termine de convertirlo.'}
+                {readOnlyMessage || 'Procesando archivo…'}
               </div>
             ) : (
               <div className="editor-toolbar-sticky">

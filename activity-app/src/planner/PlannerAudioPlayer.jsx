@@ -242,12 +242,12 @@ export function PlannerAudioPlayer({ recording, onRename, onDelete }) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Renombrar grabación</DialogTitle>
-            <DialogDescription>Solo cambia el nombre de la grabación; su tema sigue igual.</DialogDescription>
           </DialogHeader>
           <Input
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
             placeholder="Nombre de la grabación"
+            aria-label="Nombre de la grabación"
             autoFocus
             className="w-full"
             onKeyDown={(event) => event.key === 'Enter' && handleConfirmRename()}

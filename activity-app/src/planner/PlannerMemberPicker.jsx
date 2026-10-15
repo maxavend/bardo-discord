@@ -11,8 +11,8 @@ import {
   CommandItem,
   CommandSeparator,
 } from '@/components/ui/command';
-import { ChevronDown } from 'lucide-react';
-import { XIcon, PlusIcon } from '@/components/ui/animated-icons';
+import { ChevronDown, Plus } from 'lucide-react';
+import { XIcon } from '@/components/ui/animated-icons';
 import { isProductionActivity, shouldLoadDemoFixture } from './planner-store.js';
 
 export const DEFAULT_DISCORD_MEMBERS = [
@@ -187,10 +187,10 @@ function useDiscordDirectory(query, active = true) {
     byId.set(member.id, {...member, avatarColor: DISCORD_PALETTES[index % DISCORD_PALETTES.length], ...byId.get(member.id)});
   }
   const message = !production ? '' : search.length < 2
-    ? 'Escribe al menos 2 letras para buscar a alguien del servidor por nombre o apodo.'
+    ? 'Escribe al menos 2 letras.'
     : search.length > 100 ? 'La búsqueda admite hasta 100 caracteres.'
     : !current ? 'Buscando en Discord…'
-    : current.message || (current.truncated ? 'Hay más coincidencias. Escribe un nombre más completo.' : 'Personas del servidor. Puede que no todas tengan acceso a este canal.');
+    : current.message || (current.truncated ? 'Hay más coincidencias. Escribe un nombre más completo.' : 'Puede que no todas tengan acceso a este canal.');
   return {...entities, members: [...byId.values()], message, failed: current?.error,
     retry: () => { setResult(null); setRetry(value => value + 1); }};
 }
@@ -361,7 +361,7 @@ export function PlannerMemberPicker({
                 onClick={() => handleAddGuest(searchQuery)}
                 className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
               >
-                <PlusIcon className="size-3.5 shrink-0" />
+                <Plus className="size-3.5 shrink-0" />
                 <span className="truncate">
                   Agregar a «<strong>{searchQuery.trim()}</strong>» como invitado
                 </span>
@@ -568,7 +568,7 @@ export function SearchableParticipantMenu({
             onClick={() => handleAddGuest(searchValue)}
             className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-medium text-primary hover:bg-accent flex items-center gap-2 transition-colors cursor-pointer"
           >
-            <PlusIcon className="size-3.5 shrink-0" />
+            <Plus className="size-3.5 shrink-0" />
             <span className="truncate">
               Agregar a «<strong>{searchValue.trim()}</strong>»
             </span>

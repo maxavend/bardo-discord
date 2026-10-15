@@ -30,6 +30,23 @@ export function listTimeZones() {
   return ['America/Santiago', 'America/Argentina/Buenos_Aires', 'America/Bogota', 'America/Lima', 'America/Mexico_City', 'America/New_York', 'Europe/Madrid', 'UTC'];
 }
 
+const REGION_NAMES = {
+  America: 'América', Europe: 'Europa', Asia: 'Asia', Africa: 'África', Australia: 'Oceanía',
+  Pacific: 'Pacífico', Atlantic: 'Atlántico', Indian: 'Índico', Antarctica: 'Antártida', Arctic: 'Ártico',
+};
+
+/** Zonas que más se usan, para mostrarlas primero. */
+export const SUGGESTED_TIME_ZONES = [
+  'America/Santiago', 'America/Buenos_Aires', 'America/Argentina/Buenos_Aires', 'America/Lima', 'America/Bogota',
+  'America/Mexico_City', 'America/Caracas', 'America/Montevideo', 'America/Sao_Paulo',
+  'America/New_York', 'Europe/Madrid', 'UTC',
+];
+
+export function timeZoneRegion(timeZone) {
+  const head = String(timeZone || '').split('/')[0];
+  return REGION_NAMES[head] || '';
+}
+
 /** «Santiago · GMT-3» para mostrar una zona horaria. */
 export function describeTimeZone(timeZone, now = new Date()) {
   const city = String(timeZone || '').split('/').pop().replace(/_/g, ' ');

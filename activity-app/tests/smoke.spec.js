@@ -166,7 +166,7 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(Math.abs(audit.contentInset - audit.contentRightInset)).toBeLessThanOrEqual(1);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
-  expect(audit.headerTargets.map(target => target.name)).toEqual(['Espacio: Bardo. Abrir ajustes del espacio', 'Subir archivo', 'Nuevo documento', 'Ajustes', 'Cambiar a modo claro']);
+  expect(audit.headerTargets.map(target => target.name)).toEqual(['Subir archivo', 'Nuevo documento', 'Ajustes', 'Cambiar a modo claro']);
   // Tolerate only floating-point layout noise (31.999998px), not smaller targets.
   const layoutEpsilon = 0.001;
   expect(audit.headerTargets.every(({w, h}) => w + layoutEpsilon >= 32 && h + layoutEpsilon >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();
@@ -681,7 +681,7 @@ test('complete editing and CRUD flow remains functional', async ({page}, testInf
 
   await page.getByRole('button', {name: 'Más acciones del documento'}).click();
   await page.getByRole('menuitem', {name: 'Archivar documento'}).click();
-  await page.getByRole('alertdialog', {name: '¿Archivar este documento?'}).getByRole('button', {name: 'Archivar', exact: true}).click();
+  await page.getByRole('alertdialog', {name: '¿Archivar este documento?'}).getByRole('button', {name: 'Sí, archivar'}).click();
   await expect(page.getByRole('button', {name: 'Archivados (1)'})).toBeVisible();
   await expect(page.getByText('1 resultado', {exact: true})).toBeVisible();
 
@@ -691,7 +691,7 @@ test('complete editing and CRUD flow remains functional', async ({page}, testInf
   await page.getByRole('menuitem', {name: 'Eliminar definitivamente'}).click();
   const confirmDelete = page.getByRole('alertdialog', {name: '¿Eliminar este documento?'});
   await expect(confirmDelete).toContainText('no se puede deshacer');
-  await confirmDelete.getByRole('button', {name: 'Eliminar definitivamente'}).click();
+  await confirmDelete.getByRole('button', {name: 'Sí, eliminar'}).click();
   await expect(page.getByRole('button', {name: 'Archivados (0)'})).toBeVisible();
   await page.getByRole('button', {name: /^Activos/}).click();
   await page.getByRole('button', {name: 'Limpiar búsqueda'}).click();

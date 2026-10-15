@@ -223,9 +223,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0">
             <h1 id="kanban-title" tabIndex={-1} className="text-lg font-bold tracking-tight text-foreground">Tareas</h1>
-            <p className="hidden text-xs text-muted-foreground md:block">
-              {remote ? 'Tablero de este canal · también puedes crear tareas con /tarea' : 'Solo en este dispositivo · abre Bardo en Discord para compartir el tablero con tu canal'}
-            </p>
+            {!remote && <p className="hidden text-xs text-muted-foreground md:block">Solo en este dispositivo</p>}
           </div>
           {STATUS_TEXT[status] && (
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{STATUS_TEXT[status]}</span>

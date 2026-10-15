@@ -51,7 +51,7 @@ export function FinishMeetingDialog({
             {pendingTemasCount > 0 && (
               <> Quedan <strong className="text-foreground font-semibold">{pendingTemasCount} {pendingTemasCount === 1 ? 'tema' : 'temas'}</strong> sin tratar.</>
             )}
-            {' '}Si te equivocas, podrás reabrirla desde el resumen.
+            {' '}Podrás reabrirla desde el resumen.
           </DialogDescription>
         </DialogHeader>
 
