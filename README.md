@@ -293,6 +293,18 @@ Para los avisos y los hilos, el bot necesita en el canal: **Ver canal**, **Envia
 
 ---
 
+## Ajustes
+
+El engranaje del header abre **Ajustes**, en tres niveles. Cada uno dice a quién afecta:
+
+- **Personal** (cada persona): tema claro, oscuro o del sistema; con qué abre Bardo (Inicio o lo último que usaste), y si quieres recibir un mensaje directo cuando te asignan una tarea.
+- **Espacio** (todo el canal; lo cambia quien gestiona el canal en Discord): nombre del espacio que se ve en el header, zona horaria del canal y avisos de Tareas (mención en el canal y mensaje directo). También muestra qué puede hacer el bot en ese canal según sus permisos.
+- **Servidor** (todos los canales; lo cambia quien administra el servidor): zona horaria y avisos por defecto. Un canal puede elegir otra cosa; si no, hereda lo del servidor.
+
+La zona horaria define «hoy», las tareas vencidas y las fechas de `/tarea` y `/reu-new`. Discord no la entrega, así que la primera persona que abre Bardo en un servidor la define con la de su dispositivo; después se puede cambiar en Ajustes.
+
+---
+
 ## Comandos de Discord
 
 Bardo registra actualmente los siguientes comandos:

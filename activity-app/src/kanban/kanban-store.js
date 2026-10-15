@@ -236,7 +236,18 @@ export function applyOps(state, ops) {
 // ---------------------------------------------------------------------------
 // Filtros de la vista
 
-export function todayIso(now = new Date(), timeZone = 'America/Santiago') {
+/** Zona horaria del espacio (Ajustes) o, sin Discord, la del dispositivo. */
+function defaultTimeZone() {
+  const fromContext = typeof window !== 'undefined' ? window.__bardoChannelContext?.timeZone : null;
+  if (fromContext) return fromContext;
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Santiago';
+  } catch {
+    return 'America/Santiago';
+  }
+}
+
+export function todayIso(now = new Date(), timeZone = defaultTimeZone()) {
   try {
     return new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'}).format(now);
   } catch {

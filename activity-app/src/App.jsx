@@ -61,6 +61,7 @@ import {
   File,
   FileArrowUp,
   FileText,
+  Gear,
   LinkSlash,
   Magnifier,
   Moon,
@@ -84,9 +85,12 @@ import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
 import {WorkspaceMenu} from './WorkspaceMenu.jsx';
+import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
+import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
 
 // Tareas carga su propio chunk (con dnd-kit) solo al abrirse.
 const KanbanModule = lazy(() => import('./kanban/KanbanModule.jsx'));
+const SettingsDialog = lazy(() => import('./settings/SettingsDialog.jsx'));
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
 // Claves por servidor + canal (ver docs-storage.js): nada de un canal aparece en otro.
@@ -598,12 +602,17 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
   );
 }
 
-function DocsHeader({children, actions, className = ''}) {
+function DocsHeader({children, actions, className = '', onOpenSettings}) {
   return (
     <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
       <div className="topbar-left">{children}</div>
       <div className="topbar-right header-actions">
         {actions}
+        {onOpenSettings && (
+          <IconButton label="Ajustes" onClick={() => onOpenSettings('personal')} className="h-8 w-8">
+            <Gear width={16} height={16} />
+          </IconButton>
+        )}
         <ThemeModeMenu />
       </div>
     </header>
@@ -612,7 +621,8 @@ function DocsHeader({children, actions, className = ''}) {
 
 function ThemeModeMenu() {
   const {theme, setTheme} = useTheme('dark');
-  const isDark = theme === 'dark';
+  const isDark = theme === 'dark'
+    || (theme === 'system' && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
   const toggleTheme = () => {
     const nextTheme = isDark ? 'light' : 'dark';
@@ -635,7 +645,7 @@ function ThemeModeMenu() {
 
 const UPLOAD_ACCEPT = '.md,.markdown,.txt,.pdf,.docx,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, onKanbanNew, docReturn = null, uploading = false}) {
+function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload, onNavigateModule, onPlannerNew, onKanbanNew, onOpenSettings, docReturn = null, uploading = false}) {
   const fileInputRef = useRef(null);
   const isLibrary = route.type === 'library';
   const isPlanner = route.type === 'planner';
@@ -645,6 +655,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
 
   return (
     <DocsHeader
+      onOpenSettings={onOpenSettings}
       className={isHome || isLibrary || isPlanner || isKanban ? 'library-header' : ''}
       actions={isKanban ? (
         <div key="kanban-actions" className="header-slot-enter flex items-center gap-2">
@@ -734,7 +745,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
       ) : (
-        <WorkspaceMenu key="brand" />
+        <WorkspaceMenu key="brand" onOpenSettings={onOpenSettings} />
       )}
       <ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />
     </DocsHeader>
@@ -1234,6 +1245,12 @@ function App() {
   // Abrir un documento desde una tarea: "Volver" regresa a esa tarea.
   const [docReturn, setDocReturn] = useState(null);
   const [kanbanQuickAdd, setKanbanQuickAdd] = useState(0);
+  const [settingsTab, setSettingsTab] = useState(null);
+  // Recuerda el último módulo (para «Al abrir Bardo: lo último que usaste»).
+  useEffect(() => {
+    const hash = {library: '#docs', doc: '#docs', planner: '#planner', kanban: '#kanban'}[route.type];
+    if (hash) rememberLastModule(hash);
+  }, [route.type]);
   useEffect(() => {
     if (route.type !== 'doc' && route.type !== 'edit') setDocReturn(null);
   }, [route.type]);
@@ -1427,6 +1444,19 @@ function App() {
     } else if (location.hash === hash) setRoute(parseRoute());
     else location.hash = hash;
   }, [captureBodyOffset]);
+
+  // Al arrancar: la zona horaria del dispositivo define la del servidor si aún
+  // no tiene una, y «Al abrir Bardo: lo último que usaste» salta a ese módulo.
+  const bootHandled = useRef(false);
+  useEffect(() => {
+    if (bootHandled.current) return;
+    bootHandled.current = true;
+    void reportDetectedTimeZone();
+    if (getStartModulePreference() === 'last' && routeRef.current.type === 'home') {
+      const target = lastModuleHash();
+      if (target) go(target, {replace: true, skipTransition: true});
+    }
+  }, [go]);
 
   // Cambios que llegan del motor de sincronización (conflictos, normalizaciones…).
   useEffect(() => {
@@ -2089,9 +2119,20 @@ function App() {
           uploading={uploading}
           onPlannerNew={() => go('#planner-new')}
           onKanbanNew={() => setKanbanQuickAdd(value => value + 1)}
+          onOpenSettings={tab => setSettingsTab(tab || 'personal')}
           docReturn={route.type === 'doc' ? docReturn : null}
           onNavigateModule={href => go(href, {skipTransition: true})}
         />
+      )}
+      {settingsTab && (
+        <Suspense fallback={null}>
+          <SettingsDialog
+            open
+            initialTab={settingsTab}
+            remote={isPlannerRemoteEnabled()}
+            onClose={() => setSettingsTab(null)}
+          />
+        </Suspense>
       )}
       <ModuleBar
         active={moduleForRoute(route)}

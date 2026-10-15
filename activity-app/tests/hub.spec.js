@@ -52,17 +52,36 @@ test('la barra móvil solo aparece en la vista principal de cada módulo', async
   expect(overlap).toBeLessThanOrEqual(0);
 });
 
-test('el nombre del espacio se puede cambiar y vacío vuelve al predeterminado', async ({page}) => {
+test('Ajustes: el nombre del espacio se cambia en Espacio y vacío vuelve al predeterminado', async ({page}) => {
   const trigger = page.getByRole('button', {name: /^Espacio: /});
   await expect(trigger).toHaveText('Bardo');
   await trigger.click();
-  await page.getByLabel('Nombre del espacio').fill('Equipo Producto');
-  await page.getByRole('button', {name: 'Guardar'}).click();
+  const dialog = page.getByRole('dialog', {name: 'Ajustes'});
+  await expect(dialog.getByRole('tab', {name: 'Espacio'})).toHaveAttribute('aria-selected', 'true');
+  await dialog.getByLabel('Nombre del espacio').fill('Equipo Producto');
+  await dialog.getByRole('button', {name: 'Guardar'}).click();
+  await expect(dialog.getByRole('button', {name: 'Guardar'})).toBeDisabled();
+  await page.keyboard.press('Escape');
   await expect(trigger).toHaveText('Equipo Producto');
   await page.reload();
   await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveText('Equipo Producto');
   await page.getByRole('button', {name: /^Espacio: /}).click();
-  await page.getByLabel('Nombre del espacio').fill('');
-  await page.getByRole('button', {name: 'Guardar'}).click();
+  await page.getByRole('dialog', {name: 'Ajustes'}).getByLabel('Nombre del espacio').fill('');
+  await page.getByRole('dialog', {name: 'Ajustes'}).getByRole('button', {name: 'Guardar'}).click();
+  await expect(page.getByRole('dialog', {name: 'Ajustes'}).getByRole('button', {name: 'Guardar'})).toBeDisabled();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveText('Bardo');
+});
+
+test('Ajustes personales: tema y «Al abrir Bardo» se recuerdan', async ({page}) => {
+  await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Tareas'}).click();
+  await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
+  const dialog = page.getByRole('dialog', {name: 'Ajustes'});
+  await dialog.getByRole('button', {name: 'Claro', exact: true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await dialog.getByRole('button', {name: 'Lo último que usaste'}).click();
+  await page.keyboard.press('Escape');
+  await page.goto('/#home');
+  await expect(page).toHaveURL(/#kanban$/);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });

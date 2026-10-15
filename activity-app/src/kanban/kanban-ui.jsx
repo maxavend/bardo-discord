@@ -5,11 +5,10 @@ import {cn} from '@/lib/utils';
 import {DISCORD_PALETTES, getAllDiscordEntities} from '../planner/PlannerMemberPicker.jsx';
 import {KANBAN_PRIORITY_LABELS} from './kanban-shared.js';
 
-// El header de Bardo es fijo y queda sobre los diálogos: este diálogo se
-// centra un poco más abajo y limita su alto para no quedar tapado. En móvil
-// es una hoja inferior.
-export const KANBAN_DIALOG_CLASS = 'kanban-card-dialog sm:max-w-xl sm:top-[calc(50%+1.75rem)] max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0 max-sm:max-w-full max-sm:rounded-b-none';
-export const KANBAN_DIALOG_SCROLL_CLASS = 'max-h-[calc(100dvh-9rem)] max-sm:max-h-[calc(88dvh-3rem)]';
+import {SHEET_DIALOG_CLASS, SHEET_DIALOG_SCROLL_CLASS} from '@/components/sheet-dialog.js';
+
+export const KANBAN_DIALOG_CLASS = `kanban-card-dialog sm:max-w-xl ${SHEET_DIALOG_CLASS}`;
+export const KANBAN_DIALOG_SCROLL_CLASS = SHEET_DIALOG_SCROLL_CLASS;
 
 export const TAG_COLOR_HEX = {
   gray: '#949BA4',

@@ -350,7 +350,12 @@ async function routePlannerApi(request, url, env) {
         loadEffectiveSettings(env.DB, session.guildId, session.channelId, settingsDefaults(env)),
       ])
       : [null, null];
-    return json({ ...context, workspaceName: workspaceName || null, timeZone: settings?.timeZone || null });
+    return json({
+      ...context,
+      workspaceName: workspaceName || null,
+      timeZone: settings?.timeZone || null,
+      timeZoneSource: settings?.sources?.timeZone || null,
+    });
   }
   if (isContextRoute) return methodNotAllowed();
 

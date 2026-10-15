@@ -12,6 +12,14 @@ export function useTheme(defaultTheme = 'system') {
       localStorage.setItem(THEME_PREFERENCE_KEY, nextTheme);
     } catch {}
     applyDiscordTheme({ preference: nextTheme });
+    // El botón del header y Ajustes muestran la misma preferencia.
+    window.dispatchEvent(new CustomEvent('bardo-theme-change', { detail: nextTheme }));
+  }, []);
+
+  useEffect(() => {
+    const sync = event => setThemeState(event.detail);
+    window.addEventListener('bardo-theme-change', sync);
+    return () => window.removeEventListener('bardo-theme-change', sync);
   }, []);
 
   useEffect(() => {

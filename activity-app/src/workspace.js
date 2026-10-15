@@ -2,7 +2,8 @@
 // canal de Discord, o "Bardo" cuando no hay canal (modo local).
 import {useEffect, useState} from 'react';
 import {scopedDocsKey} from './docs-storage.js';
-import {isPlannerRemoteEnabled, plannerRequest} from './planner/planner-sync.js';
+import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
+import {applySettingsSnapshot, patchSettings} from './settings/settings-client.js';
 
 export const WORKSPACE_NAME_MAX = 60;
 const LOCAL_KEY = 'bardo.workspace.name.v1';
@@ -35,8 +36,8 @@ export function workspaceInfo() {
 export async function renameWorkspace(rawName) {
   const name = String(rawName ?? '').replace(/\s+/g, ' ').trim().slice(0, WORKSPACE_NAME_MAX);
   if (isPlannerRemoteEnabled()) {
-    const data = await plannerRequest('/api/workspace', {method: 'PATCH', body: JSON.stringify({name})});
-    window.__bardoChannelContext = {...(window.__bardoChannelContext || {}), workspaceName: data?.workspaceName || null};
+    applySettingsSnapshot(await patchSettings('space', {name}));
+    return workspaceInfo();
   } else {
     try {
       if (name) localStorage.setItem(scopedDocsKey(LOCAL_KEY), name);
