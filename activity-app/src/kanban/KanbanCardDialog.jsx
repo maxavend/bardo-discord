@@ -411,7 +411,7 @@ export function KanbanCardDialog({
         className={KANBAN_DIALOG_CLASS}
         aria-describedby={descriptionId}
       >
-        <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid gap-5 p-1">
+        <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
         <DialogHeader className="gap-2">
           <div className="flex items-center gap-2 pr-8">
             <span className="text-xs font-medium tabular-nums text-muted-foreground">#{card.number}</span>

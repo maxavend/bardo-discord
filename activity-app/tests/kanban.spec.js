@@ -39,8 +39,9 @@ async function quickAdd(page, titles) {
   await input.press('Escape');
 }
 
+/** Desliza el tablero (carrusel en móvil) hasta la columna. */
 async function openColumn(page, name) {
-  if (isNarrow(page)) await page.getByRole('tab', {name: new RegExp(`^${name}`)}).click();
+  await page.getByRole('list', {name: `Tareas en ${name}`}).scrollIntoViewIfNeeded();
 }
 
 const column = (page, name) => page.getByRole('list', {name: `Tareas en ${name}`});
@@ -106,25 +107,14 @@ test('mover con el teclado desde el asa (escritorio) y con "Mover a" (móvil)', 
 test('columnas: hasta 6, renombrar y eliminar moviendo sus tareas', async ({page}) => {
   await quickAdd(page, ['Tarea viajera']);
   const addColumn = async name => {
-    if (isNarrow(page)) {
-      await page.getByRole('button', {name: /^Opciones de la columna/}).click();
-      await page.getByRole('menuitem', {name: 'Agregar columna'}).click();
-    } else {
-      await page.getByLabel('Columnas del tablero').getByRole('button', {name: 'Agregar columna'}).click();
-    }
+    await page.getByLabel('Columnas del tablero').getByRole('button', {name: 'Agregar columna'}).click();
     const dialog = page.getByRole('dialog', {name: 'Nueva columna'});
     await dialog.getByLabel('Nombre').fill(name);
     await dialog.getByRole('button', {name: 'Agregar columna'}).click();
     await expect(dialog).toBeHidden();
   };
   for (const name of ['Revisión', 'Bloqueado', 'QA']) await addColumn(name);
-  if (isNarrow(page)) {
-    await page.getByRole('button', {name: /^Opciones de la columna/}).click();
-    await expect(page.getByRole('menuitem', {name: 'Máximo 6 columnas'})).toBeDisabled();
-    await page.keyboard.press('Escape');
-  } else {
-    await expect(page.getByLabel('Columnas del tablero').getByRole('button', {name: 'Agregar columna'})).toHaveAttribute('aria-disabled', 'true');
-  }
+  await expect(page.getByLabel('Columnas del tablero').getByRole('button', {name: 'Agregar columna'})).toHaveAttribute('aria-disabled', 'true');
 
   await openColumn(page, 'Por hacer');
   await page.getByRole('button', {name: 'Opciones de la columna Por hacer'}).click();
@@ -152,7 +142,12 @@ test('filtro "Mías" y archivar con deshacer', async ({page}) => {
   await page.getByRole('option', {name: /Max Avendaño/}).click();
   await dialog.getByRole('button', {name: 'Listo'}).click();
 
-  await page.getByRole('button', {name: 'Mías'}).click();
+  if (isNarrow(page)) {
+    await page.getByRole('button', {name: /^Filtrar tareas/}).click();
+    await page.getByRole('menuitemradio', {name: 'Mías'}).click();
+  } else {
+    await page.getByRole('button', {name: 'Mías'}).click();
+  }
   await expect(column(page, 'Por hacer').getByRole('listitem')).toHaveCount(1);
   await expect(column(page, 'Por hacer')).toContainText('Mía');
   await page.getByRole('button', {name: 'Quitar filtros'}).click();
@@ -162,6 +157,26 @@ test('filtro "Mías" y archivar con deshacer', async ({page}) => {
   await expect(column(page, 'Por hacer')).not.toContainText('De otra persona');
   await page.getByRole('button', {name: 'Deshacer'}).click();
   await expect(column(page, 'Por hacer')).toContainText('De otra persona');
+});
+
+test('móvil: el tablero es un carrusel con la columna siguiente a la vista', async ({page}) => {
+  test.skip(!isNarrow(page), 'carrusel solo en móvil');
+  const board = page.getByLabel('Columnas del tablero');
+  const geometry = await board.evaluate(el => {
+    const slots = [...el.querySelectorAll('.kanban-column-slot')].map(slot => slot.getBoundingClientRect());
+    return {snap: getComputedStyle(el).scrollSnapType, firstLeft: slots[0].left, secondLeft: slots[1].left, width: window.innerWidth};
+  });
+  expect(geometry.snap).toContain('mandatory');
+  expect(geometry.firstLeft).toBeGreaterThanOrEqual(12);
+  // Un borde de la segunda columna asoma (entre 16 y 64 px).
+  expect(geometry.width - geometry.secondLeft).toBeGreaterThanOrEqual(16);
+  expect(geometry.width - geometry.secondLeft).toBeLessThanOrEqual(64);
+  // Un solo control de filtro y un solo ⋯ en la cabecera.
+  await expect(page.getByRole('button', {name: /^Filtrar tareas: Todas/})).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await page.getByRole('button', {name: /^Filtrar tareas/}).click();
+  await page.getByRole('menuitemradio', {name: 'Vencidas'}).click();
+  await expect(page.getByRole('button', {name: /^Filtrar tareas: Vencidas/})).toBeVisible();
 });
 
 test('la página no se desborda a lo ancho y no tiene scroll vertical vacío', async ({page}) => {

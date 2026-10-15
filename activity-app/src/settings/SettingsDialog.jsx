@@ -393,7 +393,7 @@ export function SettingsDialog({open, initialTab = 'personal', onClose, remote})
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
       {/* Anclado arriba en escritorio: cambiar de pestaña no lo hace saltar. */}
       <DialogContent scrollable={false} className={cn('sm:max-w-xl', SHEET_DIALOG_CLASS, 'sm:top-[max(4.5rem,9vh)] sm:translate-y-0')}>
-        <OverlayScrollArea className={SHEET_DIALOG_SCROLL_CLASS} contentClassName="grid gap-5 p-1">
+        <OverlayScrollArea className={SHEET_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
           <DialogHeader>
             <DialogTitle>Ajustes</DialogTitle>
             <DialogDescription>Cada sección dice a quién afecta: solo a ti, a este canal o a todo el servidor.</DialogDescription>

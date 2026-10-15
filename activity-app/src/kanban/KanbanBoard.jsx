@@ -10,17 +10,9 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import {arrayMove, sortableKeyboardCoordinates} from '@dnd-kit/sortable';
-import {MoreHorizontal, Plus} from 'lucide-react';
+import {Plus} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {Tabs, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {KANBAN_LIMITS} from './kanban-shared.js';
 import {KanbanColumn} from './KanbanColumn.jsx';
 import {KanbanCardBody} from './KanbanCard.jsx';
@@ -42,9 +34,6 @@ export function KanbanBoard({
   tags,
   today,
   doneId,
-  isMobile,
-  mobileColumnId,
-  onMobileColumnChange,
   quickAddColumnId,
   onQuickAddChange,
   onCreate,
@@ -156,12 +145,7 @@ export function KanbanBoard({
     onDragCancel: ({active}) => `Movimiento cancelado. La tarea ${cardLabel(active.id)} volvió a su lugar.`,
   };
 
-  const visibleColumns = isMobile
-    ? columns.filter(column => column.id === mobileColumnId).slice(0, 1)
-    : columns;
   const activeCard = activeId ? cards[activeId] : null;
-  const mobileColumnIndex = columns.findIndex(column => column.id === mobileColumnId);
-  const mobileColumn = columns[mobileColumnIndex];
 
   const renderColumn = (column, index) => (
     <KanbanColumn
@@ -184,7 +168,6 @@ export function KanbanBoard({
       onArchiveCard={onArchiveCard}
       onOpenThread={onOpenThread}
       columnActions={columnActions}
-      hideHeader={isMobile}
       filtered={filtered}
     />
   );
@@ -204,43 +187,18 @@ export function KanbanBoard({
         },
       }}
     >
-      {isMobile ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-1">
-            <Tabs value={mobileColumnId} onValueChange={onMobileColumnChange} className="min-w-0 flex-1">
-              <TabsList className="kanban-mobile-tabs max-w-full justify-start overflow-x-auto">
-                {columns.map(column => (
-                  <TabsTrigger key={column.id} value={column.id} className="flex-none text-xs px-3">
-                    <span className="max-w-[9rem] truncate">{column.name}</span>
-                    <span className="tabular-nums text-muted-foreground">{allCounts[column.id] || 0}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            {mobileColumn && (
-              <MobileColumnMenu
-                column={mobileColumn}
-                index={mobileColumnIndex}
-                columnCount={columns.length}
-                columnActions={columnActions}
-                onAddColumn={onAddColumn}
-              />
-            )}
+      {/* Escritorio: columnas en fila. Móvil: carrusel con snap y un borde de
+          la columna siguiente a la vista (CSS en .kanban-board). */}
+      <div className="kanban-board" role="list" aria-label="Columnas del tablero" data-dragging={activeId ? '' : undefined}>
+        {columns.map((column, index) => (
+          <div key={column.id} role="listitem" className="kanban-column-slot" data-column-id={column.id}>
+            {renderColumn(column, index)}
           </div>
-          {visibleColumns.map(column => renderColumn(column, mobileColumnIndex))}
+        ))}
+        <div role="listitem" className="kanban-add-column-slot">
+          <AddColumnButton count={columns.length} onAddColumn={onAddColumn} />
         </div>
-      ) : (
-        <div className="kanban-board" role="list" aria-label="Columnas del tablero">
-          {visibleColumns.map((column, index) => (
-            <div key={column.id} role="listitem" className="kanban-column-slot">
-              {renderColumn(column, index)}
-            </div>
-          ))}
-          <div role="listitem" className="kanban-add-column-slot">
-            <AddColumnButton count={columns.length} onAddColumn={onAddColumn} />
-          </div>
-        </div>
-      )}
+      </div>
       <DragOverlay dropAnimation={prefersReducedMotion() ? null : undefined}>
         {activeCard ? (
           <div className="kanban-card-overlay flex w-[256px] max-w-[85vw] flex-col gap-2 rounded-xl border border-primary/60 bg-card px-3 py-2.5 shadow-lg cursor-grabbing">
@@ -271,41 +229,5 @@ function AddColumnButton({count, onAddColumn}) {
       <TooltipTrigger render={button} />
       <TooltipContent side="bottom">El tablero ya tiene el máximo de {KANBAN_LIMITS.columns} columnas</TooltipContent>
     </Tooltip>
-  );
-}
-
-function MobileColumnMenu({column, index, columnCount, columnActions, onAddColumn}) {
-  const full = columnCount >= KANBAN_LIMITS.columns;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={(
-          <Button variant="ghost" size="icon" aria-label={`Opciones de la columna ${column.name}`} className="shrink-0 rounded-full text-muted-foreground hover:text-foreground">
-            <MoreHorizontal className="size-4" />
-          </Button>
-        )}
-      />
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => columnActions.onRename(column)} className="cursor-pointer">Renombrar «{column.name}»</DropdownMenuItem>
-          {!column.isDone && (
-            <DropdownMenuItem onClick={() => columnActions.onSetDone(column.id)} className="cursor-pointer">Usar como columna «Hecho»</DropdownMenuItem>
-          )}
-          <DropdownMenuItem disabled={index === 0} onClick={() => columnActions.onMoveColumn(column.id, -1)} className="cursor-pointer">Mover a la izquierda</DropdownMenuItem>
-          <DropdownMenuItem disabled={index === columnCount - 1} onClick={() => columnActions.onMoveColumn(column.id, 1)} className="cursor-pointer">Mover a la derecha</DropdownMenuItem>
-          <DropdownMenuItem disabled={full} onClick={onAddColumn} className="cursor-pointer">
-            {full ? `Máximo ${KANBAN_LIMITS.columns} columnas` : 'Agregar columna'}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            disabled={column.isDone || columnCount <= 1}
-            onClick={() => columnActions.onDelete(column)}
-            className="cursor-pointer"
-          >
-            {column.isDone ? 'La columna «Hecho» no se puede eliminar' : 'Eliminar columna'}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

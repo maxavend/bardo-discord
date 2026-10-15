@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Archive, MoreHorizontal, Tags} from 'lucide-react';
+import {Archive, ChevronDown, MoreHorizontal, Tags} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {ToggleGroup, ToggleGroupItem} from '@/components/ui/toggle-group';
 import {
@@ -9,6 +9,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -35,18 +37,15 @@ import {KanbanCardDialog} from './KanbanCardDialog.jsx';
 import {ArchivedCardsDialog, ColumnNameDialog, DeleteColumnDialog, TagsDialog} from './KanbanDialogs.jsx';
 import {TagChip, discordChannelUrl} from './kanban-ui.jsx';
 
-const MOBILE_QUERY = '(max-width: 767px)';
+const FILTER_LABELS = {all: 'Todas', mine: 'Mías', overdue: 'Vencidas'};
 
-function useIsMobile() {
-  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(MOBILE_QUERY).matches);
-  useEffect(() => {
-    const media = window.matchMedia?.(MOBILE_QUERY);
-    if (!media) return undefined;
-    const update = () => setMobile(media.matches);
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-  return mobile;
+/** Lleva una columna a la vista (carrusel en móvil, scroll horizontal en escritorio). */
+function scrollColumnIntoView(columnId) {
+  requestAnimationFrame(() => {
+    const slot = document.querySelector(`[data-column-id="${CSS.escape(columnId)}"]`);
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    slot?.scrollIntoView({inline: 'start', block: 'nearest', behavior: reduced ? 'auto' : 'smooth'});
+  });
 }
 
 const STATUS_TEXT = {
@@ -68,11 +67,9 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
   const board = view.board;
   const columns = useMemo(() => board?.columns || [], [board]);
   const tags = useMemo(() => board?.tags || [], [board]);
-  const isMobile = useIsMobile();
   const [filter, setFilter] = useState('all');
   const [tagFilter, setTagFilter] = useState(null);
   const [quickAddColumnId, setQuickAddColumnId] = useState(null);
-  const [mobileColumnId, setMobileColumnId] = useState(null);
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteColumn, setDeleteColumn] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -83,8 +80,6 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
   const userId = currentUserId();
   const missingNotified = useRef(null);
 
-  // Columna visible en móvil: la elegida, o la primera abierta.
-  const activeMobileColumn = columns.some(column => column.id === mobileColumnId) ? mobileColumnId : defaultColumnId(board);
 
   const visibleCards = useMemo(
     () => filterCards(view.cards, {filter, userId, tagId: tagFilter, today, doneId}),
@@ -101,13 +96,11 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
   // "Nueva tarea" del header: abre el alta rápida de la primera columna abierta.
   useEffect(() => {
     if (!quickAddRequest || !board) return;
-    const target = isMobile && activeMobileColumn && !columns.find(column => column.id === activeMobileColumn)?.isDone
-      ? activeMobileColumn
-      : defaultColumnId(board);
+    const target = defaultColumnId(board);
     setFilter('all');
     setTagFilter(null);
-    setMobileColumnId(target);
     setQuickAddColumnId(target);
+    scrollColumnIntoView(target);
   }, [quickAddRequest]);
 
   // Enlace a una tarjeta que ya no está: se busca una vez y, si no existe, se explica.
@@ -230,7 +223,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0">
             <h1 id="kanban-title" tabIndex={-1} className="text-lg font-bold tracking-tight text-foreground">Tareas</h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="hidden text-xs text-muted-foreground md:block">
               {remote ? 'Tablero de este canal · también puedes crear tareas con /tarea' : 'Solo en este dispositivo · abre Bardo en Discord para compartir el tablero con tu canal'}
             </p>
           </div>
@@ -238,12 +231,30 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{STATUS_TEXT[status]}</span>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            {/* Móvil: un solo chip de filtro en vez de tres botones. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={(
+                  <Button variant="outline" size="sm" data-kanban-toolbar-control="" aria-label={`Filtrar tareas: ${FILTER_LABELS[filter]}`} className="h-8 gap-1 px-3 text-xs md:hidden">
+                    {FILTER_LABELS[filter]} <ChevronDown className="size-3.5" aria-hidden="true" />
+                  </Button>
+                )}
+              />
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuRadioGroup value={filter} onValueChange={value => setFilter(value || 'all')}>
+                  <DropdownMenuRadioItem value="all" className="cursor-pointer">Todas</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="mine" disabled={!userId} className="cursor-pointer">Mías</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="overdue" className="cursor-pointer">Vencidas</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ToggleGroup
               value={[filter]}
               onValueChange={value => setFilter((Array.isArray(value) ? value.at(-1) : value) || 'all')}
               variant="outline"
               size="sm"
               aria-label="Filtrar tareas"
+              className="hidden md:flex"
             >
               <ToggleGroupItem value="all" className="h-8 px-3 text-xs">Todas</ToggleGroupItem>
               <ToggleGroupItem value="mine" className="h-8 px-3 text-xs" disabled={!userId}>Mías</ToggleGroupItem>
@@ -252,7 +263,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={(
-                  <Button variant="ghost" size="icon-sm" aria-label="Más opciones del tablero" className="rounded-full text-muted-foreground hover:text-foreground">
+                  <Button variant="ghost" size="icon-sm" data-kanban-toolbar-control="" aria-label="Más opciones del tablero" className="rounded-full text-muted-foreground hover:text-foreground">
                     <MoreHorizontal className="size-4" />
                   </Button>
                 )}
@@ -305,7 +316,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
       {/* En escritorio el tablero ocupa todo el ancho y alto disponibles: las
           columnas no se cortan en el borde del contenido y la barra horizontal
           queda al borde inferior de la pantalla. */}
-      <div className={isMobile ? 'kanban-inner mt-4' : 'kanban-board-region'}>
+      <div className="kanban-board-region">
         <KanbanBoard
           columns={columns}
           cards={visibleCards}
@@ -313,9 +324,6 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
           tags={tags}
           today={today}
           doneId={doneId}
-          isMobile={isMobile}
-          mobileColumnId={activeMobileColumn}
-          onMobileColumnChange={setMobileColumnId}
           quickAddColumnId={quickAddColumnId}
           onQuickAddChange={setQuickAddColumnId}
           onCreate={createCard}
@@ -364,7 +372,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
             engine.renameColumn(nameDialog.column.id, name);
           } else {
             const id = engine.addColumn(name);
-            setMobileColumnId(id);
+            scrollColumnIntoView(id);
           }
           setNameDialog(null);
         }}
@@ -377,7 +385,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
         onConfirm={(id, moveTo) => {
           engine.deleteColumn(id, moveTo);
           setDeleteColumn(null);
-          setMobileColumnId(moveTo);
+          if (moveTo) scrollColumnIntoView(moveTo);
         }}
       />
       <ArchivedCardsDialog

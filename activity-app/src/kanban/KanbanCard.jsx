@@ -21,13 +21,14 @@ export function KanbanCardBody({card, tagsById, today, doneId}) {
   const tags = (card.tagIds || []).map(id => tagsById.get(id)).filter(Boolean);
   return (
     <>
+      {/* Las filas de arriba dejan sitio al asa y al menú (esquina superior derecha). */}
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 pr-11">
           {tags.slice(0, 3).map(tag => <TagChip key={tag.id} tag={tag} />)}
           {tags.length > 3 && <span className="text-[10.5px] text-muted-foreground">+{tags.length - 3}</span>}
         </div>
       )}
-      <p className={cn('text-[13px] font-medium leading-snug text-foreground break-words line-clamp-3', card.columnId === doneId && 'text-muted-foreground')}>
+      <p className={cn('text-[13px] font-medium leading-snug text-foreground break-words line-clamp-3', tags.length === 0 && 'pr-11', card.columnId === doneId && 'text-muted-foreground')}>
         {card.title}
       </p>
       <div className="flex items-center gap-2 min-h-6">
@@ -134,7 +135,7 @@ function KanbanCardImpl({card, columns, tagsById, today, doneId, onOpen, onMove,
         onClick={() => onOpen(card.id)}
         aria-label={`Abrir tarea #${card.number}: ${card.title}`}
       />
-      <div className="pointer-events-none flex flex-col gap-2 pr-11">
+      <div className="pointer-events-none flex flex-col gap-2">
         <KanbanCardBody card={card} tagsById={tagsById} today={today} doneId={doneId} />
       </div>
       <div className="absolute right-1.5 top-1.5 flex items-center">

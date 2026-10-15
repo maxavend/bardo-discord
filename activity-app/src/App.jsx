@@ -85,6 +85,7 @@ import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
 import {WorkspaceMenu} from './WorkspaceMenu.jsx';
+import {BetaNotice} from './BetaNotice.jsx';
 import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
 import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
 
@@ -2123,6 +2124,9 @@ function App() {
           docReturn={route.type === 'doc' ? docReturn : null}
           onNavigateModule={href => go(href, {skipTransition: true})}
         />
+      )}
+      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || route.type === 'kanban' || (route.type === 'doc' && currentDoc)) && (
+        <BetaNotice />
       )}
       {settingsTab && (
         <Suspense fallback={null}>

@@ -85,3 +85,12 @@ test('Ajustes personales: tema y «Al abrir Bardo» se recuerdan', async ({page}
   await expect(page).toHaveURL(/#kanban$/);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
+
+test('el aviso de beta se puede cerrar y no vuelve a aparecer', async ({page}) => {
+  const notice = page.getByRole('note', {name: 'Aviso de beta'});
+  await expect(notice).toContainText('Bardo está en beta');
+  await notice.getByRole('button', {name: 'Cerrar aviso de beta'}).click();
+  await expect(notice).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('note', {name: 'Aviso de beta'})).toHaveCount(0);
+});

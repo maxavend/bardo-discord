@@ -55,7 +55,7 @@ test('campos y botones vecinos tienen el mismo alto', async ({page}) => {
   await page.getByPlaceholder('¿Qué hay que hacer?').press('Escape');
   expect(await page.evaluate(auditAdjacentHeights), 'Tareas').toEqual([]);
   // Filtros y su menú ⋯ en la misma fila.
-  const toolbar = await page.evaluate(rowHeights, '[aria-label="Filtrar tareas"] button, [aria-label="Más opciones del tablero"]');
+  const toolbar = await page.evaluate(rowHeights, '[aria-label="Filtrar tareas"] button, [data-kanban-toolbar-control]');
   expect(new Set(toolbar).size, `filtros: ${toolbar}`).toBe(1);
 
   await page.getByRole('button', {name: /Abrir tarea #1/}).click();
