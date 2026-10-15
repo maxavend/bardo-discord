@@ -2,6 +2,21 @@
 
 
 
+## v0.6.0 (beta): Tareas, Hub, Ajustes — 15 de octubre de 2026
+
+- Código: `390595d` (PR #24). Worker activo al 100%: `06bb29b2-db67-4609-984f-c59b6f8d50d2` (deploy de GitHub, mismo build que `2d7fc7cb-05c9-44ec-9aa7-64618cb4eb25`).
+- Migraciones remotas aplicadas: `0013_kanban`, `0014_workspaces`, `0015_settings` (todas aditivas; verificadas las 9 tablas nuevas).
+- Comandos del servidor registrados: 10, incluidos `/tarea` y `/tareas`, con las descripciones nuevas.
+- Novedades: Tareas (Kanban por canal), Hub de módulos, Ajustes en tres niveles, repaso de copy, aviso de beta.
+- Validación: 459 unitarias, 302 E2E en 7 viewports, lint/tipos/build. Producción: `/` 200; APIs nuevas responden 401 sin sesión.
+- Pendiente en Discord: dar al bot «Crear hilos públicos» y «Enviar mensajes en hilos» en los canales donde se usen hilos.
+
+Rollback del Worker (no deshace las migraciones; son aditivas y la versión anterior las ignora):
+
+```sh
+npx wrangler rollback 8043114d-f9c9-4648-84ef-335fd2fb7495 --message 'Volver a v0.5.0' --yes
+```
+
 ## Recuperación fuera de Inicio — 13 de octubre de 2026, 14:02 Chile
 
 - Código: `bbf6f0c`. Worker activo al 100%: `8e788332-f3ec-4f21-a072-3e71cd063278`.
