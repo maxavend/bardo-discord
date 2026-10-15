@@ -166,7 +166,7 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(Math.abs(audit.contentInset - audit.contentRightInset)).toBeLessThanOrEqual(1);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
-  expect(audit.headerTargets.map(target => target.name)).toEqual(['Reuniones', 'Tareas', 'Subir archivo', 'Crear documento', 'Cambiar a modo claro']);
+  expect(audit.headerTargets.map(target => target.name)).toEqual(['Subir archivo', 'Crear documento', 'Cambiar a modo claro']);
   // Tolerate only floating-point layout noise (31.999998px), not smaller targets.
   const layoutEpsilon = 0.001;
   expect(audit.headerTargets.every(({w, h}) => w + layoutEpsilon >= 32 && h + layoutEpsilon >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();

@@ -706,6 +706,115 @@ button { font-size: 14px; }
   border-bottom: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Hub de módulos. Escritorio: pestañas en el header, mismo lenguaje que
+   TabsList (cápsula muted, activa en background). Móvil: barra inferior. */
+.module-hub-tabs { display: none; }
+@media (min-width: 768px) {
+  .module-hub-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 36px;
+    margin-inline-start: 8px;
+    padding: 4px;
+    border-radius: 9999px;
+    background: var(--muted);
+  }
+}
+.module-hub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding-inline: 12px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  color: color-mix(in oklab, var(--foreground) 60%, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color var(--duration-fast, 150ms) var(--ease-smooth-out, ease), background-color var(--duration-fast, 150ms) var(--ease-smooth-out, ease);
+}
+.module-hub-tab:hover { color: var(--foreground); }
+.module-hub-tab[aria-current="page"] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 0.06); }
+.dark .module-hub-tab[aria-current="page"] { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
+.module-hub-tab:focus-visible, .module-hub-bar-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet: el nombre del módulo importa más que el ícono; se quita el ícono. */
+  .module-hub-tab { padding-inline: 10px; }
+  .module-hub-tab > svg { display: none; }
+}
+.module-hub-bar {
+  /* Cápsula flotante de vidrio, como la tab bar nativa (iOS 26 / Material 3). */
+  --hub-bar-height: 62px;
+  --hub-bar-inset: 4px;
+  position: fixed;
+  inset-inline: calc(16px + var(--bardo-safe-left, 0px)) calc(16px + var(--bardo-safe-right, 0px));
+  bottom: calc(10px + var(--bardo-safe-bottom, 0px));
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: var(--hub-bar-height);
+  padding: var(--hub-bar-inset);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--background) 70%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  box-shadow:
+    0 10px 30px -8px oklch(0 0 0 / 0.45),
+    inset 0 1px 0 color-mix(in oklab, var(--foreground) 8%, transparent);
+  transition: height 260ms cubic-bezier(0.32, 0.72, 0, 1), inset-inline 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (min-width: 768px) { .module-hub-bar { display: none; } }
+.module-hub-bar[data-minimized] { --hub-bar-height: 48px; inset-inline: calc(48px + var(--bardo-safe-left, 0px)) calc(48px + var(--bardo-safe-right, 0px)); }
+/* Indicador de vidrio que se desliza a la pestaña activa. */
+.module-hub-bar-indicator {
+  position: absolute;
+  top: var(--hub-bar-inset);
+  bottom: var(--hub-bar-inset);
+  left: var(--hub-bar-inset);
+  width: calc((100% - 2 * var(--hub-bar-inset)) / 4);
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground) 10%, transparent);
+  transform: translateX(calc(var(--hub-index, 0) * 100%));
+  transition: transform 380ms cubic-bezier(0.34, 1.36, 0.64, 1);
+  pointer-events: none;
+}
+.module-hub-bar-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  border-radius: 9999px;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 200ms ease, transform 160ms ease;
+}
+.module-hub-bar-item:active { transform: scale(0.94); }
+.module-hub-bar-item[aria-current="page"] { color: var(--primary); }
+.dark .module-hub-bar-item[aria-current="page"] { color: color-mix(in oklab, var(--primary) 70%, white); }
+.module-hub-bar-label { line-height: 1.1; max-height: 14px; transition: opacity 200ms ease, max-height 260ms cubic-bezier(0.32, 0.72, 0, 1); }
+.module-hub-bar[data-minimized] .module-hub-bar-label { opacity: 0; max-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .module-hub-bar, .module-hub-bar-indicator, .module-hub-bar-item, .module-hub-bar-label { transition: none; }
+}
+/* Avisos flotantes sobre la barra inferior, nunca debajo. */
+@media (max-width: 767px) {
+  :root[data-hub-bar="visible"] .bardo-toaster { bottom: calc(62px + 10px + var(--bardo-safe-bottom, 0px) + 12px); }
+  :root[data-hub-bar="visible"] .library,
+  :root[data-hub-bar="visible"] .kanban-page,
+  :root[data-hub-bar="visible"] .planner-module-root { padding-bottom: calc(96px + var(--bardo-safe-bottom, 0px)); }
+}
 .topbar-center { color: var(--muted); font-size: 12px; line-height: 1.3; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .icon-button-circle { border-radius: 9999px !important; }

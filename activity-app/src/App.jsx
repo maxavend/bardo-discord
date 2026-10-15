@@ -53,7 +53,6 @@ import {
   Archive,
   ArrowDownToLine,
   ArrowUpRightFromSquare,
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -62,7 +61,6 @@ import {
   File,
   FileArrowUp,
   FileText,
-  LayoutColumns3,
   LinkSlash,
   Magnifier,
   Moon,
@@ -84,6 +82,7 @@ import {PlannerModule} from './planner/PlannerModule.jsx';
 import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
+import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
 
 // Tareas carga su propio chunk (con dnd-kit) solo al abrirse.
 const KanbanModule = lazy(() => import('./kanban/KanbanModule.jsx'));
@@ -639,25 +638,13 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
   const isPlanner = route.type === 'planner';
   const isKanban = route.type === 'kanban';
   const isHome = route.type === 'home';
-  const moduleButton = (module, label, Icon) => (
-    <Button
-      variant="secondary"
-      size="sm"
-      onClick={() => onNavigateModule?.(module)}
-      aria-label={label}
-      className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-    >
-      <Icon width={14} height={14} aria-hidden="true" /> <span className="header-label">{label}</span>
-    </Button>
-  );
+  const isPlannerSubview = isPlanner && route.tab && route.tab !== 'home';
 
   return (
     <DocsHeader
       className={isHome || isLibrary || isPlanner || isKanban ? 'library-header' : ''}
       actions={isKanban ? (
         <div key="kanban-actions" className="header-slot-enter flex items-center gap-2">
-          {moduleButton('docs', 'Documentos', FileText)}
-          {moduleButton('planner', 'Reuniones', Calendar)}
           <Button
             variant="default"
             size="sm"
@@ -670,17 +657,6 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
-          {/* Same responsive pattern as the library: labels collapse to icons on narrow phones. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigateModule?.('docs')}
-            aria-label="Documentos"
-            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-          >
-            <FileText width={14} height={14} aria-hidden="true" /> <span className="header-label">Documentos</span>
-          </Button>
-          {route.tab === 'home' && moduleButton('kanban', 'Tareas', LayoutColumns3)}
           {route.tab === 'home' && (
             <Button
               variant="default"
@@ -695,16 +671,6 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : isLibrary ? (
         <div key="library-actions" className="header-slot-enter flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigateModule?.('planner')}
-            aria-label="Reuniones"
-            className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
-          >
-            <Calendar width={14} height={14} aria-hidden="true" /> <span className="header-label">Reuniones</span>
-          </Button>
-          {moduleButton('kanban', 'Tareas', LayoutColumns3)}
           <input
             ref={fileInputRef}
             className="library-file-input"
@@ -747,36 +713,29 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         </div>
       ) : null}
     >
-      {isHome ? <span className="topbar-title font-bold">Bardo</span> : isKanban ? (
-        <a key="kanban-brand" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
-          <span>Bardo</span>
-        </a>
-      ) : isPlanner ? (
-        route.tab && route.tab !== 'home' ? (
-          <Button
-            key="planner-back"
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            aria-label="Volver"
-            className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
-          >
-            <ChevronLeft width={15} height={15} /> Volver
-          </Button>
-        ) : (
-          <a key="planner-brand" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
-            <span>Bardo</span>
-          </a>
-        )
-      ) : isLibrary ? (
-        <a key="library-title" href="#home" aria-label="Bardo · Inicio" className="topbar-title home-brand header-slot-enter font-bold text-sm tracking-tight text-foreground">
-          <span>Bardo</span>
-        </a>
-      ) : (
+      {/* La marca es siempre el mismo elemento (no se vuelve a montar ni a
+          animar al cambiar de vista); en una subvista la reemplaza "Volver". */}
+      {isPlannerSubview ? (
+        <Button
+          key="planner-back"
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          aria-label="Volver"
+          className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
+        >
+          <ChevronLeft width={15} height={15} /> Volver
+        </Button>
+      ) : doc && !isHome && !isLibrary && !isPlanner && !isKanban ? (
         <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : 'Volver a Documentos'} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
+      ) : (
+        <a key="brand" href="#home" aria-label="Bardo · Inicio" aria-current={isHome ? 'page' : undefined} className="topbar-title home-brand">
+          <span>Bardo</span>
+        </a>
       )}
+      <ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />
     </DocsHeader>
   );
 }
@@ -2126,9 +2085,14 @@ function App() {
           onPlannerNew={() => go('#planner-new')}
           onKanbanNew={() => setKanbanQuickAdd(value => value + 1)}
           docReturn={route.type === 'doc' ? docReturn : null}
-          onNavigateModule={(mod) => go(mod === 'planner' ? '#planner' : mod === 'kanban' ? '#kanban' : '#docs')}
+          onNavigateModule={href => go(href, {skipTransition: true})}
         />
       )}
+      <ModuleBar
+        active={moduleForRoute(route)}
+        visible={routeShowsHubBar(route)}
+        onNavigate={href => go(href, {skipTransition: true})}
+      />
       {route.type === 'kanban' && (
         <Suspense fallback={<p className="mt-24 text-center text-sm text-muted-foreground" role="status">Cargando tareas…</p>}>
           <KanbanModule
