@@ -83,6 +83,7 @@ import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} 
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
+import {WorkspaceMenu} from './WorkspaceMenu.jsx';
 
 // Tareas carga su propio chunk (con dnd-kit) solo al abrirse.
 const KanbanModule = lazy(() => import('./kanban/KanbanModule.jsx'));
@@ -731,9 +732,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
       ) : (
-        <a key="brand" href="#home" aria-label="Bardo · Inicio" aria-current={isHome ? 'page' : undefined} className="topbar-title home-brand">
-          <span>Bardo</span>
-        </a>
+        <WorkspaceMenu key="brand" />
       )}
       <ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />
     </DocsHeader>

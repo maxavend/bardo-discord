@@ -15,7 +15,10 @@ import {
   loadLiveSessionState,
   loadPlannerSession,
   loadPlannerSessionOwner,
+  loadWorkspaceName,
   saveLiveSessionState,
+  saveWorkspaceName,
+  WORKSPACE_NAME_MAX,
   savePlannerSession,
   updatePlannerSession,
 } from './db.js';
@@ -313,9 +316,10 @@ async function handleSingle(request, env, session, route) {
 async function routePlannerApi(request, url, env) {
   const isContextRoute = url.pathname === DISCORD_CONTEXT_PATH;
   const isMemberSearch = url.pathname === '/api/discord/members';
+  const isWorkspaceRoute = url.pathname === '/api/workspace';
   const plannerRoute = parsePlannerRoute(url.pathname);
 
-  if (!isContextRoute && !isMemberSearch && !plannerRoute) return null;
+  if (!isContextRoute && !isMemberSearch && !isWorkspaceRoute && !plannerRoute) return null;
   if (plannerRoute?.invalid) return apiError(400, 'invalid_route', 'Identificador de reunión inválido.');
 
   const auth = await requireDocsSession(request, env);
@@ -341,9 +345,24 @@ async function routePlannerApi(request, url, env) {
   // 1. Channel Context: roles, members, permissions
   if (isContextRoute && request.method === 'GET') {
     const context = await getUserChannelContext(env, session.guildId, session.userId, session.channelId);
-    return json(context);
+    const workspaceName = env.DB ? await loadWorkspaceName(env.DB, session.guildId, session.channelId) : null;
+    return json({ ...context, workspaceName: workspaceName || null });
   }
   if (isContextRoute) return methodNotAllowed();
+
+  // Nombre del espacio de trabajo del canal: lo puede cambiar cualquiera que vea el canal.
+  if (isWorkspaceRoute) {
+    if (request.method !== 'PATCH') return methodNotAllowed();
+    if (!env.DB) return apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible.');
+    const body = await readJsonBody(request);
+    if (body.error) return body.error;
+    const name = String(body.payload.name ?? '').replace(/\s+/g, ' ').trim();
+    if (name.length > WORKSPACE_NAME_MAX) {
+      return apiError(422, 'name_too_long', `El nombre puede tener hasta ${WORKSPACE_NAME_MAX} caracteres.`);
+    }
+    const saved = await saveWorkspaceName(env.DB, session.guildId, session.channelId, name, session.userId);
+    return json({ workspaceName: saved });
+  }
 
   if (!env.DB) {
     return apiError(503, 'database_unavailable', 'La base de datos de Bardo no está disponible.');

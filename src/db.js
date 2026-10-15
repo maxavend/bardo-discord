@@ -986,3 +986,25 @@ export async function cleanupExpiredRecords(db, now = new Date()) {
     kanbanNotifications: Number(results?.[3]?.meta?.changes || 0),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Espacio de trabajo (nombre visible del canal en Bardo)
+
+export const WORKSPACE_NAME_MAX = 60;
+
+export async function loadWorkspaceName(db, guildId, channelId) {
+  return db.prepare('SELECT name FROM workspaces WHERE guild_id = ? AND channel_id = ?')
+    .bind(guildId, channelId).first('name');
+}
+
+/** Guarda el nombre; uno vacío vuelve al nombre del canal. */
+export async function saveWorkspaceName(db, guildId, channelId, name, userId) {
+  if (!name) {
+    await db.prepare('DELETE FROM workspaces WHERE guild_id = ? AND channel_id = ?').bind(guildId, channelId).run();
+    return null;
+  }
+  await db.prepare(`INSERT INTO workspaces (guild_id, channel_id, name, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(guild_id, channel_id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
+    .bind(guildId, channelId, name, new Date().toISOString(), userId).run();
+  return name;
+}

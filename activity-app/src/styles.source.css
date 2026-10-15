@@ -708,6 +708,17 @@ button { font-size: 14px; }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* Hub de módulos. Escritorio: pestañas en el header, mismo lenguaje que
    TabsList (cápsula muted, activa en background). Móvil: barra inferior. */
+.workspace-trigger {
+  gap: 4px;
+  max-width: min(46vw, 240px);
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.workspace-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.workspace-trigger[data-popup-open] { background: var(--accent); }
+.workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .module-hub-tabs { display: none; }
 @media (min-width: 768px) {
   .module-hub-tabs {

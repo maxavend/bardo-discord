@@ -140,6 +140,11 @@ test('cada export de db.js ejecuta su SQL contra el esquema final sin errores de
     loadLiveSessionState: () => db.loadLiveSessionState(d1, 's1'),
     deletePlannerSessionPermanently: () => db.deletePlannerSessionPermanently(d1, 's1', 'g1', 'c1'),
     cleanupExpiredRecords: () => db.cleanupExpiredRecords(d1),
+    loadWorkspaceName: () => db.loadWorkspaceName(d1, 'g1', 'c1'),
+    saveWorkspaceName: async () => {
+      await db.saveWorkspaceName(d1, 'g1', 'c1', 'Equipo', 'u1');
+      await db.saveWorkspaceName(d1, 'g1', 'c1', '', 'u1');
+    },
   };
 
   const exported = Object.entries(db).filter(([, value]) => typeof value === 'function').map(([name]) => name);

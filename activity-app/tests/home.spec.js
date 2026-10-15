@@ -16,10 +16,10 @@ test('Inicio conecta módulos, documentos recientes y borrador sin perder el his
   await expect(page.getByLabel('Título', {exact: true})).toHaveValue('Pendiente de publicar');
   await expect(page.locator('.editable-body')).toContainText('Borrador conservado');
   await page.getByRole('button', {name: 'Volver a Documentos'}).click();
-  await page.getByRole('link', {name: 'Bardo · Inicio'}).click();
+  await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Inicio'}).click();
   await page.getByRole('link', {name: 'Abrir Reuniones', exact: true}).click();
   await expect(page.getByText('Todavía no hay reuniones')).toBeVisible();
-  await page.getByRole('link', {name: 'Bardo · Inicio'}).click();
+  await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Inicio'}).click();
   await expect(page.getByRole('heading', {name: 'Tu espacio en Bardo'})).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -30,7 +30,7 @@ test('Inicio muestra la reunión creada y abre su agenda correcta', async ({page
   await page.getByPlaceholder('Nombre de la reunión').fill('Revisión desde Inicio');
   await page.getByRole('button', {name: 'Listo', exact: true}).click();
   await page.getByRole('button', {name: 'Volver', exact: true}).click();
-  await page.getByRole('link', {name: 'Bardo · Inicio'}).click();
+  await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Inicio'}).click();
   await page.getByRole('link', {name: /Revisión desde Inicio/}).click();
   await expect(page.locator('.planner-module-root')).toContainText('Revisión desde Inicio');
   await expect(page).toHaveURL(/#planner-agenda$/);

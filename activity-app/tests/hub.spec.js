@@ -19,7 +19,7 @@ test.beforeEach(async ({page}) => {
 test('el Hub lleva a cada módulo, marca el actual y la marca no se mueve', async ({page}) => {
   const hub = page.getByRole('navigation', {name: 'Módulos de Bardo'});
   await expect(hub).toHaveCount(1);
-  const brand = page.getByRole('link', {name: 'Bardo · Inicio'});
+  const brand = page.getByRole('button', {name: /^Espacio: /});
   const positions = new Set();
   for (const [label, url] of MODULES) {
     await hub.getByRole('link', {name: label}).click();
@@ -50,4 +50,19 @@ test('la barra móvil solo aparece en la vista principal de cada módulo', async
     return last ? last.getBoundingClientRect().bottom - bar.top : 0;
   });
   expect(overlap).toBeLessThanOrEqual(0);
+});
+
+test('el nombre del espacio se puede cambiar y vacío vuelve al predeterminado', async ({page}) => {
+  const trigger = page.getByRole('button', {name: /^Espacio: /});
+  await expect(trigger).toHaveText('Bardo');
+  await trigger.click();
+  await page.getByLabel('Nombre del espacio').fill('Equipo Producto');
+  await page.getByRole('button', {name: 'Guardar'}).click();
+  await expect(trigger).toHaveText('Equipo Producto');
+  await page.reload();
+  await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveText('Equipo Producto');
+  await page.getByRole('button', {name: /^Espacio: /}).click();
+  await page.getByLabel('Nombre del espacio').fill('');
+  await page.getByRole('button', {name: 'Guardar'}).click();
+  await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveText('Bardo');
 });
