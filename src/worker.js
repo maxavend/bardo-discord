@@ -12,6 +12,8 @@ import {
   buildDocsListPayload,
   buildErrorPayload,
   buildHelpPayload,
+  buildKanbanCardPayload,
+  buildKanbanListPayload,
   buildReuNewPayload,
   buildReusListPayload,
   BARDO_OPEN_PREFIX,
@@ -21,9 +23,30 @@ import { normalizeDocumentId } from './document-id.js';
 import { handleDocsApi, normalizeDocumentImport } from './docs-api.js';
 import { normalizeExportFormat, verifyExportToken } from './export-token.js';
 import { handlePlannerApi } from './planner-api.js';
+import { handleKanbanApi } from './kanban-api.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
 import { sessionCanAccessDocument } from './document-access.js';
-import { discordUnavailableResponse, isDiscordUnavailableError } from './discord-permissions.js';
+import {
+  DISCORD_PERMISSION,
+  createDiscordPermissionChecker,
+  discordUnavailableResponse,
+  isDiscordUnavailableError,
+} from './discord-permissions.js';
+import { getOriginalInteractionMessage } from './discord-bot.js';
+import {
+  claimKanbanNotification,
+  countActiveKanbanCards,
+  ensureKanbanBoard,
+  finishKanbanNotification,
+  insertKanbanCard,
+  listKanbanCards,
+  loadKanbanBoard,
+  loadKanbanStructure,
+  rankForPosition,
+  setKanbanCardMessageId,
+} from './kanban-db.js';
+import { notifyAssignment } from './kanban-notify.js';
+import { KANBAN_LIMITS, compareCards } from '../activity-app/src/kanban/kanban-shared.js';
 import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
 import { REU_DESCRIPTION_MAX, REU_DURATION_MAX_MINUTES, TITLE_MAX } from './limits.js';
 import {
@@ -352,6 +375,149 @@ async function createDocumentFromCommand(interaction, env) {
   });
 }
 
+function addDaysIso(isoDate, days) {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+/** "hoy", "mañana" o AAAA-MM-DD → fecha ISO; null si no se pidió; false si no es válida. */
+export function parseTaskDueDate(value, timeZone = DEFAULT_TIME_ZONE) {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) return null;
+  const today = todayInTimeZone(timeZone);
+  if (text === 'hoy') return today;
+  if (text === 'mañana' || text === 'manana') return addDaysIso(today, 1);
+  return isValidIsoDate(text) ? text : false;
+}
+
+function interactionActor(interaction) {
+  const user = interaction.member?.user || interaction.user || {};
+  return { id: user.id || null, name: interaction.member?.nick || user.global_name || user.username || 'Alguien' };
+}
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/** Id del mensaje público de /tarea (el aviso), para anclar el hilo y enlazar el MD. */
+async function originalResponseMessageId(env, interaction) {
+  if (!interaction.application_id || !interaction.token) return null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const original = await getOriginalInteractionMessage(env, interaction.application_id, interaction.token);
+    if (original.ok && original.data?.id) return original.data.id;
+    await delay(400 * (attempt + 1));
+  }
+  return null;
+}
+
+async function createTaskFromCommand(interaction, env, ctx) {
+  if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible.');
+  if (!interaction.guild_id || !interaction.channel_id) {
+    return ephemeral('Las tareas se crean dentro de un canal de un servidor de Discord.');
+  }
+  const options = interaction.data?.options || [];
+  const title = String(options.find(opt => opt.name === 'titulo')?.value || '').trim().slice(0, TITLE_MAX);
+  if (!title) return ephemeral('Escribe qué hay que hacer en `titulo`.');
+  const fecha = options.find(opt => opt.name === 'fecha')?.value;
+  const dueDate = parseTaskDueDate(fecha, env.BARDO_TIME_ZONE || DEFAULT_TIME_ZONE);
+  if (dueDate === false) {
+    return ephemeral(`La fecha «${fecha}» no es válida. Usa AAAA-MM-DD (por ejemplo 2026-10-15), «hoy» o «mañana».`);
+  }
+
+  const actor = interactionActor(interaction);
+  const assigneeId = options.find(opt => opt.name === 'responsable')?.value || null;
+  let assignee = null;
+  if (assigneeId) {
+    const user = interaction.data?.resolved?.users?.[assigneeId] || {};
+    const member = interaction.data?.resolved?.members?.[assigneeId] || {};
+    if (user.bot) return ephemeral('Elige a una persona como responsable, no a un bot.');
+    assignee = { id: String(assigneeId), name: (member.nick || user.global_name || user.username || 'Miembro').slice(0, 100) };
+    if (assignee.id !== String(actor.id)) {
+      // Discord incluye los permisos del miembro en el canal; si no, se calculan.
+      const viewBit = DISCORD_PERMISSION.VIEW_CHANNEL;
+      let canView;
+      try {
+        canView = member.permissions !== undefined
+          ? (BigInt(member.permissions) & viewBit) === viewBit
+          : await createDiscordPermissionChecker(env, interaction.guild_id, assignee.id).canViewChannel(interaction.channel_id);
+      } catch (error) {
+        if (isDiscordUnavailableError(error)) return ephemeral('Discord no respondió al revisar permisos. Inténtalo de nuevo en unos segundos.');
+        throw error;
+      }
+      if (!canView) return ephemeral(`<@${assignee.id}> no puede ver este canal. Elige a alguien que sí pueda.`);
+    }
+  }
+
+  let board;
+  let card;
+  let created;
+  let column;
+  try {
+    board = await ensureKanbanBoard(env.DB, interaction.guild_id, interaction.channel_id, actor.id || 'unknown');
+    const { columns } = await loadKanbanStructure(env.DB, board.id);
+    column = columns.find(item => !item.isDone) || columns[0];
+    if (await countActiveKanbanCards(env.DB, board.id) >= KANBAN_LIMITS.activeCards) {
+      return ephemeral(`El tablero de este canal llegó a ${KANBAN_LIMITS.activeCards} tareas activas. Archiva algunas desde Bardo.`);
+    }
+    const { rank } = await rankForPosition(env.DB, board.id, column.id);
+    ({ card, created } = await insertKanbanCard(env.DB, board, {
+      id: crypto.randomUUID(),
+      columnId: column.id,
+      rank,
+      title,
+      assignee,
+      dueDate,
+      sourceRef: `command:${interaction.id}`,
+    }, actor.id || 'unknown'));
+  } catch (error) {
+    console.error('Error creando tarea con /tarea:', error);
+    return ephemeral('No se pudo crear la tarea. Inténtalo de nuevo en unos segundos.');
+  }
+
+  const notifyOthers = Boolean(card.assignee && String(card.assignee.id) !== String(actor.id));
+  // La respuesta pública ES el aviso en el canal: se registra para no duplicarlo.
+  if (created && notifyOthers && await claimKanbanNotification(env.DB, card.id, card.assignee.id, 'channel', { status: 'sent' })) {
+    ctx.waitUntil((async () => {
+      const messageId = await originalResponseMessageId(env, interaction);
+      if (messageId) await finishKanbanNotification(env.DB, board.id, card.id, card.assignee.id, 'channel', { status: 'sent', messageId });
+      await notifyAssignment(env, { board, card: { ...card, messageId }, actor, channelNotice: false });
+    })().catch(error => console.error('Kanban /tarea follow-up failed', error)));
+  } else if (created) {
+    ctx.waitUntil(originalResponseMessageId(env, interaction)
+      .then(messageId => messageId && setKanbanCardMessageId(env.DB, board.id, card.id, messageId))
+      .catch(error => console.error('Kanban /tarea message id failed', error)));
+  }
+
+  return jsonResponse({
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: buildKanbanCardPayload({ card, columnName: column?.name, actorName: actor.name, verb: 'creó', mention: notifyOthers }),
+  });
+}
+
+async function listTasksFromCommand(interaction, env) {
+  if (!env.DB) return ephemeral('La base de datos de Bardo no está disponible.');
+  if (!interaction.guild_id || !interaction.channel_id) {
+    return ephemeral('Las tareas de Bardo solo están disponibles dentro de un canal de servidor.');
+  }
+  const mine = Boolean((interaction.data?.options || []).find(opt => opt.name === 'mias')?.value);
+  const userId = interactionActor(interaction).id;
+  try {
+    const board = await loadKanbanBoard(env.DB, interaction.guild_id, interaction.channel_id);
+    if (!board) return jsonResponse({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: buildKanbanListPayload({ mine }) });
+    const [{ columns }, cards] = await Promise.all([loadKanbanStructure(env.DB, board.id), listKanbanCards(env.DB, board.id)]);
+    const openColumns = columns.filter(column => !column.isDone);
+    const position = new Map(openColumns.map((column, index) => [column.id, index]));
+    const open = cards
+      .filter(card => position.has(card.columnId) && (!mine || card.assignee?.id === userId))
+      .sort((a, b) => (position.get(a.columnId) - position.get(b.columnId)) || compareCards(a, b));
+    return jsonResponse({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: buildKanbanListPayload({ cards: open, columns: openColumns, mine, total: open.length }),
+    });
+  } catch (error) {
+    console.error('Error listando tareas:', error);
+    return ephemeral('No se pudieron cargar las tareas de este canal. Intenta de nuevo en unos segundos.');
+  }
+}
+
 async function handleCommandInteraction(interaction, env, ctx) {
   const commandName = interaction.data?.name;
 
@@ -510,6 +676,14 @@ async function handleCommandInteraction(interaction, env, ctx) {
     });
   }
 
+  if (commandName === 'tarea') {
+    return createTaskFromCommand(interaction, env, ctx);
+  }
+
+  if (commandName === 'tareas') {
+    return listTasksFromCommand(interaction, env);
+  }
+
   if (commandName === 'bardo') {
     if (!interaction.guild_id || !interaction.channel_id) {
       return ephemeral('Bardo se abre dentro de un canal de un servidor de Discord.');
@@ -615,7 +789,8 @@ async function handleComponentInteraction(interaction, env, ctx) {
 
   // Non-document routes like planner, new document, the library, etc.
   const target = customId.slice(BARDO_OPEN_PREFIX.length);
-  const isSpecialTarget = target === 'home' || target === 'docs' || target.startsWith('planner') || target.startsWith('new-doc');
+  const isSpecialTarget = target === 'home' || target === 'docs' || target.startsWith('planner') || target.startsWith('new-doc')
+    || target === 'kanban' || target.startsWith('kanban-card:');
 
   if (isSpecialTarget) {
     // Saved as a launch intent too: some Discord mobile clients don't forward
@@ -999,6 +1174,9 @@ async function routeRequest(request, env, ctx) {
 
   const plannerApiResponse = await handlePlannerApi(request, url, env);
   if (plannerApiResponse) return plannerApiResponse;
+
+  const kanbanApiResponse = await handleKanbanApi(request, url, env, ctx);
+  if (kanbanApiResponse) return kanbanApiResponse;
 
   if (url.pathname.startsWith(DOCUMENT_API_PREFIX)) {
     const route = parseDocumentApiPath(url.pathname);

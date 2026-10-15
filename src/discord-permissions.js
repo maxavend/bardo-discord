@@ -8,6 +8,8 @@ export const DISCORD_PERMISSION = {
   MANAGE_MESSAGES: 1n << 13n,
   MANAGE_EVENTS: 1n << 33n,
   MANAGE_THREADS: 1n << 34n,
+  CREATE_PUBLIC_THREADS: 1n << 35n,
+  SEND_MESSAGES_IN_THREADS: 1n << 38n,
 };
 
 function asPermissionBits(value) {

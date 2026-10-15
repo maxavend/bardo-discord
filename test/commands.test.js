@@ -19,6 +19,15 @@ test('los títulos opcionales de documentos también están limitados', () => {
   }
 });
 
-test('se registran los ocho comandos esperados', () => {
-  assert.deepEqual(Object.keys(byName).sort(), ['ayuda', 'bardo', 'doc-new', 'doc-upload', 'docs', 'reu-new', 'reus', 'upload-docs']);
+test('se registran los diez comandos esperados', () => {
+  assert.deepEqual(Object.keys(byName).sort(),
+    ['ayuda', 'bardo', 'doc-new', 'doc-upload', 'docs', 'reu-new', 'reus', 'tarea', 'tareas', 'upload-docs']);
+});
+
+test('/tarea pide título y acepta responsable y fecha opcionales', () => {
+  assert.equal(option('tarea', 'titulo').required, true);
+  assert.equal(option('tarea', 'titulo').max_length, TITLE_MAX);
+  assert.equal(option('tarea', 'responsable').type, 6);
+  assert.equal(option('tarea', 'fecha').max_length, 10);
+  assert.equal(option('tareas', 'mias').type, 5);
 });

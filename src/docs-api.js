@@ -221,7 +221,7 @@ async function resolveLaunchContext(request, env, session) {
       await deleteDocsLaunchIntent(env.DB, session.userId, session.guildId, `${LAUNCH_TARGET_PREFIX}${requested}`);
       return { contextDocumentId: documentId, launchTarget: requested };
     }
-  } else if (requested && !requested.startsWith(LAUNCH_TARGET_PREFIX)) {
+  } else if (requested && !requested.startsWith(LAUNCH_TARGET_PREFIX) && !requested.startsWith('kanban')) {
     if (await documentSharedInSessionChannel(env, session, requested)) return { contextDocumentId: requested, launchTarget: null };
   }
 

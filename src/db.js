@@ -971,14 +971,18 @@ export async function cleanupExpiredRecords(db, now = new Date()) {
   const nowIso = now.toISOString();
   const intentCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const contextCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const noticeCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const results = await db.batch([
     db.prepare('DELETE FROM docs_sessions WHERE expires_at <= ?').bind(nowIso),
     db.prepare('DELETE FROM docs_launch_intents WHERE created_at < ?').bind(intentCutoff),
     db.prepare('DELETE FROM activity_contexts WHERE created_at < ?').bind(contextCutoff),
+    // Solo el registro de avisos ya resueltos; las tareas nunca se borran solas.
+    db.prepare("DELETE FROM kanban_notifications WHERE updated_at < ? AND status != 'pending'").bind(noticeCutoff),
   ]);
   return {
     sessions: Number(results?.[0]?.meta?.changes || 0),
     launchIntents: Number(results?.[1]?.meta?.changes || 0),
     activityContexts: Number(results?.[2]?.meta?.changes || 0),
+    kanbanNotifications: Number(results?.[3]?.meta?.changes || 0),
   };
 }

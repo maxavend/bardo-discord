@@ -393,6 +393,10 @@ export const HELP_TEXT = [
   '`/reu-new` — agenda una reunión (título, fecha AAAA-MM-DD, hora HH:MM, duración, descripción).',
   '`/reus` — muestra las reuniones programadas, en curso y terminadas.',
   '',
+  '**Tareas**',
+  '`/tarea` — crea una tarea en el tablero del canal (título, responsable y fecha opcionales) y avisa a quien la recibe.',
+  '`/tareas` — te muestra (solo a ti) las tareas abiertas del canal; con `mias:true`, solo las tuyas.',
+  '',
   '**Ayuda**',
   '`/ayuda` — muestra esta guía.',
   '`/upload-docs` — alias de /doc-upload; hace lo mismo.',
@@ -420,6 +424,174 @@ export function buildHelpPayload() {
     allowed_mentions: { parse: [] },
     components: [container.toJSON()],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Tareas (Kanban)
+
+const KANBAN_PRIORITY_TEXT = { high: 'Prioridad alta', urgent: '🔺 Urgente' };
+const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+const KANBAN_LIST_CARDS_MAX = 10;
+const KANBAN_LIST_BUTTONS_MAX = 5;
+
+export function kanbanCardCustomId(cardId) {
+  return `${BARDO_OPEN_PREFIX}kanban-card:${cardId}`;
+}
+
+export function formatKanbanDueDate(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || '');
+  if (!match) return null;
+  return `${Number(match[3])} ${MONTHS_ES[Number(match[2]) - 1]}`;
+}
+
+function kanbanCardTitle(card) {
+  return `#${card.number} · ${escapeDiscordMarkdown(truncateText(card.title || 'Sin título', 180))}`;
+}
+
+function kanbanMetaLine(card, { columnName = null } = {}) {
+  const parts = [];
+  if (card.assignee?.id) parts.push(`Responsable: <@${card.assignee.id}>`);
+  const due = formatKanbanDueDate(card.dueDate);
+  if (due) parts.push(`Vence: **${due}**`);
+  if (KANBAN_PRIORITY_TEXT[card.priority]) parts.push(KANBAN_PRIORITY_TEXT[card.priority]);
+  if (columnName) parts.push(`En **${escapeDiscordMarkdown(columnName)}**`);
+  return parts.join(' · ');
+}
+
+function openKanbanCardRow(cardId, label = 'Abrir tarjeta') {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Primary).setCustomId(kanbanCardCustomId(cardId)),
+  );
+}
+
+/** Aviso público de una tarea creada o asignada. Solo menciona a quien la recibe. */
+export function buildKanbanCardPayload({ card, columnName = null, actorName = null, verb = 'asignó', mention = true }) {
+  const meta = kanbanMetaLine(card, { columnName });
+  const byline = actorName ? `*${escapeDiscordMarkdown(truncateText(actorName, 80))} ${verb} esta tarea.*` : null;
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## 📌 ${kanbanCardTitle(card)}`));
+  const body = [meta, byline].filter(Boolean).join('\n');
+  if (body) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(truncateText(body, 1000)));
+  container.addActionRowComponents(openKanbanCardRow(card.id));
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    allowed_mentions: { parse: [], users: mention && card.assignee?.id ? [String(card.assignee.id)] : [] },
+    components: [container.toJSON()],
+  };
+}
+
+/** Lista efímera de /tareas: abiertas, agrupadas por columna. */
+export function buildKanbanListPayload({ cards = [], columns = [], mine = false, total = cards.length }) {
+  const heading = mine ? '# 📋 Tus tareas abiertas' : '# 📋 Tareas abiertas';
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(heading))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+
+  const shown = cards.slice(0, KANBAN_LIST_CARDS_MAX);
+  if (!shown.length) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(mine
+      ? 'No tienes tareas abiertas en este canal. 🎉'
+      : 'No hay tareas abiertas en este canal.\nCrea una con `/tarea`.'));
+  } else {
+    const sections = [];
+    for (const column of columns) {
+      const inColumn = shown.filter(card => card.columnId === column.id);
+      if (!inColumn.length) continue;
+      const lines = inColumn.map(card => {
+        const extra = [card.assignee?.id ? `<@${card.assignee.id}>` : null,
+          formatKanbanDueDate(card.dueDate) ? `vence ${formatKanbanDueDate(card.dueDate)}` : null].filter(Boolean).join(' · ');
+        return `• **#${card.number}** ${escapeDiscordMarkdown(truncateText(card.title, 90))}${extra ? ` — ${extra}` : ''}`;
+      });
+      sections.push(`**${escapeDiscordMarkdown(column.name)}**\n${lines.join('\n')}`);
+    }
+    if (total > shown.length) sections.push(`*…y ${total - shown.length} más en el tablero.*`);
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(truncateText(sections.join('\n\n'), 3000)));
+    container
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
+      .addActionRowComponents(new ActionRowBuilder().addComponents(
+        ...shown.slice(0, KANBAN_LIST_BUTTONS_MAX).map(card => new ButtonBuilder()
+          .setLabel(`#${card.number} ${truncateText(card.title, 40)}`)
+          .setStyle(ButtonStyle.Secondary)
+          .setCustomId(kanbanCardCustomId(card.id))),
+      ));
+  }
+  container.addActionRowComponents(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setLabel('Abrir tablero').setStyle(ButtonStyle.Primary).setCustomId(`${BARDO_OPEN_PREFIX}kanban`),
+  ));
+
+  return {
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    allowed_mentions: { parse: [] },
+    components: [container.toJSON()],
+  };
+}
+
+export function discordMessageUrl(guildId, channelId, messageId = null) {
+  return `https://discord.com/channels/${guildId}/${channelId}${messageId ? `/${messageId}` : ''}`;
+}
+
+/** MD a quien recibe tareas. Sin descripción (privacidad); enlace al canal. */
+export function buildKanbanDmPayload({ card = null, cards = card ? [card] : [], guildId, channelId, messageId = null, actorName = null, channelName = null }) {
+  const where = channelName ? ` en **#${escapeDiscordMarkdown(channelName)}**` : '';
+  const many = cards.length > 1;
+  const what = many ? `${cards.length} tareas` : 'una tarea';
+  const who = actorName
+    ? `${escapeDiscordMarkdown(truncateText(actorName, 80))} te asignó ${what}${where}.`
+    : `Te asignaron ${what}${where}.`;
+  const lines = cards.slice(0, 10).map(item => {
+    const due = formatKanbanDueDate(item.dueDate);
+    return `${many ? '• ' : ''}**${kanbanCardTitle(item)}**${due ? ` — vence ${due}` : ''}`;
+  });
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## 📌 ${many ? 'Nuevas tareas para ti' : 'Nueva tarea para ti'}`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(truncateText(`${who}\n${lines.join('\n')}`, 2000)))
+    .addActionRowComponents(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setLabel('Ver en el canal').setStyle(ButtonStyle.Link).setURL(discordMessageUrl(guildId, channelId, messageId)),
+    ));
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    allowed_mentions: { parse: [] },
+    components: [container.toJSON()],
+  };
+}
+
+/** Un solo aviso para todas las tareas creadas desde los acuerdos de una reunión. */
+export function buildKanbanBulkAssignedPayload({ cards = [], sessionTitle = null, actorName = null }) {
+  const title = sessionTitle ? ` de «${escapeDiscordMarkdown(truncateText(sessionTitle, 80))}»` : '';
+  const lines = cards.slice(0, 20).map(card =>
+    `• **#${card.number}** ${escapeDiscordMarkdown(truncateText(card.title, 90))}${card.assignee?.id ? ` — <@${card.assignee.id}>` : ''}`);
+  if (cards.length > 20) lines.push(`*…y ${cards.length - 20} más.*`);
+  const byline = actorName ? `\n\n*${escapeDiscordMarkdown(truncateText(actorName, 80))} convirtió los acuerdos en tareas.*` : '';
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ✅ Tareas de la reunión${title}`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(truncateText(`${lines.join('\n')}${byline}`, 3000)))
+    .addActionRowComponents(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setLabel('Abrir Tareas').setStyle(ButtonStyle.Primary).setCustomId(`${BARDO_OPEN_PREFIX}kanban`),
+    ));
+  const users = [...new Set(cards.map(card => card.assignee?.id).filter(Boolean).map(String))].slice(0, 100);
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    allowed_mentions: { parse: [], users },
+    components: [container.toJSON()],
+  };
+}
+
+/** Primer mensaje de un hilo creado sin mensaje previo: suma al hilo a quienes menciona. */
+export function buildKanbanThreadStarterPayload({ card, actorId = null }) {
+  const people = [...new Set([card.assignee?.id, actorId].filter(Boolean).map(String))];
+  const mentions = people.map(id => `<@${id}>`).join(' ');
+  const meta = kanbanMetaLine(card);
+  const content = [`## 📌 ${kanbanCardTitle(card)}`, meta, mentions ? `${mentions} — conversemos esta tarea aquí.` : 'Conversemos esta tarea aquí.']
+    .filter(Boolean).join('\n');
+  return {
+    content: truncateText(content, 1900),
+    allowed_mentions: { parse: [], users: people },
+  };
+}
+
+export function kanbanThreadName(card) {
+  return truncateText(`#${card.number} · ${card.title || 'Tarea'}`, 100);
 }
 
 export function buildErrorPayload(message) {

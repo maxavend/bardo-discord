@@ -70,6 +70,31 @@ const reusCommand = new SlashCommandBuilder()
   .setName('reus')
   .setDescription('Muestra las reuniones programadas, en curso y terminadas de este canal.');
 
+const tareaCommand = new SlashCommandBuilder()
+  .setName('tarea')
+  .setDescription('Crea una tarea en el tablero de este canal y avisa a quien la recibe.')
+  .addStringOption(titleOption('Qué hay que hacer.', true))
+  .addUserOption((option) =>
+    option
+      .setName('responsable')
+      .setDescription('Quién se hace cargo (recibe una mención y un mensaje directo).'),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('fecha')
+      .setDescription('Fecha límite: AAAA-MM-DD, «hoy» o «mañana».')
+      .setMaxLength(10),
+  );
+
+const tareasCommand = new SlashCommandBuilder()
+  .setName('tareas')
+  .setDescription('Te muestra (solo a ti) las tareas abiertas de este canal.')
+  .addBooleanOption((option) =>
+    option
+      .setName('mias')
+      .setDescription('Mostrar solo las tareas asignadas a ti.'),
+  );
+
 const bardoCommand = new SlashCommandBuilder()
   .setName('bardo')
   .setDescription('Abre el Inicio de Bardo en este canal.');
@@ -89,6 +114,8 @@ export const allCommands = [
   docsCommand,
   reuNewCommand,
   reusCommand,
+  tareaCommand,
+  tareasCommand,
   helpCommand,
   legacyUploadCommand,
 ];
