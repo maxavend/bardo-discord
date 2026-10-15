@@ -48,6 +48,7 @@ import {
   normalizeServerSession,
   toPlannerEvent,
   isDefaultEmptySession,
+  isDemoPlannerState,
 } from './planner-store.js';
 import {
   createPlannerSyncEngine,
@@ -284,6 +285,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
    */
   const upsertPlannerEvent = useCallback((session) => {
     if (!session?.id) return;
+    // Los datos de demostración nunca entran a la lista real.
+    if (!shouldLoadDemoFixture() && isDemoPlannerState(session)) return;
     setPlannerEvents((previous) => {
       const existing = previous.find((event) => eventIdOf(event) === session.id);
       const entry = {
@@ -1010,8 +1013,10 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     await finalizeIntoCurrentSession();
     const previousLive = sessionStateRef.current;
     const leaving = plannerStateRef.current;
-    // The list entry of the agenda being left gets its latest local content.
-    if (leaving?.id && leaving.id !== targetId) upsertPlannerEvent(leaving);
+    // The list entry of the agenda being left gets its latest local content
+    // (never an untouched placeholder that was never saved: it would be a
+    // meeting the server doesn't know and that can't be archived).
+    if (leaving?.id && leaving.id !== targetId && !isDefaultEmptySession(leaving)) upsertPlannerEvent(leaving);
     const source = leaving?.id === (event.id || targetId) ? leaving : event;
     const next = replacePlannerLocally({...normalizeServerSession(source), id: event.id || targetId, eventId: targetId});
     setSelectedEventId(targetId);
@@ -1116,6 +1121,11 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         try {
           await deletePlannerSessionPermanentlyById(targetId);
         } catch (error) {
+          // Ya no existe en el servidor: quitarla de la lista es el resultado esperado.
+          if (error?.status === 404) {
+            toast('Reunión eliminada');
+            return;
+          }
           setArchivedPlannerEvents((prev) => [target, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
           toast(`No se pudo eliminar la reunión. ${describeSyncError(error, {retrying: false})}`);
           return;
@@ -1126,6 +1136,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     }
 
     const previousEvent = targetId ? plannerEvents.find((ev) => eventIdOf(ev) === targetId) || target : target;
+    let missingOnServer = false;
 
     if (targetId) {
       setPlannerEvents((prev) => prev.filter((ev) => eventIdOf(ev) !== targetId));
@@ -1142,9 +1153,14 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
         await deletePlannerSessionById(targetId);
       } catch (error) {
         setArchivedPlannerEvents((prev) => prev.filter((ev) => eventIdOf(ev) !== targetId));
-        setPlannerEvents((prev) => [previousEvent, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
-        toast(`No se pudo archivar la reunión. ${describeSyncError(error, {retrying: false})}`);
-        return;
+        // El servidor no la tiene (nunca se guardó): se quita de la lista y listo.
+        if (error?.status === 404) {
+          missingOnServer = true;
+        } else {
+          setPlannerEvents((prev) => [previousEvent, ...prev.filter((ev) => eventIdOf(ev) !== targetId)]);
+          toast(`No se pudo archivar la reunión. ${describeSyncError(error, {retrying: false})}`);
+          return;
+        }
       }
     }
 
@@ -1162,7 +1178,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       handleTabChange('home');
     }
 
-    toast('Reunión archivada. Puedes restaurarla desde «Archivadas».');
+    toast(missingOnServer ? 'Reunión quitada de la lista.' : 'Reunión archivada. Puedes restaurarla desde «Archivadas».');
   }, [deleteSessionModal.session, deleteSessionModal.action, plannerEvents, clearUndo, commitSessionState, finalizeIntoCurrentSession, handleTabChange]);
 
   const handledInitialTabRef = useRef(null);

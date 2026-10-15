@@ -274,12 +274,17 @@ export function shouldLoadDemoFixture() {
   return params.get('demo') === '1';
 }
 
+// Huella de los datos de demostración: sus ids, descripciones y menciones
+// exactas. No basta el título: un equipo puede tener su propia «Weekly».
+const DEMO_IDS = new Set(['demo-session-weekly-design', ...DEMO_PLANNER_EVENTS.map((event) => event.eventId)]);
+const DEMO_DESCRIPTIONS = new Set([DEMO_PLANNER_FIXTURE.description, ...DEMO_PLANNER_EVENTS.map((event) => event.description)]);
+
 export function isDemoPlannerState(state) {
   if (!state || typeof state !== 'object') return false;
-  return state.id === 'demo-session-weekly-design'
-    || state.sessionId === 'demo-session-weekly-design'
-    || state.title === 'Weekly de Diseño & SD'
-    || state.title === 'Weekly Diseño & SD'
+  const ids = [state.id, state.eventId, state.sessionId].filter(Boolean).map(String);
+  return ids.some((id) => DEMO_IDS.has(id) || id.startsWith('demo-session-'))
+    || DEMO_DESCRIPTIONS.has(state.description)
+    || state.mentions === DEMO_PLANNER_FIXTURE.mentions
     || (state.host === 'Camila' && (state.mentions || '').includes('@diseño'));
 }
 
@@ -322,7 +327,8 @@ export function loadPlannerEvents() {
   if (typeof window !== 'undefined') {
     const channelSessions = window.__bardoChannelSessions || [];
     if (channelSessions.length > 0) {
-      return channelSessions.map(toPlannerEvent);
+      const events = channelSessions.map(toPlannerEvent);
+      return shouldLoadDemoFixture() ? events : events.filter((event) => !isDemoPlannerState(event));
     }
     if (!shouldLoadDemoFixture()) {
       return [];
