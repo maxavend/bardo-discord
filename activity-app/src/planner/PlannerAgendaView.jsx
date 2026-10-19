@@ -1307,9 +1307,10 @@ export function PlannerAgendaView({
                       return (
                         <div
                           key={decision.id}
-                          className="group px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-muted/40 hover:bg-muted/60 border border-border/40 text-xs text-foreground flex items-center justify-between gap-3 transition-colors"
+                          className="group px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-muted/40 hover:bg-muted/60 border border-border/40 text-xs text-foreground flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 transition-colors"
                         >
-                          <div className="flex items-start gap-2.5 min-w-0">
+                          {/* En pantallas angostas el responsable baja a su propia línea en vez de aplastar el texto. */}
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1 basis-56">
                             <Handshake className="size-4 text-foreground/80 shrink-0 mt-0.5" />
                             <span className="min-w-0">
                               <span className="font-medium break-words leading-snug">{decision.content}</span>
@@ -1317,7 +1318,7 @@ export function PlannerAgendaView({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 ml-auto">
                             {ownerDisplayName && (
                               <div className="inline-flex items-center gap-1.5">
                                 <Avatar
