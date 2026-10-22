@@ -77,6 +77,7 @@ export function getAllDiscordEntities() {
       name: r.name,
       tag: r.tag || `@${r.name}`,
       color: r.color || '#5865F2',
+      memberCount: Number.isFinite(r.memberCount) ? r.memberCount : null,
     }));
 
     members = (channelContext.members || []).map((m, idx) => ({
@@ -86,6 +87,7 @@ export function getAllDiscordEntities() {
       globalName: m.globalName || m.username,
       tag: m.tag || `@${m.globalName || m.username}`,
       avatar: m.avatar,
+      roles: m.roles || [],
       avatarColor: DISCORD_PALETTES[idx % DISCORD_PALETTES.length],
     }));
   } else if (!isProduction && shouldLoadDemoFixture()) {
@@ -140,6 +142,38 @@ export function getAllDiscordEntities() {
   return { members, roles };
 }
 
+/** The channel's whole member list is loaded: search locally, no Discord round trip. */
+function hasCompleteDirectory() {
+  return Boolean(typeof window !== 'undefined' && window.__bardoChannelContext?.memberDirectory?.complete);
+}
+
+/** A person of the directory by display name, @tag or username (case-insensitive). */
+export function findMemberByName(name, members = getAllDiscordEntities().members) {
+  const key = String(name || '').trim().replace(/^@/, '').toLowerCase();
+  if (!key) return null;
+  return members.find((member) => [member.globalName, member.username, member.tag?.replace(/^@/, '')]
+    .some((value) => String(value || '').toLowerCase() === key)) || null;
+}
+
+/** Comma-separated names ("Ana, Pedro") ↔ list; used for one or more facilitators. */
+export function splitPeople(value = '') {
+  return String(value || '').split(',').map((name) => name.trim().replace(/^@/, '')).filter(Boolean);
+}
+
+/** Discord photo when the person is known, initials on their color otherwise. */
+export function MemberAvatar({name = '', member = undefined, size = 'xs', className = ''}) {
+  const match = member === undefined ? findMemberByName(name) : member;
+  const label = match?.globalName || String(name || '').replace(/^@/, '') || '?';
+  const color = match?.avatarColor
+    || DISCORD_PALETTES[[...label].reduce((sum, char) => sum + char.charCodeAt(0), 0) % DISCORD_PALETTES.length];
+  return (
+    <Avatar size={size} className={`font-bold shrink-0 shadow-2xs ${className}`} style={{ backgroundColor: `${color}30`, color }}>
+      {match?.avatar && <AvatarImage src={match.avatar} alt="" />}
+      <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>{label.slice(0, 2).toUpperCase()}</AvatarFallback>
+    </Avatar>
+  );
+}
+
 function useDiscordDirectory(query, active = true) {
   const [result, setResult] = useState(null);
   const [revision, setRevision] = useState(0);
@@ -147,6 +181,7 @@ function useDiscordDirectory(query, active = true) {
   const retryAt = useRef(0);
   const search = query.trim().replace(/^@/, '');
   const production = isProductionActivity();
+  const complete = hasCompleteDirectory();
   const scope = production ? `${window.__BARDO_GUILD_ID__}:${window.__BARDO_CHANNEL_ID__}:${window.__BARDO_USER__?.id}` : 'local';
   useEffect(() => {
     const update = () => setRevision(value => value + 1);
@@ -154,7 +189,7 @@ function useDiscordDirectory(query, active = true) {
     return () => window.removeEventListener('bardo-participants-change', update);
   }, []);
   useEffect(() => {
-    if (!production || !active || search.length < 2 || search.length > 100) return;
+    if (!production || complete || !active || search.length < 2 || search.length > 100) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
@@ -177,7 +212,7 @@ function useDiscordDirectory(query, active = true) {
       }
     }, Math.max(300, retryAt.current - Date.now()));
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [production, active, search, scope, retry]);
+  }, [production, complete, active, search, scope, retry]);
   // Read local suggestions on render; live participant events trigger revision.
   void revision;
   const entities = getAllDiscordEntities();
@@ -186,13 +221,18 @@ function useDiscordDirectory(query, active = true) {
   for (const [index, member] of (current?.members || []).entries()) {
     byId.set(member.id, {...member, avatarColor: DISCORD_PALETTES[index % DISCORD_PALETTES.length], ...byId.get(member.id)});
   }
-  const message = !production ? '' : search.length < 2
+  const message = !production || complete ? '' : search.length < 2
     ? 'Escribe al menos 2 letras.'
     : search.length > 100 ? 'La búsqueda admite hasta 100 caracteres.'
     : !current ? 'Buscando en Discord…'
     : current.message || (current.truncated ? 'Hay más coincidencias. Escribe un nombre más completo.' : 'Puede que no todas tengan acceso a este canal.');
   return {...entities, members: [...byId.values()], message, failed: current?.error,
     retry: () => { setResult(null); setRetry(value => value + 1); }};
+}
+
+function roleHint(role) {
+  if (role.memberCount === null || role.memberCount === undefined) return role.tag;
+  return role.memberCount === 1 ? '1 persona' : `${role.memberCount} personas`;
 }
 
 function DirectoryStatus({directory}) {
@@ -219,6 +259,7 @@ export function PlannerMemberPicker({
   singleSelect = false,
   hideRoles = false,
   placeholder = 'Buscar personas o roles…',
+  onPickMember,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -235,8 +276,10 @@ export function PlannerMemberPicker({
     if (singleSelect) {
       if (selectedSet.has(cleanTag)) {
         onChange('');
+        onPickMember?.(null);
       } else {
         onChange(cleanTag);
+        onPickMember?.(members.find((m) => m.tag.toLowerCase() === cleanTag.toLowerCase()) || null);
       }
       setIsOpen(false);
       return;
@@ -255,6 +298,7 @@ export function PlannerMemberPicker({
     e?.stopPropagation();
     if (singleSelect) {
       onChange('');
+      onPickMember?.(null);
       return;
     }
     const nextKeys = new Set(Array.from(selectedSet));
@@ -285,6 +329,7 @@ export function PlannerMemberPicker({
 
     if (singleSelect) {
       onChange(cleanTag);
+      onPickMember?.(null);
       setIsOpen(false);
     } else {
       const nextKeys = new Set(Array.from(selectedSet));
@@ -318,16 +363,21 @@ export function PlannerMemberPicker({
                 const label = matchedRole?.name || matchedMember?.globalName || tag;
                 const color = matchedRole?.color || matchedMember?.avatarColor || '#5865F2';
 
+                // Avatar inset = vertical padding, so the photo sits evenly inside the pill.
                 return (
                   <Badge
                     key={tag}
                     variant="secondary"
-                    className="gap-1.5 py-1 px-2.5 rounded-xl border border-border/50 text-xs font-medium text-foreground shrink-0"
+                    className={`gap-1.5 py-1 pr-2.5 rounded-xl border border-border/50 text-xs font-medium text-foreground shrink-0 ${matchedRole ? 'pl-2.5' : 'pl-1'}`}
                   >
-                    <span
-                      className="size-2 rounded-full shrink-0"
-                      style={{ backgroundColor: color }}
-                    />
+                    {matchedRole ? (
+                      <span
+                        className="size-2 rounded-full shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
+                    ) : (
+                      <MemberAvatar name={label} member={matchedMember || null} size="xxs" />
+                    )}
                     <span>{label}</span>
                     <button
                       type="button"
@@ -393,7 +443,7 @@ export function PlannerMemberPicker({
                           #
                         </span>
                         <span className="text-xs font-medium text-foreground truncate">{role.name}</span>
-                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{role.tag}</span>
+                        <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{roleHint(role)}</span>
                       </div>
                     </CommandItem>
                   );
@@ -404,7 +454,7 @@ export function PlannerMemberPicker({
             {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
             {members.length > 0 && (
-              <CommandGroup heading="Personas del servidor e invitados">
+              <CommandGroup heading={hasCompleteDirectory() ? 'Personas del canal e invitados' : 'Personas del servidor e invitados'}>
                 {members.map((member) => {
                   const isSelected = selectedSet.has(member.tag);
                   return (
@@ -621,7 +671,7 @@ export function SearchableParticipantMenu({
                       {role.name}
                     </span>
                     <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">
-                      {role.tag}
+                      {roleHint(role)}
                     </span>
                   </div>
                 </CommandItem>
@@ -633,7 +683,7 @@ export function SearchableParticipantMenu({
         {!hideRoles && roles.length > 0 && members.length > 0 && <CommandSeparator />}
 
         {members.length > 0 && (
-          <CommandGroup heading={allowGuests ? 'Personas del servidor e invitados' : 'Personas del servidor'}>
+          <CommandGroup heading={`${hasCompleteDirectory() ? 'Personas del canal' : 'Personas del servidor'}${allowGuests ? ' e invitados' : ''}`}>
             {members.map((member) => {
               const isSelected =
                 selectedKeys.has(member.tag) ||
@@ -714,6 +764,38 @@ export function SinglePersonPicker({
           onSelectionChange={(keys) => pick(keys[0] ? keys[0].replace(/^@/, '') : '')}
           onClear={value ? () => pick('') : undefined}
           clearLabel={clearLabel}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * One or more people (meeting facilitators), stored as "Ana, Pedro". The menu
+ * stays open to pick several; "Quitar" clears them all.
+ */
+export function MultiPersonPicker({
+  value = '',
+  onChange,
+  renderTrigger,
+  clearLabel = 'Quitar a quienes facilitan',
+  align = 'start',
+}) {
+  const [open, setOpen] = useState(false);
+  const names = splitPeople(value);
+  const selectedKeys = new Set(names.map((name) => `@${name}`));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={renderTrigger({open})} />
+      <PopoverContent align={align} className="p-0 w-auto overflow-hidden">
+        <SearchableParticipantMenu
+          hideRoles
+          selectedKeys={selectedKeys}
+          onSelectionChange={(keys) => onChange?.(keys.map((key) => key.replace(/^@/, '')).join(', '))}
+          onClear={names.length ? () => { onChange?.(''); setOpen(false); } : undefined}
+          clearLabel={clearLabel}
+          placeholder="Buscar persona…"
         />
       </PopoverContent>
     </Popover>

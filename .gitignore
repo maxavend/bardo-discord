@@ -15,3 +15,7 @@ skills-lock.json
 # Playwright
 activity-app/test-results/
 activity-app/playwright-report/
+
+# Portafolio: capturas generadas (se regeneran con portfolio/capture.mjs)
+portfolio/capturas/
+portfolio/.preview/

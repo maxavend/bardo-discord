@@ -25,9 +25,13 @@ import {
   FileTextIcon,
 } from '@/components/ui/animated-icons';
 import { computeSessionRecap } from './session-assistant-engine.js';
-import { formatMeetingDateLong, generateMinutesMarkdown } from './planner-store.js';
+import { collectMeetingAgreements, formatMeetingDateLong, generateMinutesMarkdown } from './planner-store.js';
+import { MemberAvatar } from './PlannerMemberPicker.jsx';
+
+const TRIAGE_LABELS = {task: 'En Tareas', dm: 'Enviado por MD', discarded: 'Descartado'};
 import { todayLocalIso } from './date-utils.js';
 import { formatSpokenDuration, getPlannedSchedule } from './time-engine.js';
+import { facilitatorsText } from './copy-tokens.js';
 import { PlannerAudioPlayer } from './PlannerAudioPlayer.jsx';
 
 // Tareas se carga solo al convertir acuerdos.
@@ -89,6 +93,7 @@ export function SessionRecapView({
   onRenameRecording,
   onDeleteRecording,
   onSaveDocToLibrary,
+  onTriageAgreements,
 }) {
   const [tasksOpen, setTasksOpen] = useState(false);
   const recap = computeSessionRecap(plannerState, sessionState);
@@ -136,9 +141,12 @@ export function SessionRecapView({
   const metaLine = [
     formatRecapDate(plannerState?.date),
     plannerState?.startTime ? `${plannerState.startTime}–${schedule.plannedEnd}` : null,
-    plannerState?.host ? `Facilita ${plannerState.host}` : null,
+    !recap.leftOpen && recap.actualDurationMinutes > 0 ? `Duró ${formatSpokenDuration(recap.actualDurationMinutes)}` : null,
+    plannerState?.host ? facilitatorsText(plannerState.host) : null,
   ].filter(Boolean).join(' · ');
   const hasDecisions = recap.decisions.length > 0;
+  const triageById = new Map(collectMeetingAgreements(plannerState, sessionState).map((agreement) => [agreement.id, agreement.triage]));
+  const pendingAgreements = recap.decisions.filter((decision) => !triageById.get(decision.id)).length;
 
   return (
     <div className="w-full max-w-4xl mx-auto pb-16 pt-2 animate-in fade-in duration-150">
@@ -213,7 +221,7 @@ export function SessionRecapView({
                   Acuerdos ({recap.decisions.length})
                 </h2>
                 <Button variant="secondary" size="sm" onClick={() => setTasksOpen(true)} className="h-7 px-2.5 text-xs gap-1.5">
-                  <ListChecks className="size-3.5" aria-hidden="true" /> Crear tareas
+                  <ListChecks className="size-3.5" aria-hidden="true" /> {pendingAgreements > 0 ? `Revisar acuerdos (${pendingAgreements})` : 'Revisar acuerdos'}
                 </Button>
               </div>
               <div className="flex flex-col gap-2">
@@ -221,6 +229,7 @@ export function SessionRecapView({
                   const block = plannerState.blocks.find((candidate) => candidate.id === decision.blockId);
                   const point = (block?.subpoints || []).find((candidate) => candidate.id === decision.pointId);
                   const ownerName = decision.owner ? decision.owner.trim().replace(/^@/, '') : null;
+                  const triage = TRIAGE_LABELS[triageById.get(decision.id)];
                   return (
                     <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -231,11 +240,15 @@ export function SessionRecapView({
                           </span>
                         )}
                       </div>
-                      {ownerName && (
-                        <span className="text-[11px] text-muted-foreground font-medium shrink-0 bg-muted/60 px-2 py-0.5 rounded-full">
-                          {ownerName}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        {triage && <span className="text-[11px] text-muted-foreground">{triage}</span>}
+                        {ownerName && (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium bg-muted/60 py-0.5 pl-0.5 pr-2 rounded-full">
+                            <MemberAvatar name={ownerName} size="xxs" />
+                            {ownerName}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   );
                 })}
@@ -331,6 +344,7 @@ export function SessionRecapView({
             onClose={() => setTasksOpen(false)}
             plannerState={plannerState}
             sessionState={sessionState}
+            onTriage={onTriageAgreements}
             onOpenTasks={() => {
               setTasksOpen(false);
               location.hash = '#kanban';

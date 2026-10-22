@@ -1,6 +1,7 @@
 import {htmlToMarkdown, markdownToHtml} from '../editor/bardo-markdown.js';
 
 export const MINUTES_DOC_ORIGIN = 'Acta de reunión';
+export const AGENDA_DOC_ORIGIN = 'Agenda de reunión';
 
 /**
  * Library document for an acta. `docData.body` is the Markdown produced by
@@ -15,7 +16,7 @@ export function buildMinutesDoc(docData, {existing = null, now = new Date().toIS
     title,
     description: docData?.description || '',
     body: markdownToHtml(String(docData?.body || ''), title),
-    origin: MINUTES_DOC_ORIGIN,
+    origin: docData?.origin || MINUTES_DOC_ORIGIN,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     createdByName: existing?.createdByName || docData?.createdByName || editorName,

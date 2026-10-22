@@ -19,12 +19,14 @@ export function PlannerCaptureModal({
 }) {
   const [content, setContent] = useState('');
   const [owner, setOwner] = useState('');
+  const [ownerMember, setOwnerMember] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setContent('');
       setOwner('');
+      setOwnerMember(null);
       setIsSubmitting(false);
     }
   }, [isOpen]);
@@ -42,6 +44,8 @@ export function PlannerCaptureModal({
         blockId: targetBlock?.id || initialBlockId,
         content: content.trim(),
         owner: cleanOwner || null,
+        // Real Discord id when picked from the directory: Tareas and MD use it.
+        ownerId: cleanOwner && /^\d+$/.test(String(ownerMember?.id || '')) ? String(ownerMember.id) : null,
       });
       onClose();
     } finally {
@@ -75,6 +79,7 @@ export function PlannerCaptureModal({
             <PlannerMemberPicker
               value={owner}
               onChange={setOwner}
+              onPickMember={setOwnerMember}
               singleSelect
               hideRoles
               placeholder="Elegir responsable"

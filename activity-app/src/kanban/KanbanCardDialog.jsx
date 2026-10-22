@@ -469,8 +469,8 @@ export function KanbanCardDialog({
               value={card.assignee}
               onChange={assignee => patch({assignee})}
               renderTrigger={() => (
-                <Button variant="outline" size="sm" className="h-8 w-full justify-start gap-2 px-2 text-xs font-medium" aria-label={card.assignee ? `Responsable: ${card.assignee.name}. Cambiar` : 'Elegir responsable'}>
-                  {card.assignee ? <AssigneeAvatar assignee={card.assignee} className="size-5" /> : <UserRound className="size-3.5 text-muted-foreground" />}
+                <Button variant="outline" size="sm" className={cn('h-8 w-full justify-start gap-2 text-xs font-medium', card.assignee ? 'pl-0.75 pr-2' : 'px-2')} aria-label={card.assignee ? `Responsable: ${card.assignee.name}. Cambiar` : 'Elegir responsable'}>
+                  {card.assignee ? <AssigneeAvatar assignee={card.assignee} /> : <UserRound className="size-3.5 text-muted-foreground" />}
                   <span className={cn('truncate', !card.assignee && 'text-muted-foreground')}>{card.assignee?.name || 'Sin responsable'}</span>
                 </Button>
               )}

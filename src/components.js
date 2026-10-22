@@ -81,12 +81,13 @@ export function escapeDiscordMarkdown(text) {
 }
 
 export const OPEN_DOCUMENT_LABEL = 'Abrir documento';
+export const OPEN_AGENDA_LABEL = 'Abrir agenda';
 
 /**
  * Card of a document in a channel. `attribution` (e.g. "Compartido por Ana")
  * is shown under the title; the footer names the real button.
  */
-export function buildDocumentPayload(document, { documentId, attribution = null }) {
+export function buildDocumentPayload(document, { documentId, attribution = null, meetingId = null }) {
   const previewSource = document.pages?.[0] || document.originalMarkdown || '';
   const preview = createDocumentPreview(previewSource);
   const cleanId = normalizeDocumentId(documentId) || documentId;
@@ -94,14 +95,24 @@ export function buildDocumentPayload(document, { documentId, attribution = null 
   // Use a real Discord message component again. The Worker acknowledges this
   // interaction inline with LAUNCH_ACTIVITY (type 12), preserving guild/channel
   // context for the embedded Activity without relying on an external deep-link.
+  // A meeting's agenda opens as a document and also links to the meeting itself.
+  const openLabel = meetingId ? OPEN_AGENDA_LABEL : OPEN_DOCUMENT_LABEL;
   const openRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel(OPEN_DOCUMENT_LABEL)
+      .setLabel(openLabel)
       .setStyle(ButtonStyle.Primary)
       .setCustomId(`${BARDO_OPEN_PREFIX}${cleanId}`),
   );
+  if (meetingId) {
+    openRow.addComponents(
+      new ButtonBuilder()
+        .setLabel('Abrir reunión')
+        .setStyle(ButtonStyle.Secondary)
+        .setCustomId(`${BARDO_OPEN_PREFIX}planner-session:${meetingId}`),
+    );
+  }
 
-  const heading = `# 📄 ${truncateText(document.title || 'Documento', 200)}`;
+  const heading = `# ${meetingId ? '🗓️' : '📄'} ${truncateText(document.title || 'Documento', 200)}`;
   const byline = attribution ? `\n-# ${escapeDiscordMarkdown(truncateText(attribution, 120))}` : '';
 
   const container = new ContainerBuilder()
@@ -120,7 +131,9 @@ export function buildDocumentPayload(document, { documentId, attribution = null 
         .setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`*Vista previa · Pulsa **${OPEN_DOCUMENT_LABEL}** para leerlo completo en Bardo.*`),
+      new TextDisplayBuilder().setContent(meetingId
+        ? `*Vista previa · Pulsa **${OPEN_AGENDA_LABEL}** para ver los temas completos o **Abrir reunión** para prepararla en Bardo.*`
+        : `*Vista previa · Pulsa **${OPEN_DOCUMENT_LABEL}** para leerlo completo en Bardo.*`),
     )
     .addActionRowComponents(openRow);
 
@@ -548,6 +561,32 @@ export function buildKanbanDmPayload({ card = null, cards = card ? [card] : [], 
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(truncateText(`${who}\n${lines.join('\n')}`, 2000)))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setLabel('Ver en el canal').setStyle(ButtonStyle.Link).setURL(discordMessageUrl(guildId, channelId, messageId)),
+    ));
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    allowed_mentions: { parse: [] },
+    components: [container.toJSON()],
+  };
+}
+
+/** MD con los acuerdos de una reunión que quedaron a cargo de una persona. */
+export function buildAgreementDmPayload({ items = [], meetingTitle = null, guildId, channelId, actorName = null, channelName = null }) {
+  const where = channelName ? ` en **#${escapeDiscordMarkdown(channelName)}**` : '';
+  const meeting = meetingTitle ? ` de «${escapeDiscordMarkdown(truncateText(meetingTitle, 80))}»` : '';
+  const many = items.length > 1;
+  const who = actorName
+    ? `${escapeDiscordMarkdown(truncateText(actorName, 80))} te envía ${many ? `${items.length} acuerdos` : 'un acuerdo'} de la reunión${meeting}${where}.`
+    : `Tienes ${many ? `${items.length} acuerdos` : 'un acuerdo'} de la reunión${meeting}${where}.`;
+  const lines = items.slice(0, 10).map(item => {
+    const origin = item.origin ? `\n-# ${escapeDiscordMarkdown(truncateText(item.origin, 120))}` : '';
+    return `${many ? '• ' : ''}**${escapeDiscordMarkdown(truncateText(item.content, 300))}**${origin}`;
+  });
+  if (items.length > 10) lines.push(`*…y ${items.length - 10} más.*`);
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## 🤝 ${many ? 'Acuerdos a tu cargo' : 'Acuerdo a tu cargo'}`))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(truncateText(`${who}\n\n${lines.join('\n')}`, 3000)))
+    .addActionRowComponents(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setLabel('Ir al canal').setStyle(ButtonStyle.Link).setURL(discordMessageUrl(guildId, channelId, null)),
     ));
   return {
     flags: MessageFlags.IsComponentsV2,

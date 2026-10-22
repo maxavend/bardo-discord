@@ -43,6 +43,13 @@ export const MEETING_COPY = {
   needsBlock: 'Agrega al menos un bloque',
 };
 
+/** "Facilita Ana" / "Facilitan Ana, Pedro" for one or more facilitators ("Ana, Pedro"). */
+export function facilitatorsText(host, separator = ' ') {
+  const names = String(host || '').split(',').map((name) => name.trim()).filter(Boolean);
+  if (!names.length) return '';
+  return `${names.length > 1 ? 'Facilitan' : 'Facilita'}${separator}${names.join(', ')}`;
+}
+
 /** Status of a meeting from its live state (Home card). */
 export function liveStatusLabel(status) {
   switch (status) {

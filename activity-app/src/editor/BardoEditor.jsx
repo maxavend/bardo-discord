@@ -95,6 +95,8 @@ function formatChangeTime(doc) {
   const parts = new Intl.DateTimeFormat('es-CL', {
     hour: '2-digit',
     minute: '2-digit',
+    // es-CL usa 12 h por defecto y aquí no se muestra «p. m.»: 18:00 salía como 06:00.
+    hourCycle: 'h23',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

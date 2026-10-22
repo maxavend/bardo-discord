@@ -46,6 +46,33 @@ function applyCombinedRoleOverwrites(permissions, combined) {
   return (permissions & ~combined.deny) | combined.allow;
 }
 
+/**
+ * Channel permissions of any member (or of a bare role, with `roleIds: [id]`),
+ * from data already loaded: guild roles and the channel's own overwrites.
+ * Same order as Discord: base roles → @everyone → roles → member overwrite.
+ */
+function memberChannelPermissions({guildId, ownerId = null, roleMap, overwrites = [], userId = null, roleIds = []}) {
+  if (userId && String(ownerId) === String(userId)) return ~0n;
+  let permissions = asPermissionBits(roleMap.get(String(guildId))?.permissions);
+  for (const roleId of roleIds) permissions |= asPermissionBits(roleMap.get(String(roleId))?.permissions);
+  if ((permissions & DISCORD_PERMISSION.ADMINISTRATOR) === DISCORD_PERMISSION.ADMINISTRATOR) return ~0n;
+  permissions = applyOverwrite(permissions, overwrites.find(
+    overwrite => String(overwrite?.type) === '0' && String(overwrite?.id) === String(guildId)));
+  permissions = applyCombinedRoleOverwrites(permissions, combineRoleOverwrites(overwrites, roleIds));
+  if (userId) {
+    permissions = applyOverwrite(permissions, overwrites.find(
+      overwrite => String(overwrite?.type) === '1' && String(overwrite?.id) === String(userId)));
+  }
+  return permissions;
+}
+
+const allowsView = permissions => (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
+
+// List Guild Members pages (1000 each). Enough for team servers; larger ones
+// keep the on-demand search for whoever is past the cap.
+const MEMBER_LIST_PAGE = 1000;
+const MEMBER_LIST_MAX_PAGES = 3;
+
 const PERMISSION_CACHE_TTL_MS = 60_000;
 const DEFAULT_RETRY_AFTER_MS = 2_000;
 
@@ -164,6 +191,31 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     botToken,
     fetchImpl,
   ));
+
+  // Threads take their parent's overwrites; category children keep their own.
+  const channelOverwrites = async channel => {
+    if (!channel) return [];
+    if (![10, 11, 12].includes(channel.type)) return channel.permission_overwrites || [];
+    if (!channel.parent_id) return [];
+    const parent = await loadChannel(channel.parent_id);
+    return parent && String(parent.guild_id) === String(guildId) ? parent.permission_overwrites || [] : [];
+  };
+
+  const listGuildMembers = () => cached('member-list', async () => {
+    const members = [];
+    let after = '0';
+    for (let page = 0; page < MEMBER_LIST_MAX_PAGES; page += 1) {
+      const batch = await readDiscord(
+        `/guilds/${encodeURIComponent(guildId)}/members?limit=${MEMBER_LIST_PAGE}&after=${after}`,
+        botToken, fetchImpl,
+      );
+      if (!Array.isArray(batch)) throw new Error('Unexpected member list');
+      members.push(...batch);
+      if (batch.length < MEMBER_LIST_PAGE) return {members, complete: true};
+      after = String(batch[batch.length - 1]?.user?.id || after);
+    }
+    return {members, complete: false};
+  });
 
   const permissionCache = permissionCacheFor(fetchImpl);
   const cacheTtlMs = Number.isFinite(Number(env?.DISCORD_PERMISSION_CACHE_TTL_MS))
@@ -298,8 +350,16 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
         || (permissions & DISCORD_PERMISSION.MANAGE_CHANNELS) !== 0n
         || (permissions & DISCORD_PERMISSION.MANAGE_EVENTS) !== 0n;
 
+      const roleMap = new Map((roles || []).map(role => [String(role.id), role]));
+      const overwrites = await channelOverwrites(channel).catch(softFail([]));
+      const viewsChannel = (extra) => allowsView(memberChannelPermissions({
+        guildId, ownerId: guild?.owner_id, roleMap, overwrites, ...extra,
+      }));
+
+      // Only roles that can open this channel: offering the rest would invite
+      // people who cannot see the meeting.
       const formattedRoles = (roles || [])
-        .filter(r => r.id !== guildId && !r.managed)
+        .filter(r => r.id !== guildId && !r.managed && viewsChannel({roleIds: [String(r.id)]}))
         .map(r => ({
           id: r.id,
           type: 'role',
@@ -310,10 +370,22 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
         }))
         .sort((a, b) => b.position - a.position);
 
-      // Seed only the authenticated member. Searching queries the guild-wide
-      // directory on demand, without requiring a privileged bulk-list intent.
+      // Everyone who can see this channel, so pickers start full. Without the
+      // members intent (or past the cap) the directory falls back to the
+      // authenticated member plus the guild-wide search.
       const member = await loadMember();
-      const members = member?.user ? [formatDiscordMember(member, guildId)] : [];
+      const listed = await listGuildMembers().catch(() => null);
+      const channelMembers = (listed?.members || [])
+        .filter(item => item?.user?.id && !item.user.bot
+          && viewsChannel({userId: String(item.user.id), roleIds: (item.roles || []).map(String)}))
+        .map(item => formatDiscordMember(item, guildId));
+      const members = member?.user && !channelMembers.some(item => String(item.id) === String(member.user.id))
+        ? [formatDiscordMember(member, guildId), ...channelMembers]
+        : channelMembers;
+      const memberCounts = new Map();
+      for (const item of channelMembers) {
+        for (const roleId of item.roles || []) memberCounts.set(String(roleId), (memberCounts.get(String(roleId)) || 0) + 1);
+      }
 
       return {
         guildId,
@@ -321,8 +393,10 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
         channelName: channel?.name || null,
         guildName: guild?.name || null,
         guildIcon: guild?.icon || null,
-        memberDirectory: { mode: 'search', complete: false },
-        roles: formattedRoles,
+        memberDirectory: listed
+          ? { mode: 'list', complete: listed.complete }
+          : { mode: 'search', complete: false },
+        roles: listed ? formattedRoles.map(role => ({...role, memberCount: memberCounts.get(String(role.id)) || 0})) : formattedRoles,
         members,
         permissions: {
           canView,

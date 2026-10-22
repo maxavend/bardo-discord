@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -57,6 +57,7 @@ import { shouldLoadDemoFixture } from './planner-store.js';
 import {
   getAllDiscordEntities,
   SearchableParticipantMenu,
+  MemberAvatar,
   SinglePersonPicker,
 } from './PlannerMemberPicker.jsx';
 
@@ -355,6 +356,7 @@ export function PlannerAgendaView({
                         color: leaderColor,
                       }}
                     >
+                      {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
                       <AvatarFallback style={{ backgroundColor: `${leaderColor}30`, color: leaderColor }}>
                         {leaderName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -383,6 +385,7 @@ export function PlannerAgendaView({
           className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
           style={{ backgroundColor: `${leaderColor}35`, color: leaderColor }}
         >
+          {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
           <AvatarFallback style={{ backgroundColor: `${leaderColor}35`, color: leaderColor }}>
             {leaderName.slice(0, 2).toUpperCase()}
           </AvatarFallback>
@@ -440,6 +443,7 @@ export function PlannerAgendaView({
                             className="size-4 text-[7px] font-bold shrink-0 shadow-2xs border border-card"
                             style={{ backgroundColor: `${pColor}30`, color: pColor }}
                           >
+                            {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
                             <AvatarFallback style={{ backgroundColor: `${pColor}30`, color: pColor }}>
                               {isRole ? '#' : pName.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
@@ -502,6 +506,7 @@ export function PlannerAgendaView({
                 className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
                 style={{ backgroundColor: `${color}35`, color }}
               >
+                {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
                 <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
                   {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -980,6 +985,7 @@ export function PlannerAgendaView({
                                                   className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
                                                   style={{ backgroundColor: `${color}35`, color }}
                                                 >
+                                                  {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
                                                   <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
                                                     {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
                                                   </AvatarFallback>
@@ -1077,6 +1083,7 @@ export function PlannerAgendaView({
                                             className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
                                             style={{ backgroundColor: `${color}35`, color }}
                                           >
+                                            {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
                                             <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
                                               {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
                                             </AvatarFallback>
@@ -1178,6 +1185,7 @@ export function PlannerAgendaView({
                                         className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
                                         style={{ backgroundColor: `${color}35`, color }}
                                       >
+                                        {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
                                         <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
                                           {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
                                         </AvatarFallback>
@@ -1292,24 +1300,15 @@ export function PlannerAgendaView({
                               rawOwner.toLowerCase().includes(m.globalName.toLowerCase())
                           )
                         : null;
-                      const ownerColor =
-                        ownerMember?.avatarColor ||
-                        DISCORD_PALETTES[
-                          Math.abs(
-                            rawOwner
-                              .split('')
-                              .reduce((acc, c) => acc + c.charCodeAt(0), 0)
-                          ) % DISCORD_PALETTES.length
-                        ] ||
-                        '#E67E22';
                       const ownerDisplayName = ownerMember?.globalName || rawOwner;
 
                       return (
                         <div
                           key={decision.id}
-                          className="group px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-muted/40 hover:bg-muted/60 border border-border/40 text-xs text-foreground flex items-center justify-between gap-3 transition-colors"
+                          className="group px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-muted/40 hover:bg-muted/60 border border-border/40 text-xs text-foreground flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 transition-colors"
                         >
-                          <div className="flex items-start gap-2.5 min-w-0">
+                          {/* En pantallas angostas el responsable baja a su propia línea en vez de aplastar el texto. */}
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1 basis-56">
                             <Handshake className="size-4 text-foreground/80 shrink-0 mt-0.5" />
                             <span className="min-w-0">
                               <span className="font-medium break-words leading-snug">{decision.content}</span>
@@ -1317,18 +1316,14 @@ export function PlannerAgendaView({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 ml-auto">
                             {ownerDisplayName && (
                               <div className="inline-flex items-center gap-1.5">
-                                <Avatar
-                                  size="xs"
-                                  className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                  style={{ backgroundColor: `${ownerColor}35`, color: ownerColor }}
-                                >
-                                  <AvatarFallback style={{ backgroundColor: `${ownerColor}35`, color: ownerColor }}>
-                                    {ownerDisplayName.slice(0, 2).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
+                                <MemberAvatar
+                                  name={ownerDisplayName}
+                                  member={ownerMember || null}
+                                  className="size-4.5 border border-card text-[8px]"
+                                />
                                 <span className="text-xs text-muted-foreground font-medium">{ownerDisplayName}</span>
                               </div>
                             )}

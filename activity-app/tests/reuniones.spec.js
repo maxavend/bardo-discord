@@ -96,17 +96,19 @@ test('hora de inicio, término y facilitador se guardan y sobreviven a recargar'
   await setTime(page, 'Término', '03', '00', 'PM');
   await expect(page.getByRole('button', {name: 'Término'})).toContainText('05:30 p.m.');
 
-  // Facilitador: una sola persona, el menú se cierra al elegir y se puede quitar.
-  await page.getByRole('button', {name: 'Facilita', exact: true}).click();
+  // Facilitan: una o más personas; el menú sigue abierto para elegir varias y se pueden quitar.
+  const hosts = page.getByRole('button', {name: 'Facilitan', exact: true});
+  await hosts.click();
   await page.getByRole('option', {name: /Anderson/}).click();
-  await expect(page.getByPlaceholder('Buscar persona…')).toBeHidden();
-  await expect(page.getByRole('button', {name: 'Facilita', exact: true})).toContainText('Anderson');
-  await page.getByRole('button', {name: 'Facilita', exact: true}).click();
-  await expect(page.locator('[role="option"][data-checked="true"]')).toHaveCount(1);
-  await page.getByRole('option', {name: 'Quitar a quien facilita'}).click();
-  await expect(page.getByRole('button', {name: 'Facilita', exact: true})).toContainText('Elegir persona');
-  await page.getByRole('button', {name: 'Facilita', exact: true}).click();
   await page.getByRole('option', {name: /Paula Molina/}).click();
+  await expect(page.locator('[role="option"][data-checked="true"]')).toHaveCount(2);
+  await page.getByRole('option', {name: 'Quitar a quienes facilitan'}).click();
+  await expect(hosts).toContainText('Elegir personas');
+  await hosts.click();
+  await page.getByRole('option', {name: /Paula Molina/}).click();
+  await page.getByRole('option', {name: /Anderson/}).click();
+  await page.keyboard.press('Escape');
+  await expect(hosts).toContainText('Paula Molina, Anderson');
 
   await page.getByRole('button', {name: 'Listo'}).click();
   await expect(page.getByText('16:00 – 17:30')).toBeVisible();

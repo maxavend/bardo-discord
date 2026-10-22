@@ -87,8 +87,92 @@ test('channel-context devuelve roles y miembros reales de Discord', async () => 
   assert.equal(json.roles.length, 2);
   assert.equal(json.roles[0].name, 'Devs');
   assert.equal(json.members.length, 1);
-  assert.equal(json.memberDirectory.complete, false);
+  assert.deepEqual(json.memberDirectory, { mode: 'list', complete: true });
   assert.equal(json.members[0].globalName, 'Maxi');
+});
+
+test('channel-context lista solo a quienes ven el canal y solo los roles con acceso', async () => {
+  const db = createTestDb();
+  await insertSession(db);
+  const base = discordFetchWithMembers();
+  const env = createEnv(db, {
+    DISCORD_FETCH: async (input, init) => {
+      const url = new URL(input);
+      if (url.pathname === `/api/v10/channels/${CHANNEL}`) {
+        // Privado: @everyone sin acceso; Diseño sí; Ana excluida por overwrite propio.
+        return Response.json({ id: CHANNEL, name: 'ux-general', guild_id: GUILD, permission_overwrites: [
+          { id: GUILD, type: 0, allow: '0', deny: '1024' },
+          { id: 'role-1', type: 0, allow: '1024', deny: '0' },
+          { id: 'user-ana', type: 1, allow: '0', deny: '1024' },
+        ] });
+      }
+      if (url.pathname === `/api/v10/guilds/${GUILD}/members`) {
+        return Response.json([
+          { user: { id: 'user-123', username: 'maxi', global_name: 'Maxi', avatar: 'abc' }, roles: ['role-1'] },
+          { user: { id: 'user-456', username: 'pau', global_name: 'Paula' }, roles: ['role-1'] },
+          { user: { id: 'user-ana', username: 'ana', global_name: 'Ana' }, roles: ['role-1'] },
+          { user: { id: 'user-789', username: 'dev', global_name: 'Dev' }, roles: ['role-2'] },
+          { user: { id: 'bot-1', username: 'bot', bot: true }, roles: ['role-1'] },
+        ]);
+      }
+      return base(input, init);
+    },
+  });
+  const { status, json } = await call(env, '/api/discord/channel-context');
+  assert.equal(status, 200);
+  assert.deepEqual(json.members.map(member => member.globalName), ['Maxi', 'Paula']);
+  assert.equal(json.members[0].avatar, 'https://cdn.discordapp.com/avatars/user-123/abc.png?size=64');
+  assert.deepEqual(json.roles.map(role => [role.name, role.memberCount]), [['Diseño', 2]]);
+});
+
+test('channel-context vuelve a la búsqueda si Discord no deja listar miembros', async () => {
+  const db = createTestDb();
+  await insertSession(db);
+  const base = discordFetchWithMembers();
+  const env = createEnv(db, {
+    DISCORD_FETCH: async (input, init) => (new URL(input).pathname === `/api/v10/guilds/${GUILD}/members`
+      ? Response.json({ message: 'Missing Access', code: 50001 }, { status: 403 })
+      : base(input, init)),
+  });
+  const { status, json } = await call(env, '/api/discord/channel-context');
+  assert.equal(status, 200);
+  assert.deepEqual(json.memberDirectory, { mode: 'search', complete: false });
+  assert.deepEqual(json.members.map(member => member.globalName), ['Maxi']);
+});
+
+test('los acuerdos se envían por MD solo a quienes ven el canal', async () => {
+  const { env } = await setup();
+  const created = await createMeeting(env);
+  const sent = [];
+  const base = env.DISCORD_FETCH;
+  env.DISCORD_FETCH = async (input, init = {}) => {
+    const url = new URL(input);
+    if (url.pathname === `/api/v10/guilds/${GUILD}/members/12345678`) return new Response('{}', { status: 404 });
+    if (url.pathname === '/api/v10/users/@me/channels') return Response.json({ id: `dm-${JSON.parse(init.body).recipient_id}` });
+    if (url.pathname.startsWith('/api/v10/channels/dm-')) {
+      sent.push({ channel: url.pathname.split('/')[4], body: JSON.parse(init.body) });
+      return Response.json({ id: 'message-1' });
+    }
+    return base(input, init);
+  };
+  const { status, json } = await call(env, `/api/planner/sessions/${created.json.id}/agreements/dm`, {
+    method: 'POST',
+    body: { items: [
+      { assigneeId: '98765432', content: 'Enviar la propuesta', origin: 'Objetivos' },
+      { assigneeId: '98765432', content: 'Revisar costos' },
+      { assigneeId: '12345678', content: 'Fuera del canal' },
+      { assigneeId: 'no-es-id', content: 'Ignorado' },
+    ] },
+  });
+  assert.equal(status, 200);
+  assert.deepEqual(json.results, [
+    { assigneeId: '98765432', ok: true, code: null, count: 2 },
+    { assigneeId: '12345678', ok: false, code: 'no_access', count: 1 },
+  ]);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].channel, 'dm-98765432');
+  assert.match(JSON.stringify(sent[0].body), /Enviar la propuesta/);
+  assert.equal((await call(env, `/api/planner/sessions/${created.json.id}/agreements/dm`, { method: 'POST', body: { items: [] } })).status, 400);
 });
 
 test('POST crea una reunión y GET la lista; status NULL cuenta como activa', async () => {

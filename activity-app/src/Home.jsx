@@ -6,6 +6,7 @@ import {currentUserId, ensureKanbanLoaded, useKanbanSnapshot} from './kanban/kan
 import {assignedOpenCards, doneColumnId, todayIso} from './kanban/kanban-store.js';
 import {formatDueDate} from './kanban/kanban-ui.jsx';
 import {useWorkspace} from './workspace.js';
+import {eventStatusLabel} from './planner/copy-tokens.js';
 
 function HomeTasks() {
   const {view, loaded} = useKanbanSnapshot();
@@ -136,7 +137,7 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
           {meetings.length ? <ul className="home-list" aria-label="Reuniones recientes">
             {meetings.map(meeting => <li key={meeting.id || meeting.eventId}>
               <a className="home-item" href={`#planner-session:${encodeURIComponent(meeting.id || meeting.eventId)}`}>
-                <span className="continue-copy"><strong>{meeting.title || 'Reunión sin título'}</strong><span>{meeting.eventStatus === 'in_progress' ? 'En curso' : meeting.eventStatus === 'finished' ? 'Terminada' : 'Programada'}{meeting.date ? ` · ${dateLabel(`${meeting.date}T12:00:00`)}${meeting.startTime ? ` · ${meeting.startTime}` : ''}` : ''}</span></span>
+                <span className="continue-copy"><strong>{meeting.title || 'Reunión sin título'}</strong><span>{eventStatusLabel(meeting.eventStatus)}{meeting.date ? ` · ${dateLabel(`${meeting.date}T12:00:00`)}${meeting.startTime ? ` · ${meeting.startTime}` : ''}` : ''}</span></span>
                 <ChevronRight width={18} height={18} aria-hidden="true" />
               </a>
             </li>)}
