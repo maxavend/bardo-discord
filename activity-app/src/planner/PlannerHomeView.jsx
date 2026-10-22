@@ -29,6 +29,7 @@ import { getHomeTopSection } from './planner-store.js';
 import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
 import {
   eventStatusLabel,
+  facilitatorsText,
   formatAgreementsCountLabel,
   formatMeetingDuration,
   formatRecordingsCountLabel,
@@ -244,7 +245,7 @@ export function PlannerHomeView({
                 {participantsList.length > 6 && (
                   <span className="text-xs text-muted-foreground font-medium">+{participantsList.length - 6}</span>
                 )}
-                {host && <span className="text-xs text-muted-foreground">Facilita: {host}</span>}
+                {host && <span className="text-xs text-muted-foreground">{facilitatorsText(host, ': ')}</span>}
               </div>
             )}
 

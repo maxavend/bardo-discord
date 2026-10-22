@@ -38,6 +38,8 @@ import {
   deletePlannerSessionPermanentlyById,
   fetchArchivedPlannerSessions,
   shouldLoadDemoFixture,
+  formatMeetingDateLong,
+  generateAgendaMarkdown,
   generateDiscordAnnouncement,
   generateMinutesMarkdown,
   createEmptyLiveSession,
@@ -113,6 +115,7 @@ import {
 } from './recording-storage.js';
 
 import {RECORDING_CAPTURE_ENABLED} from './recording-policy.js';
+import {AGENDA_DOC_ORIGIN} from './minutes-doc.js';
 
 const REMOTE_POLL_MS = 4000;
 
@@ -132,7 +135,7 @@ function eventIdOf(event) {
   return event?.eventId || event?.id || null;
 }
 
-export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary}) {
+export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary, onShareDocToChannel}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
@@ -897,7 +900,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     });
   }, []);
 
-  const handleCaptureSubmit = useCallback(({blockId, content, owner = null}) => {
+  const handleCaptureSubmit = useCallback(({blockId, content, owner = null, ownerId = null}) => {
     const liveSession = sessionStateRef.current;
     const resolvedBlockId = blockId || liveSession.liveActiveBlockId || plannerStateRef.current.blocks[0]?.id;
     const isTargetLiveBlock = liveSession.liveActiveBlockId === resolvedBlockId;
@@ -911,6 +914,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       pointId,
       content,
       owner: cleanOwner,
+      ownerId: cleanOwner ? ownerId : null,
       timestamp,
     };
 
@@ -983,6 +987,41 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
       if (liveDecision) commitSessionState(restoreSessionAgreement(sessionStateRef.current, liveDecision));
     });
   }, [commitSessionState, offerUndo, updatePlanner]);
+
+  /** Remembers what was decided per acuerdo (task / dm / discarded) in agenda and live state. */
+  const handleTriageAgreements = useCallback((triageById) => {
+    const mark = (decision) => (decision?.id && triageById[decision.id] ? {...decision, triage: triageById[decision.id]} : decision);
+    updatePlanner((previous) => ({
+      ...previous,
+      blocks: previous.blocks.map((block) => (block.decisions?.length ? {...block, decisions: block.decisions.map(mark)} : block)),
+    }));
+    if ((sessionStateRef.current.decisions || []).some((decision) => triageById[decision.id])) {
+      commitSessionState({...sessionStateRef.current, decisions: sessionStateRef.current.decisions.map(mark)});
+    }
+  }, [commitSessionState, updatePlanner]);
+
+  /** The meeting's agenda as a document; stable id, so saving again updates it. */
+  const agendaDocData = useCallback(() => {
+    const planner = plannerStateRef.current;
+    const meetingId = planner.id || planner.eventId || Date.now().toString(36);
+    return {
+      id: `agenda-${meetingId}`,
+      plannerSessionId: planner.id || null,
+      title: planner.title || 'Reunión',
+      description: `Agenda de la reunión${planner.date ? ` del ${formatMeetingDateLong(planner.date)}` : ''}`,
+      origin: AGENDA_DOC_ORIGIN,
+      body: generateAgendaMarkdown(planner),
+    };
+  }, []);
+
+  const handleSaveAgendaDoc = useCallback(() => {
+    onSaveDocToLibrary?.(agendaDocData());
+  }, [agendaDocData, onSaveDocToLibrary]);
+
+  const handleShareMeeting = useCallback(async () => {
+    if (!onShareDocToChannel) return;
+    await onShareDocToChannel(agendaDocData());
+  }, [agendaDocData, onShareDocToChannel]);
 
   const handleCopyAnnouncement = useCallback(async () => {
     const copied = await copyTextToClipboard(generateDiscordAnnouncement(plannerStateRef.current));
@@ -1447,6 +1486,8 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           onToggleEditMode={handleToggleEditMode}
           onUpdateHeaderField={handleUpdateHeaderField}
           onCopyAnnouncement={handleCopyAnnouncement}
+          onShareMeeting={onShareDocToChannel ? handleShareMeeting : undefined}
+          onSaveAgendaDoc={onSaveDocToLibrary ? handleSaveAgendaDoc : undefined}
           onNewCleanSession={handleCleanSession}
           onDeleteSession={handleDeleteSessionPrompt}
           onStartSession={handleStartSession}
@@ -1519,6 +1560,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           onRenameRecording={handleRenameRecording}
           onDeleteRecording={handleDeleteRecording}
           onSaveDocToLibrary={onSaveDocToLibrary}
+          onTriageAgreements={handleTriageAgreements}
         />
       )}
       </div>

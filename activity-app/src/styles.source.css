@@ -142,6 +142,10 @@ html::before {
   pointer-events: none;
   background-color: var(--background);
 }
+/* A fixed backdrop can't reach the stable scrollbar gutter: tint it like the backdrop (black/30) while a dialog is open. */
+html:has([data-slot$="dialog-overlay"][data-open]) {
+  background-color: color-mix(in srgb, var(--background) 70%, black);
+}
 body {
   min-height: 100dvh;
   color: var(--foreground);
@@ -761,7 +765,8 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 .doc-topbar {
   position: sticky;
   top: var(--bardo-safe-top);
-  z-index: 60;
+  /* Below dialogs (z-50) so their backdrop also covers the header. */
+  z-index: 40;
   height: var(--bardo-topbar);
   padding: 0 16px;
   display: flex;

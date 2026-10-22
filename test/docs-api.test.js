@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleDocsApi } from '../src/docs-api.js';
+import { savePlannerSession } from '../src/db.js';
 import {
   CHANNEL,
   GUILD,
@@ -102,6 +103,26 @@ test('handleDocsApi reenvía un documento únicamente al canal de la sesión', a
   assert.equal(status, 200);
   assert.deepEqual(json, { ok: true, messageId: 'message-1' });
   assert.equal(postedPath, `/api/v10/channels/${CHANNEL}/messages`);
+});
+
+test('la agenda de una reunión del canal se comparte con el botón Abrir reunión', async () => {
+  const { db, env } = await setup();
+  await savePlannerSession(db, { id: 'meet-1', guildId: GUILD, channelId: CHANNEL, title: 'Weekly', blocks: [], createdBy: 'user-123', updatedBy: 'user-123' });
+  const posted = [];
+  const baseFetch = env.DISCORD_FETCH;
+  env.DISCORD_FETCH = async (input, init) => {
+    if (new URL(input).pathname === `/api/v10/channels/${CHANNEL}/messages`) {
+      posted.push(JSON.stringify(JSON.parse(init.body)));
+      return Response.json({ id: 'message-1' });
+    }
+    return baseFetch(input, init);
+  };
+  assert.equal((await call(env, '/api/docs/doc-1/message', { method: 'POST', body: { plannerSessionId: 'meet-1' } })).status, 200);
+  assert.match(posted[0], /bardo:open:planner-session:meet-1/);
+  assert.match(posted[0], /Abrir agenda/);
+  // Una reunión que no está en este canal no agrega el botón.
+  assert.equal((await call(env, '/api/docs/doc-1/message', { method: 'POST', body: { plannerSessionId: 'otra' } })).status, 200);
+  assert.doesNotMatch(posted[1], /planner-session/);
 });
 
 test('POST /api/docs crea el documento y sus ACL en una sola operación', async () => {

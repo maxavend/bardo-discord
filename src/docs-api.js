@@ -19,6 +19,7 @@ import {
   listDocumentsForChannel,
   loadDocument,
   loadDocumentSource,
+  loadPlannerSession,
   loadRecentDocsLaunchIntent,
   deleteDocsLaunchIntent,
   LAUNCH_TARGET_PREFIX,
@@ -319,6 +320,19 @@ async function handleMessage(route, request, env, session) {
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
 
+  // Agenda of a meeting: the card also opens the meeting, if it is in this channel.
+  const text = await request.text().catch(() => '');
+  let plannerSessionId = null;
+  try {
+    const raw = text ? JSON.parse(text)?.plannerSessionId : null;
+    plannerSessionId = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 128) : null;
+  } catch {
+    return apiError(400, 'invalid_json', 'No pudimos leer la solicitud. Inténtalo de nuevo.');
+  }
+  const meeting = plannerSessionId
+    ? await loadPlannerSession(env.DB, plannerSessionId, session.guildId, session.channelId)
+    : null;
+
   const discordFetch = env.DISCORD_FETCH || fetch;
   const response = await discordFetch(`https://discord.com/api/v10/channels/${encodeURIComponent(session.channelId)}/messages`, {
     method: 'POST',
@@ -329,6 +343,7 @@ async function handleMessage(route, request, env, session) {
     body: JSON.stringify(buildDocumentPayload(access.document, {
       documentId: route.id,
       attribution: `Compartido por ${sessionDisplayName(session)}`,
+      meetingId: meeting?.id || null,
     })),
   });
 

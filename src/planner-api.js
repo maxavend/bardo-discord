@@ -1,5 +1,7 @@
 import { requireDocsSession } from './discord-auth.js';
-import { loadEffectiveSettings } from './settings-db.js';
+import { loadEffectiveSettings, loadUserSettings } from './settings-db.js';
+import { buildAgreementDmPayload } from './components.js';
+import { getChannel, sendDirectMessage } from './discord-bot.js';
 import { settingsDefaults } from './settings-api.js';
 import {
   canUserViewChannel,
@@ -66,6 +68,9 @@ function parsePlannerRoute(pathname) {
   }
   if (parts.length === 2 && ['live', 'restore', 'permanent'].includes(parts[1])) {
     return { type: 'sessions', collection: false, id, action: parts[1] };
+  }
+  if (parts.length === 3 && parts[1] === 'agreements' && parts[2] === 'dm') {
+    return { type: 'sessions', collection: false, id, action: 'agreements-dm' };
   }
   return null;
 }
@@ -250,12 +255,78 @@ async function handleLive(request, env, session, sessionId) {
   return json({ ok: true, liveState });
 }
 
+const MAX_DM_AGREEMENTS = 25;
+const MAX_DM_PEOPLE = 10;
+
+async function wantsDirectMessages(env, userId) {
+  try {
+    return (await loadUserSettings(env.DB, userId)).taskDmNotices !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Sends each person the acuerdos left in their charge (one DM per person).
+ * Only to people who can see this channel, and never to someone who turned
+ * Bardo's DMs off. A failure for one person never blocks the others.
+ */
+async function handleAgreementDms(request, env, session, meeting) {
+  const body = await readJsonBody(request);
+  if (body.error) return body.error;
+  const items = (Array.isArray(body.payload.items) ? body.payload.items : [])
+    .slice(0, MAX_DM_AGREEMENTS)
+    .map(item => ({
+      assigneeId: String(item?.assigneeId ?? '').trim(),
+      content: cleanString(item?.content, 500)?.trim() || '',
+      origin: cleanString(item?.origin, 200)?.trim() || null,
+    }))
+    .filter(item => /^\d{5,25}$/.test(item.assigneeId) && item.content);
+  if (!items.length) return apiError(400, 'invalid_items', 'Elige al menos un acuerdo con responsable.');
+  if (!String(env.DISCORD_TOKEN || '').trim()) {
+    return apiError(503, 'bot_not_configured', 'Bardo no está configurado para enviar mensajes. Avisa a quien administra el bot.');
+  }
+
+  const byPerson = new Map();
+  for (const item of items) byPerson.set(item.assigneeId, [...(byPerson.get(item.assigneeId) || []), item]);
+  const channel = await getChannel(env, session.channelId);
+  const results = [];
+  // Sequential: DMs have stricter rate limits than channel messages.
+  for (const [assigneeId, list] of [...byPerson.entries()].slice(0, MAX_DM_PEOPLE)) {
+    let code = null;
+    try {
+      if (!(await canUserViewChannel(env, session.guildId, assigneeId, session.channelId))) code = 'no_access';
+    } catch (error) {
+      code = isDiscordUnavailableError(error) ? 'discord_unavailable' : 'no_access';
+    }
+    if (!code && !(await wantsDirectMessages(env, assigneeId))) code = 'opted_out';
+    if (!code) {
+      const sent = await sendDirectMessage(env, assigneeId, buildAgreementDmPayload({
+        items: list,
+        meetingTitle: meeting.title,
+        guildId: session.guildId,
+        channelId: session.channelId,
+        actorName: session.username || null,
+        channelName: channel.ok ? channel.data?.name || null : null,
+      }));
+      if (!sent.ok) code = sent.code || 'failed';
+    }
+    results.push({ assigneeId, ok: !code, code, count: list.length });
+  }
+  return json({ results });
+}
+
 async function handleSingle(request, env, session, route) {
   const sessionId = route.id;
 
   // Ownership is verified before ANY mutation (including deletes).
   const existing = await loadPlannerSession(env.DB, sessionId, session.guildId, session.channelId);
   if (!existing) return notFound();
+
+  if (route.action === 'agreements-dm') {
+    if (request.method !== 'POST') return methodNotAllowed();
+    return handleAgreementDms(request, env, session, existing);
+  }
 
   if (route.action === 'restore') {
     if (request.method !== 'POST') return methodNotAllowed();

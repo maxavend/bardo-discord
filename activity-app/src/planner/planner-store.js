@@ -1,15 +1,16 @@
 import {scopedDocsKey} from '../docs-storage.js';
-import {computePlannerTimes, getPlannedSchedule} from './time-engine.js';
+import {computePlannerTimes, getPlannedSchedule, wasMeetingLeftOpen} from './time-engine.js';
 import {
   DEFAULT_LIVE_SESSION,
   POINT_STATUS,
   SESSION_STATUS,
+  getElapsedSessionMs,
   getPointStatus,
   migrateLiveSessionState,
   normalizeLegacyLiveShape,
 } from './session-runner.js';
 import {todayLocalIso, toLocalDateIso, parseLocalDateIso} from './date-utils.js';
-import {formatMeetingDuration} from './copy-tokens.js';
+import {facilitatorsText, formatMeetingDuration} from './copy-tokens.js';
 import {plannerRequest, isPlannerRemoteEnabled} from './planner-sync.js';
 
 export const PLANNER_STORE_KEY = 'bardo-planner-session-state-v1';
@@ -768,7 +769,7 @@ export function generateDiscordAnnouncement(plannerState) {
   let text = `📢 **Reunión: ${computed.title}**\n`;
   if (mentions) text += `👥 ${mentions}\n`;
   text += `📅 **Fecha:** ${dateStr} · ⏰ **Hora:** ${startStr} a ${schedule.plannedEnd} (${formatMeetingDuration(schedule.plannedMinutes)})\n`;
-  if (computed.host) text += `👤 **Facilita:** ${computed.host}\n`;
+  if (computed.host) text += `👤 **${facilitatorsText(computed.host, ':** ')}\n`;
   if (computed.description) text += `\n> ${computed.description}\n`;
 
   text += `\n**📋 Agenda de la reunión:**\n`;
@@ -791,6 +792,47 @@ export function generateDiscordAnnouncement(plannerState) {
 }
 
 /**
+ * Agenda of a meeting as a document (Documentos): date, people, objective and
+ * the topics per block. Shared to Discord as the meeting's own card.
+ */
+export function generateAgendaMarkdown(plannerState) {
+  const computed = computePlannerTimes(plannerState);
+  const schedule = getPlannedSchedule(computed);
+  const mentions = (computed.mentions || '').trim();
+  const lines = [];
+  const meta = [
+    `**Fecha:** ${computed.date ? formatMeetingDateLong(computed.date) : 'Por confirmar'}`,
+    `**Hora:** ${computed.startTime || '10:00'} a ${schedule.plannedEnd} (${formatMeetingDuration(schedule.plannedMinutes)})`,
+  ];
+  if (computed.host) meta.push(`**${facilitatorsText(computed.host, ':** ')}`);
+  if (mentions) meta.push(`**Participan:** ${mentions}`);
+  lines.push(`> ${meta.join(' | ')}`, '');
+  if (computed.description) lines.push('## Objetivo', '', computed.description, '');
+
+  lines.push('## Agenda', '');
+  const blocks = computed.blocks || [];
+  if (!blocks.length) lines.push('*Todavía no hay temas en la agenda.*', '');
+  let blockNumber = 0;
+  for (const block of blocks) {
+    if (block.isBreak) {
+      lines.push(`*☕ ${block.title || 'Descanso'} (${formatMeetingDuration(block.durationMinutes)})*`, '');
+      continue;
+    }
+    blockNumber += 1;
+    lines.push(`### ${blockNumber}. ${block.title || 'Bloque sin título'} (${formatMeetingDuration(block.durationMinutes)})`);
+    if (block.leader) lines.push(`*Facilita: ${block.leader}*`);
+    if (block.introDesc) lines.push('', block.introDesc);
+    lines.push('');
+    for (const point of block.subpoints || []) {
+      const presenter = point.presenter ? ` · *${point.presenter}*` : '';
+      lines.push(`- ${point.title || 'Tema sin título'}${presenter}`);
+    }
+    if ((block.subpoints || []).length) lines.push('');
+  }
+  return lines.join('\n');
+}
+
+/**
  * Acuerdos of a meeting, each once. The agenda (block.decisions) and the live
  * state (sessionState.decisions) hold the same acuerdo under the same id, so
  * they are merged by id (legacy entries without id: by bloque + text). Every
@@ -810,6 +852,8 @@ export function collectMeetingAgreements(plannerState, sessionState = null) {
       id: decision.id || previous?.id || null,
       content: decision.content,
       owner: decision.owner || previous?.owner || null,
+      ownerId: decision.ownerId || previous?.ownerId || null,
+      triage: decision.triage || previous?.triage || null,
       blockId: block?.id || previous?.blockId || null,
       blockTitle: block?.title || previous?.blockTitle || 'Reunión',
       pointTitle: point?.title || previous?.pointTitle || null,
@@ -830,8 +874,16 @@ export function generateMinutesMarkdown(plannerState, sessionState = null) {
   const agreements = collectMeetingAgreements(computed, sessionState);
   const ownerTag = (owner) => `@${String(owner).replace(/^@/, '')}`;
 
+  const plannedMinutes = getPlannedSchedule(computed).plannedMinutes || computed.totalCalculatedDuration || 0;
+  const actualMinutes = sessionState?.sessionStartedAt
+    ? Math.round(getElapsedSessionMs(sessionState, sessionState.sessionEndedAt || Date.now()) / 60000)
+    : 0;
+  const duration = actualMinutes > 0 && !wasMeetingLeftOpen(actualMinutes, plannedMinutes)
+    ? `**Duración:** ${formatMeetingDuration(actualMinutes)} (de ${formatMeetingDuration(plannedMinutes)} planificados)`
+    : `**Duración planificada:** ${formatMeetingDuration(plannedMinutes)}`;
+
   let markdown = `# Acta: ${computed.title}\n\n`;
-  markdown += `> **Fecha:** ${computed.date ? formatMeetingDateLong(computed.date) : 'Sin fecha'} | **Facilita:** ${computed.host || 'Sin asignar'} | **Duración total:** ${formatMeetingDuration(computed.totalCalculatedDuration || 0)} | **Acuerdos:** ${agreements.length}\n\n`;
+  markdown += `> **Fecha:** ${computed.date ? formatMeetingDateLong(computed.date) : 'Sin fecha'} | **${computed.host ? facilitatorsText(computed.host, ':** ') : 'Facilita:** Sin asignar'} | ${duration} | **Acuerdos:** ${agreements.length}\n\n`;
   markdown += `---\n\n`;
 
   markdown += '## 📋 Resumen de acuerdos\n\n';

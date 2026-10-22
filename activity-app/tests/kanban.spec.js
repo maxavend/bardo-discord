@@ -205,16 +205,18 @@ test('acuerdos de una reunión → tareas, sin duplicar al repetir', async ({pag
   await page.getByRole('menuitem', {name: 'Terminar reunión'}).click();
   await page.getByRole('dialog', {name: '¿Terminar la reunión?'}).getByRole('button', {name: 'Terminar reunión'}).click();
 
-  await page.getByRole('button', {name: 'Crear tareas'}).click();
-  const dialog = page.getByRole('dialog', {name: 'Crear tareas desde los acuerdos'});
+  await page.getByRole('button', {name: 'Revisar acuerdos (1)'}).click();
+  const dialog = page.getByRole('dialog', {name: 'Revisar acuerdos'});
   await expect(dialog).toContainText('Enviar la minuta al equipo');
+  await expect(dialog.getByRole('button', {name: 'Tarea', exact: true})).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('button', {name: 'Crear 1 tarea'}).click();
   await expect(dialog).toContainText('Se creó 1 tarea.');
   await dialog.getByRole('button', {name: 'Cerrar', exact: true}).first().click();
+  await expect(page.getByText('En Tareas')).toBeVisible();
 
-  await page.getByRole('button', {name: 'Crear tareas'}).click();
-  await expect(page.getByRole('dialog', {name: 'Crear tareas desde los acuerdos'})).toContainText('Ya es la tarea #1');
-  await page.getByRole('dialog', {name: 'Crear tareas desde los acuerdos'}).getByRole('button', {name: 'Cancelar'}).click();
+  await page.getByRole('button', {name: 'Revisar acuerdos', exact: true}).click();
+  await expect(page.getByRole('dialog', {name: 'Revisar acuerdos'})).toContainText('Ya es la tarea #1');
+  await page.getByRole('dialog', {name: 'Revisar acuerdos'}).getByRole('button', {name: 'Decidir después'}).click();
 
   await page.goto('/?theme=dark#kanban');
   await expect(column(page, 'Por hacer')).toContainText('Enviar la minuta al equipo');

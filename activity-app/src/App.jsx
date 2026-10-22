@@ -79,7 +79,7 @@ import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSna
 import {copyTextToClipboard} from './docs-clipboard.js';
 import {openExternalUrl} from './discord-links.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
-import {buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
+import {AGENDA_DOC_ORIGIN, buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
@@ -1079,14 +1079,14 @@ function ShareConfirmDialog({isOpen, doc, onConfirm, onCancel}) {
   );
 }
 
-function MinutesEditedDialog({isOpen, title, onCopy, onReplace, onCancel}) {
+function MinutesEditedDialog({isOpen, title, isAgenda = false, onCopy, onReplace, onCancel}) {
   return (
     <AlertDialog open={isOpen} onOpenChange={open => !open && onCancel()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>¿Reemplazar el acta editada?</AlertDialogTitle>
+          <AlertDialogTitle>{isAgenda ? '¿Reemplazar la agenda editada?' : '¿Reemplazar el acta editada?'}</AlertDialogTitle>
           <AlertDialogDescription>
-            Si la reemplazas, se perderán los cambios hechos a «{title || 'Acta de reunión'}» en Documentos.
+            Si la reemplazas, se perderán los cambios hechos a «{title || (isAgenda ? 'Agenda de reunión' : 'Acta de reunión')}» en Documentos.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1916,14 +1916,14 @@ function App() {
     }
   }, [updateDoc]);
 
-  const publishDoc = useCallback(async id => {
+  const publishDoc = useCallback(async (id, options = {}) => {
     setModal(null);
     if (!window.__bardoPublishDocument) {
       showToast('Para compartir en el canal, abre Bardo en Discord.');
       return;
     }
     try {
-      await window.__bardoPublishDocument(id);
+      await window.__bardoPublishDocument(id, options);
       setSharePromptDocId(current => (current === id ? null : current));
       showToast(`Documento compartido en ${channelLabel()}`);
     } catch (error) {
@@ -1999,11 +1999,31 @@ function App() {
     commitStore(prev => ({...prev, docs: [doc, ...(prev.docs || []).filter(d => d.id !== doc.id)]}));
     rememberMinutesHash(doc.id, minutesContentHash(doc.body));
     setModal(null);
+    const isAgenda = docData?.origin === AGENDA_DOC_ORIGIN;
     showToast(decision === 'copy'
-      ? 'Guardamos el acta como un documento nuevo. Tu versión editada sigue igual.'
-      : existing ? 'Acta actualizada en Documentos' : 'Acta guardada en Documentos');
+      ? `Guardamos ${isAgenda ? 'la agenda' : 'el acta'} como un documento nuevo. Tu versión editada sigue igual.`
+      : `${isAgenda ? 'Agenda' : 'Acta'} ${existing ? 'actualizada' : 'guardada'} en Documentos`);
     go(`#doc-${doc.id}`);
   }, [commitStore, go, showToast]);
+
+  /**
+   * Agenda de una reunión → tarjeta en el canal. Se regenera desde la reunión
+   * salvo que alguien la haya editado en Documentos: entonces se comparte esa versión.
+   */
+  const shareMeetingDoc = useCallback(docData => {
+    if (!window.__bardoPublishDocument) {
+      showToast('Para compartir en el canal, abre Bardo en Discord.');
+      return;
+    }
+    const existing = storeRef.current.docs.find(doc => doc.id === docData.id) || null;
+    const generated = buildMinutesDoc(docData, {existing, editorName: currentEditorName()});
+    const decision = planMinutesSave({existing, generatedBody: generated.body, lastGeneratedHash: readMinutesHash(docData.id)});
+    if (decision !== 'confirm' && existing?.body !== generated.body) {
+      commitStore(prev => ({...prev, docs: [generated, ...(prev.docs || []).filter(d => d.id !== generated.id)]}));
+      rememberMinutesHash(generated.id, minutesContentHash(generated.body));
+    }
+    setModal({type: 'share', docId: docData.id, plannerSessionId: docData.plannerSessionId || null});
+  }, [commitStore, showToast]);
 
   const retryParkedChanges = useCallback(async () => {
     if (!window.__bardoRetryParked) return;
@@ -2158,6 +2178,7 @@ function App() {
             else go(`#planner-${tab}`, options);
           }}
           onSaveDocToLibrary={(docData) => saveMinutesDoc(docData)}
+          onShareDocToChannel={shareMeetingDoc}
         />
       )}
       {route.type === 'library' && (
@@ -2322,7 +2343,7 @@ function App() {
       <ShareConfirmDialog
         isOpen={modal?.type === 'share'}
         doc={modal?.type === 'share' ? docsById.get(modal.docId) : null}
-        onConfirm={publishDoc}
+        onConfirm={id => publishDoc(id, modal?.plannerSessionId ? {plannerSessionId: modal.plannerSessionId} : {})}
         onCancel={() => setModal(null)}
       />
 
@@ -2337,6 +2358,7 @@ function App() {
       <MinutesEditedDialog
         isOpen={modal?.type === 'minutes-edited'}
         title={modal?.type === 'minutes-edited' ? modal.title : ''}
+        isAgenda={modal?.type === 'minutes-edited' && modal.docData?.origin === AGENDA_DOC_ORIGIN}
         onCopy={() => saveMinutesDoc(modal?.docData, 'copy')}
         onReplace={() => saveMinutesDoc(modal?.docData, 'replace')}
         onCancel={() => setModal(null)}

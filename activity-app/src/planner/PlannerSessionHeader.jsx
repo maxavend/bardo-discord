@@ -27,6 +27,7 @@ import {
   ChevronDown,
   Archive,
   Plus,
+  Send,
 } from 'lucide-react';
 import {
   FileTextIcon,
@@ -40,8 +41,10 @@ import { durationUntil, getPlannedSchedule } from './time-engine.js';
 import { formatMeetingDuration, MEETING_COPY } from './copy-tokens.js';
 import {
   getAllDiscordEntities,
+  MemberAvatar,
+  MultiPersonPicker,
   SearchableParticipantMenu,
-  SinglePersonPicker,
+  splitPeople,
 } from './PlannerMemberPicker.jsx';
 
 const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
@@ -84,6 +87,8 @@ export function PlannerSessionHeader({
   onToggleEditMode,
   onUpdateHeaderField,
   onCopyAnnouncement,
+  onShareMeeting,
+  onSaveAgendaDoc,
   onNewCleanSession,
   onDeleteSession,
   onStartSession,
@@ -115,7 +120,8 @@ export function PlannerSessionHeader({
   const isCompleted = status === SESSION_STATUS.COMPLETED;
   const isIdleView = !isEditing && !isRunning && !isPaused && !isCompleted && !isInterrupted;
 
-  const { members } = getAllDiscordEntities();
+  const { members, roles } = getAllDiscordEntities();
+  const hosts = splitPeople(host);
   const selectedKeys = new Set(parseMentions(mentions));
   const hasBlocks = (blocks || []).length > 0;
   const fieldId = useId();
@@ -278,6 +284,18 @@ export function PlannerSessionHeader({
                       <span>Copiar anuncio</span>
                     </DropdownMenuItem>
                   )}
+                  {onShareMeeting && (
+                    <DropdownMenuItem onClick={onShareMeeting}>
+                      <Send className="size-4 text-muted-foreground" />
+                      <span>Compartir agenda en el canal</span>
+                    </DropdownMenuItem>
+                  )}
+                  {onSaveAgendaDoc && (
+                    <DropdownMenuItem onClick={onSaveAgendaDoc}>
+                      <FileTextIcon className="size-4 text-muted-foreground" />
+                      <span>Guardar agenda en Documentos</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -383,43 +401,27 @@ export function PlannerSessionHeader({
             {/* Fila 2: Facilita (1fr), Participan (3fr) */}
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_3fr] gap-3 items-end">
               <div>
-                <label htmlFor={`${fieldId}-host`} className="text-xs font-semibold text-foreground mb-1.5 block">Facilita</label>
-                <SinglePersonPicker
+                <label htmlFor={`${fieldId}-host`} className="text-xs font-semibold text-foreground mb-1.5 block">Facilitan</label>
+                <MultiPersonPicker
                   value={host}
-                  onChange={(name) => onUpdateHeaderField?.('host', name)}
+                  onChange={(names) => onUpdateHeaderField?.('host', names)}
                   renderTrigger={() => (
                       <button
                         id={`${fieldId}-host`}
                         type="button"
-                        className="w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 px-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0"
+                        className={`w-full h-9 rounded-full bg-muted/40 hover:bg-muted/60 border border-border/50 pr-3.5 flex items-center justify-between gap-2 text-xs text-foreground transition-colors cursor-pointer min-w-0 ${hosts.length ? 'pl-2' : 'pl-3.5'}`}
                       >
-                        {host ? (
+                        {hosts.length > 0 ? (
                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                            {(() => {
-                              const matched = members.find(
-                                (m) =>
-                                  m.globalName.toLowerCase() === host.toLowerCase() ||
-                                  m.tag.toLowerCase() === `@${host.toLowerCase()}`
-                              );
-                              const color = matched?.avatarColor || DISCORD_PALETTES[Math.abs(host.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
-                              return (
-                                <>
-                                  <Avatar
-                                    size="xs"
-                                    className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                                    style={{ backgroundColor: `${color}30`, color }}
-                                  >
-                                    <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
-                                      {host.slice(0, 2).toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="font-medium text-foreground truncate">{host}</span>
-                                </>
-                              );
-                            })()}
+                            <div className="flex items-center -space-x-1.5 shrink-0">
+                              {hosts.slice(0, 3).map((name) => (
+                                <MemberAvatar key={name} name={name} className="size-5 text-[9px] ring-1 ring-background" />
+                              ))}
+                            </div>
+                            <span className="font-medium text-foreground truncate">{hosts.join(', ')}</span>
                           </div>
                         ) : (
-                          <span className="truncate text-muted-foreground">Elegir persona</span>
+                          <span className="truncate text-muted-foreground">Elegir personas</span>
                         )}
                         <ChevronDown className="size-3.5 text-muted-foreground shrink-0 ml-auto" />
                       </button>
@@ -448,20 +450,20 @@ export function PlannerSessionHeader({
                                     m.tag.toLowerCase() === tag.toLowerCase() ||
                                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                                 );
-                                const isRole = tag.startsWith('#');
+                                const isRole = tag.startsWith('#') || roles.some((role) => role.tag.toLowerCase() === tag.toLowerCase());
                                 const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
 
-                                return (
+                                return isRole ? (
                                   <Avatar
                                     key={tag}
                                     size="xs"
                                     className="size-5 text-[8.5px] font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
                                     style={{ backgroundColor: `${color}30`, color }}
                                   >
-                                    <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
-                                      {isRole ? '#' : cleanName.slice(0, 2).toUpperCase()}
-                                    </AvatarFallback>
+                                    <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>#</AvatarFallback>
                                   </Avatar>
+                                ) : (
+                                  <MemberAvatar key={tag} name={cleanName} member={matched || null} className="size-5 text-[8.5px] border border-card ring-1 ring-background" />
                                 );
                               })}
                             </div>
@@ -507,19 +509,15 @@ export function PlannerSessionHeader({
                 · {formatMeetingDuration(totalPlannedMinutes)}
               </span>
 
-              {host && (
-                <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground font-normal">
-                  <span>Facilita:</span>
-                  <Avatar
-                    size="xs"
-                    className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                    style={{ backgroundColor: '#5865F235', color: '#5865F2' }}
-                  >
-                    <AvatarFallback style={{ backgroundColor: '#5865F235', color: '#5865F2' }}>
-                      {host.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="font-semibold text-foreground">{host}</span>
+              {hosts.length > 0 && (
+                <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground font-normal min-w-0">
+                  <span>{hosts.length > 1 ? 'Facilitan:' : 'Facilita:'}</span>
+                  <span className="flex items-center -space-x-1 shrink-0">
+                    {hosts.slice(0, 3).map((name) => (
+                      <MemberAvatar key={name} name={name} className="size-4.5 border border-card text-[8px]" />
+                    ))}
+                  </span>
+                  <span className="font-semibold text-foreground">{hosts.join(', ')}</span>
                 </div>
               )}
 
@@ -538,23 +536,15 @@ export function PlannerSessionHeader({
                             m.tag.toLowerCase() === tag.toLowerCase() ||
                             `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                         );
-                        const color =
-                          matched?.avatarColor ||
-                          DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                         const name = matched?.globalName || tag.replace(/^@/, '');
                         return (
-                          <Avatar
+                          <MemberAvatar
                             key={i}
+                            name={name}
+                            member={matched || null}
                             size="sm"
-                            className="size-5 text-[8.5px] font-bold border-2 border-background shadow-2xs shrink-0"
-                            style={{ backgroundColor: `${color}30`, color }}
-                          >
-                            <AvatarFallback
-                              style={{ backgroundColor: `${color}30`, color }}
-                            >
-                              {name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                            className="size-5 text-[8.5px] border-2 border-background"
+                          />
                         );
                       })}
                   </div>

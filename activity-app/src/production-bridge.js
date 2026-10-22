@@ -531,12 +531,13 @@ export async function prepareBardoProduction(options = {}) {
 
   const UNSAVED_MESSAGE = 'Este documento tiene cambios que aún no se guardan. Revisa tu conexión e inténtalo de nuevo.';
 
-  window.__bardoPublishDocument = async documentId => {
+  window.__bardoPublishDocument = async (documentId, {plannerSessionId = null} = {}) => {
     // Publicar la versión guardada más reciente.
     const settled = await docsSync.settle(documentId);
     if (!settled) throw new Error(UNSAVED_MESSAGE);
     try {
-      return await request(`/api/docs/${encodeURIComponent(documentId)}/message`, {method:'POST'});
+      return await request(`/api/docs/${encodeURIComponent(documentId)}/message`,
+        plannerSessionId ? {method:'POST', body:{plannerSessionId}} : {method:'POST'});
     } catch (error) {
       const message = error?.status === 403 && error?.data?.error === 'publish_failed'
         ? 'Bardo no tiene permiso para escribir en este canal. Pide a quien administra el servidor que le permita enviar mensajes aquí.'

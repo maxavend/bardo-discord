@@ -23,6 +23,7 @@ const {
   collectMeetingAgreements,
   generateMinutesMarkdown,
   generateDiscordAnnouncement,
+  generateAgendaMarkdown,
   DEFAULT_MEETING_TITLE,
 } = await import('../activity-app/src/planner/planner-store.js');
 const {
@@ -43,6 +44,7 @@ const {
   liveStatusLabel,
   formatMeetingDuration,
   formatAgreementsCountLabel,
+  facilitatorsText,
 } = await import('../activity-app/src/planner/copy-tokens.js');
 
 // ── Descansos: solo por tipo explícito ──────────────────────────────────────
@@ -308,4 +310,30 @@ test('"Abrir reunión" en Discord abre la agenda de esa reunión, no la lista', 
   assert.equal(plannerSessionLaunchHash('reu-1', 'reu-2'), '#planner');
   assert.equal(plannerSessionLaunchHash('reu-1', null), '#planner');
   assert.equal(plannerSessionLaunchHash('', ''), '#planner');
+});
+
+test('varias personas facilitan: el texto pasa a plural en anuncio y acta', () => {
+  assert.equal(facilitatorsText('Ana'), 'Facilita Ana');
+  assert.equal(facilitatorsText('Ana, Pedro', ': '), 'Facilitan: Ana, Pedro');
+  assert.equal(facilitatorsText(''), '');
+  const meeting = {...MEETING, host: 'Max, Paula'};
+  assert.match(generateDiscordAnnouncement(meeting), /Facilitan:\*\* Max, Paula/);
+  assert.match(generateMinutesMarkdown(meeting), /\*\*Facilitan:\*\* Max, Paula/);
+});
+
+test('la agenda como documento lista temas por bloque, sin acuerdos', () => {
+  const markdown = generateAgendaMarkdown({...MEETING, mentions: '@Ana @Pedro', description: 'Alinear el sprint'});
+  assert.match(markdown, /\*\*Participan:\*\* @Ana @Pedro/);
+  assert.match(markdown, /## Objetivo\n\nAlinear el sprint/);
+  assert.match(markdown, /### 1\. Revisión/);
+  assert.match(markdown, /- Tema 1/);
+  assert.doesNotMatch(markdown, /Acuerdo/);
+  assert.doesNotMatch(markdown, /^# /m, 'el título lo pone el documento');
+});
+
+test('el acta muestra la duración real cuando la reunión se midió', () => {
+  const start = Date.parse('2026-10-08T13:00:00Z');
+  const live = {status: 'completed', sessionStartedAt: start, sessionEndedAt: start + 52 * 60000, totalPausedMs: 0, decisions: []};
+  assert.match(generateMinutesMarkdown(MEETING, live), /\*\*Duración:\*\* 52 min \(de .* planificados\)/);
+  assert.match(generateMinutesMarkdown(MEETING), /\*\*Duración planificada:\*\*/);
 });
