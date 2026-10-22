@@ -227,7 +227,7 @@ test('un enlace firmado que falla muestra la página en español, no un JSON 500
     DISCORD_CLIENT_SECRET: 'secreto',
     DB: { prepare() { throw new Error('D1 caído'); } },
   };
-  const { token } = await createExportToken(env, { docId: 'doc-1', format: 'pdf', userId: 'u' });
+  const { token } = await createExportToken(env, { docId: 'doc-1', format: 'pdf', userId: 'u', guildId: 'g', channelId: 'c' });
   const response = await worker.fetch(new Request(`https://bardo.example/api/documents/doc-1/export?format=pdf&t=${encodeURIComponent(token)}`), env);
   assert.equal(response.status, 500);
   assert.match(response.headers.get('content-type'), /text\/html/);

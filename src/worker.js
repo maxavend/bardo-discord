@@ -945,9 +945,10 @@ async function handleDocumentExportApi(request, url, documentId, env) {
       : jsonResponse({ error: 'database_unavailable', message: 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.' }, 503);
   }
 
+  let grant = null;
   if (token) {
     // Signed link opened outside Discord: the token replaces the session.
-    const grant = format
+    grant = format
       ? await verifyExportToken(env, token, { docId: documentId, format })
       : { ok: false, reason: 'invalid' };
     if (!grant.ok) {
@@ -968,6 +969,11 @@ async function handleDocumentExportApi(request, url, documentId, env) {
     return token
       ? downloadErrorPage(404, 'Este documento ya no existe', 'Puede que alguien lo haya eliminado.')
       : jsonResponse({ error: 'not_found', message: 'No se encontró el documento.' }, 404);
+  }
+  // El permiso se revisa de nuevo al descargar: si el documento dejó de estar
+  // compartido en ese canal o la persona perdió acceso, el enlace ya no sirve.
+  if (grant && !(await sessionCanAccessDocument(env, grant, documentId))) {
+    return downloadErrorPage(403, 'Ya no tienes acceso a este documento', 'Vuelve a Bardo en Discord para ver qué documentos puedes abrir.');
   }
 
   const baseName = exportFileName(document.title || document.sourceName || 'documento');
@@ -1161,8 +1167,53 @@ async function handleDiscordInteraction(request, env, ctx) {
   });
 }
 
+// Solo Discord (web, escritorio y el proxy de Activities) puede mostrar Bardo
+// dentro de una página. Arranca en modo reporte: registra sin bloquear hasta
+// confirmar que ningún cliente de Discord queda fuera; CSP_FRAME_MODE=enforce
+// lo vuelve obligatorio.
+const FRAME_ANCESTORS = "frame-ancestors 'self' https://discord.com https://*.discord.com https://*.discordsays.com";
+const CSP_REPORT_PATH = '/api/csp-report';
+
+export function withFramePolicy(response, env) {
+  if (!(response.headers.get('content-type') || '').includes('text/html')) return response;
+  const framed = new Response(response.body, response);
+  const enforce = env?.CSP_FRAME_MODE === 'enforce';
+  framed.headers.set(enforce ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only',
+    `${FRAME_ANCESTORS}; report-uri ${CSP_REPORT_PATH}; report-to csp`);
+  framed.headers.set('Reporting-Endpoints', `csp="${CSP_REPORT_PATH}"`);
+  framed.headers.set('X-Content-Type-Options', 'nosniff');
+  framed.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  return framed;
+}
+
+/** Reportes de CSP del navegador: solo se registran (campos acotados) para revisarlos con `wrangler tail`. */
+async function handleCspReport(request) {
+  const text = (await request.text().catch(() => '')).slice(0, 8_192);
+  let reports = [];
+  try {
+    const parsed = JSON.parse(text);
+    reports = Array.isArray(parsed) ? parsed.map(item => item?.body || item) : [parsed?.['csp-report'] || parsed];
+  } catch {
+    return new Response(null, { status: 204 });
+  }
+  for (const report of reports.slice(0, 5)) {
+    const field = name => String(report?.[name] ?? report?.[name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] ?? '').slice(0, 200);
+    console.warn('CSP report', JSON.stringify({
+      directive: field('effective-directive') || field('violated-directive'),
+      blocked: field('blocked-uri') || field('blockedURL'),
+      document: field('document-uri') || field('documentURL'),
+      disposition: field('disposition'),
+    }));
+  }
+  return new Response(null, { status: 204 });
+}
+
 async function routeRequest(request, env, ctx) {
   const url = new URL(request.url);
+
+  if (url.pathname === CSP_REPORT_PATH) {
+    return request.method === 'POST' ? handleCspReport(request) : new Response(null, { status: 405 });
+  }
 
   const authApiResponse = await handleDiscordAuthApi(request, url, env);
   if (authApiResponse) return authApiResponse;
@@ -1215,7 +1266,7 @@ async function routeRequest(request, env, ctx) {
   }
 
   if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS) {
-    return env.ASSETS.fetch(request);
+    return withFramePolicy(await env.ASSETS.fetch(request), env);
   }
 
   return new Response('Method not allowed', { status: 405 });

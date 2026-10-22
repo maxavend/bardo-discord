@@ -65,7 +65,9 @@ function ScrollBar({
   )
 }
 
-// Surface stays outside the mask; only overflowing content fades.
+// Surface stays outside the mask; only overflowing content fades. shadcn's
+// default depth (12% of the height, up to 40px); scroll padding keeps the
+// keyboard-focused item out of the faded edge.
 function OverlayScrollArea({className, viewportProps, contentStyle, ...props}: React.ComponentProps<typeof ScrollArea>) {
   return (
     <ScrollArea
@@ -73,7 +75,7 @@ function OverlayScrollArea({className, viewportProps, contentStyle, ...props}: R
       contentStyle={{minWidth: 0, ...contentStyle}}
       viewportProps={{
         ...viewportProps,
-        className: cn("scroll-fade scroll-fade-4 motion-reduce:scroll-fade-none overscroll-contain scroll-py-4", viewportProps?.className),
+        className: cn("scroll-fade motion-reduce:scroll-fade-none overscroll-contain scroll-py-10", viewportProps?.className),
         style: {maxHeight: "inherit", ...viewportProps?.style},
       }}
       {...props}
