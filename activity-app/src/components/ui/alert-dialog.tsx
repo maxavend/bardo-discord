@@ -59,7 +59,7 @@ function AlertDialogContent({
         )}
         {...props}
       >
-        <OverlayScrollArea className="max-h-[calc(100dvh-5rem)]" contentClassName="grid gap-6 p-1">
+        <OverlayScrollArea className="max-h-[calc(100dvh-5rem)]" contentClassName="grid grid-cols-[minmax(0,1fr)] gap-6 p-1">
           {children}
         </OverlayScrollArea>
       </AlertDialogPrimitive.Popup>

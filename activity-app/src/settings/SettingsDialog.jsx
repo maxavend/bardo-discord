@@ -54,7 +54,8 @@ function Row({label, hint, children, htmlFor}) {
           : <span className="text-[13px] font-medium text-foreground">{label}</span>}
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
       </div>
-      <div className="flex shrink-0 items-center gap-2">{children}</div>
+      {/* En pantallas angostas las opciones bajan de línea en vez de salirse de la tarjeta. */}
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:shrink-0 [&>[data-slot=toggle-group]]:max-w-full [&>[data-slot=toggle-group]]:flex-wrap">{children}</div>
     </div>
   );
 }
