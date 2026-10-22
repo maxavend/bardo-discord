@@ -407,6 +407,13 @@ test('DELETE /permanent de otro canal no borra la reunión ni su estado en vivo'
   assert.ok(db.row("SELECT 1 AS ok FROM planner_sessions WHERE id = 'sess-1'"));
   assert.ok(db.row("SELECT 1 AS ok FROM planner_live_sessions WHERE session_id = 'sess-1'"));
 
+  // Sin archivar no se borra; tampoco lo borra otra persona sin moderar.
+  assert.equal((await call(env, '/api/planner/sessions/sess-1/permanent', { method: 'DELETE' })).status, 409);
+  await call(env, '/api/planner/sessions/sess-1', { method: 'DELETE' });
+  await insertSession(db, { token: 'token-other', userId: 'user-999' });
+  assert.equal((await call(env, '/api/planner/sessions/sess-1/permanent', { method: 'DELETE', token: 'token-other' })).status, 403);
+  assert.ok(db.row("SELECT 1 AS ok FROM planner_sessions WHERE id = 'sess-1'"));
+
   const own = await call(env, '/api/planner/sessions/sess-1/permanent', { method: 'DELETE' });
   assert.equal(own.status, 200);
   assert.equal(db.row("SELECT COUNT(*) AS n FROM planner_live_sessions WHERE session_id = 'sess-1'").n, 0);
@@ -499,3 +506,25 @@ test('member search validates query, denies channel access, and surfaces rate li
   assert.match(restricted.json.message, /invitado/);
 });
 
+
+test('la búsqueda de miembros se comparte un minuto y tiene un límite por persona', async () => {
+  const { env } = await setup();
+  let searches = 0;
+  const base = env.DISCORD_FETCH;
+  env.DISCORD_FETCH = async (input, init) => {
+    if (new URL(input).pathname.endsWith('/members/search')) {
+      searches += 1;
+      return Response.json([{ user: { id: '1001', username: 'zoe' } }]);
+    }
+    return base(input, init);
+  };
+  for (let index = 0; index < 3; index += 1) assert.equal((await call(env, '/api/discord/members?query=Zoe')).status, 200);
+  assert.equal(searches, 1);
+  let limited = null;
+  for (let index = 0; index < 50 && !limited; index += 1) {
+    const result = await call(env, `/api/discord/members?query=persona-${index}`);
+    if (result.status === 429) limited = result;
+  }
+  assert.ok(limited, 'tarde o temprano responde 429');
+  assert.equal(limited.json.error, 'rate_limited');
+});

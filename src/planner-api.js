@@ -30,6 +30,23 @@ import {
 } from './db.js';
 
 const PLANNER_PREFIX = '/api/planner';
+
+// Búsquedas de miembros por persona (por isolate): protege el límite del bot,
+// que comparten todos los servidores.
+const MEMBER_SEARCHES_PER_MINUTE = 40;
+const memberSearchLog = new Map();
+
+function memberSearchWaitMs(userId, now = Date.now()) {
+  const recent = (memberSearchLog.get(userId) || []).filter(at => now - at < 60_000);
+  if (recent.length >= MEMBER_SEARCHES_PER_MINUTE) {
+    memberSearchLog.set(userId, recent);
+    return 60_000 - (now - recent[0]);
+  }
+  recent.push(now);
+  memberSearchLog.set(userId, recent);
+  if (memberSearchLog.size > 5_000) memberSearchLog.delete(memberSearchLog.keys().next().value);
+  return 0;
+}
 const DISCORD_CONTEXT_PATH = '/api/discord/channel-context';
 export const MAX_PLANNER_JSON_BYTES = 512 * 1024;
 const encoder = new TextEncoder();
@@ -388,6 +405,14 @@ async function handleSingle(request, env, session, route) {
 
   if (route.action === 'permanent') {
     if (request.method !== 'DELETE') return methodNotAllowed();
+    // Same rule as documents: archived first, and only its author or a moderator.
+    if (existing.status !== 'archived') {
+      return apiError(409, 'not_archived', 'Archiva la reunión antes de eliminarla definitivamente.');
+    }
+    const isAuthor = existing.createdBy && String(existing.createdBy) === String(session.userId);
+    if (!isAuthor && !(await createDiscordPermissionChecker(env, session.guildId, session.userId).canModerateDocuments(session.channelId))) {
+      return apiError(403, 'forbidden', 'Solo quien creó la reunión o quien modera el canal puede eliminarla definitivamente.');
+    }
     const deleted = await deletePlannerSessionPermanently(env.DB, sessionId, session.guildId, session.channelId);
     if (!deleted) return notFound();
     return json({ ok: true, deleted: true, id: sessionId });
@@ -461,6 +486,8 @@ async function routePlannerApi(request, url, env) {
     if (request.method !== 'GET') return methodNotAllowed();
     const query = (url.searchParams.get('query') || '').trim();
     if (query.length < 2 || query.length > 100) return apiError(400, 'invalid_query', 'Escribe entre 2 y 100 caracteres para buscar por nombre o apodo.');
+    const waitMs = memberSearchWaitMs(session.userId);
+    if (waitMs) return apiError(429, 'rate_limited', 'Estás buscando muy rápido. Espera unos segundos.', { retryAfterMs: waitMs });
     return json(await searchGuildMembers(env, session.guildId, query));
   }
 

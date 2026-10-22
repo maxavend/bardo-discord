@@ -105,6 +105,13 @@ test('handleDocsApi reenvía un documento únicamente al canal de la sesión', a
   assert.equal(postedPath, `/api/v10/channels/${CHANNEL}/messages`);
 });
 
+test('quien solo puede ver el canal no puede compartir como el bot', async () => {
+  const { env } = await setup({ permissions: '1024' });
+  const { status, json } = await call(env, '/api/docs/doc-1/message', { method: 'POST' });
+  assert.equal(status, 403);
+  assert.equal(json.error, 'send_forbidden');
+});
+
 test('la agenda de una reunión del canal se comparte con el botón Abrir reunión', async () => {
   const { db, env } = await setup();
   await savePlannerSession(db, { id: 'meet-1', guildId: GUILD, channelId: CHANNEL, title: 'Weekly', blocks: [], createdBy: 'user-123', updatedBy: 'user-123' });
