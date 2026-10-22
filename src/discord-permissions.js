@@ -6,6 +6,7 @@ export const DISCORD_PERMISSION = {
   MANAGE_GUILD: 1n << 5n,
   VIEW_CHANNEL: 1n << 10n,
   SEND_MESSAGES: 1n << 11n,
+  READ_MESSAGE_HISTORY: 1n << 16n,
   MANAGE_MESSAGES: 1n << 13n,
   MANAGE_EVENTS: 1n << 33n,
   MANAGE_THREADS: 1n << 34n,
@@ -298,6 +299,12 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     );
     permissions = applyOverwrite(permissions, memberOverwrite);
 
+    // Timed-out members can still read, but nothing else (Discord's own rule).
+    const timeoutUntil = Date.parse(member?.communication_disabled_until || '');
+    if (Number.isFinite(timeoutUntil) && timeoutUntil > Date.now()) {
+      permissions &= DISCORD_PERMISSION.VIEW_CHANNEL | DISCORD_PERMISSION.READ_MESSAGE_HISTORY;
+    }
+
     if (channel.type === 12 && !(permissions & DISCORD_PERMISSION.MANAGE_THREADS)) {
       // The bot seeing a private thread does not imply this user joined it.
       const membership = await readDiscord(
@@ -337,7 +344,14 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
   // write there themselves (read-only channels, timeouts).
   const canSendMessages = async channelId => {
     const permissions = await permissionsOrZero(channelId);
-    return (permissions & (DISCORD_PERMISSION.SEND_MESSAGES | DISCORD_PERMISSION.SEND_MESSAGES_IN_THREADS)) !== 0n;
+    const channel = await loadChannel(channelId).catch(error => {
+      if (isDiscordUnavailableError(error)) throw error;
+      return null;
+    });
+    const bit = [10, 11, 12].includes(channel?.type)
+      ? DISCORD_PERMISSION.SEND_MESSAGES_IN_THREADS
+      : DISCORD_PERMISSION.SEND_MESSAGES;
+    return (permissions & bit) === bit;
   };
 
   // Moderation of shared documents (permanent deletion) mirrors Discord's own
@@ -470,7 +484,28 @@ export function formatDiscordMember(member, guildId) {
   };
 }
 
+// Same query in the same guild within a minute: one Discord call for everyone.
+const MEMBER_SEARCH_TTL_MS = 60 * 1000;
+const memberSearchCaches = new WeakMap();
+
 export async function searchGuildMembers(env, guildId, query) {
+  const fetchImpl = env.DISCORD_FETCH || fetch;
+  let cache = memberSearchCaches.get(fetchImpl);
+  if (!cache) {
+    cache = new Map();
+    memberSearchCaches.set(fetchImpl, cache);
+  }
+  const key = `${guildId}:${String(query).toLowerCase()}`;
+  const hit = cache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.promise;
+  const promise = searchGuildMembersUncached(env, guildId, query);
+  cache.set(key, {promise, expiresAt: Date.now() + MEMBER_SEARCH_TTL_MS});
+  promise.catch(() => cache.delete(key));
+  if (cache.size > 2_000) cache.delete(cache.keys().next().value);
+  return promise;
+}
+
+async function searchGuildMembersUncached(env, guildId, query) {
   try {
     const params = new URLSearchParams({query, limit: '100'});
     const members = await readDiscord(`/guilds/${encodeURIComponent(guildId)}/members/search?${params}`,

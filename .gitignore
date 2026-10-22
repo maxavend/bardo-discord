@@ -1,5 +1,9 @@
 node_modules/
 .env
+# Secretos locales de wrangler y variantes de .env (el ejemplo sí va al repo).
+.env.*
+!.env.example
+.dev.vars*
 data/
 *.log
 .DS_Store

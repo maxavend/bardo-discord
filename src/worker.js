@@ -49,7 +49,8 @@ import {
 } from './kanban-db.js';
 import { notifyAssignment } from './kanban-notify.js';
 import { KANBAN_LIMITS, compareCards } from '../activity-app/src/kanban/kanban-shared.js';
-import { fileStem, getSourceType, isTextSourceType, sourceLabel } from './import-format.js';
+import { fileStem, getSourceType, isTextSourceType, sourceLabel, SOURCE_TYPES } from './import-format.js';
+import { docxBombReason } from '../activity-app/src/zip-guard.js';
 import { REU_DESCRIPTION_MAX, REU_DURATION_MAX_MINUTES, TITLE_MAX } from './limits.js';
 import {
   cleanupExpiredRecords,
@@ -60,7 +61,6 @@ import {
   listDocumentGuildIds,
   listDocumentsForChannel,
   listPlannerSessionsForChannel,
-  loadActivityContext,
   loadDocument,
   loadDocumentSource,
   LAUNCH_TARGET_PREFIX,
@@ -70,7 +70,6 @@ import {
 
 const MAX_STORED_DOCUMENT_BYTES = 1_800_000;
 const DOCUMENT_API_PREFIX = '/api/documents/';
-const ACTIVITY_CONTEXT_API_PREFIX = '/api/activity-context/';
 const REU_TITLE_MAX = TITLE_MAX;
 // Calendar dates for /reu-new are interpreted in the community's time zone,
 // not UTC (in Chile, UTC is already "tomorrow" from ~20:00-21:00).
@@ -158,8 +157,13 @@ function attachmentName(attachment) {
   return attachment.filename || attachment.name || '';
 }
 
+/** Error con un mensaje en español pensado para mostrarse a la persona. */
+function userError(message) {
+  return Object.assign(new Error(message), {expose: true});
+}
+
 function tooLargeError() {
-  return new Error('El archivo supera 1,8 MB, el máximo que acepta Bardo. Prueba con un archivo más liviano o divídelo en partes.');
+  return userError('El archivo supera 1,8 MB, el máximo que acepta Bardo. Prueba con un archivo más liviano o divídelo en partes.');
 }
 
 function validateAttachment(attachment) {
@@ -168,9 +172,9 @@ function validateAttachment(attachment) {
 
   if (!sourceType) {
     if (name.toLowerCase().endsWith('.doc')) {
-      throw new Error('El formato Word antiguo `.doc` todavía no es compatible. Guárdalo como `.docx` y vuelve a subirlo.');
+      throw userError('El formato Word antiguo `.doc` todavía no es compatible. Guárdalo como `.docx` y vuelve a subirlo.');
     }
-    throw new Error('Bardo no puede leer ese tipo de archivo. Usa uno `.md`, `.markdown`, `.txt`, `.pdf` o `.docx`.');
+    throw userError('Bardo no puede leer ese tipo de archivo. Usa uno `.md`, `.markdown`, `.txt`, `.pdf` o `.docx`.');
   }
 
   // Early rejection only; the real limit is enforced on the downloaded bytes.
@@ -186,7 +190,7 @@ function validateAttachment(attachment) {
 export async function downloadAttachment(attachment, sourceType, fetchImpl = fetch) {
   const response = await fetchImpl(attachment.url);
   if (!response.ok) {
-    throw new Error(`No se pudo descargar el archivo desde Discord (código ${response.status}). Vuelve a subirlo con \`/doc-upload\`.`);
+    throw userError(`No se pudo descargar el archivo desde Discord (código ${response.status}). Vuelve a subirlo con \`/doc-upload\`.`);
   }
 
   const declaredLength = Number(response.headers.get('content-length'));
@@ -194,6 +198,11 @@ export async function downloadAttachment(attachment, sourceType, fetchImpl = fet
 
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.byteLength > MAX_STORED_DOCUMENT_BYTES) throw tooLargeError();
+  if (sourceType === SOURCE_TYPES.DOCX) {
+    // Nunca se guarda un .docx que se infla al abrirlo: congelaría Bardo a todo el canal.
+    const reason = docxBombReason(bytes);
+    if (reason) throw userError(reason);
+  }
 
   if (isTextSourceType(sourceType)) {
     return { text: new TextDecoder('utf-8').decode(bytes), byteLength: bytes.byteLength };
@@ -222,11 +231,11 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
     const sourceType = validateAttachment(attachment);
 
     if (!env.DB) {
-      throw new Error('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
+      throw userError('Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.');
     }
 
     if (!interaction.guild_id || !interaction.channel_id) {
-      throw new Error('Bardo solo puede compartir documentos desde un canal de servidor de Discord.');
+      throw userError('Bardo solo puede compartir documentos desde un canal de servidor de Discord.');
     }
 
     const downloaded = await downloadAttachment(attachment, sourceType, discordFetch);
@@ -247,7 +256,7 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       pages = firstPreviewPage(extracted.body);
 
       if (pages.length === 0) {
-        throw new Error('El archivo está vacío. Revisa que tenga contenido y vuelve a subirlo.');
+        throw userError('El archivo está vacío. Revisa que tenga contenido y vuelve a subirlo.');
       }
     } else {
       title = (explicitTitle?.trim() || fileStem(sourceName)).slice(0, 200);
@@ -275,9 +284,9 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
       ? null
       : {
         bytes: downloaded.bytes,
-        mime: attachment.content_type || (sourceType === 'pdf'
+        mime: sourceType === 'pdf'
           ? 'application/pdf'
-          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         type: sourceType,
       };
 
@@ -303,15 +312,17 @@ async function processAndSaveDocument(env, interaction, attachment, explicitTitl
 
     if (!editRes.ok) {
       const errText = await editRes.text().catch(() => '');
-      throw new Error(`Error al actualizar el mensaje en Discord: ${editRes.status} ${errText.slice(0, MAX_ERROR_DETAIL)}`);
+      console.error('Discord rejected the document card', editRes.status, errText.slice(0, MAX_ERROR_DETAIL));
+      throw new Error(`Discord card update failed (${editRes.status})`);
     }
 
     console.log(`Documento publicado: ${title} (${documentId}, ${sourceType})`);
   } catch (error) {
     console.error('Error procesando documento en background:', error);
-    const detail = error instanceof Error ? error.message : 'Error desconocido.';
+    // Solo los mensajes escritos para la persona llegan a Discord; el detalle técnico queda en el log.
+    const detail = error?.expose ? error.message : 'No se pudo procesar el archivo. Inténtalo de nuevo en unos minutos.';
     const message = saved
-      ? `El documento se guardó y ya aparece en **Documentos** de este canal, pero Discord no aceptó la tarjeta del mensaje. No hace falta volver a subirlo.\n\n${detail.slice(0, MAX_ERROR_DETAIL)}`
+      ? 'El documento se guardó y ya aparece en **Documentos** de este canal, pero Discord no aceptó la tarjeta del mensaje. No hace falta volver a subirlo.'
       : detail.slice(0, 1500);
     const errorPayload = buildErrorPayload(message, saved ? 'El documento se guardó, pero no se pudo mostrar aquí' : 'No se pudo subir el documento');
 
@@ -1071,6 +1082,8 @@ async function handleDocumentSourceApi(request, documentId, env) {
     headers: {
       'Content-Type': source.mime,
       'Content-Length': String(source.bytes.byteLength),
+      'Content-Disposition': 'attachment',
+      'Content-Security-Policy': 'sandbox',
       ...PRIVATE_HEADERS,
     },
   });
@@ -1097,39 +1110,6 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
   }
 
   return normalizeDocumentImport(env, access.session, document, payload);
-}
-
-async function handleActivityContextApi(url, env) {
-  if (!env.DB) {
-    return jsonResponse({ error: 'database_unavailable' }, 503);
-  }
-
-  const encodedId = url.pathname.slice(ACTIVITY_CONTEXT_API_PREFIX.length);
-  if (!encodedId) {
-    return jsonResponse({ error: 'instance_required' }, 400);
-  }
-
-  let instanceId;
-  try {
-    instanceId = decodeURIComponent(encodedId);
-  } catch {
-    return jsonResponse({ error: 'invalid_instance' }, 400);
-  }
-
-  const context = await loadActivityContext(env.DB, instanceId);
-  if (!context) {
-    return jsonResponse({ error: 'not_found' }, 404);
-  }
-
-  return jsonResponse(
-    {
-      instanceId: context.instanceId,
-      documentId: context.documentId,
-      createdAt: context.createdAt,
-    },
-    200,
-    PRIVATE_HEADERS,
-  );
 }
 
 async function handleDiscordInteraction(request, env, ctx) {
@@ -1228,10 +1208,6 @@ async function routeRequest(request, env, ctx) {
     }
 
     return jsonResponse({ error: 'method_not_allowed', message: 'Esta acción no está disponible.' }, 405);
-  }
-
-  if (request.method === 'GET' && url.pathname.startsWith(ACTIVITY_CONTEXT_API_PREFIX)) {
-    return handleActivityContextApi(url, env);
   }
 
   if (request.method === 'POST') {

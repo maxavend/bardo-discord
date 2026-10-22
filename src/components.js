@@ -80,6 +80,19 @@ export function escapeDiscordMarkdown(text) {
   return String(text ?? '').replace(/([\\*_~`|>#[\]()])/g, '\\$1');
 }
 
+/**
+ * Text people wrote (titles, names) shown inside a bot message: one line, no
+ * markdown, so it can never fake a heading, a notice or a masked link.
+ */
+export function safeInline(text, max) {
+  return escapeDiscordMarkdown(truncateText(String(text ?? '').replace(/\s+/g, ' ').trim(), max));
+}
+
+/** Free text (descriptions): masked links show their real address. */
+export function unmaskLinks(text) {
+  return String(text ?? '').replace(/\[([^\]\n]{0,200})\]\((<?https?:\/\/[^)\s]+>?)\)/gi, (_, label, url) => `${label} (${url.replace(/^<|>$/g, '')})`);
+}
+
 export const OPEN_DOCUMENT_LABEL = 'Abrir documento';
 export const OPEN_AGENDA_LABEL = 'Abrir agenda';
 
@@ -89,7 +102,7 @@ export const OPEN_AGENDA_LABEL = 'Abrir agenda';
  */
 export function buildDocumentPayload(document, { documentId, attribution = null, meetingId = null }) {
   const previewSource = document.pages?.[0] || document.originalMarkdown || '';
-  const preview = createDocumentPreview(previewSource);
+  const preview = createDocumentPreview(unmaskLinks(previewSource));
   const cleanId = normalizeDocumentId(documentId) || documentId;
 
   // Use a real Discord message component again. The Worker acknowledges this
@@ -112,7 +125,7 @@ export function buildDocumentPayload(document, { documentId, attribution = null,
     );
   }
 
-  const heading = `# ${meetingId ? '🗓️' : '📄'} ${truncateText(document.title || 'Documento', 200)}`;
+  const heading = `# ${meetingId ? '🗓️' : '📄'} ${safeInline(document.title || 'Documento', 200)}`;
   const byline = attribution ? `\n-# ${escapeDiscordMarkdown(truncateText(attribution, 120))}` : '';
 
   const container = new ContainerBuilder()
@@ -155,14 +168,14 @@ export function buildReuNewPayload({ session, channelName = null }) {
   const durationText = session.targetDuration ? `${session.targetDuration} min` : '60 min';
   const dateText = session.date || 'Hoy';
   const timeText = session.startTime || 'Por definir';
-  const hostText = session.hostName ? ` · Facilita: ${session.hostName}` : '';
+  const hostText = session.hostName ? ` · Facilita: ${safeInline(session.hostName, 120)}` : '';
   const metaLine = `📅 **${dateText}** a las **${timeText}** (${durationText})${hostText}`;
 
-  const descLine = session.description ? `\n\n${session.description}` : '';
+  const descLine = session.description ? `\n\n${unmaskLinks(session.description)}` : '';
 
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# 🎙️ ${truncateText(session.title || 'Nueva reunión', 200)}`),
+      new TextDisplayBuilder().setContent(`# 🎙️ ${safeInline(session.title || 'Nueva reunión', 200)}`),
     )
     .addSeparatorComponents(
       new SeparatorBuilder()
@@ -232,7 +245,7 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
   if (live.length > 0) {
     listText += '🔴 **En curso**\n';
     for (const s of live.slice(0, 5)) {
-      listText += `• **${s.title}**${s.startTime ? ` — empezó a las ${s.startTime}` : ''}\n`;
+      listText += `• **${safeInline(s.title, 120)}**${s.startTime ? ` — empezó a las ${s.startTime}` : ''}\n`;
     }
     listText += '\n';
   }
@@ -240,7 +253,7 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
   if (scheduled.length > 0) {
     listText += '⏳ **Programadas**\n';
     for (const s of scheduled.slice(0, 5)) {
-      listText += `• **${s.title}** — ${s.date || ''} ${s.startTime || ''}\n`;
+      listText += `• **${safeInline(s.title, 120)}** — ${s.date || ''} ${s.startTime || ''}\n`;
     }
     listText += '\n';
   }
@@ -248,7 +261,7 @@ export function buildReusListPayload({ sessions = [], channelName = null }) {
   if (finished.length > 0) {
     listText += '✅ **Terminadas**\n';
     for (const s of finished.slice(0, 3)) {
-      listText += `• **${s.title}** — ${s.date || ''}\n`;
+      listText += `• **${safeInline(s.title, 120)}** — ${s.date || ''}\n`;
     }
   }
 
@@ -367,7 +380,7 @@ export function buildDocsListPayload({ documents = [], channelName = null }) {
     );
   } else {
     const lines = documents.map((doc, index) => {
-      const title = truncateText(doc.title || 'Sin título', 120);
+      const title = safeInline(doc.title || 'Sin título', 120);
       return index < DOCS_LIST_BUTTONS_MAX ? `**${index + 1}.** ${title}` : `• ${title}`;
     });
     container.addTextDisplayComponents(

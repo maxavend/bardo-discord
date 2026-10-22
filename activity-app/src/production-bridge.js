@@ -67,6 +67,17 @@ function readImportFailures() {
   }
 }
 
+// Una conversión que se cortó (la Activity se cerró o se colgó) deja la marca
+// 'interrupted'. Tras dos cortes seguidos el archivo se da por fallido: así un
+// archivo que congela el dispositivo no bloquea cada apertura del canal.
+const MAX_INTERRUPTED_IMPORTS = 2;
+
+function isFinalImportFailure(failure) {
+  return Boolean(failure) && (failure.code !== 'interrupted' || (failure.attempts || 0) >= MAX_INTERRUPTED_IMPORTS);
+}
+
+const INTERRUPTED_IMPORT_MESSAGE = 'Bardo no pudo terminar de convertir este archivo en tu dispositivo. Descarga el original o súbelo de nuevo en un formato más liviano.';
+
 function writeImportFailures(failures) {
   try {
     localStorage.setItem(scopedDocsKey(DOCS_KEYS.importFailures), JSON.stringify(failures));
@@ -357,7 +368,7 @@ export async function prepareBardoProduction(options = {}) {
     }
   });
   if (failuresChanged) writeImportFailures(importFailures);
-  const markFailed = doc => (doc.importStatus === 'pending' && importFailures[doc.id]
+  const markFailed = doc => (doc.importStatus === 'pending' && isFinalImportFailure(importFailures[doc.id])
     ? {...doc, importStatus: 'failed', importError: importFailures[doc.id].message || ''}
     : doc);
   // Las ediciones locales sin confirmar se superponen ANTES de que la copia del
@@ -432,11 +443,23 @@ export async function prepareBardoProduction(options = {}) {
   // el store. Si un archivo no se puede leer (dañado, con contraseña, escaneado
   // o demasiado largo) el documento muestra el error en vez de quedar
   // "Procesando archivo…" para siempre.
-  const pendingImports = serverDocuments.filter(item => item?.importStatus === 'pending' && item?.hasSource && !importFailures[item.id]);
+  const pendingImports = serverDocuments.filter(item => item?.importStatus === 'pending' && item?.hasSource && !isFinalImportFailure(importFailures[item.id]));
   if (pendingImports.length) {
     setTimeout(() => {
       normalizePendingImports(pendingImports, {
         request: docsRequest,
+        onStart: doc => {
+          const failures = readImportFailures();
+          const attempts = (failures[doc.id]?.code === 'interrupted' ? failures[doc.id].attempts || 0 : 0) + 1;
+          failures[doc.id] = {code: 'interrupted', attempts, message: INTERRUPTED_IMPORT_MESSAGE, at: Date.now()};
+          writeImportFailures(failures);
+        },
+        onFinish: doc => {
+          const failures = readImportFailures();
+          if (failures[doc.id]?.code !== 'interrupted') return;
+          delete failures[doc.id];
+          writeImportFailures(failures);
+        },
         onFailure: (doc, error) => {
           const failure = {code: error?.code || 'unreadable', message: error?.userMessage || '', at: Date.now()};
           const failures = readImportFailures();

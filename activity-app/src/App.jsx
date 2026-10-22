@@ -139,9 +139,9 @@ function parseRoute() {
 }
 
 function stripHtml(value = '') {
-  const node = document.createElement('div');
-  node.innerHTML = value;
-  return (node.textContent || '').replace(/\s+/g, ' ').trim();
+  // Documento inerte: el HTML nunca se ejecuta (ni `onerror` en imágenes).
+  const parsed = new DOMParser().parseFromString(String(value), 'text/html');
+  return (parsed.body.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
 function normalizeUrl(raw) {

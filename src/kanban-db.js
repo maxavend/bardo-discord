@@ -445,10 +445,21 @@ export async function deleteKanbanTag(db, boardId, tagId, userId) {
 // Avisos (outbox) e hilos
 
 /** true si esta petición es dueña del envío (nadie lo envió antes). */
+// Avisos por persona, tipo y tablero en una hora: archivar y recrear tareas no
+// puede convertirse en una forma de mencionar o escribirle a alguien sin fin.
+export const KANBAN_NOTICES_PER_HOUR = 15;
+
 export async function claimKanbanNotification(db, cardId, assigneeId, kind, {status = 'pending'} = {}) {
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const since = new Date(nowDate.getTime() - 60 * 60 * 1000).toISOString();
   const result = await db.prepare(`INSERT INTO kanban_notifications (card_id, assignee_id, kind, status, attempts, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING`).bind(cardId, assigneeId, kind, status, now, now).run();
+    SELECT ?, ?, ?, ?, 1, ?, ?
+    WHERE (SELECT COUNT(*) FROM kanban_notifications n JOIN kanban_cards c ON c.id = n.card_id
+           WHERE n.assignee_id = ? AND n.kind = ? AND n.created_at >= ?
+             AND c.board_id = (SELECT board_id FROM kanban_cards WHERE id = ?)) < ?
+    ON CONFLICT DO NOTHING`)
+    .bind(cardId, assigneeId, kind, status, now, now, assigneeId, kind, since, cardId, KANBAN_NOTICES_PER_HOUR).run();
   return Number(result.meta?.changes) === 1;
 }
 

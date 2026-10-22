@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ASSIGNEE, setupKanban} from './helpers/kanban.js';
-import {CHANNEL} from './helpers/sqlite-d1.js';
+import {CHANNEL, GUILD, USER} from './helpers/sqlite-d1.js';
 
 const OTHER = '333333333';
 const channelPosts = sent => sent.filter(call => call.path === `/channels/${CHANNEL}/messages`);
@@ -171,7 +171,14 @@ test('hilos: canal de voz → 409; bot sin permisos → 403 con la lista; 429 �
   assert.equal((await voice.call(`/cards/${voiceCard.id}/thread`, {method: 'POST'})).json.error, 'threads_unsupported');
   assert.equal((await voice.call('/board?capabilities=1')).json.capabilities.threadsSupported, false);
 
-  const noPerms = await setupKanban({permissions: '1024'});
+  // La persona puede escribir (overwrite propio); el bot, no.
+  const noPerms = await setupKanban({
+    permissions: '1024',
+    respond: ({method, path}) => (method === 'GET' && path === `/channels/${CHANNEL}`
+      ? Response.json({id: CHANNEL, name: 'general', guild_id: GUILD, type: 0,
+        permission_overwrites: [{type: 1, id: USER, allow: '2048', deny: '0'}]})
+      : null),
+  });
   const noPermsCard = (await noPerms.createCard({title: 'Permisos'})).json.card;
   const denied = await noPerms.call(`/cards/${noPermsCard.id}/thread`, {method: 'POST'});
   assert.equal(denied.status, 403);
@@ -187,4 +194,30 @@ test('hilos: canal de voz → 409; bot sin permisos → 403 con la lista; 429 �
   const busy = await limited.call(`/cards/${limitedCard.id}/thread`, {method: 'POST'});
   assert.equal(busy.status, 503);
   assert.equal((await limited.call(`/cards/${limitedCard.id}`)).json.card.threadPending, false, 'libera el reclamo para reintentar');
+});
+
+test('quien solo puede ver el canal no hace que el bot publique, mencione ni abra hilos', async () => {
+  const k = await setupKanban({
+    respond: ({method, path}) => (method === 'GET' && path === `/channels/${CHANNEL}`
+      ? Response.json({id: CHANNEL, name: 'general', guild_id: GUILD, type: 0,
+        permission_overwrites: [{type: 1, id: USER, allow: '0', deny: '2048'}]})
+      : null),
+  });
+  const {card} = (await k.createCard({title: 'Silenciosa', assigneeId: ASSIGNEE, assigneeName: 'Ana'})).json;
+  await k.flush();
+  assert.equal(k.discord.sent.filter(item => item.method === 'POST').length, 0, 'ni aviso en el canal ni MD');
+  assert.equal((await k.call(`/cards/${card.id}/thread`, {method: 'POST'})).json.error, 'send_forbidden');
+  assert.equal((await k.call(`/cards/${card.id}/notify`, {method: 'POST'})).status, 403);
+});
+
+test('archivar y recrear tareas no permite avisarle a alguien sin fin', async () => {
+  const k = await setupKanban();
+  for (let index = 0; index < 18; index += 1) {
+    await k.createCard({title: `Tarea ${index}`, assigneeId: ASSIGNEE, assigneeName: 'Ana'});
+  }
+  await k.flush();
+  const dms = k.discord.sent.filter(item => item.method === 'POST' && item.path === `/channels/dm-${ASSIGNEE}/messages`);
+  const mentions = k.discord.sent.filter(item => item.method === 'POST' && item.path === `/channels/${CHANNEL}/messages`);
+  assert.equal(dms.length, 15);
+  assert.equal(mentions.length, 15);
 });

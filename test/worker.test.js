@@ -272,20 +272,12 @@ test('POST /api/documents/:id/normalize respeta el estado pending', async () => 
   assert.equal((await again.json()).error, 'already_normalized');
 });
 
-test('Worker expone el contexto de activity por instanceId', async () => {
+test('el contexto de una instancia de Activity ya no se expone sin sesión', async () => {
   const db = await setupDb();
   db.run("INSERT INTO activity_contexts (instance_id, document_id, created_at) VALUES ('inst-123', 'doc-123', '2026-08-19T12:00:00.000Z')");
-  const res = await worker.fetch(new Request('http://localhost/api/activity-context/inst-123'), { DB: db });
-  assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.instanceId, 'inst-123');
-  assert.equal(json.documentId, 'doc-123');
-});
-
-test('Worker responde 404 para contextos de activity inexistentes', async () => {
-  const db = await setupDb();
-  const res = await worker.fetch(new Request('http://localhost/api/activity-context/inst-no-existe'), { DB: db });
-  assert.equal(res.status, 404);
+  const res = await worker.fetch(new Request('http://localhost/api/activity-context/inst-123'), { DB: db, ASSETS: { fetch: async () => new Response('not found', { status: 404 }) } });
+  assert.notEqual(res.status, 200);
+  assert.doesNotMatch(await res.text(), /doc-123/);
 });
 
 // ---------------------------------------------------------------------------

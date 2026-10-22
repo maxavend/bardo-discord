@@ -1,3 +1,5 @@
+import {docxBombReason} from './zip-guard.js';
+
 export const MAX_PDF_PAGES = 80;
 /** Mismo límite que el servidor para el contenido de un documento (1,8 MB). */
 export const MAX_IMPORTED_MARKDOWN_BYTES = 1_800_000;
@@ -119,6 +121,10 @@ async function importDocx(arrayBuffer, title) {
   const mammoth = mammothModule.default || mammothModule;
   const TurndownService = turndownModule.default || turndownModule;
   const gfm = gfmModule.gfm || gfmModule.default?.gfm;
+
+  // Antes de descomprimir: un .docx que se infla a cientos de MB congelaría Bardo.
+  const bombReason = docxBombReason(arrayBuffer);
+  if (bombReason) throw new ImportError('too_large', bombReason);
 
   let result;
   try {
@@ -265,17 +271,24 @@ function isFileFailure(error) {
  * (dañados, con contraseña, escaneados, demasiado largos); los errores de red
  * se ignoran para reintentar en la próxima apertura.
  */
-export async function normalizePendingImports(documents, {request, fetchImpl, getHeaders = sessionHeaders, onFailure} = {}) {
+export async function normalizePendingImports(documents, {request, fetchImpl, getHeaders = sessionHeaders, onFailure, onStart, onFinish} = {}) {
   const ready = [];
   const doFetch = fetchImpl || ((...args) => window.fetch(...args));
   for (const doc of documents || []) {
     try {
+      // onStart deja una marca: si la conversión cuelga o cierra la Activity,
+      // la próxima apertura lo sabe y no repite el bloqueo indefinidamente.
+      try { onStart?.(doc); } catch {}
       const normalized = await normalizeDocument(doc, {request, fetchImpl: doFetch, getHeaders});
+      try { onFinish?.(doc); } catch {}
       if (normalized) ready.push(normalized);
     } catch (error) {
       console.error(`Bardo Docs: no se pudo normalizar ${doc?.id}`, error);
       if (isFileFailure(error)) {
         try { onFailure?.(doc, error); } catch {}
+      } else {
+        // Red o servidor: se reintenta en la próxima apertura sin contar como intento fallido.
+        try { onFinish?.(doc); } catch {}
       }
     }
   }

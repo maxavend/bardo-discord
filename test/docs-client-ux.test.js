@@ -535,6 +535,8 @@ test('destinos de lanzamiento: edit:<id>, documentos y secciones', () => {
 
 test('archivos ilegibles dan un error en español y se reportan; los de red no', async () => {
   const failures = [];
+  const started = [];
+  const finished = [];
   const docs = [
     {id: 'pdf-roto', importStatus: 'pending', hasSource: true, sourceType: 'docx', title: 'Roto'},
     {id: 'sin-red', importStatus: 'pending', hasSource: true, sourceType: 'pdf', title: 'Red'},
@@ -548,8 +550,13 @@ test('archivos ilegibles dan un error en español y se reportan; los de red no',
     fetchImpl,
     getHeaders: () => ({}),
     onFailure: (doc, error) => failures.push({id: doc.id, code: error.code, message: error.userMessage}),
+    onStart: doc => started.push(doc.id),
+    onFinish: doc => finished.push(doc.id),
   });
   assert.deepEqual(ready, []);
+  // Cada intento deja marca; la red la limpia (se reintenta), un archivo ilegible no.
+  assert.deepEqual(started, ['pdf-roto', 'sin-red']);
+  assert.deepEqual(finished, ['sin-red']);
   assert.equal(failures.length, 1);
   assert.equal(failures[0].id, 'pdf-roto');
   assert.equal(failures[0].code, 'unreadable');

@@ -197,3 +197,14 @@ test('buildReuNewPayload y buildErrorPayload nunca superan el límite de Compone
   assert.ok(totalText(buildErrorPayload('E'.repeat(10_000))).length < 4000);
   assert.ok(totalText(buildDocumentPayload({ title: 'X'.repeat(3000), pages: ['hola'] }, { documentId: 'd' })).length < 4000);
 });
+
+test('los títulos de las personas no pueden fingir avisos ni esconder enlaces en mensajes del bot', async () => {
+  const {buildDocumentPayload, unmaskLinks} = await import('../src/components.js');
+  const payload = JSON.stringify(buildDocumentPayload(
+    {title: 'Acta\n-# Aviso de moderación: [verifica](https://evil.example)', pages: ['Mira [aquí](https://evil.example)']},
+    {documentId: 'doc-1'},
+  ));
+  assert.doesNotMatch(payload, /\\n-# Aviso/);
+  assert.match(payload, /aquí \(https:\/\/evil\.example\)/);
+  assert.equal(unmaskLinks('[x](https://a.example/b)'), 'x (https://a.example/b)');
+});

@@ -191,7 +191,7 @@ export function insertDocument(db, {
  * `channelGuild` maps channel → guild. `fail` forces a status for every call.
  */
 export function createDiscordFetch({
-  permissions = '1024',
+  permissions = '3072', // Ver canal + enviar mensajes.
   ownerId = 'owner-1',
   channels = {[CHANNEL]: GUILD},
   fail = null,

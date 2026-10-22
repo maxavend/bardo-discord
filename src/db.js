@@ -295,6 +295,11 @@ export async function restoreDocument(db, documentId) {
     .run();
 }
 
+const SOURCE_MIME_TYPES = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
 export async function loadDocumentSource(db, documentId) {
   const row = await db
     .prepare(
@@ -308,7 +313,8 @@ export async function loadDocumentSource(db, documentId) {
 
   return {
     bytes: new Uint8Array(toArrayBuffer(row.source_blob)),
-    mime: row.source_mime || 'application/octet-stream',
+    // The type Discord reported at upload is never served back: only known formats.
+    mime: SOURCE_MIME_TYPES[row.source_type] || 'application/octet-stream',
     type: row.source_type || null,
     importStatus: row.import_status || 'pending',
   };
@@ -844,10 +850,10 @@ export async function deletePlannerSessionPermanently(db, sessionId, guildId, ch
       `DELETE FROM planner_live_sessions
        WHERE session_id = ?
          AND EXISTS (
-           SELECT 1 FROM planner_sessions WHERE id = ? AND guild_id = ? AND channel_id = ?
+           SELECT 1 FROM planner_sessions WHERE id = ? AND guild_id = ? AND channel_id = ? AND status = 'archived'
          )`,
     ).bind(sessionId, sessionId, guildId, channelId),
-    db.prepare('DELETE FROM planner_sessions WHERE id = ? AND guild_id = ? AND channel_id = ?')
+    db.prepare("DELETE FROM planner_sessions WHERE id = ? AND guild_id = ? AND channel_id = ? AND status = 'archived'")
       .bind(sessionId, guildId, channelId),
   ]);
   return Number(results?.at(-1)?.meta?.changes || 0) > 0;

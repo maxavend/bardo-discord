@@ -262,6 +262,8 @@ async function handleSource(route, request, env, session) {
     headers:{
       'Content-Type': source.mime,
       'Content-Length': String(source.bytes.byteLength),
+      'Content-Disposition':'attachment',
+      'Content-Security-Policy':'sandbox',
       'Cache-Control':'private, no-store',
       'X-Content-Type-Options':'nosniff',
     },
@@ -319,6 +321,9 @@ async function handleMessage(route, request, env, session) {
 
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
+  if (!(await createDiscordPermissionChecker(env, session.guildId, session.userId).canSendMessages(session.channelId))) {
+    return apiError(403, 'send_forbidden', 'Necesitas permiso para escribir en este canal para compartir aquí.');
+  }
 
   // Agenda of a meeting: the card also opens the meeting, if it is in this channel.
   const text = await request.text().catch(() => '');

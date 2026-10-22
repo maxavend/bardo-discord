@@ -178,3 +178,19 @@ test('fresh authentication can bypass a positive cached permission after access 
   revoked = true;
   assert.equal(await canUserViewChannel({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, 'guild-123', 'user-123', 'channel-123'), false);
 });
+
+test('un miembro en timeout puede leer el canal pero no escribir', async () => {
+  const fetchImpl = async input => {
+    const path = new URL(input).pathname.replace('/api/v10', '');
+    if (path === '/guilds/guild-t') return Response.json({id: 'guild-t', owner_id: 'owner'});
+    if (path === '/guilds/guild-t/roles') return Response.json([{id: 'guild-t', permissions: String(1024 + 2048)}]);
+    if (path === '/guilds/guild-t/members/user-t') {
+      return Response.json({user: {id: 'user-t'}, roles: [], communication_disabled_until: new Date(Date.now() + 60_000).toISOString()});
+    }
+    if (path === '/channels/channel-t') return Response.json({id: 'channel-t', guild_id: 'guild-t', type: 0, permission_overwrites: []});
+    return new Response('{}', {status: 404});
+  };
+  const checker = createDiscordPermissionChecker({DISCORD_TOKEN: 'bot', DISCORD_FETCH: fetchImpl}, 'guild-t', 'user-t');
+  assert.equal(await checker.canViewChannel('channel-t'), true);
+  assert.equal(await checker.canSendMessages('channel-t'), false);
+});

@@ -308,7 +308,7 @@ async function createCard(request, env, ctx, session, board, structure) {
   });
 
   const {card, created} = await insertKanbanCard(env.DB, board, {...parsed.fields, id, columnId, rank}, session.userId);
-  if (created && card.assignee) {
+  if (created && card.assignee && session.canSendMessages) {
     ctx.waitUntil(notifyAssignment(env, {board, card, actor: actorFrom(session), columnName: columnName(structure, columnId)}));
   }
   return json({card}, created ? 201 : 200);
@@ -356,7 +356,7 @@ async function createCardsBulk(request, env, ctx, session, board, structure) {
     (result.created ? created : existing).push(result.card);
     if (result.created) rank = generateKeyBetween(rank, null);
   }
-  if (created.length) {
+  if (created.length && session.canSendMessages) {
     const sessionTitle = String(body.payload.sessionTitle || '').trim().slice(0, 200) || null;
     ctx.waitUntil(notifyBulkAssignment(env, {board, cards: created, actor: actorFrom(session), sessionTitle}));
   }
@@ -389,7 +389,7 @@ async function patchCard(request, env, ctx, session, board, structure, card) {
     if (refreshed.archivedAt) return apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card: refreshed});
     return apiError(409, 'conflict', 'Otra persona cambió esta tarea al mismo tiempo. Revisa sus cambios e inténtalo de nuevo.', {card: refreshed});
   }
-  if (assigneeChanged && refreshed.assignee) {
+  if (assigneeChanged && refreshed.assignee && session.canSendMessages) {
     ctx.waitUntil(notifyAssignment(env, {board, card: refreshed, actor: actorFrom(session), columnName: columnName(structure, refreshed.columnId)}));
   }
   return json({card: refreshed});
@@ -429,6 +429,9 @@ async function openThread(request, env, ctx, session, board, card) {
   if (card.threadId) return json({card});
   if (card.archivedAt) return apiError(410, 'archived', 'Esta tarea está archivada. Puedes restaurarla desde «Tareas archivadas».', {card});
 
+  if (!session.canSendMessages) {
+    return apiError(403, 'send_forbidden', 'Necesitas permiso para escribir en este canal para abrir un hilo.');
+  }
   const state = await botChannelState(env, session);
   if (!state.threadsSupported) {
     return apiError(409, 'threads_unsupported', 'Los hilos solo se pueden crear en canales de texto, no en canales de voz ni dentro de otro hilo.');
@@ -472,6 +475,7 @@ async function openThread(request, env, ctx, session, board, card) {
 async function retryNotice(request, env, ctx, session, board, structure, card) {
   if (request.method !== 'POST') return methodNotAllowed();
   if (!card.assignee) return apiError(422, 'no_assignee', 'Esta tarea no tiene responsable a quien avisar.');
+  if (!session.canSendMessages) return apiError(403, 'send_forbidden', 'Necesitas permiso para escribir en este canal para avisar.');
   ctx.waitUntil(notifyAssignment(env, {
     board, card, actor: actorFrom(session), columnName: columnName(structure, card.columnId), retry: true,
   }));
@@ -676,6 +680,9 @@ async function routeKanbanApi(request, url, env, ctx) {
   if (!(await canUserViewChannel(env, session.guildId, session.userId, session.channelId))) {
     return apiError(403, 'forbidden', 'No tienes acceso a este canal en Discord.');
   }
+  // Avisos, menciones e hilos los publica el bot: solo para quien puede escribir aquí.
+  session.canSendMessages = await createDiscordPermissionChecker(env, session.guildId, session.userId)
+    .canSendMessages(session.channelId);
 
   if (route.resource === 'board') return handleBoard(request, url, env, session);
   if (route.resource === 'cards') return handleCards(route, request, url, env, ctx, session);
