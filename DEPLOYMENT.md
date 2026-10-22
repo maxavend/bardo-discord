@@ -2,6 +2,19 @@
 
 
 
+## Reuniones: agenda compartible, facilitadores y revisión de acuerdos — 22 de octubre de 2026
+
+- Código: `acb48ad` (rama `feat/portafolio-datos-de-ejemplo`, PR #27; aún no está en `main`). Worker activo al 100%: `733c2ec0-df72-4a6b-845d-445234586c56` (`wrangler deploy` local).
+- Selectores precargados con quienes ven el canal y solo los roles con acceso (lista de miembros con el intent limitado del bot; si falla, vuelve a la búsqueda). Fotos de Discord en chips y avatares.
+- Facilitan una o más personas. «Compartir agenda en el canal» publica la agenda como documento con «Abrir agenda» y «Abrir reunión».
+- Resumen con duración real; «Revisar acuerdos»: Tarea, MD al responsable o Descartar. Nuevo `POST /api/planner/sessions/:id/agreements/dm`.
+- Sin migraciones ni cambios de comandos. Validación: lint/tipos/build, 467 unitarias, 146 E2E (laptop, 320 y 390 px). Producción: `/` 200; APIs nuevas 401 sin sesión. Sin prueba autenticada dentro de Discord.
+- Importante: el próximo push a `main` redespliega desde `main`; mergear el PR #27 antes para no revertir estos cambios.
+
+```sh
+npx wrangler rollback e9aa03ad-8d43-45f2-9e1f-b5cd114009df --message 'Volver a #26' --yes
+```
+
 ## v0.6.0 (beta): Tareas, Hub, Ajustes — 15 de octubre de 2026
 
 - Código: `390595d` (PR #24). Worker activo al 100%: `06bb29b2-db67-4609-984f-c59b6f8d50d2` (deploy de GitHub, mismo build que `2d7fc7cb-05c9-44ec-9aa7-64618cb4eb25`).
