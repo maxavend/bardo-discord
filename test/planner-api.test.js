@@ -140,39 +140,56 @@ test('channel-context vuelve a la búsqueda si Discord no deja listar miembros',
   assert.deepEqual(json.members.map(member => member.globalName), ['Maxi']);
 });
 
-test('los acuerdos se envían por MD solo a quienes ven el canal', async () => {
+test('MD de acuerdos: texto desde la reunión guardada, una vez por persona y solo a quienes ven el canal', async () => {
   const { env } = await setup();
-  const created = await createMeeting(env);
+  const created = await createMeeting(env, { blocks: [{ id: 'b-1', title: 'Objetivos', subpoints: [], decisions: [
+    { id: 'd-1', content: 'Enviar la propuesta' },
+    { id: 'd-2', content: 'Revisar costos' },
+  ] }] });
   const sent = [];
   const base = env.DISCORD_FETCH;
+  let canWrite = true;
   env.DISCORD_FETCH = async (input, init = {}) => {
     const url = new URL(input);
+    if (url.pathname === `/api/v10/guilds/${GUILD}/roles`) return Response.json([{ id: GUILD, permissions: canWrite ? String(1024 + 2048) : '1024' }]);
     if (url.pathname === `/api/v10/guilds/${GUILD}/members/12345678`) return new Response('{}', { status: 404 });
     if (url.pathname === '/api/v10/users/@me/channels') return Response.json({ id: `dm-${JSON.parse(init.body).recipient_id}` });
     if (url.pathname.startsWith('/api/v10/channels/dm-')) {
-      sent.push({ channel: url.pathname.split('/')[4], body: JSON.parse(init.body) });
+      sent.push({ channel: url.pathname.split('/')[4], body: JSON.stringify(JSON.parse(init.body)) });
       return Response.json({ id: 'message-1' });
     }
     return base(input, init);
   };
-  const { status, json } = await call(env, `/api/planner/sessions/${created.json.id}/agreements/dm`, {
-    method: 'POST',
-    body: { items: [
-      { assigneeId: '98765432', content: 'Enviar la propuesta', origin: 'Objetivos' },
-      { assigneeId: '98765432', content: 'Revisar costos' },
-      { assigneeId: '12345678', content: 'Fuera del canal' },
-      { assigneeId: 'no-es-id', content: 'Ignorado' },
-    ] },
-  });
+  const path = `/api/planner/sessions/${created.json.id}/agreements/dm`;
+  const send = items => call(env, path, { method: 'POST', body: { items } });
+  const { status, json } = await send([
+    { agreementId: 'd-1', assigneeId: '98765432', content: 'texto inventado https://evil.example' },
+    { agreementId: 'd-2', assigneeId: '98765432' },
+    { agreementId: 'd-1', assigneeId: '12345678' },
+    { agreementId: 'no-existe', assigneeId: '98765432' },
+  ]);
   assert.equal(status, 200);
   assert.deepEqual(json.results, [
+    { assigneeId: '98765432', agreementId: 'no-existe', ok: false, code: 'not_saved', count: 1 },
     { assigneeId: '98765432', ok: true, code: null, count: 2 },
     { assigneeId: '12345678', ok: false, code: 'no_access', count: 1 },
   ]);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].channel, 'dm-98765432');
-  assert.match(JSON.stringify(sent[0].body), /Enviar la propuesta/);
-  assert.equal((await call(env, `/api/planner/sessions/${created.json.id}/agreements/dm`, { method: 'POST', body: { items: [] } })).status, 400);
+  assert.match(sent[0].body, /Enviar la propuesta/);
+  assert.doesNotMatch(sent[0].body, /evil\.example/, 'el texto nunca viene del cliente');
+
+  // Repetir no vuelve a enviar.
+  const again = await send([{ agreementId: 'd-1', assigneeId: '98765432' }]);
+  assert.deepEqual(again.json.results, [{ assigneeId: '98765432', ok: false, code: 'already_sent', count: 1 }]);
+  assert.equal(sent.length, 1);
+
+  // Sin permiso para escribir en el canal no se envía nada.
+  canWrite = false;
+  const { clearDiscordPermissionCache } = await import('../src/discord-permissions.js');
+  clearDiscordPermissionCache(env.DISCORD_FETCH);
+  assert.equal((await send([{ agreementId: 'd-2', assigneeId: '55555555' }])).status, 403);
+  assert.equal((await send([])).status, 400);
 });
 
 test('POST crea una reunión y GET la lista; status NULL cuenta como activa', async () => {

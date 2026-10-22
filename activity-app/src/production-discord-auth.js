@@ -2,6 +2,7 @@ import {installBardoApiSession} from './production-launch-auth.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const AUTH_TIMEOUT_MS = 15000;
+const SILENT_AUTH_TIMEOUT_MS = 5000;
 const SDK_READY_TIMEOUT_MS = 10000;
 
 export function logBreadcrumb(stage, detail = null) {
@@ -75,6 +76,26 @@ function withTimeout(promise, ms, label) {
   });
 }
 
+/**
+ * Quien ya autorizó Bardo no vuelve a ver el modal: `prompt: 'none'` pide a
+ * Discord el código en silencio (Discord sigue verificando la cuenta actual).
+ * Solo la primera vez, o si se revocó el permiso, se muestra «Autorizar».
+ */
+export async function authorizeWithDiscord(sdk, clientId) {
+  const request = {client_id: clientId, response_type: 'code', state: '', scope: ['identify']};
+  try {
+    const silent = await withTimeout(
+      sdk.commands.authorize({...request, prompt: 'none'}),
+      SILENT_AUTH_TIMEOUT_MS,
+      'Discord authorize (silent)',
+    );
+    if (silent?.code) return silent;
+  } catch (error) {
+    logBreadcrumb('authorize_silent_unavailable', {code: error?.code ?? null});
+  }
+  return withTimeout(sdk.commands.authorize(request), AUTH_TIMEOUT_MS, 'Discord authorize');
+}
+
 // ── Main auth ────────────────────────────────────────────────────────────────
 
 export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) {
@@ -126,20 +147,10 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
       localStorage.removeItem('bardo_session_v1');
     } catch {}
 
-    // ── Full OAuth flow ───────────────────────────────────────────────────
+    // ── OAuth ─────────────────────────────────────────────────────────────
     onStageChange('authorize_started');
     logBreadcrumb('authorize_started');
-    // Note: prompt is intentionally omitted to support first-time user authorization without errors
-    const authResult = await withTimeout(
-      sdk.commands.authorize({
-        client_id: clientId,
-        response_type: 'code',
-        state: '',
-        scope: ['identify'],
-      }),
-      AUTH_TIMEOUT_MS,
-      'Discord authorize',
-    );
+    const authResult = await authorizeWithDiscord(sdk, clientId);
     const code = authResult?.code;
     if (!code) {
       throw new Error('Discord no devolvió un código de autorización.');

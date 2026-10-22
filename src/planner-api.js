@@ -5,6 +5,7 @@ import { getChannel, sendDirectMessage } from './discord-bot.js';
 import { settingsDefaults } from './settings-api.js';
 import {
   canUserViewChannel,
+  createDiscordPermissionChecker,
   discordUnavailableResponse,
   getUserChannelContext,
   searchGuildMembers,
@@ -12,6 +13,9 @@ import {
 } from './discord-permissions.js';
 import {
   archivePlannerSession,
+  claimAgreementDm,
+  countAgreementDmsByActor,
+  finishAgreementDm,
   restorePlannerSession,
   deletePlannerSessionPermanently,
   listPlannerSessionsForChannel,
@@ -257,6 +261,7 @@ async function handleLive(request, env, session, sessionId) {
 
 const MAX_DM_AGREEMENTS = 25;
 const MAX_DM_PEOPLE = 10;
+const MAX_DMS_PER_HOUR = 30;
 
 async function wantsDirectMessages(env, userId) {
   try {
@@ -266,31 +271,63 @@ async function wantsDirectMessages(env, userId) {
   }
 }
 
+/** Acuerdos guardados de la reunión (agenda + estado en vivo), por id. */
+async function storedAgreements(env, meeting) {
+  const byId = new Map();
+  const blocks = Array.isArray(meeting.blocks) ? meeting.blocks : [];
+  const add = (decision, block) => {
+    if (!decision?.id || !decision.content || byId.has(String(decision.id))) return;
+    const point = (block?.subpoints || []).find(candidate => candidate.id === decision.pointId);
+    const blockTitle = block?.title || 'Reunión';
+    byId.set(String(decision.id), {
+      content: String(decision.content),
+      origin: point?.title ? `${blockTitle} → ${point.title}` : blockTitle,
+    });
+  };
+  for (const block of blocks) for (const decision of block?.decisions || []) add(decision, block);
+  const live = await loadLiveSessionState(env.DB, meeting.id).catch(() => null);
+  for (const decision of live?.decisions || []) add(decision, blocks.find(block => block?.id === decision.blockId));
+  return byId;
+}
+
 /**
  * Sends each person the acuerdos left in their charge (one DM per person).
- * Only to people who can see this channel, and never to someone who turned
- * Bardo's DMs off. A failure for one person never blocks the others.
+ * The text always comes from the meeting as saved, never from the request;
+ * only whoever can write in the channel may send, each acuerdo reaches a person
+ * at most once, and there is an hourly cap per sender. Recipients must see the
+ * channel and not have turned Bardo's DMs off.
  */
 async function handleAgreementDms(request, env, session, meeting) {
   const body = await readJsonBody(request);
   if (body.error) return body.error;
-  const items = (Array.isArray(body.payload.items) ? body.payload.items : [])
+  const requested = (Array.isArray(body.payload.items) ? body.payload.items : [])
     .slice(0, MAX_DM_AGREEMENTS)
-    .map(item => ({
-      assigneeId: String(item?.assigneeId ?? '').trim(),
-      content: cleanString(item?.content, 500)?.trim() || '',
-      origin: cleanString(item?.origin, 200)?.trim() || null,
-    }))
-    .filter(item => /^\d{5,25}$/.test(item.assigneeId) && item.content);
-  if (!items.length) return apiError(400, 'invalid_items', 'Elige al menos un acuerdo con responsable.');
+    .map(item => ({agreementId: String(item?.agreementId ?? '').trim().slice(0, 128), assigneeId: String(item?.assigneeId ?? '').trim()}))
+    .filter(item => item.agreementId && /^\d{5,25}$/.test(item.assigneeId));
+  if (!requested.length) return apiError(400, 'invalid_items', 'Elige al menos un acuerdo con responsable.');
   if (!String(env.DISCORD_TOKEN || '').trim()) {
     return apiError(503, 'bot_not_configured', 'Bardo no está configurado para enviar mensajes. Avisa a quien administra el bot.');
   }
+  const checker = createDiscordPermissionChecker(env, session.guildId, session.userId);
+  if (!(await checker.canSendMessages(session.channelId))) {
+    return apiError(403, 'send_forbidden', 'Necesitas permiso para escribir en este canal para enviar acuerdos por MD.');
+  }
 
-  const byPerson = new Map();
-  for (const item of items) byPerson.set(item.assigneeId, [...(byPerson.get(item.assigneeId) || []), item]);
-  const channel = await getChannel(env, session.channelId);
+  const agreements = await storedAgreements(env, meeting);
   const results = [];
+  const byPerson = new Map();
+  for (const item of requested) {
+    const agreement = agreements.get(item.agreementId);
+    if (!agreement) {
+      results.push({assigneeId: item.assigneeId, agreementId: item.agreementId, ok: false, code: 'not_saved', count: 1});
+      continue;
+    }
+    byPerson.set(item.assigneeId, [...(byPerson.get(item.assigneeId) || []), {...agreement, agreementId: item.agreementId}]);
+  }
+
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  let budget = MAX_DMS_PER_HOUR - await countAgreementDmsByActor(env.DB, session.userId, since);
+  const channel = await getChannel(env, session.channelId);
   // Sequential: DMs have stricter rate limits than channel messages.
   for (const [assigneeId, list] of [...byPerson.entries()].slice(0, MAX_DM_PEOPLE)) {
     let code = null;
@@ -300,9 +337,21 @@ async function handleAgreementDms(request, env, session, meeting) {
       code = isDiscordUnavailableError(error) ? 'discord_unavailable' : 'no_access';
     }
     if (!code && !(await wantsDirectMessages(env, assigneeId))) code = 'opted_out';
+    const claimed = [];
+    if (!code) {
+      for (const item of list) {
+        if (budget <= 0) break;
+        const key = {sessionId: meeting.id, agreementId: item.agreementId, assigneeId, actorId: session.userId};
+        if (await claimAgreementDm(env.DB, key)) {
+          claimed.push(item);
+          budget -= 1;
+        }
+      }
+      if (!claimed.length) code = budget <= 0 ? 'rate_limited' : 'already_sent';
+    }
     if (!code) {
       const sent = await sendDirectMessage(env, assigneeId, buildAgreementDmPayload({
-        items: list,
+        items: claimed,
         meetingTitle: meeting.title,
         guildId: session.guildId,
         channelId: session.channelId,
@@ -310,10 +359,13 @@ async function handleAgreementDms(request, env, session, meeting) {
         channelName: channel.ok ? channel.data?.name || null : null,
       }));
       if (!sent.ok) code = sent.code || 'failed';
+      for (const item of claimed) {
+        await finishAgreementDm(env.DB, {sessionId: meeting.id, agreementId: item.agreementId, assigneeId}, sent.ok);
+      }
     }
-    results.push({ assigneeId, ok: !code, code, count: list.length });
+    results.push({assigneeId, ok: !code, code, count: code ? list.length : claimed.length});
   }
-  return json({ results });
+  return json({results});
 }
 
 async function handleSingle(request, env, session, route) {

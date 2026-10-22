@@ -55,6 +55,9 @@ const DM_ERRORS = {
   dm_closed: 'tiene los MD cerrados',
   opted_out: 'pidió no recibir MD de Bardo',
   no_access: 'no tiene acceso a este canal',
+  already_sent: 'ya lo había recibido',
+  rate_limited: 'no lo recibió: alcanzaste el límite de MD por hora',
+  not_saved: 'no lo recibió: el acuerdo aún no se guarda, inténtalo en unos segundos',
 };
 
 /** MD con los acuerdos de cada responsable (una conversación por persona). */
@@ -127,7 +130,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
   const tasks = pending.filter(row => row.action === 'task');
   const dms = pending.filter(row => row.action === 'dm');
   const discards = pending.filter(row => row.action === 'discard');
-  const missingDmOwner = dms.some(row => !row.assignee);
+  const missingDmOwner = dms.some(row => !row.assignee || !row.agreement.id);
   const total = tasks.length + dms.length + discards.length;
   const title = plannerState?.title || 'Reunión';
   const updateRow = (index, patch) => setRows(previous => previous.map((item, i) => (i === index ? {...item, ...patch} : item)));
@@ -164,18 +167,20 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
         for (const row of tasks) if (row.agreement.id) triage[row.agreement.id] = 'task';
       }
       if (dms.length) {
+        // El servidor arma el MD desde la reunión guardada: solo viajan los ids.
         const results = await sendAgreementDms(sessionId, dms.map(row => ({
+          agreementId: row.agreement.id,
           assigneeId: row.assignee.id,
-          content: row.agreement.content,
-          origin: row.agreement.origin,
         })));
-        const failed = new Map(results.filter(result => !result.ok).map(result => [String(result.assigneeId), result.code]));
+        const problems = new Map(results.filter(result => !result.ok).map(result => [String(result.assigneeId), result.code]));
         for (const row of dms) {
-          if (failed.has(String(row.assignee.id))) continue;
-          done.sent += 1;
-          if (row.agreement.id) triage[row.agreement.id] = 'dm';
+          const code = problems.get(String(row.assignee.id));
+          // «Ya lo había recibido» también cuenta como enviado.
+          if (code && code !== 'already_sent') continue;
+          if (!code) done.sent += 1;
+          triage[row.agreement.id] = 'dm';
         }
-        done.failures = [...failed.entries()].map(([id, code]) => {
+        done.failures = [...problems.entries()].map(([id, code]) => {
           const name = dms.find(row => String(row.assignee.id) === id)?.assignee.name || 'Una persona';
           return `${name} ${DM_ERRORS[code] || 'no recibió el MD'}.`;
         });

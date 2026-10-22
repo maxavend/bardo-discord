@@ -1008,3 +1008,29 @@ export async function saveWorkspaceName(db, guildId, channelId, name, userId) {
     .bind(guildId, channelId, name, new Date().toISOString(), userId).run();
   return name;
 }
+
+/**
+ * Reserva el MD de un acuerdo para una persona. Falso si ya se envió (o se está
+ * enviando): así un acuerdo nunca llega dos veces a la misma persona.
+ */
+export async function claimAgreementDm(db, {sessionId, agreementId, assigneeId, actorId}) {
+  const result = await db.prepare(`INSERT INTO planner_agreement_dms (session_id, agreement_id, assignee_id, actor_id, status, created_at)
+    VALUES (?, ?, ?, ?, 'pending', ?) ON CONFLICT DO NOTHING`)
+    .bind(sessionId, agreementId, assigneeId, actorId, new Date().toISOString()).run();
+  return Number(result.meta?.changes) === 1;
+}
+
+/** Enviado: queda reservado. Fallido: se libera para poder reintentarlo. */
+export async function finishAgreementDm(db, {sessionId, agreementId, assigneeId}, sent) {
+  const statement = sent
+    ? db.prepare(`UPDATE planner_agreement_dms SET status = 'sent' WHERE session_id = ? AND agreement_id = ? AND assignee_id = ?`)
+    : db.prepare('DELETE FROM planner_agreement_dms WHERE session_id = ? AND agreement_id = ? AND assignee_id = ?');
+  await statement.bind(sessionId, agreementId, assigneeId).run();
+}
+
+/** MD de acuerdos que una persona pidió enviar desde `since` (límite por hora). */
+export async function countAgreementDmsByActor(db, actorId, since) {
+  const row = await db.prepare('SELECT COUNT(*) AS count FROM planner_agreement_dms WHERE actor_id = ? AND created_at >= ?')
+    .bind(actorId, since).first();
+  return Number(row?.count || 0);
+}
