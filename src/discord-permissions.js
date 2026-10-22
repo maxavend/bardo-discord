@@ -68,6 +68,26 @@ function memberChannelPermissions({guildId, ownerId = null, roleMap, overwrites 
 
 const allowsView = permissions => (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
 
+// The member directory is shared by everyone in a guild for a few minutes, so
+// reopening Bardo (or looping the endpoint) cannot burn the bot's rate limit.
+const MEMBER_LIST_TTL_MS = 5 * 60 * 1000;
+const memberListCaches = new WeakMap();
+
+function sharedMemberList(fetchImpl, guildId, load) {
+  let cache = memberListCaches.get(fetchImpl);
+  if (!cache) {
+    cache = new Map();
+    memberListCaches.set(fetchImpl, cache);
+  }
+  const hit = cache.get(guildId);
+  if (hit && hit.expiresAt > Date.now()) return hit.promise;
+  const promise = load();
+  cache.set(guildId, {promise, expiresAt: Date.now() + MEMBER_LIST_TTL_MS});
+  promise.catch(() => cache.delete(guildId));
+  if (cache.size > 500) cache.delete(cache.keys().next().value);
+  return promise;
+}
+
 // List Guild Members pages (1000 each). Enough for team servers; larger ones
 // keep the on-demand search for whoever is past the cap.
 const MEMBER_LIST_PAGE = 1000;
@@ -201,7 +221,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     return parent && String(parent.guild_id) === String(guildId) ? parent.permission_overwrites || [] : [];
   };
 
-  const listGuildMembers = () => cached('member-list', async () => {
+  const listGuildMembers = () => cached('member-list', () => sharedMemberList(fetchImpl, guildId, async () => {
     const members = [];
     let after = '0';
     for (let page = 0; page < MEMBER_LIST_MAX_PAGES; page += 1) {
@@ -215,7 +235,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
       after = String(batch[batch.length - 1]?.user?.id || after);
     }
     return {members, complete: false};
-  });
+  }));
 
   const permissionCache = permissionCacheFor(fetchImpl);
   const cacheTtlMs = Number.isFinite(Number(env?.DISCORD_PERMISSION_CACHE_TTL_MS))
@@ -311,6 +331,13 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     return (permissions & DISCORD_PERMISSION.ADMINISTRATOR) !== 0n
       || (permissions & DISCORD_PERMISSION.MANAGE_CHANNELS) !== 0n
       || (permissions & DISCORD_PERMISSION.MANAGE_EVENTS) !== 0n;
+  };
+
+  // Anything that makes the bot speak for someone requires that they could
+  // write there themselves (read-only channels, timeouts).
+  const canSendMessages = async channelId => {
+    const permissions = await permissionsOrZero(channelId);
+    return (permissions & (DISCORD_PERMISSION.SEND_MESSAGES | DISCORD_PERMISSION.SEND_MESSAGES_IN_THREADS)) !== 0n;
   };
 
   // Moderation of shared documents (permanent deletion) mirrors Discord's own
@@ -415,6 +442,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     canViewChannel,
     canManageChannel,
     canModerateDocuments,
+    canSendMessages,
     computeChannelPermissions,
     getChannelContext,
   };

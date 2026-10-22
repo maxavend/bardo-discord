@@ -145,6 +145,15 @@ test('cada export de db.js ejecuta su SQL contra el esquema final sin errores de
       await db.saveWorkspaceName(d1, 'g1', 'c1', 'Equipo', 'u1');
       await db.saveWorkspaceName(d1, 'g1', 'c1', '', 'u1');
     },
+    claimAgreementDm: async () => {
+      await db.savePlannerSession(d1, {...planner, id: 's-dm'});
+      await db.claimAgreementDm(d1, {sessionId: 's-dm', agreementId: 'd1', assigneeId: 'u2', actorId: 'u1'});
+    },
+    finishAgreementDm: async () => {
+      await db.finishAgreementDm(d1, {sessionId: 's-dm', agreementId: 'd1', assigneeId: 'u2'}, true);
+      await db.finishAgreementDm(d1, {sessionId: 's-dm', agreementId: 'd1', assigneeId: 'u2'}, false);
+    },
+    countAgreementDmsByActor: () => db.countAgreementDmsByActor(d1, 'u1', '2026-01-01T00:00:00.000Z'),
   };
 
   const exported = Object.entries(db).filter(([, value]) => typeof value === 'function').map(([name]) => name);

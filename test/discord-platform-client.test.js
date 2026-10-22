@@ -46,6 +46,34 @@ test('Activity launch authenticates the current Discord account before loading a
   } finally { Object.assign(globalThis, original); }
 });
 
+test('authorize: quien ya autorizó no ve el modal; la primera vez sí', async () => {
+  const bundle = await build({
+    entryPoints: ['activity-app/src/production-discord-auth.js'], bundle: true,
+    format: 'esm', write: false, platform: 'browser', plugins: [{name: 'sdk-host', setup(builder) {
+      builder.onResolve({filter: /^@discord\/embedded-app-sdk$/}, () => ({path: 'sdk', namespace: 'fixture'}));
+      builder.onLoad({filter: /.*/, namespace: 'fixture'}, () => ({contents: 'export const DiscordSDK = null;'}));
+    }}],
+  });
+  const original = globalThis.window;
+  globalThis.window = {location: {hostname: 'example.com', search: ''}};
+  try {
+    const {authorizeWithDiscord} = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
+    const calls = [];
+    const authorized = {commands: {authorize: async args => { calls.push(args.prompt ?? 'consent'); return {code: 'silent'}; }}};
+    assert.deepEqual(await authorizeWithDiscord(authorized, 'app'), {code: 'silent'});
+    assert.deepEqual(calls, ['none']);
+
+    calls.length = 0;
+    const firstTime = {commands: {authorize: async args => {
+      calls.push(args.prompt ?? 'consent');
+      if (args.prompt === 'none') throw Object.assign(new Error('not authorized'), {code: 5000});
+      return {code: 'consented'};
+    }}};
+    assert.deepEqual(await authorizeWithDiscord(firstTime, 'app'), {code: 'consented'});
+    assert.deepEqual(calls, ['none', 'consent']);
+  } finally { globalThis.window = original; }
+});
+
 test('API interceptor only attaches credentials to the same origin and clears stale launch context', async () => {
   const original = globalThis.window;
   const calls = [];
