@@ -250,9 +250,9 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
                             value={row.assignee}
                             onChange={assignee => updateRow(index, {assignee})}
                             renderTrigger={() => (
-                              <Button variant="outline" size="sm" className={cn('h-7 gap-1.5 text-xs', row.assignee ? 'pl-px pr-2.5' : 'px-2')} aria-label={row.assignee ? `Responsable: ${row.assignee.name}. Cambiar` : 'Elegir responsable'}>
+                              <Button variant="outline" size="sm" className={cn('h-7 min-w-0 max-w-full gap-1.5 text-xs', row.assignee ? 'pl-px pr-2.5' : 'px-2')} aria-label={row.assignee ? `Responsable: ${row.assignee.name}. Cambiar` : 'Elegir responsable'}>
                                 {row.assignee ? <AssigneeAvatar assignee={row.assignee} /> : <UserRound className="size-3.5 text-muted-foreground" />}
-                                <span className={cn(!row.assignee && 'text-muted-foreground')}>{row.assignee?.name || 'Sin responsable'}</span>
+                                <span className={cn('truncate', !row.assignee && 'text-muted-foreground')}>{row.assignee?.name || 'Sin responsable'}</span>
                               </Button>
                             )}
                           />

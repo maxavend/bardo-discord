@@ -368,7 +368,7 @@ export function PlannerMemberPicker({
                   <Badge
                     key={tag}
                     variant="secondary"
-                    className={`gap-1.5 py-1 pr-2.5 rounded-xl border border-border/50 text-xs font-medium text-foreground shrink-0 ${matchedRole ? 'pl-2.5' : 'pl-1'}`}
+                    className={`gap-1.5 py-1 pr-2.5 rounded-xl border border-border/50 text-xs font-medium text-foreground min-w-0 max-w-full ${matchedRole ? 'pl-2.5' : 'pl-1'}`}
                   >
                     {matchedRole ? (
                       <span
@@ -378,7 +378,7 @@ export function PlannerMemberPicker({
                     ) : (
                       <MemberAvatar name={label} member={matchedMember || null} size="xxs" />
                     )}
-                    <span>{label}</span>
+                    <span className="truncate">{label}</span>
                     <button
                       type="button"
                       onClick={(e) => handleRemoveTag(tag, e)}

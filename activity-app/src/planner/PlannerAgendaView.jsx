@@ -1316,15 +1316,15 @@ export function PlannerAgendaView({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0 ml-auto">
+                          <div className="flex items-center gap-2 min-w-0 max-w-full ml-auto">
                             {ownerDisplayName && (
-                              <div className="inline-flex items-center gap-1.5">
+                              <div className="inline-flex items-center gap-1.5 min-w-0">
                                 <MemberAvatar
                                   name={ownerDisplayName}
                                   member={ownerMember || null}
                                   className="size-4.5 border border-card text-[8px]"
                                 />
-                                <span className="text-xs text-muted-foreground font-medium">{ownerDisplayName}</span>
+                                <span className="text-xs text-muted-foreground font-medium truncate">{ownerDisplayName}</span>
                               </div>
                             )}
 

@@ -162,17 +162,17 @@ export function SessionRecapView({
             {recap.recapDescription && <p className="text-sm text-muted-foreground mt-2">{recap.recapDescription}</p>}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 min-w-0 sm:shrink-0">
             <IconButton label="Copiar resumen" onClick={handleCopyRecap}>
               <CopyIcon className="size-4" />
             </IconButton>
             {isInterrupted && onResumeSession ? (
-              <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3.5 ml-1">
-                <PlayIcon className="size-3.5" /> Reanudar reunión
+              <Button variant="default" size="sm" onClick={onResumeSession} className="font-semibold h-8 px-3.5 ml-1 min-w-0 shrink">
+                <PlayIcon className="size-3.5" /> <span className="truncate">Reanudar reunión</span>
               </Button>
             ) : onSaveDocToLibrary ? (
-              <Button variant="default" size="sm" onClick={handleSaveDoc} className="font-semibold h-8 px-3.5 ml-1">
-                <FileTextIcon className="size-3.5" /> Guardar acta en Documentos
+              <Button variant="default" size="sm" onClick={handleSaveDoc} className="font-semibold h-8 px-3.5 ml-1 min-w-0 shrink">
+                <FileTextIcon className="size-3.5" /> <span className="truncate">Guardar acta en Documentos</span>
               </Button>
             ) : null}
             <DropdownMenu>
@@ -215,8 +215,8 @@ export function SessionRecapView({
 
           {hasDecisions && (
             <Card className="p-4 sm:p-5 flex flex-col gap-3 rounded-2xl">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-foreground flex items-center gap-2 whitespace-nowrap">
                   <CheckCircle2 className="size-3.5 text-primary" />
                   Acuerdos ({recap.decisions.length})
                 </h2>
@@ -231,8 +231,8 @@ export function SessionRecapView({
                   const ownerName = decision.owner ? decision.owner.trim().replace(/^@/, '') : null;
                   const triage = TRIAGE_LABELS[triageById.get(decision.id)];
                   return (
-                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex items-center justify-between gap-2">
-                      <div className="min-w-0">
+                    <div key={decision.id || index} className="py-2 border-b border-border/30 last:border-0 text-xs text-foreground leading-relaxed flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                      <div className="min-w-0 flex-1 basis-48">
                         <strong className="font-semibold">{decision.content}</strong>
                         {(point || block) && (
                           <span className="block text-[11px] text-muted-foreground mt-0.5">
@@ -240,12 +240,12 @@ export function SessionRecapView({
                           </span>
                         )}
                       </div>
-                      <span className="flex items-center gap-1.5 shrink-0">
-                        {triage && <span className="text-[11px] text-muted-foreground">{triage}</span>}
+                      <span className="flex items-center gap-1.5 min-w-0 max-w-full ml-auto">
+                        {triage && <span className="text-[11px] text-muted-foreground shrink-0">{triage}</span>}
                         {ownerName && (
-                          <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium bg-muted/60 py-0.5 pl-0.5 pr-2 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 min-w-0 text-[11px] text-muted-foreground font-medium bg-muted/60 py-0.5 pl-0.5 pr-2 rounded-full">
                             <MemberAvatar name={ownerName} size="xxs" />
-                            {ownerName}
+                            <span className="truncate">{ownerName}</span>
                           </span>
                         )}
                       </span>
