@@ -193,7 +193,7 @@ function KanbanColumnImpl({
         </header>
       )}
       <SortableContext id={column.id} items={cardIds} strategy={verticalListSortingStrategy}>
-        <ul ref={setListRef} className="kanban-column-list flex min-h-12 flex-col gap-2" aria-label={`Tareas en ${column.name}`}>
+        <ul ref={setListRef} className="kanban-column-list scroll-fade motion-reduce:scroll-fade-none flex min-h-12 flex-col gap-2" aria-label={`Tareas en ${column.name}`}>
           {cardIds.map(id => cardsById[id] && (
             <KanbanCard
               key={id}

@@ -17,6 +17,10 @@ jobs:
   deploy:
     name: Deploy to Cloudflare (D1 & Worker)
     runs-on: ubuntu-latest
+    # El entorno production pide tu aprobación en GitHub antes de desplegar.
+    environment:
+      name: production
+      url: https://bardo-discord.bardo-discord.workers.dev
     # Las credenciales de Cloudflare solo llegan a los dos pasos de wrangler,
     # nunca a la instalación de dependencias, las pruebas ni el build.
     env:

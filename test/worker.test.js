@@ -551,3 +551,17 @@ test('Discord caído al verificar permisos devuelve 503 también en /api/documen
   assert.equal(res.status, 503);
   assert.equal((await res.json()).error, 'discord_unavailable');
 });
+
+test('el HTML de la Activity declara quién puede mostrarla (reporte o bloqueo) y los reportes se aceptan', async () => {
+  const db = await setupDb();
+  const ASSETS = { fetch: async () => new Response('<!doctype html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }) };
+  const report = await worker.fetch(new Request('http://localhost/?instance_id=i'), { DB: db, ASSETS });
+  assert.match(report.headers.get('Content-Security-Policy-Report-Only'), /frame-ancestors 'self' https:\/\/discord\.com https:\/\/\*\.discord\.com https:\/\/\*\.discordsays\.com/);
+  assert.equal(report.headers.get('Content-Security-Policy'), null);
+  const enforced = await worker.fetch(new Request('http://localhost/'), { DB: db, ASSETS, CSP_FRAME_MODE: 'enforce' });
+  assert.match(enforced.headers.get('Content-Security-Policy'), /frame-ancestors/);
+  const posted = await worker.fetch(new Request('http://localhost/api/csp-report', {
+    method: 'POST', body: JSON.stringify({ 'csp-report': { 'violated-directive': 'frame-ancestors', 'blocked-uri': 'https://evil.example' } }),
+  }), { DB: db });
+  assert.equal(posted.status, 204);
+});

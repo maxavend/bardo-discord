@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
 import { handleDocsApi } from '../src/docs-api.js';
 import { createExportToken, normalizeExportFormat, verifyExportToken } from '../src/export-token.js';
-import { CHANNEL, authHeaders, createEnv, createTestDb, insertDocument, insertSession } from './helpers/sqlite-d1.js';
+import { CHANNEL, GUILD, USER, authHeaders, createEnv, createTestDb, insertDocument, insertSession } from './helpers/sqlite-d1.js';
 
 const SECRET = 'test-client-secret';
 
@@ -106,7 +106,7 @@ test('un enlace solo sirve para su documento y formato, y vence', async () => {
   const tampered = await worker.fetch(new Request(`https://bardo.example/api/documents/doc-1/export?format=pdf&t=${token}x`), env);
   assert.equal(tampered.status, 403);
 
-  const expired = await createExportToken(env, { docId: 'doc-1', format: 'pdf', userId: 'u', now: Date.now() - 6 * 60_000 });
+  const expired = await createExportToken(env, { docId: 'doc-1', format: 'pdf', userId: USER, guildId: GUILD, channelId: CHANNEL, now: Date.now() - 6 * 60_000 });
   const late = await worker.fetch(new Request(`https://bardo.example/api/documents/doc-1/export?format=pdf&t=${encodeURIComponent(expired.token)}`), env);
   assert.equal(late.status, 410);
   assert.match(await late.text(), /expiró/);
@@ -193,4 +193,19 @@ test('el enlace firmado también descarga el archivo original (PDF/DOCX subido)'
   const missing = await worker.fetch(new Request(link2.json.url), env2);
   assert.equal(missing.status, 404);
   assert.match(await missing.text(), /original ya no está disponible/);
+});
+
+test('el enlace queda ligado a su canal: si deja de estar compartido ahí o se pierde acceso, ya no sirve', async () => {
+  const { db, env } = await setup();
+  const { json } = await exportLink(env, 'doc-1', { format: 'md' });
+  assert.equal((await worker.fetch(new Request(json.url), env)).status, 200);
+  db.run("DELETE FROM document_channel_access WHERE document_id = 'doc-1'");
+  const revoked = await worker.fetch(new Request(json.url), env);
+  assert.equal(revoked.status, 403);
+  assert.match(await revoked.text(), /Ya no tienes acceso/);
+
+  // Un token sin servidor ni canal (formato anterior) no se acepta.
+  const legacy = await createExportToken(env, { docId: 'doc-1', format: 'md', userId: USER });
+  const res = await worker.fetch(new Request(`https://bardo.example/api/documents/doc-1/export?format=md&t=${encodeURIComponent(legacy.token)}`), env);
+  assert.equal(res.status, 403);
 });

@@ -269,7 +269,7 @@ export function BardoSlashMenu() {
       viewportProps={{
         ref: viewportRef,
         tabIndex: -1,
-        className: 'scroll-fade scroll-fade-4 motion-reduce:scroll-fade-none overscroll-contain p-1.5 pr-3',
+        className: 'scroll-fade motion-reduce:scroll-fade-none overscroll-contain scroll-py-10 p-1.5 pr-3',
         style: {maxHeight: 'var(--slash-menu-height)'},
       }}
       style={{

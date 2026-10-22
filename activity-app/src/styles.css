@@ -503,8 +503,7 @@ button { font-size: 14px; }
 }
 
 .markdown-preview-content {
-  max-height: min(60dvh, 520px);
-  overflow: auto;
+  /* El scroll (con fade) lo hace el OverlayScrollArea que la contiene. */
   margin: 0;
   padding: 14px 16px;
   border: 1px solid var(--border);

@@ -384,7 +384,9 @@ async function handleExportLink(route, request, url, env, session) {
     return apiError(503, 'export_unavailable', 'Las descargas no están configuradas en Bardo. Avisa a quien administra el bot.');
   }
 
-  const { token, expiresAt } = await createExportToken(env, { docId: route.id, format, userId: session.userId });
+  const { token, expiresAt } = await createExportToken(env, {
+    docId: route.id, format, userId: session.userId, guildId: session.guildId, channelId: session.channelId,
+  });
   const origin = String(env.PUBLIC_ORIGIN || '').trim().replace(/\/+$/, '') || url.origin;
   const exportUrl = `${origin}/api/documents/${encodeURIComponent(route.id)}/export?format=${format}&t=${encodeURIComponent(token)}`;
   return json({ url: exportUrl, expiresAt });
