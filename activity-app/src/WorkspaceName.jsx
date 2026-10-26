@@ -18,8 +18,11 @@ function ServerIcon({name, src}) {
  */
 export function WorkspaceName() {
   const workspace = useWorkspace();
-  // Sin nombre propio, el nombre ya es «#canal»: no se repite debajo.
-  const channel = workspace.customName && workspace.channelName ? `#${workspace.channelName}` : null;
+  // Debajo, dónde estás: con nombre propio, «#canal en Servidor»; sin él, el
+  // nombre ya es «#canal» y debajo va solo el servidor.
+  const channel = workspace.customName && workspace.channelName
+    ? `#${workspace.channelName}${workspace.guildName ? ` en ${workspace.guildName}` : ''}`
+    : workspace.guildName;
   return (
     <span className="topbar-title workspace-label">
       {/* Sin servidor (modo local), el símbolo de Bardo. */}
@@ -28,7 +31,7 @@ export function WorkspaceName() {
         : <span className="workspace-mark" aria-hidden="true" />}
       <span className="workspace-text">
         <span className="workspace-name">{workspace.displayName}</span>
-        {channel && <span className="workspace-channel">{channel}{workspace.guildName ? ` en ${workspace.guildName}` : ''}</span>}
+        {channel && <span className="workspace-channel">{channel}</span>}
       </span>
     </span>
   );
