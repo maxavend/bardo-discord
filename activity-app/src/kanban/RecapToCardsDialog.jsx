@@ -234,6 +234,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
                     {!already && (
                       <div className="flex flex-wrap items-center gap-2">
                         <ToggleGroup
+                          indicator
                           value={row.action ? [row.action] : []}
                           onValueChange={value => updateRow(index, {action: (Array.isArray(value) ? value.at(-1) : value) || null})}
                           variant="outline"

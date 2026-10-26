@@ -27,6 +27,7 @@ import { SESSION_STATUS, getPointCounts } from './session-runner.js';
 import { getPlannedSchedule } from './time-engine.js';
 import { getHomeTopSection } from './planner-store.js';
 import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
+import { SegmentIndicator } from '@/components/ui/segment-indicator';
 import {
   eventStatusLabel,
   facilitatorsText,
@@ -280,12 +281,13 @@ export function PlannerHomeView({
       {(events.length > 0 || archivedEvents.length > 0) && (
         <section className="library-section recent-section">
           <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs">
+            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs" role="group" aria-label="Mostrar reuniones">
+              <SegmentIndicator />
               <button
                 type="button"
                 onClick={() => setEventsTab('active')}
                 aria-pressed={eventsTab === 'active'}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                className={`px-3 py-1 rounded-md font-medium transition-colors ${
                   eventsTab === 'active'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -297,7 +299,7 @@ export function PlannerHomeView({
                 type="button"
                 onClick={() => setEventsTab('archived')}
                 aria-pressed={eventsTab === 'archived'}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                className={`px-3 py-1 rounded-md font-medium transition-colors ${
                   eventsTab === 'archived'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -313,7 +315,7 @@ export function PlannerHomeView({
 
           {eventsTab === 'active' ? (
             events.length > 0 ? (
-              <div className="docs-list">
+              <div className="docs-list tab-swap" key="active">
                 {events.map((event) => {
                   const eventMinutes = getPlannedSchedule(event).plannedMinutes;
                   const eventDate = formatShortDate(event.date) || 'Fecha por confirmar';
@@ -375,7 +377,7 @@ export function PlannerHomeView({
             )
           ) : (
             archivedEvents.length > 0 ? (
-              <div className="docs-list">
+              <div className="docs-list tab-swap" key="archived">
                 {archivedEvents.map((event) => {
                   const eventMinutes = getPlannedSchedule(event).plannedMinutes;
                   const eventDate = formatShortDate(event.date) || 'Fecha por confirmar';

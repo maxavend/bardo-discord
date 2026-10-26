@@ -513,6 +513,7 @@ export function KanbanCardDialog({
         <Field className="gap-1.5">
           <FieldLabel className="text-xs font-semibold text-muted-foreground">Prioridad</FieldLabel>
           <ToggleGroup
+            indicator
             value={[card.priority || 'normal']}
             onValueChange={value => {
               const next = Array.isArray(value) ? value.at(-1) : value;

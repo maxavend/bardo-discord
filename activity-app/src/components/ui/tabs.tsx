@@ -4,6 +4,7 @@ import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
+import { SegmentIndicator } from "@/components/ui/segment-indicator"
 
 function Tabs({
   className,
@@ -41,6 +42,7 @@ const tabsListVariants = cva(
 function TabsList({
   className,
   variant = "default",
+  children,
   ...props
 }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
   return (
@@ -49,7 +51,11 @@ function TabsList({
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {/* La pestaña activa se desliza; la variante «line» ya tiene su subrayado. */}
+      {variant !== "line" && <SegmentIndicator />}
+      {children}
+    </TabsPrimitive.List>
   )
 }
 

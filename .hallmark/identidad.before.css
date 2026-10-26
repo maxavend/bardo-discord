@@ -1,0 +1,182 @@
+/*
+ * Bardo · capa de identidad «tinta, papel y punto».
+ *
+ * Se carga después de styles.css y solo actúa con html[data-identidad="propuesta"]:
+ * con «Antes» la app se ve exactamente como hoy. No cambia estructura, rutas
+ * ni componentes; reemplaza valores de tokens y viste piezas existentes.
+ *
+ * Idea (brand/logo/kit/GUIA.md): la voz se calma, se asienta en un renglón y
+ * cierra con punto final. Violeta solo para lo que concluye.
+ */
+
+/* Mismo Inter, con eje de tamaño óptico: los títulos toman el corte Display. */
+@import "@fontsource-variable/inter/opsz.css";
+
+/* ── Tokens · papel (claro) ─────────────────────────────────────────── */
+html[data-identidad="propuesta"] {
+  --background: oklch(0.985 0.005 305);
+  --foreground: oklch(0.2 0.025 300);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.025 300);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.025 300);
+  --primary: oklch(0.496 0.265 301.924);
+  --primary-foreground: oklch(0.985 0.01 308);
+  --secondary: oklch(0.95 0.014 305);
+  --secondary-foreground: oklch(0.3 0.06 300);
+  --muted: oklch(0.955 0.008 305);
+  --muted-foreground: oklch(0.5 0.025 300);
+  --accent: oklch(0.95 0.02 305);
+  --accent-foreground: oklch(0.3 0.06 300);
+  --border: oklch(0.905 0.012 305);
+  --input: oklch(0.89 0.014 305);
+  --ring: oklch(0.6 0.2 303);
+  --sidebar: oklch(0.975 0.007 305);
+  --sidebar-border: oklch(0.905 0.012 305);
+  --sidebar-accent: oklch(0.95 0.014 305);
+  --punto: oklch(0.496 0.265 301.924);
+  --bardo-card-shadow: 0 1px 2px oklch(0.3 0.06 300 / 5%), 0 8px 24px -14px oklch(0.3 0.08 300 / 22%);
+  font-optical-sizing: auto;
+}
+
+/* ── Tokens · noche (oscuro) ────────────────────────────────────────── */
+/* Violeta casi negro en vez de #0A0A0A: dentro de Discord (#313338) se lee
+   como superficie, no como hueco. */
+html[data-identidad="propuesta"].dark {
+  --background: oklch(0.2 0.014 292);
+  --foreground: oklch(0.965 0.006 305);
+  --card: oklch(0.24 0.016 292);
+  --card-foreground: oklch(0.965 0.006 305);
+  --popover: oklch(0.26 0.018 292);
+  --popover-foreground: oklch(0.965 0.006 305);
+  /* Violeta claro (#C27AFF) con texto en tinta: el violeta oscuro se pierde
+     sobre fondos oscuros, como advierte la guía del logo. */
+  --primary: oklch(0.722 0.177 305.5);
+  --primary-foreground: oklch(0.2 0.04 300);
+  --secondary: oklch(0.29 0.02 295);
+  --secondary-foreground: oklch(0.95 0.01 305);
+  --muted: oklch(0.27 0.016 292);
+  --muted-foreground: oklch(0.74 0.02 300);
+  --accent: oklch(0.29 0.02 295);
+  --accent-foreground: oklch(0.95 0.01 305);
+  --border: oklch(1 0.02 300 / 9%);
+  --input: oklch(1 0.02 300 / 14%);
+  --ring: oklch(0.722 0.177 305.5);
+  --sidebar: oklch(0.23 0.016 292);
+  --sidebar-border: oklch(1 0.02 300 / 9%);
+  --sidebar-accent: oklch(0.29 0.02 295);
+  --punto: oklch(0.722 0.177 305.5);
+}
+
+/* ── Superficies del navegador ──────────────────────────────────────── */
+html[data-identidad="propuesta"] ::selection {
+  background: color-mix(in oklab, var(--punto) 28%, transparent);
+  color: inherit;
+}
+html[data-identidad="propuesta"] :is(input, textarea, [contenteditable="true"]) { caret-color: var(--punto); }
+html[data-identidad="propuesta"] {
+  --scrollbar-thumb: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--punto) 55%, transparent);
+}
+
+/* ── Marca en la cabecera ───────────────────────────────────────────── */
+/* Símbolo pequeño (el corte para menos de 40 px) junto al nombre del espacio.
+   La silueta es una máscara: la onda y el renglón toman la tinta del tema y
+   un degradado radial pinta solo el punto. */
+html[data-identidad="propuesta"] .workspace-label::before {
+  content: "";
+  flex: none;
+  width: 20px;
+  height: 20px;
+  background:
+    radial-gradient(circle at 85.35% 67.2%, var(--punto) 2.9px, transparent 3px),
+    var(--foreground);
+  mask: url("./simbolo-pequeno.svg") center / contain no-repeat;
+}
+
+/* ── Títulos de módulo: cierran con punto final ─────────────────────── */
+/* Solo títulos de la interfaz. Los de documentos y reuniones son contenido
+   del usuario y no se tocan. */
+html[data-identidad="propuesta"] :is(#home-title, #kanban-title) { letter-spacing: -0.02em; }
+html[data-identidad="propuesta"] :is(#home-title, #kanban-title)::after {
+  content: "";
+  display: inline-block;
+  width: 0.2em;
+  height: 0.2em;
+  margin-left: 0.06em;
+  border-radius: 999px;
+  background: var(--punto);
+}
+html[data-identidad="propuesta"] .doc-title { letter-spacing: -0.02em; }
+
+/* Pestaña activa del hub: lleva su punto, como el renglón del logo. */
+html[data-identidad="propuesta"] .module-hub-tab[aria-current="page"]::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--punto);
+}
+
+/* ── Reunión en vivo: onda, renglón y punto ─────────────────────────── */
+/* El tema en curso marca su lugar con el punto, no con la estrella de
+   Material. La onda (MaterialWavyProgress) se queda: ya ondula mientras se
+   conversa y se pone recta al pausar, que es justo la idea del logo. */
+html[data-identidad="propuesta"] .m3-morph-svg {
+  animation: none !important;
+  color: var(--punto);
+}
+html[data-identidad="propuesta"] .m3-morph-svg path { d: path("M16 9.5a6.5 6.5 0 1 1 0 13a6.5 6.5 0 1 1 0-13z"); }
+
+/* Tema terminado: lo conversado ya es renglón (tinta, recto) y su marca es
+   el punto lleno. El verde de «hecho» pasa a ser el violeta del acuerdo. */
+html[data-identidad="propuesta"] [class~="bg-emerald-500/15"][class~="size-5"] {
+  background: var(--punto);
+  border-color: var(--punto);
+  color: var(--primary-foreground);
+  box-shadow: none;
+}
+html[data-identidad="propuesta"] [class~="bg-emerald-400/50"] { background: color-mix(in oklab, var(--foreground) 26%, transparent); }
+html[data-identidad="propuesta"] [class~="text-emerald-600"][class~="font-semibold"] { color: var(--foreground); }
+html[data-identidad="propuesta"] .rounded-full[class~="bg-emerald-500"] { background: var(--punto); }
+
+/* Acuerdo cerrado: el punto violeta en vez del check verde. */
+html[data-identidad="propuesta"] button[class~="bg-emerald-500"][class~="size-4.5"] {
+  background: var(--punto);
+  border-color: var(--punto);
+  color: var(--primary-foreground);
+}
+
+/* ── Interruptor de comparación (fuera del producto) ────────────────── */
+.propuesta-interruptor {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2147483000;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: oklch(0.16 0.02 295 / 92%);
+  box-shadow: 0 6px 20px -8px rgb(0 0 0 / 45%);
+  font: 500 12px/1 "Inter Variable", Inter, system-ui, sans-serif;
+}
+.propuesta-interruptor button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: oklch(0.92 0.01 300 / 70%);
+  font: inherit;
+  cursor: pointer;
+}
+.propuesta-interruptor button[aria-pressed="true"] { background: oklch(1 0 0 / 16%); color: oklch(0.98 0 0); }
+.propuesta-interruptor button:focus-visible { outline: 2px solid oklch(0.722 0.177 305.5); outline-offset: 1px; }
+.propuesta-interruptor button:last-child { color: oklch(0.92 0.01 300 / 55%); }
+@media (max-width: 767px) {
+  /* En móvil la barra de módulos ocupa el borde inferior y la cabecera tiene
+     sus controles a la derecha: el interruptor va justo sobre la barra. */
+  .propuesta-interruptor { left: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
+  .propuesta-interruptor button:last-child { display: none; }
+}
