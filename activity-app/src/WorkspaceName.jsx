@@ -22,7 +22,10 @@ export function WorkspaceName() {
   const channel = workspace.customName && workspace.channelName ? `#${workspace.channelName}` : null;
   return (
     <span className="topbar-title workspace-label">
-      {workspace.guildName && <ServerIcon name={workspace.guildName} src={workspace.guildIcon} />}
+      {/* Sin servidor (modo local), el símbolo de Bardo. */}
+      {workspace.guildName
+        ? <ServerIcon name={workspace.guildName} src={workspace.guildIcon} />
+        : <span className="workspace-mark" aria-hidden="true" />}
       <span className="workspace-text">
         <span className="workspace-name">{workspace.displayName}</span>
         {channel && <span className="workspace-channel">{channel}{workspace.guildName ? ` en ${workspace.guildName}` : ''}</span>}

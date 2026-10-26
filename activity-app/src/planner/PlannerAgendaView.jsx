@@ -44,7 +44,6 @@ import {
 import { formatMsToClock } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialWavyProgress } from './MaterialWavyProgress.jsx';
-import { MaterialMorphShape } from './MaterialMorphShape.jsx';
 import {
   downloadPointAudio,
   exportBlockRecordingsCombined,
@@ -678,11 +677,11 @@ export function PlannerAgendaView({
                   className="grid grid-cols-[52px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:gap-4 items-center my-0.5"
                 >
                   {/* Timeline lateral izquierdo */}
-                  <div className="flex flex-col items-center text-[10px] sm:text-[11px] text-muted-foreground/60 font-medium select-none py-0.5">
-                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600/80 dark:text-emerald-400/80 font-medium' : 'text-muted-foreground/70'}>
+                  <div className="flex flex-col items-center text-[11px] text-muted-foreground/60 font-medium select-none py-0.5">
+                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-foreground/80 font-medium' : 'text-muted-foreground/70'}>
                       {blockStart}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground/40 font-normal">
+                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/40 font-normal">
                       {blockDuration} min
                     </span>
                   </div>
@@ -717,7 +716,7 @@ export function PlannerAgendaView({
                         <span className="text-[11px] font-semibold text-primary select-none">En curso</span>
                       ) : isCompleted ? (
                         <div className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground/60 select-none">
-                          <Check className="size-3 text-emerald-500 stroke-[2]" />
+                          <Check className="size-3 text-punto stroke-[2]" />
                           <span>Terminado</span>
                         </div>
                       ) : (
@@ -753,7 +752,7 @@ export function PlannerAgendaView({
                         style={{ fontWeight: 700 }}
                       />
                     ) : (
-                      <h3 className="text-base font-bold tracking-tight text-foreground min-w-0">{block.title}</h3>
+                      <h3 className="font-heading text-base font-semibold tracking-tight text-foreground min-w-0">{block.title}</h3>
                     )}
 
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -1126,14 +1125,14 @@ export function PlannerAgendaView({
                                   onClick={() => onToggleSubpointStatus(block.id, point.id, !isDone)}
                                   className={`size-4.5 shrink-0 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
                                     isDone
-                                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                                      ? 'punto-asienta bg-punto border-punto text-primary-foreground'
                                       : 'border-muted-foreground/40 bg-background hover:border-primary'
                                   }`}
                                 >
                                   {isDone && <Check className="size-3 stroke-[3]" />}
                                 </button>
                               ) : isDone ? (
-                                <CheckCircle2 aria-label="Tratado" className="size-4 text-emerald-500 shrink-0" />
+                                <CheckCircle2 aria-label="Tratado" className="size-4 text-punto shrink-0" />
                               ) : null}
                               <span
                                 className={`text-sm leading-normal truncate ${
@@ -1376,7 +1375,7 @@ export function PlannerAgendaView({
                 {/* Timeline lateral izquierdo */}
                 <div className="flex flex-col items-center justify-between text-[11px] sm:text-xs text-muted-foreground font-medium select-none py-1 min-h-[130px] sm:min-h-[140px]">
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}>
+                    <span className={isLive ? 'text-primary font-bold' : isCompleted ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
                       {blockStart}
                     </span>
                     <span className={`text-[10px] sm:text-[11px] ${isLive ? 'text-primary/70 font-medium' : isCompleted ? 'text-muted-foreground/70 font-normal' : 'text-muted-foreground/60'}`}>
@@ -1390,15 +1389,13 @@ export function PlannerAgendaView({
                   <div className="flex-1 flex flex-col items-center my-1 relative w-full">
                     <div className="relative my-1 z-10 flex items-center justify-center">
                       {isLive ? (
-                        <MaterialMorphShape
-                          size={18}
-                          color={blockColor}
-                          isPaused={isPaused}
-                          isActive={true}
-                          isCompleted={false}
-                        />
+                        // El tema en curso marca su lugar con el punto del logo; toma
+                        // el color de la urgencia cuando se pausa o se excede.
+                        <span className="grid size-[18px] place-items-center" aria-hidden="true">
+                          <span className={`size-2.5 rounded-full ${blockColor === 'danger' ? 'bg-destructive' : blockColor === 'warning' ? 'bg-warning' : 'bg-punto'}`} />
+                        </span>
                       ) : isCompleted ? (
-                        <div className="size-5 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-2xs">
+                        <div className="punto-asienta size-5 rounded-full bg-punto flex items-center justify-center text-primary-foreground">
                           <Check className="size-3 stroke-[2.5]" />
                         </div>
                       ) : (
@@ -1418,7 +1415,8 @@ export function PlannerAgendaView({
                           amplitude={3.5}
                         />
                       ) : isCompleted ? (
-                        <div className="w-[3px] sm:w-[3.5px] h-full bg-emerald-400/50 dark:bg-emerald-500/40 rounded-full" />
+                        // Lo ya conversado queda como renglón: recto y en tinta.
+                        <div className="renglon-traza w-[3px] sm:w-[3.5px] h-full bg-foreground/25 rounded-full" />
                       ) : (
                         <div className="w-[3px] sm:w-[3.5px] h-full bg-border/40 rounded-full" />
                       )}
@@ -1427,7 +1425,7 @@ export function PlannerAgendaView({
                     {isLast && (
                       <div className="relative mb-2 z-10 flex items-center justify-center">
                         <span className={`size-2 rounded-full ring-2 ring-card block ${
-                          isCompleted ? 'bg-emerald-500' : 'bg-border'
+                          isCompleted ? 'bg-punto' : 'bg-border'
                         }`} />
                       </div>
                     )}
