@@ -14,7 +14,7 @@
  * gota de violeta; el violeta pleno queda para lo que concluye (--punto).
  */
 :root {
-  --bardo-topbar: 52px;
+  --bardo-topbar: 56px;
   --bardo-toolbar-gap: 16px;
   --bardo-content: 690px;
   --font-inter: "Inter Variable", Inter, sans-serif;
@@ -716,7 +716,9 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   min-height: 32px;
   padding-inline: 4px;
 }
-.workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Solo se recorta a lo ancho (con «…»): los emojis de los nombres de canal
+   son más altos que la línea y no deben cortarse arriba ni abajo. */
+.workspace-name { overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; white-space: nowrap; }
 /* Ícono del servidor (o sus iniciales) y, bajo el nombre, el canal. */
 .workspace-icon {
   display: grid;
@@ -744,10 +746,10 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   mask: url("./assets/brand/simbolo-pequeno.svg") center / contain no-repeat;
 }
 .workspace-name { font-family: var(--font-heading); font-weight: 500; letter-spacing: -0.01em; }
-.workspace-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.workspace-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
 /* Sin pestañas en el header (móvil), el nombre usa el ancho libre. */
 @media (max-width: 767px) { .workspace-label { max-width: none; } }
-.workspace-channel { overflow: hidden; color: var(--muted-foreground); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-channel { overflow-x: clip; overflow-y: visible; color: var(--muted-foreground); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 /* Perfil: el avatar abre el menú de ajustes y tema. Área táctil de 40 px. */
 .user-menu-trigger {
   display: grid;
@@ -761,7 +763,10 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   background: transparent;
   cursor: pointer;
 }
-.user-menu-trigger:hover [data-slot="avatar"],
+/* En táctil, área de 44 px; el anillo de hover solo con cursor (en el
+   teléfono quedaba pegado después de tocar). */
+@media (pointer: coarse) { .user-menu-trigger { width: 44px; height: 44px; margin-inline: -6px -4px; } }
+@media (hover: hover) { .user-menu-trigger:hover [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); } }
 .user-menu-trigger[data-state="open"] [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); }
 .user-menu-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .user-menu-profile { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--foreground); font-size: 14px; font-weight: 400; }
