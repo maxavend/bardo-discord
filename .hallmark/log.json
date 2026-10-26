@@ -1,0 +1,13 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "restyle",
+  "scope": "app",
+  "theme": "brand",
+  "shape": "app screen",
+  "signature": "live meeting wave settles into a rule and closes on a dot",
+  "axes": "light+dark/geometric-sans/chromatic-violet",
+  "prompt": "Bardo, Discord activity that turns channel conversation into docs, meetings and tasks",
+  "date": "2026-10-26"
+ }
+]
