@@ -783,6 +783,47 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   padding-inline: 4px;
 }
 .workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ícono del servidor (o sus iniciales) y, bajo el nombre, el canal. */
+.workspace-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+.workspace-icon img { width: 100%; height: 100%; object-fit: cover; }
+.workspace-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+/* Sin pestañas en el header (móvil), el nombre usa el ancho libre. */
+@media (max-width: 767px) { .workspace-label { max-width: none; } }
+.workspace-channel { overflow: hidden; color: var(--muted-foreground); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* Perfil: el avatar abre el menú de ajustes y tema. Área táctil de 40 px. */
+.user-menu-trigger {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-inline: -4px -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+.user-menu-trigger:hover [data-slot="avatar"],
+.user-menu-trigger[data-state="open"] [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); }
+.user-menu-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.user-menu-profile { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--foreground); font-size: 14px; font-weight: 400; }
+.user-menu-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.user-menu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted-foreground); font-size: 12px; }
+/* El color del rol es el que tiene en Discord. */
+.user-menu-role { display: inline-flex; align-items: center; gap: 6px; }
+.user-menu-role::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--role-color, var(--muted-foreground)); }
 .module-hub-tabs { display: none; }
 @media (min-width: 768px) {
   .module-hub-tabs {
@@ -814,6 +855,60 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 }
 .dark .module-hub-tabs-indicator { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
 .module-hub-tabs[data-ready] .module-hub-tab[aria-current="page"] { background: transparent; border-color: transparent; box-shadow: none; }
+
+/* Selectores de una opción (Activos/Archivados, filtros, Ajustes): el fondo
+   de la opción activa se desliza con el mismo movimiento que las pestañas del
+   hub. Lo dibuja <SegmentIndicator>; la opción activa deja su fondo propio. */
+:has(> .segment-indicator) { position: relative; isolation: isolate; }
+.segment-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: var(--segment-width, 0px);
+  height: var(--segment-height, 0px);
+  transform: translate(var(--segment-left, 0px), var(--segment-top, 0px));
+  border: 1px solid var(--segment-border, transparent);
+  border-radius: var(--segment-radius, 9999px);
+  background: var(--segment-bg, var(--background));
+  box-shadow: var(--segment-shadow, 0 1px 2px oklch(0 0 0 / 0.06));
+  opacity: 0;
+  pointer-events: none;
+}
+.dark .segment-indicator {
+  --segment-bg: color-mix(in oklab, var(--input) 30%, transparent);
+  --segment-border: var(--input);
+}
+/* Los toggles marcan la opción con el fondo apagado, sin borde ni sombra. */
+[data-slot="toggle-group"] > .segment-indicator,
+.dark [data-slot="toggle-group"] > .segment-indicator { --segment-bg: var(--muted); --segment-border: transparent; --segment-shadow: none; }
+[data-segment-ready] > .segment-indicator { opacity: 1; }
+[data-segment-animate] > .segment-indicator {
+  transition:
+    transform var(--duration-medium) var(--ease-bounce),
+    width var(--duration-medium) var(--ease-bounce),
+    height var(--duration-medium) var(--ease-bounce);
+}
+:has(> .segment-indicator) > :not(.segment-indicator) { position: relative; z-index: 1; }
+[data-segment-ready] > :is([aria-pressed="true"], [aria-selected="true"]) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* Al cambiar de pestaña, la lista nueva entra con un fundido corto que sube
+   unos píxeles: se lee como otro contenido, no como un salto. */
+.tab-swap { animation: tab-swap-in var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tab-swap-in {
+  from { opacity: 0; transform: translateY(var(--distance-micro)); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tab-swap-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  /* Sin deslizamiento: el fondo cambia de opción en el acto y la lista solo
+     aparece con un fundido, sin moverse. */
+  [data-segment-animate] > .segment-indicator { transition: none; }
+  .tab-swap { animation-name: tab-swap-fade; }
+}
 .module-hub-tab {
   position: relative;
   z-index: 1;

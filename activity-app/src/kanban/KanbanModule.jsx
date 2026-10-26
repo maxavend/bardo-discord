@@ -247,6 +247,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
               </DropdownMenuContent>
             </DropdownMenu>
             <ToggleGroup
+              indicator
               value={[filter]}
               onValueChange={value => setFilter((Array.isArray(value) ? value.at(-1) : value) || 'all')}
               variant="outline"

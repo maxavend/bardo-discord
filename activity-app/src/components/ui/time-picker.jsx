@@ -249,6 +249,7 @@ export function TimePicker({
               <div className="flex flex-col items-center gap-1 pl-1 shrink-0">
                 <div className="h-9 flex items-center">
                   <ToggleGroup
+                    indicator
                     type="single"
                     spacing={0.5}
                     value={[period]}

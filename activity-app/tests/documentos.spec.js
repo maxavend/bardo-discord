@@ -222,7 +222,9 @@ test('una tarea marcada en el lector sigue marcada tras recargar y se lee bien',
   expect(darkContrast).toBeGreaterThanOrEqual(3);
 
   // Igual en tema claro.
-  await page.getByRole('button', {name: 'Cambiar a modo claro'}).click();
+  await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
+  await page.getByRole('menuitem', {name: /^Tema/}).click();
+  await page.getByRole('menuitemradio', {name: 'Claro'}).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
   const lightContrast = await contrastAgainstBackground(reloadedFirst);
   test.info().annotations.push({type: 'contraste tarea hecha (claro)', description: lightContrast.toFixed(2)});

@@ -7,6 +7,7 @@ import { type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 import { toggleVariants } from "@/components/ui/toggle"
+import { SegmentIndicator } from "@/components/ui/segment-indicator"
 
 const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants> & {
@@ -26,12 +27,15 @@ function ToggleGroup({
   size,
   spacing = 2,
   orientation = "horizontal",
+  indicator = false,
   children,
   ...props
 }: ToggleGroupPrimitive.Props &
   VariantProps<typeof toggleVariants> & {
     spacing?: number
     orientation?: "horizontal" | "vertical"
+    /** Selección única: el fondo de la opción activa se desliza entre opciones. */
+    indicator?: boolean
   }) {
   return (
     <ToggleGroupPrimitive
@@ -50,6 +54,7 @@ function ToggleGroup({
       <ToggleGroupContext.Provider
         value={{ variant, size, spacing, orientation }}
       >
+        {indicator && <SegmentIndicator />}
         {children}
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>

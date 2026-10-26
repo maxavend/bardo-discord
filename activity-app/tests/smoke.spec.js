@@ -167,7 +167,8 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(Math.abs(audit.contentInset - audit.contentRightInset)).toBeLessThanOrEqual(1);
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
-  expect(audit.headerTargets.map(target => target.name)).toEqual(['Subir archivo', 'Nuevo documento', 'Ajustes', 'Cambiar a modo claro']);
+  // Ajustes y tema viven en el menú de perfil (sin Discord se llama «Ajustes»).
+  expect(audit.headerTargets.map(target => target.name)).toEqual(['Subir archivo', 'Nuevo documento', 'Ajustes']);
   // Tolerate only floating-point layout noise (31.999998px), not smaller targets.
   const layoutEpsilon = 0.001;
   expect(audit.headerTargets.every(({w, h}) => w + layoutEpsilon >= 32 && h + layoutEpsilon >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();
@@ -231,19 +232,25 @@ test('Discord theme picks the initial theme and the manual toggle persists', asy
     colorScheme: getComputedStyle(document.documentElement).colorScheme,
   }));
   expect(await themeState()).toEqual({theme: 'light', colorScheme: 'light'});
-  await expect(page.getByRole('button', {name: 'Cambiar a modo oscuro'})).toBeVisible();
 
   await page.goto('/?theme=dark#docs');
   await expectLibrary(page);
   await expect.poll(themeState).toEqual({theme: 'dark', colorScheme: 'dark'});
 
-  // Un solo botón cambia el tema; la elección del usuario manda sobre la de Discord.
-  await page.getByRole('button', {name: 'Cambiar a modo claro'}).click();
+  // El tema se elige en el menú de perfil; la elección del usuario manda sobre la de Discord.
+  const openThemeMenu = async () => {
+    await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
+    await page.getByRole('menuitem', {name: /^Tema/}).click();
+  };
+  await openThemeMenu();
+  await page.getByRole('menuitemradio', {name: 'Claro'}).click();
   await expect.poll(themeState).toEqual({theme: 'light', colorScheme: 'light'});
   await page.reload();
   await expectLibrary(page);
   await expect.poll(themeState).toEqual({theme: 'light', colorScheme: 'light'});
-  await expect(page.getByRole('button', {name: 'Cambiar a modo oscuro'})).toBeVisible();
+  await openThemeMenu();
+  await expect(page.getByRole('menuitemradio', {name: 'Claro'})).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
 });
 
 test('Discord mobile safe area keeps Bardo chrome below the host header', async ({page}) => {
