@@ -2170,6 +2170,7 @@ function App() {
       {route.type === 'planner' && (
         <PlannerModule
           initialTab={route.tab || 'home'}
+          navigation={route}
           onSwitchTab={(tab) => {
             // An action URL is consumed once; Back must not create/open again.
             const options = {replace: route.tab === 'new' || route.tab?.startsWith('session:')};

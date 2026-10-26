@@ -135,7 +135,7 @@ function eventIdOf(event) {
   return event?.eventId || event?.id || null;
 }
 
-export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary, onShareDocToChannel}) {
+export function PlannerModule({initialTab = 'home', navigation, onSwitchTab, onSaveDocToLibrary, onShareDocToChannel}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
@@ -153,9 +153,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const [isEditing, setIsEditing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
 
+  // `navigation` is a new object on every route change, even when the tab name
+  // repeats: a hashchange for "#planner-agenda" can be handled after the hash
+  // already went back to "#planner", so the tab name alone would never change
+  // and the module would stay on the agenda.
   useEffect(() => {
     setActiveTab(initialTab || 'home');
-  }, [initialTab]);
+  }, [initialTab, navigation]);
   const [recordingStatus, setRecordingStatus] = useState(RECORDING_STATUS.IDLE);
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [dismissedUpcomingBanner, setDismissedUpcomingBanner] = useState(false);
