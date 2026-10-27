@@ -206,3 +206,15 @@ export function contrastAgainstBackground(locator) {
 export function horizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 }
+
+/**
+ * Abre un submenú de un menú desplegable. En pantallas angostas (< 768 px) el
+ * submenú va en línea dentro del mismo menú y no hay nada que abrir.
+ */
+export async function openSubmenu(page, name) {
+  if (page.viewportSize().width < 768) {
+    await expect(page.locator('[data-slot="dropdown-menu-sub-trigger"]').filter({hasText: name})).toBeVisible();
+    return;
+  }
+  await page.getByRole('menuitem', {name}).click();
+}
