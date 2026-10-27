@@ -13,7 +13,10 @@ html[data-editor-keyboard="open"] .editing-route .editor-toolbar-sticky {
 
 html[data-editor-keyboard="open"] .editing-route .editor-toolbar-container {
   position: fixed;
-  top: calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + var(--bardo-toolbar-gap));
+  top: max(
+    calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + var(--bardo-toolbar-gap)),
+    var(--bardo-toolbar-slot-top, 0px)
+  );
   left: calc(50% + var(--bardo-visual-viewport-left));
   width: min(var(--bardo-content), calc(100vw - var(--bardo-safe-left) - var(--bardo-safe-right) - 28px));
   transform: translateX(-50%) translateZ(0);

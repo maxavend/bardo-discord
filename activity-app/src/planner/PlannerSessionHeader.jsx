@@ -1,5 +1,4 @@
 import { useId, useState } from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -47,7 +46,6 @@ import {
   splitPeople,
 } from './PlannerMemberPicker.jsx';
 
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
 function parseMentions(mentionsStr = '') {
   if (!mentionsStr) return [];
@@ -415,7 +413,7 @@ export function PlannerSessionHeader({
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <div className="flex items-center -space-x-1.5 shrink-0">
                               {hosts.slice(0, 3).map((name) => (
-                                <MemberAvatar key={name} name={name} className="size-5 text-[9px] ring-1 ring-background" />
+                                <MemberAvatar key={name} name={name} stacked />
                               ))}
                             </div>
                             <span className="font-medium text-foreground truncate">{hosts.join(', ')}</span>
@@ -442,7 +440,7 @@ export function PlannerSessionHeader({
                         {selectedKeys.size > 0 ? (
                           <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                             <div className="flex items-center -space-x-1.5 shrink-0">
-                              {Array.from(selectedKeys).slice(0, 2).map((tag, idx) => {
+                              {Array.from(selectedKeys).slice(0, 2).map((tag) => {
                                 const cleanName = tag.replace(/^[@#]/, '');
                                 const matched = members.find(
                                   (m) =>
@@ -451,19 +449,11 @@ export function PlannerSessionHeader({
                                     `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                                 );
                                 const isRole = tag.startsWith('#') || roles.some((role) => role.tag.toLowerCase() === tag.toLowerCase());
-                                const color = matched?.avatarColor || DISCORD_PALETTES[(idx + 1) % DISCORD_PALETTES.length];
 
                                 return isRole ? (
-                                  <Avatar
-                                    key={tag}
-                                    size="xs"
-                                    className="size-5 text-[8.5px] font-bold shrink-0 shadow-2xs border border-card ring-1 ring-background"
-                                    style={{ backgroundColor: `${color}30`, color }}
-                                  >
-                                    <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>#</AvatarFallback>
-                                  </Avatar>
+                                  <MemberAvatar key={tag} name={tag} role stacked />
                                 ) : (
-                                  <MemberAvatar key={tag} name={cleanName} member={matched || null} className="size-5 text-[8.5px] border border-card ring-1 ring-background" />
+                                  <MemberAvatar key={tag} name={cleanName} member={matched || null} stacked />
                                 );
                               })}
                             </div>
@@ -514,7 +504,7 @@ export function PlannerSessionHeader({
                   <span>{hosts.length > 1 ? 'Facilitan:' : 'Facilita:'}</span>
                   <span className="flex items-center -space-x-1 shrink-0">
                     {hosts.slice(0, 3).map((name) => (
-                      <MemberAvatar key={name} name={name} className="size-4.5 border border-card text-[8px]" />
+                      <MemberAvatar key={name} name={name} stacked />
                     ))}
                   </span>
                   <span className="font-semibold text-foreground">{hosts.join(', ')}</span>
@@ -542,8 +532,7 @@ export function PlannerSessionHeader({
                             key={i}
                             name={name}
                             member={matched || null}
-                            size="sm"
-                            className="size-5 text-[8.5px] border-2 border-background"
+                            stacked
                           />
                         );
                       })}

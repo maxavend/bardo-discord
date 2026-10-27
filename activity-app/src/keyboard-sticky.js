@@ -16,6 +16,15 @@ function rememberBaseline() {
   baselineHeight = Math.max(baselineHeight, viewport.height);
 }
 
+// With the keyboard open the toolbar is fixed, but never above its own slot in
+// the document: near the top it stays in place instead of covering the title
+// and leaving an empty gap where it used to be.
+function syncToolbarSlot() {
+  if (root.dataset.editorKeyboard !== 'open') return;
+  const slot = document.querySelector('.editing-route .editor-toolbar-sticky');
+  if (slot) root.style.setProperty('--bardo-toolbar-slot-top', `${slot.getBoundingClientRect().top}px`);
+}
+
 function syncKeyboardState() {
   if (!viewport) {
     root.style.setProperty('--bardo-visual-viewport-top', '0px');
@@ -33,6 +42,7 @@ function syncKeyboardState() {
 
   if (keyboardOpen) root.dataset.editorKeyboard = 'open';
   else root.removeAttribute('data-editor-keyboard');
+  syncToolbarSlot();
 
   if (!focused && reduction < 80) {
     baselineHeight = Math.max(viewport.height, window.innerHeight);
@@ -52,6 +62,8 @@ rememberBaseline();
 viewport?.addEventListener('resize', scheduleSync, {passive: true});
 viewport?.addEventListener('scroll', scheduleSync, {passive: true});
 window.addEventListener('resize', scheduleSync, {passive: true});
+// In the scroll handler itself, so the toolbar follows its slot in the same frame.
+window.addEventListener('scroll', syncToolbarSlot, {passive: true});
 document.addEventListener('focusin', () => {
   // focusin usually fires before the keyboard finishes animating, which makes
   // it the safest moment to preserve the keyboard-free baseline.
