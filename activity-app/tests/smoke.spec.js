@@ -615,7 +615,7 @@ test('document actions: text preview, markdown download and share outside Discor
 
   await openRowActions();
   expect((await page.getByRole('menuitem').allTextContents()).map(text => text.trim()))
-    .toEqual(['Abrir', 'Editar', 'Duplicar', 'Copiar texto', 'Compartir en el canal', 'Texto con formato (.md)', 'Ver como texto', 'Archivar documento']);
+    .toEqual(['Abrir', 'Editar', 'Duplicar', 'Copiar texto', 'Compartir en el canal', 'Compartir enlace', 'Texto con formato (.md)', 'Ver como texto', 'Archivar documento']);
   // En móvil, «Descargar» va en línea: sus opciones están en el mismo menú.
   await openSubmenu(page, 'Descargar');
   await expect(page.getByRole('menuitem', {name: 'Texto con formato (.md)'})).toBeVisible();

@@ -27,6 +27,7 @@ import {
   Archive,
   Plus,
   Send,
+  Link,
 } from 'lucide-react';
 import {
   FileTextIcon,
@@ -86,6 +87,7 @@ export function PlannerSessionHeader({
   onUpdateHeaderField,
   onCopyAnnouncement,
   onShareMeeting,
+  onShareMeetingLink,
   onSaveAgendaDoc,
   onNewCleanSession,
   onDeleteSession,
@@ -286,6 +288,12 @@ export function PlannerSessionHeader({
                     <DropdownMenuItem onClick={onShareMeeting}>
                       <Send className="size-4 text-muted-foreground" />
                       <span>Compartir agenda en el canal</span>
+                    </DropdownMenuItem>
+                  )}
+                  {onShareMeetingLink && (
+                    <DropdownMenuItem onClick={onShareMeetingLink}>
+                      <Link className="size-4 text-muted-foreground" />
+                      <span>Compartir enlace</span>
                     </DropdownMenuItem>
                   )}
                   {onSaveAgendaDoc && (
