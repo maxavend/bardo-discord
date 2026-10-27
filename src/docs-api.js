@@ -20,6 +20,7 @@ import {
   loadDocument,
   loadDocumentSource,
   loadPlannerSession,
+  loadPlannerSessionOwner,
   loadRecentDocsLaunchIntent,
   deleteDocsLaunchIntent,
   LAUNCH_TARGET_PREFIX,
@@ -31,6 +32,7 @@ import {
   isDiscordUnavailableError,
 } from './discord-permissions.js';
 import { createExportToken, exportLinksConfigured, normalizeExportFormat } from './export-token.js';
+import { loadKanbanCardScope } from './kanban-db.js';
 
 const DOCS_API_PREFIX = '/api/docs';
 export const MAX_DOCUMENT_BYTES = 1_800_000;
@@ -190,10 +192,36 @@ async function sessionCanViewCurrentChannel(env, session) {
     .canViewChannel(session.channelId);
 }
 
+const PLANNER_SESSION_TARGET_PREFIX = 'planner-session:';
+const KANBAN_CARD_TARGET_PREFIX = 'kanban-card:';
+
 async function documentSharedInSessionChannel(env, session, documentId) {
   if (!documentId) return false;
   const channels = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
   return channels.includes(session.channelId);
+}
+
+/**
+ * An explicit destination (a shared link or a button, custom_id
+ * `bardo:open:…`) that exists in this server but not in the session's channel:
+ * returns its kind ("doc", "meeting" or "task") so the Activity can say the
+ * person has no access. Never says where it lives, and anything from another
+ * server, or that no longer exists, is not reported as denied.
+ */
+async function deniedLaunchKind(env, session, requested) {
+  if (!requested || requested.startsWith(LAUNCH_TARGET_PREFIX)) return null;
+  if (requested.startsWith(PLANNER_SESSION_TARGET_PREFIX)) {
+    const owner = await loadPlannerSessionOwner(env.DB, requested.slice(PLANNER_SESSION_TARGET_PREFIX.length));
+    return owner?.guildId === session.guildId && owner.channelId !== session.channelId ? 'meeting' : null;
+  }
+  if (requested.startsWith(KANBAN_CARD_TARGET_PREFIX)) {
+    const scope = await loadKanbanCardScope(env.DB, requested.slice(KANBAN_CARD_TARGET_PREFIX.length));
+    return scope?.guildId === session.guildId && scope.channelId !== session.channelId ? 'task' : null;
+  }
+  if (requested.startsWith('kanban') || requested.startsWith('planner') || requested.startsWith('new-doc')) return null;
+  const documentId = requested.startsWith(EDIT_DOC_TARGET_PREFIX) ? requested.slice(EDIT_DOC_TARGET_PREFIX.length) : requested;
+  const channels = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
+  return channels.length && !channels.includes(session.channelId) ? 'doc' : null;
 }
 
 /**
@@ -203,8 +231,12 @@ async function documentSharedInSessionChannel(env, session, documentId) {
  * honoured when the document is shared with the session's channel.
  */
 async function resolveLaunchContext(request, env, session) {
-  const none = { contextDocumentId: null, launchTarget: null };
   const requested = launchDocumentId(request);
+  const launchDenied = await deniedLaunchKind(env, session, requested);
+  // A link to something this person cannot open lands on Home with a notice;
+  // it must not fall back to an older intent and open something else instead.
+  if (launchDenied) return { contextDocumentId: null, launchTarget: 'home', launchDenied };
+  const none = { contextDocumentId: null, launchTarget: null };
   const intent = await loadRecentDocsLaunchIntent(env.DB, session.userId, session.guildId);
   // /bardo deliberately resets the destination, including a stale custom_id
   // retained by a reused Discord Activity instance. A later document click
@@ -405,7 +437,7 @@ async function handleList(request, url, env, session) {
     limit: 150,
     summary,
   });
-  const { contextDocumentId, launchTarget } = isArchivedQuery
+  const { contextDocumentId, launchTarget, launchDenied = null } = isArchivedQuery
     ? { contextDocumentId: null, launchTarget: null }
     : await resolveLaunchContext(request, env, session);
 
@@ -418,6 +450,7 @@ async function handleList(request, url, env, session) {
     documents: documents.map(serialize),
     contextDocumentId,
     launchTarget,
+    launchDenied,
     guildId: session.guildId,
     user: sessionUser(session),
   });

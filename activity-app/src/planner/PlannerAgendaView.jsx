@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -60,7 +59,6 @@ import {
   SinglePersonPicker,
 } from './PlannerMemberPicker.jsx';
 
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
 const BLOCK_DURATION_PRESETS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 const BREAK_DURATION_PRESETS = [5, 10, 15, 20, 25, 30, 45, 60];
@@ -333,7 +331,6 @@ export function PlannerAgendaView({
         m.globalName.toLowerCase() === leaderName.toLowerCase() ||
         m.tag.toLowerCase() === `@${leaderName.toLowerCase()}`
     );
-    const leaderColor = matched?.avatarColor || DISCORD_PALETTES[Math.abs(leaderName.charCodeAt(0) || 0) % DISCORD_PALETTES.length];
 
     if (isEditing) {
       return (
@@ -347,19 +344,7 @@ export function PlannerAgendaView({
               >
                 {leaderName ? (
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <Avatar
-                      size="xs"
-                      className="size-4 text-[8px] font-bold shrink-0 shadow-2xs"
-                      style={{
-                        backgroundColor: `${leaderColor}30`,
-                        color: leaderColor,
-                      }}
-                    >
-                      {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-                      <AvatarFallback style={{ backgroundColor: `${leaderColor}30`, color: leaderColor }}>
-                        {leaderName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <MemberAvatar name={leaderName} member={matched || null} />
                     <span className="font-semibold text-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/60 group-hover:decoration-foreground transition-colors">
                       {leaderName}
                     </span>
@@ -379,16 +364,7 @@ export function PlannerAgendaView({
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-muted-foreground">Facilita</span>
-        <Avatar
-          size="xs"
-          className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-          style={{ backgroundColor: `${leaderColor}35`, color: leaderColor }}
-        >
-          {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-          <AvatarFallback style={{ backgroundColor: `${leaderColor}35`, color: leaderColor }}>
-            {leaderName.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <MemberAvatar name={leaderName} member={matched || null} />
         <strong className="text-foreground font-semibold">{leaderName}</strong>
       </div>
     );
@@ -426,7 +402,7 @@ export function PlannerAgendaView({
                 {mentions.length > 0 ? (
                   <div className="flex items-center gap-1.5 min-w-0">
                     <div className="flex items-center -space-x-1 shrink-0">
-                      {mentions.slice(0, 3).map((pName, pIdx) => {
+                      {mentions.slice(0, 3).map((pName) => {
                         const matched = discordMembers.find(
                           (m) =>
                             m.globalName.toLowerCase() === pName.toLowerCase() ||
@@ -434,19 +410,8 @@ export function PlannerAgendaView({
                             m.tag.toLowerCase() === pName.toLowerCase()
                         );
                         const isRole = pName.startsWith('@') || pName.startsWith('#');
-                        const pColor = matched?.avatarColor || DISCORD_PALETTES[(pIdx + 2) % DISCORD_PALETTES.length];
                         return (
-                          <Avatar
-                            key={pName}
-                            size="xs"
-                            className="size-4 text-[7px] font-bold shrink-0 shadow-2xs border border-card"
-                            style={{ backgroundColor: `${pColor}30`, color: pColor }}
-                          >
-                            {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-                            <AvatarFallback style={{ backgroundColor: `${pColor}30`, color: pColor }}>
-                              {isRole ? '#' : pName.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                          <MemberAvatar key={pName} name={pName} member={isRole ? null : matched || null} role={isRole} stacked />
                         );
                       })}
                     </div>
@@ -497,19 +462,8 @@ export function PlannerAgendaView({
                 m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                 m.tag.toLowerCase().includes(pName.toLowerCase())
             );
-            const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
             return (
-              <Avatar
-                key={pIdx}
-                size="xs"
-                className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                style={{ backgroundColor: `${color}35`, color }}
-              >
-                {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-                <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                  {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <MemberAvatar key={pIdx} name={pName} member={matched || null} stacked />
             );
           })}
         </div>
@@ -976,19 +930,8 @@ export function PlannerAgendaView({
                                                   m.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                                   m.tag.toLowerCase().includes(pName.toLowerCase())
                                               );
-                                              const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
                                               return (
-                                                <Avatar
-                                                  key={pIdx}
-                                                  size="xs"
-                                                  className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                                  style={{ backgroundColor: `${color}35`, color }}
-                                                >
-                                                  {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-                                                  <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                                                    {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                                                  </AvatarFallback>
-                                                </Avatar>
+                                                <MemberAvatar key={pIdx} name={pName} member={matched || null} stacked />
                                               );
                                             })}
                                           </div>
@@ -1074,19 +1017,8 @@ export function PlannerAgendaView({
                                             member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                             member.tag.toLowerCase().includes(pName.toLowerCase())
                                         );
-                                        const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
                                         return (
-                                          <Avatar
-                                            key={pIdx}
-                                            size="xs"
-                                            className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                            style={{ backgroundColor: `${color}35`, color }}
-                                          >
-                                            {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-                                            <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                                              {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                                            </AvatarFallback>
-                                          </Avatar>
+                                          <MemberAvatar key={pIdx} name={pName} member={matched || null} stacked />
                                         );
                                       })}
                                     </div>
@@ -1105,7 +1037,7 @@ export function PlannerAgendaView({
                       return (
                         <div
                           key={point.id}
-                          className={`group relative flex items-center justify-between px-4 py-3 sm:px-4.5 sm:py-3.5 rounded-xl gap-3 sm:gap-4 transition-all ${
+                          className={`group relative flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-between px-4 py-3 sm:px-4.5 sm:py-3.5 rounded-xl gap-2 sm:gap-4 transition-all ${
                             isDone || isPointSkipped
                               ? 'bg-muted/40 text-muted-foreground'
                               : 'bg-muted/50 hover:bg-muted/70 text-foreground'
@@ -1176,19 +1108,8 @@ export function PlannerAgendaView({
                                         member.globalName.toLowerCase().includes(pName.toLowerCase()) ||
                                         member.tag.toLowerCase().includes(pName.toLowerCase())
                                     );
-                                    const color = matched?.avatarColor || DISCORD_PALETTES[pIdx % DISCORD_PALETTES.length];
                                     return (
-                                      <Avatar
-                                        key={pIdx}
-                                        size="xs"
-                                        className="size-4.5 border border-card text-[8px] font-bold shadow-2xs shrink-0"
-                                        style={{ backgroundColor: `${color}35`, color }}
-                                      >
-                                        {matched?.avatar && <AvatarImage src={matched.avatar} alt="" />}
-                                        <AvatarFallback style={{ backgroundColor: `${color}35`, color }}>
-                                          {(matched?.globalName || pName).slice(0, 2).toUpperCase()}
-                                        </AvatarFallback>
-                                      </Avatar>
+                                      <MemberAvatar key={pIdx} name={pName} member={matched || null} stacked />
                                     );
                                   })}
                                 </div>
@@ -1199,10 +1120,11 @@ export function PlannerAgendaView({
                             )}
                           </div>
 
-                          {/* Columna Derecha: Reproductor inline si isDone, o saltado */}
-                          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                          {/* Columna Derecha: Reproductor inline si isDone, o saltado. En
+                              móvil va debajo del título, a todo el ancho. */}
+                          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 sm:shrink-0 empty:hidden">
                             {isDone && (firstPointRecording || allowSyntheticAudio) ? (
-                              <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                              <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0 -ml-1.5 sm:ml-0">
                                 <audio
                                   id={`audio-element-${point.id}`}
                                   className="bardo-point-audio hidden"
@@ -1216,7 +1138,7 @@ export function PlannerAgendaView({
                                     handleTogglePlay(point, firstPointRecording, pointRecordingDurationMs);
                                   }}
                                   aria-label={isCurrentPlaying ? 'Pausar audio' : 'Reproducir audio'}
-                                  className="size-6 sm:size-7 rounded-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                                  className="size-8 sm:size-7 shrink-0 rounded-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors cursor-pointer"
                                 >
                                   {isCurrentPlaying ? (
                                     <Pause className="size-3.5 fill-primary text-primary" />
@@ -1242,14 +1164,14 @@ export function PlannerAgendaView({
                                     e.stopPropagation();
                                     seekAudio(point.id, percent / 100, pointRecordingDurationMs);
                                   }}
-                                  className="w-28 sm:w-44 h-1.5 bg-muted/80 hover:bg-muted rounded-full overflow-hidden relative cursor-pointer select-none"
+                                  className="flex-1 min-w-0 sm:flex-none sm:w-44 h-1.5 bg-muted/80 hover:bg-muted rounded-full overflow-hidden relative cursor-pointer select-none"
                                 >
                                   <div
                                     className="h-full bg-primary rounded-full transition-all duration-100"
                                     style={{ width: `${audioProgress[point.id]?.percent || 0}%` }}
                                   />
                                 </div>
-                                <span className="font-mono text-xs text-muted-foreground tabular-nums select-none min-w-[36px]">
+                                <span className="font-mono text-xs text-muted-foreground tabular-nums select-none min-w-[36px] shrink-0">
                                   {formatMsToClock(audioProgress[point.id]?.currentMs || 0)}
                                 </span>
                                 <button
@@ -1260,7 +1182,7 @@ export function PlannerAgendaView({
                                   }}
                                   aria-label={`Descargar audio de ${point.title}`}
                                   title={`Descargar audio: ${point.title}`}
-                                  className="p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-md hover:bg-muted/50"
+                                  className="size-8 sm:size-auto sm:p-1 shrink-0 grid place-items-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-full sm:rounded-md hover:bg-muted/50"
                                 >
                                   <DownloadIcon className="size-4" />
                                 </button>
@@ -1318,11 +1240,7 @@ export function PlannerAgendaView({
                           <div className="flex items-center gap-2 min-w-0 max-w-full ml-auto">
                             {ownerDisplayName && (
                               <div className="inline-flex items-center gap-1.5 min-w-0">
-                                <MemberAvatar
-                                  name={ownerDisplayName}
-                                  member={ownerMember || null}
-                                  className="size-4.5 border border-card text-[8px]"
-                                />
+                                <MemberAvatar name={ownerDisplayName} member={ownerMember || null} />
                                 <span className="text-xs text-muted-foreground font-medium truncate">{ownerDisplayName}</span>
                               </div>
                             )}

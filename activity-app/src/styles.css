@@ -737,18 +737,45 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 /* Símbolo pequeño de Bardo (el corte para menos de 40 px): la onda y el
    renglón toman la tinta del tema y un degradado pinta solo el punto. */
 .workspace-mark {
+  --mark-size: 20px;
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: var(--mark-size);
+  height: var(--mark-size);
+  /* El punto crece con el símbolo (2,9 px a 20 px). */
   background:
-    radial-gradient(circle at 85.35% 67.2%, var(--punto) 2.9px, transparent 3px),
+    radial-gradient(circle at 85.35% 67.2%, var(--punto) calc(var(--mark-size) * 0.145), transparent calc(var(--mark-size) * 0.15)),
     var(--foreground);
   mask: url("./assets/brand/simbolo-pequeno.svg") center / contain no-repeat;
 }
 .workspace-name { font-family: var(--font-heading); font-weight: 500; letter-spacing: -0.01em; }
 .workspace-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
-/* Sin pestañas en el header (móvil), el nombre usa el ancho libre. */
-@media (max-width: 767px) { .workspace-label { max-width: none; } }
+/* Móvil: el header muestra solo el símbolo (o el ícono del servidor) en una
+   zona de 32 px; el nombre y el canal siguen para lectores de pantalla. El
+   header crece a 64 px para que las áreas táctiles de 44 px respiren. */
+@media (max-width: 767px) {
+  :root { --bardo-topbar: 64px; }
+  .workspace-label { max-width: none; padding-inline: 0; }
+  /* Zona de 32 px; el símbolo, a 24 px, respira dentro de ella. */
+  .workspace-mark {
+    --mark-size: 24px;
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    background-origin: content-box;
+    background-clip: content-box;
+    mask-origin: content-box;
+    mask-clip: content-box;
+  }
+  .workspace-icon { width: 32px; height: 32px; border-radius: 10px; font-size: 12px; }
+  .workspace-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .workspace-channel { overflow-x: clip; overflow-y: visible; color: var(--muted-foreground); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 /* Perfil: el avatar abre el menú de ajustes y tema. Área táctil de 40 px. */
 .user-menu-trigger {
@@ -763,12 +790,29 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   background: transparent;
   cursor: pointer;
 }
-/* En táctil, área de 44 px; el anillo de hover solo con cursor (en el
-   teléfono quedaba pegado después de tocar). */
-@media (pointer: coarse) { .user-menu-trigger { width: 44px; height: 44px; margin-inline: -6px -4px; } }
+/* En móvil y táctil, los botones del header se ven de 32 px y su área táctil
+   llega a 44 × 44 px sin ocupar más espacio; el anillo de hover solo con
+   cursor (en el teléfono quedaba pegado después de tocar). */
+@media (max-width: 767px), (pointer: coarse) {
+  .doc-topbar [data-slot="button"] { position: relative; min-width: 32px; }
+  .doc-topbar [data-slot="button"]::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+  /* Avatar de 32 px en un área de 44; el margen alinea el círculo al borde del header. */
+  .user-menu-trigger { width: 44px; height: 44px; margin-inline: -6px; }
+  .user-menu-trigger [data-slot="avatar"] { width: 32px; height: 32px; }
+}
 @media (hover: hover) { .user-menu-trigger:hover [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); } }
 .user-menu-trigger[data-state="open"] [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); }
-.user-menu-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+/* El foco abraza el avatar, no el área táctil: así no invade el botón vecino. */
+.user-menu-trigger:focus-visible { outline: none; }
+.user-menu-trigger:focus-visible [data-slot="avatar"] { outline: 2px solid var(--ring); outline-offset: 1px; }
 .user-menu-profile { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--foreground); font-size: 14px; font-weight: 400; }
 .user-menu-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .user-menu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted-foreground); font-size: 12px; }
@@ -785,15 +829,37 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
     margin-inline-start: 8px;
     padding: 4px;
     border-radius: 9999px;
-    background: var(--muted);
+    /* Cápsula de vidrio: el header ya difumina; aquí, el filo de luz. */
+    background: color-mix(in oklab, var(--muted) 78%, transparent);
+    box-shadow:
+      inset 0 0 0 0.5px color-mix(in oklab, var(--foreground) 9%, transparent),
+      inset 0 0.5px 0 oklch(1 0 0 / 0.07);
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 .module-hub-tabs { position: relative; }
-/* Fondo de la pestaña activa: se desliza igual que en la barra móvil. */
+/* Brillo que sigue al dedo mientras el lente está levantado. */
+.module-hub-tabs::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle 220px at var(--hub-x, 20%) 50%, color-mix(in oklab, var(--foreground) 9%, transparent), color-mix(in oklab, var(--foreground) 4%, transparent) 60%, transparent);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+.module-hub-tabs[data-lifted]::before { opacity: 1; transition-duration: 120ms; }
+/* Fondo de la pestaña activa: un lente que se desliza igual que en la barra
+   móvil. Al presionar se levanta (crece, se vuelve vidrio claro y refracta
+   las pestañas que pasa) y al soltar se asienta. */
 .module-hub-tabs-indicator {
   position: absolute;
   top: 4px;
   left: 0;
+  z-index: 0;
   height: 28px;
   width: var(--hub-tab-width, 0px);
   transform: translateX(var(--hub-tab-left, 0px));
@@ -801,11 +867,39 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   border-radius: 9999px;
   background: var(--background);
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.06);
-  transition: transform var(--duration-medium) var(--ease-bounce), width var(--duration-medium) var(--ease-bounce);
+  transition:
+    transform var(--duration-medium) var(--ease-bounce),
+    width var(--duration-medium) var(--ease-bounce),
+    top 220ms var(--ease-bounce),
+    height 220ms var(--ease-bounce),
+    background-color 140ms ease,
+    box-shadow 140ms ease;
   pointer-events: none;
 }
-.dark .module-hub-tabs-indicator { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
+.dark .module-hub-tabs-indicator {
+  background: color-mix(in oklab, var(--foreground) 13%, transparent);
+  box-shadow: inset 0 0.5px 0 oklch(1 0 0 / 0.06);
+}
+.module-hub-tabs[data-lifted] .module-hub-tabs-indicator {
+  z-index: 2;
+  top: -4px;
+  height: 44px;
+  width: calc(var(--hub-tab-width, 0px) + 20px);
+  transform: translateX(calc(var(--hub-tab-left, 0px) - 10px));
+  background: color-mix(in oklab, var(--background) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 0.5px color-mix(in oklab, var(--foreground) 16%, transparent),
+    inset 0 1px 1px oklch(1 0 0 / 0.22),
+    inset 0 -1px 1px oklch(1 0 0 / 0.08),
+    0 6px 18px -6px oklch(0 0 0 / 0.45);
+  transition-duration: var(--duration-medium), var(--duration-medium), 220ms, 220ms, 100ms, 100ms;
+}
+.module-hub-tabs[data-refracting] .module-hub-tabs-indicator { backdrop-filter: var(--hub-lens-filter, none); }
+/* Arrastrando, el lente sigue al dedo casi sin retraso. */
+.module-hub-tabs[data-dragging] .module-hub-tabs-indicator { transition-duration: 90ms, var(--duration-medium), 220ms, 220ms, 100ms, 100ms; }
 .module-hub-tabs[data-ready] .module-hub-tab[aria-current="page"] { background: transparent; border-color: transparent; box-shadow: none; }
+.module-hub-tabs[data-lifted] .module-hub-tab { color: color-mix(in oklab, var(--foreground) 60%, transparent); }
+.module-hub-tabs[data-lifted] .module-hub-tab[data-hub-target] { color: var(--foreground); }
 
 /* Selectores de una opción (Activos/Archivados, filtros, Ajustes): el fondo
    de la opción activa se desliza con el mismo movimiento que las pestañas del
@@ -965,20 +1059,59 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 }
 @media (min-width: 768px) { .module-hub-bar { display: none; } }
 .module-hub-bar[data-minimized] { --hub-bar-height: 48px; inset-inline: calc(48px + var(--bardo-safe-left, 0px)) calc(48px + var(--bardo-safe-right, 0px)); }
-/* Indicador de vidrio que se desliza a la pestaña activa. */
+.module-hub-bar { touch-action: pan-y; user-select: none; }
+/* Vidrio líquido (Chromium): poco desenfoque y el canto refracta lo que pasa
+   por debajo. En el resto queda el vidrio esmerilado de arriba. */
+.module-hub-bar[data-glass] {
+  background: color-mix(in oklab, var(--background) 55%, transparent);
+  backdrop-filter: blur(6px) var(--hub-glass-filter, none);
+  box-shadow:
+    0 10px 30px -8px oklch(0 0 0 / 0.45),
+    inset 0 1px 0 oklch(1 0 0 / 0.12),
+    inset 0 -1px 0 oklch(1 0 0 / 0.04);
+}
+/* Lente que se desliza a la pestaña activa; se mide como en el header. Antes
+   de medir, se ubica por índice. */
 .module-hub-bar-indicator {
   position: absolute;
   top: var(--hub-bar-inset);
   bottom: var(--hub-bar-inset);
-  left: var(--hub-bar-inset);
-  width: calc((100% - 2 * var(--hub-bar-inset)) / 4);
+  left: 0;
+  width: var(--hub-tab-width, calc((100% - 2 * var(--hub-bar-inset)) / 4));
   border-radius: 9999px;
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in oklab, var(--foreground) 10%, transparent);
-  transform: translateX(calc(var(--hub-index, 0) * 100%));
-  transition: transform var(--duration-medium) var(--ease-bounce);
+  transform: translateX(var(--hub-tab-left, calc(var(--hub-bar-inset) + var(--hub-index, 0) * 100%)));
+  transition:
+    transform var(--duration-medium) var(--ease-bounce),
+    width var(--duration-medium) var(--ease-bounce),
+    top 220ms var(--ease-bounce),
+    bottom 220ms var(--ease-bounce),
+    background-color 140ms ease,
+    box-shadow 140ms ease;
   pointer-events: none;
 }
+.module-hub-bar[data-lifted] .module-hub-bar-indicator {
+  z-index: 2;
+  top: -3px;
+  bottom: -3px;
+  width: calc(var(--hub-tab-width, 0px) + 16px);
+  transform: translateX(calc(var(--hub-tab-left, 0px) - 8px));
+  background: oklch(1 0 0 / 0.04);
+  box-shadow:
+    inset 0 0 0 0.5px color-mix(in oklab, var(--foreground) 16%, transparent),
+    inset 0 1px 1px oklch(1 0 0 / 0.24),
+    inset 0 -1px 1px oklch(1 0 0 / 0.08),
+    0 8px 22px -6px oklch(0 0 0 / 0.5);
+  transition-duration: var(--duration-medium), var(--duration-medium), 220ms, 220ms, 100ms, 100ms;
+}
+.module-hub-bar[data-refracting] .module-hub-bar-indicator { backdrop-filter: var(--hub-lens-filter, none); }
+.module-hub-bar[data-dragging] .module-hub-bar-indicator { transition-duration: 90ms, var(--duration-medium), 220ms, 220ms, 100ms, 100ms; }
+.module-hub-bar[data-lifted] .module-hub-bar-item:not([data-hub-target]) { color: var(--muted-foreground); }
+.module-hub-bar[data-lifted] .module-hub-bar-item[data-hub-target] { color: var(--primary); }
+.dark .module-hub-bar[data-lifted] .module-hub-bar-item[data-hub-target] { color: color-mix(in oklab, var(--primary) 70%, white); }
+/* Mantener presionado no abre la vista previa del link ni lo arrastra. */
+:is(.module-hub-tab, .module-hub-bar-item) { -webkit-touch-callout: none; -webkit-user-drag: none; }
 .module-hub-bar-item {
   position: relative;
   display: flex;
@@ -1562,9 +1695,11 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .header-compact-button { padding-inline: 8px !important; }
+  /* Solo ícono: círculo de 32 px (también «volver» cuando oculta su texto). */
+  :is(.header-compact-button, .back-button:has(> .header-label)) { width: 32px; padding-inline: 0 !important; border-radius: 9999px; }
   .doc-topbar { padding-inline: 12px; }
-  .topbar-right { gap: 6px; }
+  /* Aire para que los anillos de foco y de menú abierto no toquen al vecino. */
+  .topbar-right { gap: 8px; }
   .save-state {
     max-inline-size: 38vw;
     overflow: hidden;

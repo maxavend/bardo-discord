@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -26,7 +25,7 @@ import { DeleteIcon as TrashIcon } from '@/components/ui/animated-icons';
 import { SESSION_STATUS, getPointCounts } from './session-runner.js';
 import { getPlannedSchedule } from './time-engine.js';
 import { getHomeTopSection } from './planner-store.js';
-import { getAllDiscordEntities } from './PlannerMemberPicker.jsx';
+import { MemberAvatar, getAllDiscordEntities } from './PlannerMemberPicker.jsx';
 import { SegmentIndicator } from '@/components/ui/segment-indicator';
 import {
   eventStatusLabel,
@@ -38,7 +37,6 @@ import {
   liveStatusLabel,
 } from './copy-tokens.js';
 
-const DISCORD_PALETTES = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#00A8FC', '#ED4245', '#9B59B6', '#E67E22'];
 
 function parseMentions(mentionsStr = '') {
   if (!mentionsStr) return [];
@@ -220,25 +218,15 @@ export function PlannerHomeView({
               <div className="pointer-events-none flex items-center gap-1.5 flex-wrap">
                 {participantsList.length > 0 && (
                   <div className="flex items-center -space-x-1.5">
-                    {participantsList.slice(0, 6).map((tag, i) => {
+                    {participantsList.slice(0, 6).map((tag) => {
                       const matched = members.find(
                         (m) => m.globalName.toLowerCase() === tag.toLowerCase().replace(/^@/, '') ||
                           m.tag.toLowerCase() === tag.toLowerCase() ||
                           `@${m.globalName.toLowerCase()}` === tag.toLowerCase()
                       );
-                      const color = matched?.avatarColor || DISCORD_PALETTES[i % DISCORD_PALETTES.length];
                       const name = matched?.globalName || tag.replace(/^@/, '');
                       return (
-                        <Avatar
-                          key={tag}
-                          size="sm"
-                          className="size-5 text-[8.5px] font-bold border-2 border-card shadow-2xs shrink-0"
-                          style={{ backgroundColor: `${color}30`, color }}
-                        >
-                          <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>
-                            {name.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <MemberAvatar key={tag} name={name} member={matched || null} stacked />
                       );
                     })}
                   </div>

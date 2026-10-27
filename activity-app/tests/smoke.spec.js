@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {
+  openSubmenu,
   collectRuntimeErrors,
   expectLibrary,
   openDocFromLibrary,
@@ -240,7 +241,7 @@ test('Discord theme picks the initial theme and the manual toggle persists', asy
   // El tema se elige en el menú de perfil; la elección del usuario manda sobre la de Discord.
   const openThemeMenu = async () => {
     await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
-    await page.getByRole('menuitem', {name: /^Tema/}).click();
+    await openSubmenu(page, /^Tema/);
   };
   await openThemeMenu();
   await page.getByRole('menuitemradio', {name: 'Claro'}).click();
@@ -614,8 +615,9 @@ test('document actions: text preview, markdown download and share outside Discor
 
   await openRowActions();
   expect((await page.getByRole('menuitem').allTextContents()).map(text => text.trim()))
-    .toEqual(['Abrir', 'Editar', 'Duplicar', 'Copiar texto', 'Compartir en el canal', 'Descargar', 'Archivar documento']);
-  await page.getByRole('menuitem', {name: 'Descargar'}).click();
+    .toEqual(['Abrir', 'Editar', 'Duplicar', 'Copiar texto', 'Compartir en el canal', 'Compartir enlace', 'Texto con formato (.md)', 'Ver como texto', 'Archivar documento']);
+  // En móvil, «Descargar» va en línea: sus opciones están en el mismo menú.
+  await openSubmenu(page, 'Descargar');
   await expect(page.getByRole('menuitem', {name: 'Texto con formato (.md)'})).toBeVisible();
   // PDF y Word se generan en el servidor: fuera de Discord no se ofrecen.
   await expect(page.getByRole('menuitem', {name: 'PDF (.pdf)'})).toHaveCount(0);
@@ -630,7 +632,7 @@ test('document actions: text preview, markdown download and share outside Discor
   await expect(preview).toBeHidden();
 
   await openRowActions();
-  await page.getByRole('menuitem', {name: 'Descargar'}).click();
+  await openSubmenu(page, 'Descargar');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('menuitem', {name: 'Texto con formato (.md)'}).click();
   const download = await downloadPromise;

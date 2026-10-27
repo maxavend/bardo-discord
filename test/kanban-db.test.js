@@ -26,6 +26,7 @@ test('cada export de kanban-db.js ejecuta su SQL contra el esquema final', async
     listKanbanCardsBySource: () => kdb.listKanbanCardsBySource(d1, board.id, 'planner:s:'),
     loadKanbanCard: () => kdb.loadKanbanCard(d1, board.id, card.id),
     loadKanbanCardOwner: () => kdb.loadKanbanCardOwner(d1, card.id),
+    loadKanbanCardScope: () => kdb.loadKanbanCardScope(d1, card.id),
     countActiveKanbanCards: () => kdb.countActiveKanbanCards(d1, board.id),
     rankForPosition: () => kdb.rankForPosition(d1, board.id, todo.id, {afterId: card.id}),
     rebalanceKanbanColumn: () => kdb.rebalanceKanbanColumn(d1, board.id, todo.id, 'u1'),

@@ -1,8 +1,7 @@
 // Piezas visuales pequeñas de Tareas, con los mismos tokens que Reuniones.
-import {Avatar, AvatarFallback, AvatarImage} from '@/components/ui/avatar';
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
-import {DISCORD_PALETTES, getAllDiscordEntities} from '../planner/PlannerMemberPicker.jsx';
+import {DISCORD_PALETTES, MemberAvatar, getAllDiscordEntities} from '../planner/PlannerMemberPicker.jsx';
 import {KANBAN_PRIORITY_LABELS} from './kanban-shared.js';
 
 import {SHEET_DIALOG_CLASS, SHEET_DIALOG_SCROLL_CLASS} from '@/components/sheet-dialog.js';
@@ -38,16 +37,8 @@ export function memberAvatarUrl(id) {
 
 export function AssigneeAvatar({assignee, className}) {
   if (!assignee) return null;
-  const color = hashColor(assignee.id);
-  const avatar = memberAvatarUrl(assignee.id);
-  return (
-    <Avatar size="sm" className={cn('size-6 text-[9.5px] font-bold shrink-0 shadow-2xs', className)} style={{backgroundColor: `${color}30`, color}}>
-      {avatar && <AvatarImage src={avatar} alt="" />}
-      <AvatarFallback style={{backgroundColor: `${color}30`, color}}>
-        {(assignee.name || '?').slice(0, 2).toUpperCase()}
-      </AvatarFallback>
-    </Avatar>
-  );
+  const member = {globalName: assignee.name || '?', avatar: memberAvatarUrl(assignee.id), avatarColor: hashColor(assignee.id)};
+  return <MemberAvatar name={member.globalName} member={member} size="md" className={className} />;
 }
 
 export function TagChip({tag, className, children}) {
