@@ -110,6 +110,7 @@ test('campos y botones vecinos tienen el mismo alto', async ({page}) => {
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
+  await page.getByRole('menuitem', {name: /^Tus preferencias/}).click();
   await expect(page.getByRole('dialog', {name: 'Ajustes'})).toBeVisible();
   expect(await page.evaluate(auditAdjacentHeights), 'Ajustes').toEqual([]);
 });

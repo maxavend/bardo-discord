@@ -56,9 +56,11 @@ test('Ajustes: el nombre del espacio se cambia en Espacio y vacío vuelve al pre
   const name = page.locator('.workspace-name');
   await expect(name).toHaveText('Bardo');
   await expect(page.getByRole('button', {name: /^Espacio: /})).toHaveCount(0);
+  // El menú de perfil abre Ajustes directo en la pestaña del canal.
   const openSpaceSettings = async () => {
     await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
-    await page.getByRole('dialog', {name: 'Ajustes'}).getByRole('tab', {name: 'Espacio'}).click();
+    await page.getByRole('menuitem', {name: /^Este canal/}).click();
+    await expect(page.getByRole('dialog', {name: 'Ajustes'}).getByRole('tab', {name: 'Espacio'})).toHaveAttribute('aria-selected', 'true');
   };
   await openSpaceSettings();
   const dialog = page.getByRole('dialog', {name: 'Ajustes'});
@@ -80,6 +82,7 @@ test('Ajustes: el nombre del espacio se cambia en Espacio y vacío vuelve al pre
 test('Ajustes personales: tema y «Al abrir Bardo» se recuerdan', async ({page}) => {
   await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Tareas'}).click();
   await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
+  await page.getByRole('menuitem', {name: /^Tus preferencias/}).click();
   const dialog = page.getByRole('dialog', {name: 'Ajustes'});
   await dialog.getByRole('button', {name: 'Claro', exact: true}).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');

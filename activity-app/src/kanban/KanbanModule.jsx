@@ -222,7 +222,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
       <div className="kanban-inner kanban-head flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0">
-            <h1 id="kanban-title" tabIndex={-1} className="text-lg font-bold tracking-tight text-foreground">Tareas</h1>
+            <h1 id="kanban-title" tabIndex={-1} className="font-heading text-lg font-semibold tracking-tight text-foreground">Tareas</h1>
             {!remote && <p className="hidden text-xs text-muted-foreground md:block">Solo en este dispositivo</p>}
           </div>
           {STATUS_TEXT[status] && (
@@ -247,6 +247,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
               </DropdownMenuContent>
             </DropdownMenu>
             <ToggleGroup
+              indicator
               value={[filter]}
               onValueChange={value => setFilter((Array.isArray(value) ? value.at(-1) : value) || 'all')}
               variant="outline"

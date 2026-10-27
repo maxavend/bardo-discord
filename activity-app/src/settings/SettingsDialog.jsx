@@ -174,6 +174,7 @@ function PersonalTab({snapshot, remote, onPatch, saving}) {
       <Section title="Apariencia" description="Solo en este dispositivo.">
         <Row label="Tema">
           <ToggleGroup
+            indicator
             value={[theme || 'system']}
             onValueChange={value => {
               const next = Array.isArray(value) ? value.at(-1) : value;
@@ -190,6 +191,7 @@ function PersonalTab({snapshot, remote, onPatch, saving}) {
         </Row>
         <Row label="Al abrir Bardo">
           <ToggleGroup
+            indicator
             value={[startModule]}
             onValueChange={value => {
               const next = Array.isArray(value) ? value.at(-1) : value;

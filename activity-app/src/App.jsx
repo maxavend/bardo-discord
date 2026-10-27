@@ -49,7 +49,7 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { toast } from '@/lib/toast';
 import { Toaster } from '@/components/ui/toaster';
 import { useTheme } from '@/lib/theme';
-import {MoonIcon, SettingsIcon, SunIcon, UploadIcon} from '@/components/ui/animated-icons';
+import {MoonIcon, SunIcon, UploadIcon} from '@/components/ui/animated-icons';
 import {useIconAnimation} from '@/components/ui/animated-icons/use-icon-animation.js';
 import {
   Archive,
@@ -84,6 +84,8 @@ import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
 import {WorkspaceName} from './WorkspaceName.jsx';
+import {UserMenu} from './UserMenu.jsx';
+import {SegmentIndicator} from '@/components/ui/segment-indicator';
 import {BetaNotice} from './BetaNotice.jsx';
 import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
 import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
@@ -618,23 +620,14 @@ function HeaderButton({Icon, iconSize = 14, children, ...props}) {
   );
 }
 
-function SettingsButton({onOpenSettings}) {
-  const {iconRef, handlers} = useIconAnimation();
-  return (
-    <IconButton label="Ajustes" onClick={() => onOpenSettings('personal')} className="h-8 w-8" {...handlers}>
-      <SettingsIcon ref={iconRef} size={16} aria-hidden="true" />
-    </IconButton>
-  );
-}
-
 function DocsHeader({children, actions, className = '', onOpenSettings}) {
   return (
     <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
       <div className="topbar-left">{children}</div>
       <div className="topbar-right header-actions">
         {actions}
-        {onOpenSettings && <SettingsButton onOpenSettings={onOpenSettings} />}
-        <ThemeModeMenu />
+        {/* Perfil: Ajustes por alcance y tema, en un solo lugar. */}
+        <UserMenu onOpenSettings={onOpenSettings} />
       </div>
     </header>
   );
@@ -785,7 +778,7 @@ function Library({
   const fileInputRef = useRef(null);
   const isArchivedTab = activeTab === 'archived';
   const parkedNames = `${parkedChanges.slice(0, 3).map(item => `«${item.title}»`).join(', ')}${parkedChanges.length > 3 ? '…' : ''}`;
-  const tabClass = selected => `px-3 py-1 rounded-md font-medium transition-all ${
+  const tabClass = selected => `px-3 py-1 rounded-md font-medium transition-colors ${
     selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
   }`;
 
@@ -877,6 +870,7 @@ function Library({
         <section className="library-section recent-section">
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-muted/60 border border-border/40 text-xs" role="group" aria-label="Mostrar documentos">
+              <SegmentIndicator />
               <button
                 type="button"
                 aria-pressed={activeTab === 'active'}
@@ -901,7 +895,8 @@ function Library({
             )}
           </div>
           {docs.length > 0 ? (
-            <div className="docs-list">
+            // La lista entra de nuevo al cambiar de pestaña (no al buscar).
+            <div className="docs-list tab-swap" key={activeTab}>
               {docs.map(doc => (
                 <article className={`doc-row ${doc.archived ? 'opacity-85' : ''}`} key={doc.id}>
                   <span className="doc-symbol">

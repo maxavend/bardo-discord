@@ -1,18 +1,27 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/inter";
+/* Inter con eje de tamaño óptico (los títulos grandes toman el corte Display)
+   y Lexend para los títulos: sus bowls circulares repiten el wordmark. */
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource-variable/lexend";
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Identidad «tinta, papel y punto» (brand/logo/kit/GUIA.md): la voz se calma,
+ * se asienta en un renglón y cierra con punto final. Papel y tinta con una
+ * gota de violeta; el violeta pleno queda para lo que concluye (--punto).
+ */
 :root {
-  --bardo-topbar: 52px;
+  --bardo-topbar: 56px;
   --bardo-toolbar-gap: 16px;
   --bardo-content: 690px;
   --font-inter: "Inter Variable", Inter, sans-serif;
+  --font-lexend: "Lexend Variable", Lexend, var(--font-inter);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-inter);
-  --font-heading: var(--font-inter);
+  --font-heading: var(--font-lexend);
   --bardo-visual-viewport-top: 0px;
   --bardo-visual-viewport-left: 0px;
   /* Discord publishes these in Activities so the iframe clears its native chrome. */
@@ -52,39 +61,44 @@
   --blur-medium: 3px;
   --blur-large: 8px;
   --bardo-container-radius: 24px;
-  --bardo-card-shadow: 0 1px 12px color-mix(in oklab, var(--foreground) 4%, transparent);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Sombra de papel: un borde de luz y una caída corta teñida de tinta. */
+  --bardo-card-shadow: 0 1px 2px oklch(0.3 0.06 300 / 5%), 0 8px 24px -14px oklch(0.3 0.08 300 / 22%);
+  /* Papel (fondo) y tinta (texto): neutros con una gota de violeta. */
+  --background: oklch(0.985 0.005 305);
+  --foreground: oklch(0.2 0.025 300);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0.025 300);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.2 0.025 300);
+  /* Violeta Bardo (#8200DB): el punto final del logo. */
   --primary: oklch(0.496 0.265 301.924);
-  --primary-foreground: oklch(0.977 0.014 308.299);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0.01 308);
+  --secondary: oklch(0.95 0.014 305);
+  --secondary-foreground: oklch(0.3 0.06 300);
+  --muted: oklch(0.955 0.008 305);
+  --muted-foreground: oklch(0.5 0.025 300);
+  --accent: oklch(0.95 0.02 305);
+  --accent-foreground: oklch(0.3 0.06 300);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.905 0.012 305);
+  --input: oklch(0.89 0.014 305);
+  --ring: oklch(0.6 0.2 303);
+  /* Lo que concluye: acuerdos cerrados, temas terminados, la pestaña activa. */
+  --punto: oklch(0.496 0.265 301.924);
   --chart-1: oklch(0.827 0.119 306.383);
   --chart-2: oklch(0.627 0.265 303.9);
   --chart-3: oklch(0.558 0.288 302.321);
   --chart-4: oklch(0.496 0.265 301.924);
   --chart-5: oklch(0.438 0.218 303.724);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar: oklch(0.975 0.007 305);
+  --sidebar-foreground: oklch(0.2 0.025 300);
   --sidebar-primary: oklch(0.558 0.288 302.321);
   --sidebar-primary-foreground: oklch(0.977 0.014 308.299);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.95 0.014 305);
+  --sidebar-accent-foreground: oklch(0.3 0.06 300);
+  --sidebar-border: oklch(0.905 0.012 305);
+  --sidebar-ring: oklch(0.6 0.2 303);
   --success: oklch(0.627 0.194 149.214);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.769 0.188 70.08);
@@ -248,7 +262,7 @@ button { font-size: 14px; }
 
 .boot-eyebrow {
   margin: 0 0 4px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 14px;
   font-weight: 450;
   letter-spacing: -.01em;
@@ -273,43 +287,9 @@ button { font-size: 14px; }
   animation: boot-stage-swap 500ms ease-in-out 80ms both;
 }
 
-.bardo-loader {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 96px;
-  height: 64px;
-  isolation: isolate;
-  overflow: visible;
-  color: var(--foreground);
-}
-.bardo-loader::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: 32px;
-  corner-shape: squircle;
-  background: #f7eadc;
-}
-.bardo-loader__eyes {
-  display: flex;
-  gap: 21px;
-  align-items: center;
-  animation: bardo-eye-look-and-blink 3.8s infinite cubic-bezier(.45, .05, .55, .95);
-  will-change: transform;
-}
-.bardo-loader__eye {
-  width: 11px;
-  height: 26px;
-  display: block;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 62% 18%, rgba(255,255,255,.42) 0 5%, transparent 7%),
-    linear-gradient(100deg, #0d0d0e 0%, #29292b 55%, #111113 100%);
-  transform-origin: center;
-  will-change: transform;
-}
+/* Wordmark dibujado; la onda se anima dentro del SVG. */
+.bardo-loader { display: block; width: 176px; height: 49px; }
+.bardo-loader img { display: block; width: 100%; height: 100%; }
 
 .boot-retry-button {
   min-height: 36px;
@@ -338,38 +318,11 @@ button { font-size: 14px; }
   line-height: 1.3;
   animation: boot-stage-swap 500ms ease-in-out both;
 }
-.t-shimmer {
-  position: relative;
-  display: inline-block;
-  color: var(--muted);
-}
-.t-shimmer::before {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    transparent 40%,
-    var(--foreground) 50%,
-    transparent 60%,
-    transparent 100%
-  );
-  background-size: 400% 100%;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: boot-hint-shimmer 3s linear infinite;
-}
-
 .boot-hint,
 .boot-error-message {
   max-width: 360px;
   margin: 0;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 14px;
   font-weight: 400;
   letter-spacing: -.01em;
@@ -409,27 +362,9 @@ button { font-size: 14px; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes bardo-eye-look-and-blink {
-  0%, 100% { transform: translate(0, 0) scaleY(1); }
-  14%, 26% { transform: translate(-7px, 0) scaleY(1); }
-  40%, 52% { transform: translate(7px, 0) scaleY(1); }
-  62% { transform: translate(0, 0) scaleY(1); }
-  66% { transform: translate(0, 0) scaleY(.06); }
-  70% { transform: translate(0, 0) scaleY(1); }
-  78%, 84% { transform: translate(5px, -2px) scaleY(1); }
-  90% { transform: translate(0, 0) scaleY(1); }
-  93% { transform: translate(0, 0) scaleY(.06); }
-  96% { transform: translate(0, 0) scaleY(1); }
-}
-
 @keyframes boot-stage-swap {
   from { opacity: 0; transform: translateY(12px); filter: blur(3px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
-}
-
-@keyframes boot-hint-shimmer {
-  from { background-position: 100% 0; }
-  to { background-position: 0% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -438,7 +373,6 @@ button { font-size: 14px; }
     animation-duration: 1ms !important;
   }
   .app-root { animation-duration: 1ms !important; }
-  .t-shimmer::before { animation: none !important; }
 }
 
 .glass-header {
@@ -619,7 +553,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 }
 .library-header { width: 100%; margin: 0; }
 .home-intro { padding-block: 28px 8px; }
-.home-intro h1 { font-size: 24px; font-weight: 700; line-height: 1.3; text-wrap: balance; }
+.home-intro h1 { font-family: var(--font-heading); font-size: 24px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.3; text-wrap: balance; }
 .home-context, .home-empty { color: var(--muted-foreground); line-height: 1.5; overflow-wrap: anywhere; }
 .home-context { margin-top: 8px; font-size: 14px; }
 .home-empty { margin-block: 16px; }
@@ -653,14 +587,14 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 
 .library-section { margin-top: 36px; }
 .continue-section { margin-top: 0; }
+/* Etiqueta de sección: la letra del cuerpo, un paso más chica, en
+   minúscula de oración y sin espaciado (nada de mayúsculas rastreadas). */
 .section-title {
   margin: 0 0 10px;
   color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.4;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .continue-row {
@@ -782,7 +716,65 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   min-height: 32px;
   padding-inline: 4px;
 }
-.workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Solo se recorta a lo ancho (con «…»): los emojis de los nombres de canal
+   son más altos que la línea y no deben cortarse arriba ni abajo. */
+.workspace-name { overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; white-space: nowrap; }
+/* Ícono del servidor (o sus iniciales) y, bajo el nombre, el canal. */
+.workspace-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+.workspace-icon img { width: 100%; height: 100%; object-fit: cover; }
+/* Símbolo pequeño de Bardo (el corte para menos de 40 px): la onda y el
+   renglón toman la tinta del tema y un degradado pinta solo el punto. */
+.workspace-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  background:
+    radial-gradient(circle at 85.35% 67.2%, var(--punto) 2.9px, transparent 3px),
+    var(--foreground);
+  mask: url("./assets/brand/simbolo-pequeno.svg") center / contain no-repeat;
+}
+.workspace-name { font-family: var(--font-heading); font-weight: 500; letter-spacing: -0.01em; }
+.workspace-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+/* Sin pestañas en el header (móvil), el nombre usa el ancho libre. */
+@media (max-width: 767px) { .workspace-label { max-width: none; } }
+.workspace-channel { overflow-x: clip; overflow-y: visible; color: var(--muted-foreground); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* Perfil: el avatar abre el menú de ajustes y tema. Área táctil de 40 px. */
+.user-menu-trigger {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-inline: -4px -2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+/* En táctil, área de 44 px; el anillo de hover solo con cursor (en el
+   teléfono quedaba pegado después de tocar). */
+@media (pointer: coarse) { .user-menu-trigger { width: 44px; height: 44px; margin-inline: -6px -4px; } }
+@media (hover: hover) { .user-menu-trigger:hover [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); } }
+.user-menu-trigger[data-state="open"] [data-slot="avatar"] { box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border); }
+.user-menu-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.user-menu-profile { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--foreground); font-size: 14px; font-weight: 400; }
+.user-menu-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.user-menu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted-foreground); font-size: 12px; }
+/* El color del rol es el que tiene en Discord. */
+.user-menu-role { display: inline-flex; align-items: center; gap: 6px; }
+.user-menu-role::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--role-color, var(--muted-foreground)); }
 .module-hub-tabs { display: none; }
 @media (min-width: 768px) {
   .module-hub-tabs {
@@ -814,6 +806,116 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 }
 .dark .module-hub-tabs-indicator { background: color-mix(in oklab, var(--input) 30%, transparent); border-color: var(--input); }
 .module-hub-tabs[data-ready] .module-hub-tab[aria-current="page"] { background: transparent; border-color: transparent; box-shadow: none; }
+
+/* Selectores de una opción (Activos/Archivados, filtros, Ajustes): el fondo
+   de la opción activa se desliza con el mismo movimiento que las pestañas del
+   hub. Lo dibuja <SegmentIndicator>; la opción activa deja su fondo propio. */
+:has(> .segment-indicator) { position: relative; isolation: isolate; }
+.segment-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: var(--segment-width, 0px);
+  height: var(--segment-height, 0px);
+  transform: translate(var(--segment-left, 0px), var(--segment-top, 0px));
+  border: 1px solid var(--segment-border, transparent);
+  border-radius: var(--segment-radius, 9999px);
+  background: var(--segment-bg, var(--background));
+  box-shadow: var(--segment-shadow, 0 1px 2px oklch(0 0 0 / 0.06));
+  opacity: 0;
+  pointer-events: none;
+}
+.dark .segment-indicator {
+  --segment-bg: color-mix(in oklab, var(--input) 30%, transparent);
+  --segment-border: var(--input);
+}
+/* Los toggles marcan la opción con el fondo apagado, sin borde ni sombra. */
+[data-slot="toggle-group"] > .segment-indicator,
+.dark [data-slot="toggle-group"] > .segment-indicator { --segment-bg: var(--muted); --segment-border: transparent; --segment-shadow: none; }
+[data-segment-ready] > .segment-indicator { opacity: 1; }
+[data-segment-animate] > .segment-indicator {
+  transition:
+    transform var(--duration-medium) var(--ease-bounce),
+    width var(--duration-medium) var(--ease-bounce),
+    height var(--duration-medium) var(--ease-bounce);
+}
+:has(> .segment-indicator) > :not(.segment-indicator) { position: relative; z-index: 1; }
+[data-segment-ready] > :is([aria-pressed="true"], [aria-selected="true"]) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* Al cambiar de pestaña, la lista nueva entra con un fundido corto que sube
+   unos píxeles: se lee como otro contenido, no como un salto. */
+.tab-swap { animation: tab-swap-in var(--duration-fast) var(--ease-smooth-out) both; }
+@keyframes tab-swap-in {
+  from { opacity: 0; transform: translateY(var(--distance-micro)); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tab-swap-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  /* Sin deslizamiento: el fondo cambia de opción en el acto y la lista solo
+     aparece con un fundido, sin moverse. */
+  [data-segment-animate] > .segment-indicator { transition: none; }
+  .tab-swap { animation-name: tab-swap-fade; }
+}
+
+/* ── Motivos de marca: onda, renglón y punto ─────────────────────────── */
+/* Superficies del navegador en el color de la marca. */
+::selection { background: color-mix(in oklab, var(--punto) 28%, transparent); }
+:is(input, textarea, [contenteditable="true"]) { caret-color: var(--punto); }
+
+/* Títulos de módulo (no los de documentos, que son del usuario): cierran
+   con punto final, como el logo. */
+:is(#home-title, #kanban-title)::after {
+  content: "";
+  display: inline-block;
+  width: 0.2em;
+  height: 0.2em;
+  margin-left: 0.06em;
+  border-radius: 999px;
+  background: var(--punto);
+}
+/* La pestaña activa del hub lleva su punto. */
+.module-hub-tab[aria-current="page"]::after {
+  content: "";
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--punto);
+}
+
+/* Vacíos: un renglón por escribir. La onda se calma en una línea, sin punto,
+   porque todavía no hay nada cerrado. */
+:is(.home-empty, [data-slot="empty"]:not(:has([data-slot="empty-icon"])) [data-slot="empty-header"])::before {
+  content: "";
+  display: block;
+  width: 72px;
+  height: 18px;
+  margin-bottom: 8px;
+  background: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  mask: url("./assets/brand/renglon-vacio.svg") left center / contain no-repeat;
+}
+[data-slot="empty-header"]::before { margin-inline: auto; mask-position: center; }
+
+/* Cierre de un tema o acuerdo: el punto aterriza y lo conversado se traza
+   como renglón. Corre una vez, cuando el elemento pasa a cerrado. */
+.punto-asienta { animation: punto-asienta 420ms var(--ease-smooth-out) both; }
+.renglon-traza { transform-origin: top; animation: renglon-traza 560ms var(--ease-smooth-out) 120ms both; }
+@keyframes punto-asienta {
+  from { transform: scale(0.2); opacity: 0; }
+  60% { transform: scale(1.14); opacity: 1; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes renglon-traza {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .punto-asienta, .renglon-traza { animation: none; }
+}
 .module-hub-tab {
   position: relative;
   z-index: 1;
@@ -1020,13 +1122,15 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   display: grid;
   align-items: start;
 }
+/* Títulos de documentos y reuniones en Lexend, también al editarlos. */
 .doc-title {
   margin: 0;
   color: var(--foreground);
+  font-family: var(--font-heading);
   font-size: clamp(28px, 4.5vw, 38px);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.15;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: pre-wrap;
@@ -1064,6 +1168,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 .doc-title-input {
   display: block;
   field-sizing: content;
+  font-family: var(--font-heading);
 }
 .doc-description-input {
   display: block;
@@ -1562,7 +1667,8 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 /* Form fields use standard default HeroUI styles via @heroui/styles */
 
 @theme inline {
-  --font-heading: var(--font-sans);
+  --font-heading: 'Lexend Variable', Lexend, 'Inter Variable', Inter, sans-serif;
+  --color-punto: var(--punto);
   --font-sans: 'Inter Variable', Inter, sans-serif;
   --font-mono: 'Inter Variable', Inter, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -1609,38 +1715,43 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Noche: un violeta casi negro en vez de #0A0A0A, para que dentro de Discord
+   (#313338) se lea como superficie y no como hueco. El violeta principal pasa
+   a violeta claro (#C27AFF) con texto en tinta: el violeta oscuro se pierde
+   sobre fondos oscuros, como advierte la guía del logo. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.438 0.218 303.724);
-  --primary-foreground: oklch(0.977 0.014 308.299);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.2 0.014 292);
+  --foreground: oklch(0.965 0.006 305);
+  --card: oklch(0.24 0.016 292);
+  --card-foreground: oklch(0.965 0.006 305);
+  --popover: oklch(0.26 0.018 292);
+  --popover-foreground: oklch(0.965 0.006 305);
+  --primary: oklch(0.722 0.177 305.5);
+  --primary-foreground: oklch(0.2 0.04 300);
+  --secondary: oklch(0.29 0.02 295);
+  --secondary-foreground: oklch(0.95 0.01 305);
+  --muted: oklch(0.27 0.016 292);
+  --muted-foreground: oklch(0.74 0.02 300);
+  --accent: oklch(0.29 0.02 295);
+  --accent-foreground: oklch(0.95 0.01 305);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0.02 300 / 9%);
+  --input: oklch(1 0.02 300 / 14%);
+  --ring: oklch(0.722 0.177 305.5);
+  --punto: oklch(0.722 0.177 305.5);
   --chart-1: oklch(0.827 0.119 306.383);
   --chart-2: oklch(0.627 0.265 303.9);
   --chart-3: oklch(0.558 0.288 302.321);
   --chart-4: oklch(0.496 0.265 301.924);
   --chart-5: oklch(0.438 0.218 303.724);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.627 0.265 303.9);
-  --sidebar-primary-foreground: oklch(0.977 0.014 308.299);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.24 0.016 292);
+  --sidebar-foreground: oklch(0.965 0.006 305);
+  --sidebar-primary: oklch(0.722 0.177 305.5);
+  --sidebar-primary-foreground: oklch(0.2 0.04 300);
+  --sidebar-accent: oklch(0.29 0.02 295);
+  --sidebar-accent-foreground: oklch(0.95 0.01 305);
+  --sidebar-border: oklch(1 0.02 300 / 9%);
+  --sidebar-ring: oklch(0.722 0.177 305.5);
   --success: oklch(0.627 0.194 149.214);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.769 0.188 70.08);

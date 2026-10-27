@@ -23,10 +23,13 @@ export function workspaceInfo() {
   const customName = (remote ? context.workspaceName : readLocalName()) || null;
   const channelName = context.channelName || context.channel?.name || null;
   const guildName = context.guildName || context.guild?.name || null;
+  const guildId = context.guildId || null;
+  const guildIconHash = context.guildIcon || context.guild?.icon || null;
   return {
     customName,
     channelName,
     guildName,
+    guildIcon: guildId && guildIconHash ? `https://cdn.discordapp.com/icons/${guildId}/${guildIconHash}.png?size=64` : null,
     remote,
     displayName: customName || (channelName ? `#${channelName}` : 'Bardo'),
   };
