@@ -1306,6 +1306,17 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   margin-block: 8px;
   height: calc(100% - 16px);
 }
+/* En diálogos el scroll llega al borde: el thumb se aparta de las esquinas
+   redondeadas y del borde, y el fade solo se encoge dentro del padding (p-7),
+   así el contenido nunca queda cortado sin fade al acercarse al final. */
+[data-slot$="dialog-content"] .overlay-scroll-area {
+  --scroll-fade-reveal: calc(var(--spacing) * 7);
+}
+[data-slot$="dialog-content"] .overlay-scroll-area > [data-slot="scroll-area-scrollbar"] {
+  margin-block: 1.25rem;
+  margin-inline-end: 4px;
+  height: calc(100% - 2.5rem);
+}
 .session-toolbar-sticky {
   position: sticky;
   top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);

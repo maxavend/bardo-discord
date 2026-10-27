@@ -106,6 +106,7 @@ export function Home({docs, draft, onNewDoc, onOpenDoc}) {
         {draft && <section className="library-section continue-section" aria-labelledby="home-draft">
           <h2 id="home-draft" className="section-title">Borrador sin terminar</h2>
           <a className="continue-row" href="#new">
+            <span className="continue-accent" aria-hidden="true" />
             <span className="continue-copy"><strong>{draft.title || 'Documento sin título'}</strong><span>Solo tú lo ves, en este dispositivo</span></span>
             <ChevronRight width={18} height={18} aria-hidden="true" />
           </a>

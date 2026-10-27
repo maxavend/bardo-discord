@@ -1,6 +1,7 @@
 import React, {lazy, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
-import {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
+import {applyDiscordTheme, collectDiscordThemeDiagnostics} from './discord-theme.js';
+import {syncThemePreference} from './theme-sync.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
 import '@fontsource-variable/inter/opsz.css';
@@ -22,9 +23,9 @@ const BOOT_PERSONALITY_MESSAGES = [
 const appModulePromise = import('./App.jsx');
 const App = lazy(() => appModulePromise);
 
-// ── Detect Discord theme before React mounts ─────────────────────────────────
+// ── Theme before React mounts: the one discord-theme.js already applied ──────
 function resolveBootTheme() {
-  return resolveDiscordTheme() || 'light';
+  return document.documentElement.dataset.bardoTheme || 'dark';
 }
 
 // ── Boot loading screen — HeroUI themed and reassuring ───────────────────────
@@ -162,6 +163,8 @@ function ActivityRoot() {
       }
 
       if (auth.embedded) {
+        // El tema guardado en la cuenta llega junto con el resto del arranque.
+        const themeSync = syncThemePreference();
         setStage('docs_hydrated');
         logBreadcrumb('docs_hydrated');
         await prepareBardoProduction({
@@ -173,6 +176,7 @@ function ActivityRoot() {
           initialDocsPayload: auth.initialDocsPayload,
         });
 
+        await Promise.race([themeSync, new Promise(resolve => window.setTimeout(resolve, 1500))]);
         setStage('document_resolved');
         logBreadcrumb('document_resolved');
         setStage('render_ready');

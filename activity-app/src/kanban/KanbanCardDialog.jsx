@@ -410,9 +410,9 @@ export function KanbanCardDialog({
         scrollable={false}
         className={KANBAN_DIALOG_CLASS}
       >
-        <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
+        <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-7 pt-4">
         <DialogHeader className="gap-2">
-          <div className="flex items-center gap-2 pr-8">
+          <div className="flex items-center gap-2 pr-1">
             <span className="text-xs font-medium tabular-nums text-muted-foreground">#{card.number}</span>
             <DropdownMenu>
               <DropdownMenuTrigger

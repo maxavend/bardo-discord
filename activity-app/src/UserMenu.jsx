@@ -87,7 +87,7 @@ function SettingsItem({Icon, title, description, onSelect}) {
 export function UserMenu({onOpenSettings}) {
   const profile = useProfile();
   const {channelName} = useWorkspace();
-  const {theme, setTheme} = useTheme('dark');
+  const {theme, setTheme} = useTheme();
   const current = THEMES.find(item => item.value === theme) || THEMES[1];
 
   return (
