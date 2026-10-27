@@ -1,5 +1,17 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+## Hub de vidrio líquido, header móvil y avatares — 27 de octubre de 2026
+
+- Código: `b9c6a0c` (rama `claude/bardo-mock-data-1ef960`; aún no está en `main`). Worker activo al 100%: `ba7c7b29-8ffa-4e91-9574-dc05db7b1ec0` (`wrangler deploy --keep-vars` local). Versión anterior: `63b02ad7-ed14-4411-b829-09b06f41ad1f`, con el mismo build que `main` (`e6178df`).
+- Pestañas del header y barra móvil con lente de vidrio deslizable; la barra móvil es vidrio líquido. La refracción solo se ve en Chromium (Discord de escritorio); en el resto, vidrio liso.
+- Header móvil de 64 px: botones, avatar y símbolo de 32 px con áreas táctiles de 44 px; submenús en línea en pantallas angostas; toolbar del editor que no tapa el título con el teclado abierto; filas de grabación apiladas; avatares unificados.
+- Solo frontend: sin cambios del Worker, migraciones, secretos ni comandos. Validación: check, 478 unitarias, revisión en 375 px y escritorio. No se corrieron los E2E. Producción: `/` 200, HTML y assets coinciden con el commit; `/api/docs`, `/api/planner/sessions` y `/api/settings` 401 sin sesión. Sin prueba autenticada dentro de Discord.
+- Importante: el próximo push a `main` redespliega desde `main`; mergear esta rama antes para no revertir estos cambios.
+
+```sh
+npx wrangler rollback 63b02ad7-ed14-4411-b829-09b06f41ad1f --message 'Volver a e6178df (#35)' --yes
+```
+
 
 
 ## Reuniones: agenda compartible, facilitadores y revisión de acuerdos — 22 de octubre de 2026
