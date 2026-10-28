@@ -47,8 +47,9 @@ test('library spacing and row geometry stay aligned', async ({page}) => {
   // El menú de cada fila es un botón táctil dentro de su tarjeta (no un <select> nativo).
   await expect(page.locator('.native-menu select')).toHaveCount(0);
   geometry.rows.forEach(({left, right, top, bottom, kebab}) => {
-    expect(kebab.w).toBeGreaterThanOrEqual(32);
-    expect(kebab.h).toBeGreaterThanOrEqual(32);
+    // Redondeado: el navegador puede medir 31,99997 px por subpíxel.
+    expect(Math.round(kebab.w)).toBeGreaterThanOrEqual(32);
+    expect(Math.round(kebab.h)).toBeGreaterThanOrEqual(32);
     expect(kebab.left).toBeGreaterThanOrEqual(left);
     expect(kebab.right).toBeLessThanOrEqual(right);
     expect(kebab.top).toBeGreaterThanOrEqual(top);

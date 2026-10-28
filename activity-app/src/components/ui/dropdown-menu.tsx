@@ -133,8 +133,36 @@ function DropdownMenuItem({
   )
 }
 
-function DropdownMenuSub(props: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
-  return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />
+// En pantallas angostas el menú ocupa casi todo el ancho y un submenú lateral
+// se saldría de la pantalla: ahí cada submenú se despliega dentro del mismo
+// menú, con su disparador como título del grupo.
+const NARROW_QUERY = "(max-width: 767px)"
+
+function subscribeNarrow(onChange: () => void) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {}
+  const query = window.matchMedia(NARROW_QUERY)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+function isNarrowScreen() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(NARROW_QUERY).matches
+}
+
+const SubInlineContext = React.createContext(false)
+
+function DropdownMenuSub({ children, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
+  const inline = React.useSyncExternalStore(subscribeNarrow, isNarrowScreen, () => false)
+  if (inline) {
+    return (
+      <SubInlineContext.Provider value={true}>
+        <DropdownMenuPrimitive.Group data-slot="dropdown-menu-sub" data-inline="">
+          {children}
+        </DropdownMenuPrimitive.Group>
+      </SubInlineContext.Provider>
+    )
+  }
+  return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props}>{children}</DropdownMenuPrimitive.Sub>
 }
 
 function DropdownMenuSubTrigger({
@@ -145,6 +173,21 @@ function DropdownMenuSubTrigger({
 }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean
 }) {
+  const inline = React.useContext(SubInlineContext)
+  if (inline) {
+    return (
+      <DropdownMenuPrimitive.Label
+        data-slot="dropdown-menu-sub-trigger"
+        className={cn(
+          "flex items-center gap-2 px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground",
+          "[&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+          inset && "pl-9"
+        )}
+      >
+        {children}
+      </DropdownMenuPrimitive.Label>
+    )
+  }
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
@@ -170,6 +213,8 @@ function DropdownMenuSubContent({
   children,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>) {
+  // En línea, las opciones van directo en el menú padre.
+  if (React.useContext(SubInlineContext)) return <>{children}</>
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.SubContent

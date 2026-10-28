@@ -70,6 +70,7 @@ import {
   TrashBin,
   TriangleExclamation,
   Xmark,
+  Link,
   PaperPlane,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
@@ -77,6 +78,7 @@ import {htmlToMarkdown, markdownToHtml} from './editor/bardo-markdown.js';
 import {DOCS_KEYS, scopedDocsKey} from './docs-storage.js';
 import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSnapshot} from './docs-text.js';
 import {copyTextToClipboard} from './docs-clipboard.js';
+import {shareBardoLinkWithFeedback} from './share-link.js';
 import {openExternalUrl} from './discord-links.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
 import {AGENDA_DOC_ORIGIN, buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
@@ -455,6 +457,12 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context =
               <DropdownMenuItem onClick={() => onAction('publish', doc)}>
                 <PaperPlane width={15} height={15} className="text-muted-foreground" />
                 <span>Compartir en el canal</span>
+              </DropdownMenuItem>
+            )}
+            {!doc.archived && (
+              <DropdownMenuItem onClick={() => onAction('share-link', doc)}>
+                <Link width={15} height={15} className="text-muted-foreground" />
+                <span>Compartir enlace</span>
               </DropdownMenuItem>
             )}
 
@@ -1134,17 +1142,26 @@ function NewDocChoiceDialog({isOpen, draft, onContinue, onStartNew, onCancel}) {
   );
 }
 
+// Enlace sin acceso: se nombra qué era, nunca dónde está.
+const DENIED_LAUNCH_NOUNS = {doc: 'este documento', meeting: 'esta reunión', task: 'esta tarea'};
+
 function LaunchNoticeDialog({notice, onRestore, onClose}) {
   const archived = notice?.kind === 'archived';
+  const denied = notice?.kind === 'denied';
+  const title = denied
+    ? `No tienes acceso a ${DENIED_LAUNCH_NOUNS[notice.target] || 'este enlace'}`
+    : archived ? 'Este documento fue archivado' : 'Este documento ya no existe';
   return (
     <AlertDialog open={Boolean(notice)} onOpenChange={open => !open && onClose()}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>{archived ? 'Este documento fue archivado' : 'Este documento ya no existe'}</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>
-            {archived
-              ? `«${notice?.title || 'Sin título'}» está en Archivados.`
-              : 'Puede que lo hayan eliminado o que no esté compartido en este canal.'}
+            {denied
+              ? 'Bardo solo te muestra lo que puedes ver en Discord. Pídele a quien te envió el enlace que te dé acceso.'
+              : archived
+                ? `«${notice?.title || 'Sin título'}» está en Archivados.`
+                : 'Puede que lo hayan eliminado o que no esté compartido en este canal.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1399,6 +1416,14 @@ function App() {
     });
     return () => { cancelled = true; };
   }, [commitStore]);
+
+  // Enlace compartido a algo que esta persona no puede ver en Discord.
+  useEffect(() => {
+    const deniedKind = window.__BARDO_LAUNCH_DENIED__;
+    if (!deniedKind) return;
+    window.__BARDO_LAUNCH_DENIED__ = null;
+    setLaunchNotice({kind: 'denied', target: deniedKind});
+  }, []);
 
   // Tarjeta antigua de /doc-new con título y un borrador sin terminar: preguntar.
   useEffect(() => {
@@ -2090,6 +2115,7 @@ function App() {
       if (!window.__bardoPublishDocument) showToast('Para compartir en el canal, abre Bardo en Discord.');
       else setModal({type: 'share', docId: doc.id});
     }
+    if (action === 'share-link') await shareBardoLinkWithFeedback('doc', {id: doc.id, title: doc.title});
     if (action === 'text-preview') setModal({type: 'text-preview', docId: doc.id});
     if (action === 'markdown') await exportDoc(doc, 'md');
     if (action === 'pdf' || action === 'docx') await exportDoc(doc, action);
