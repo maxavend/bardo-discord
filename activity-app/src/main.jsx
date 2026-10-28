@@ -24,6 +24,15 @@ const BOOT_PERSONALITY_MESSAGES = [
 const appModulePromise = import('./App.jsx');
 const App = lazy(() => appModulePromise);
 
+// Si el enlace abre una vista pesada (editor, Reuniones, Tareas), su módulo
+// se descarga junto con App y no después: sin cascada al entrar directo.
+const ROUTE_MODULES = [
+  [/^#(new|edit-)/, () => import('./editor/BardoEditor.jsx')],
+  [/^#planner/, () => import('./planner/PlannerModule.jsx')],
+  [/^#kanban/, () => import('./kanban/KanbanModule.jsx')],
+];
+ROUTE_MODULES.find(([pattern]) => pattern.test(location.hash))?.[1]().catch(() => {});
+
 // ── Theme before React mounts: the one discord-theme.js already applied ──────
 function resolveBootTheme() {
   return document.documentElement.dataset.bardoTheme || 'dark';

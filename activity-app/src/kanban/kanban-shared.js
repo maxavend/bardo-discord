@@ -134,3 +134,19 @@ export function isOpenCard(card, doneColumnId) {
 export function isOverdue(card, todayIso) {
   return Boolean(card.dueDate) && card.dueDate < todayIso;
 }
+
+function addDays(iso, days) {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+export function formatDueDate(dueDate, today) {
+  if (!dueDate) return '';
+  if (dueDate === today) return 'Hoy';
+  if (dueDate === addDays(today, 1)) return 'Mañana';
+  if (dueDate === addDays(today, -1)) return 'Ayer';
+  const [year, month, day] = dueDate.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const sameYear = year === Number(today.slice(0, 4));
+  return new Intl.DateTimeFormat('es-CL', {day: 'numeric', month: 'short', ...(sameYear ? {} : {year: 'numeric'})}).format(date);
+}
