@@ -17,15 +17,26 @@ Personas, empresa y cifras son inventadas.
 ## Estructura
 
 ```
-capturas/
-  <NN-flujo>/
-    <NN-pantalla>/
-      escritorio-oscuro.png   1440×900 @2x → 2880×1800
-      escritorio-claro.png
-      movil-oscuro.png        390×844 @3x → 1170×2532
-      movil-claro.png
-  reporte.json                resultado de cada recorrido (capturas, errores de consola)
+capturas/                 las 12 vistas esenciales, cada una en 4 variantes
+  01-inicio/ … 12-tiempo-excedido/
+    escritorio-oscuro.png   1440×900 @2x → 2880×1800
+    escritorio-claro.png
+    movil-oscuro.png        390×844 @3x → 1170×2532
+    movil-claro.png
+    *-pieza.png             en las vistas con diálogo: el diálogo solo, entero y con fondo transparente
+slides/                   12 slides 16:9 (3840×2160) y bardo-caso-de-estudio.pdf
+covers/                   6 covers: 16:9 (×2), 1:1 (×2), 4:3 y 4:5, a 2×
+hoja-de-contacto.png      todo lo anterior en grilla, numerado
+_archivo/<fecha>/         material anterior, archivado sin borrar
 ```
+
+Vistas: Inicio, biblioteca, lector, editor, agenda, reunión en vivo, resumen, acuerdos a tareas, tablero y detalle de tarea.
+
+Slides: una vitrina de la interfaz (portada, lector, editor, reunión en vivo, reunión en curso a pantalla completa, acuerdos a tareas, tablero, detalle de tarea, móvil, claro y oscuro, marca y cierre). Usan la marca oficial (`brand/logo/kit`): fondos planos que alternan lavanda y tinta, con la app en el tema contrario para que cada pantalla contraste con su fondo.
+
+### Recorridos de captura
+
+`capture.mjs` recorre seis flujos completos (unas 50 pantallas por variante). `material.mjs` elige las 10 esenciales.
 
 | Flujo | Qué muestra |
 | --- | --- |
@@ -42,8 +53,11 @@ Algunas pantallas existen solo en un formato (por ejemplo, arrastrar una tarea e
 
 ```bash
 cd activity-app && node scripts/assemble-source.mjs && npx vite build --outDir /tmp/bardo-dist --emptyOutDir
-cd .. && node portfolio/capture.mjs --dist=/tmp/bardo-dist
+cd .. && node portfolio/capture.mjs --dist=/tmp/bardo-dist --out=/tmp/bardo-capturas
+node portfolio/material.mjs --from=/tmp/bardo-capturas
 ```
+
+`material.mjs` copia las 10 vistas a `capturas/` y genera slides, PDF, covers y hoja de contacto. Sin `--from` solo regenera las piezas a partir de `capturas/`. Antes de guardar cada pieza revisa que no haya texto cortado o fuera de su columna, bloques encimados, imágenes recortadas o deformadas, ni fuentes sin cargar; si encuentra algo, lo informa y termina con error.
 
 Opciones: `--only=03,04` (flujos), `--devices=desktop,mobile`, `--themes=dark,light`, `--preview` (escala 1 para revisar rápido), `--verbose`.
 

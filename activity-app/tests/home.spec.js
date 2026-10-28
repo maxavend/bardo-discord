@@ -7,11 +7,11 @@ test('Inicio conecta módulos, documentos recientes y borrador sin perder el his
   await seedDocs(page, [doc], {hash: '#home'});
   await page.evaluate(() => localStorage.setItem('bardo.docs.heroui.draft.v1', JSON.stringify({title: 'Pendiente de publicar', body: '<p>Borrador conservado</p>'})));
   await page.reload();
-  await expect(page.getByRole('heading', {name: 'Lo último en tu espacio'})).toBeVisible();
+  await expect(page.locator('#home-title')).toBeVisible();
   await page.getByRole('link', {name: /Decisiones del equipo/}).click();
   await expect(page.locator('h1.doc-title')).toHaveText(doc.title);
   await page.goBack();
-  await expect(page.getByRole('heading', {name: 'Lo último en tu espacio'})).toBeVisible();
+  await expect(page.locator('#home-title')).toBeVisible();
   await page.getByRole('link', {name: /Pendiente de publicar/}).click();
   await expect(page.getByLabel('Título', {exact: true})).toHaveValue('Pendiente de publicar');
   await expect(page.locator('.editable-body')).toContainText('Borrador conservado');
@@ -20,7 +20,7 @@ test('Inicio conecta módulos, documentos recientes y borrador sin perder el his
   await page.getByRole('link', {name: 'Abrir Reuniones', exact: true}).click();
   await expect(page.getByText('Todavía no hay reuniones')).toBeVisible();
   await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Inicio'}).click();
-  await expect(page.getByRole('heading', {name: 'Lo último en tu espacio'})).toBeVisible();
+  await expect(page.locator('#home-title')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -29,13 +29,13 @@ test('Inicio muestra la reunión creada y abre su agenda correcta', async ({page
   await page.getByRole('link', {name: 'Nueva reunión', exact: true}).click();
   await page.getByPlaceholder('Nombre de la reunión').fill('Revisión desde Inicio');
   await page.getByRole('button', {name: 'Listo', exact: true}).click();
-  await page.getByRole('button', {name: 'Volver', exact: true}).click();
+  await page.getByRole('button', {name: 'Volver a Reuniones'}).click();
   await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Inicio'}).click();
   await page.getByRole('link', {name: /Revisión desde Inicio/}).click();
   await expect(page.locator('.planner-module-root')).toContainText('Revisión desde Inicio');
   await expect(page).toHaveURL(/#planner-agenda$/);
   await page.goBack();
-  await expect(page.getByRole('heading', {name: 'Lo último en tu espacio'})).toBeVisible();
+  await expect(page.locator('#home-title')).toBeVisible();
   await page.getByRole('link', {name: /Revisión desde Inicio/}).click();
   await page.reload();
   await expect(page.locator('.planner-module-root')).toContainText('Revisión desde Inicio');
@@ -57,7 +57,7 @@ test('Inicio vacío, errores parciales y títulos largos mantienen navegación, 
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   expect(await contrastAgainstBackground(page.locator('.home-context'))).toBeGreaterThanOrEqual(4.5);
   await page.screenshot({path: `/tmp/bardo-home-${test.info().project.name}.png`, fullPage: true, animations: 'disabled'});
-  await page.getByRole('link', {name: 'Abrir Documentos', exact: true}).focus();
+  await page.getByRole('link', {name: 'Documentos del canal', exact: true}).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('textbox', {name: 'Buscar documentos'})).toBeVisible();
 });
@@ -76,11 +76,11 @@ test('Inicio respeta reduced motion y el zoom por aumento de texto', async ({pag
 test('una URL dañada recupera Inicio sin bloquear la aplicación', async ({page}) => {
   const errors = collectRuntimeErrors(page);
   await page.goto('/?theme=dark#%E0%A4%A');
-  await expect(page.getByRole('heading', {name: 'Lo último en tu espacio'})).toBeVisible();
+  await expect(page.locator('#home-title')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
-test('Inicio usa títulos naturales y acciones alineadas sin avisos de copias antiguas', async ({page}) => {
+test('Inicio usa títulos naturales sin avisos de copias antiguas', async ({page}) => {
   await page.addInitScript(() => {window.__BARDO_UNOWNED_LOCAL_DATA__ = true;});
   await seedDocs(page, [makeDoc({title: 'Documento del canal'})], {hash: '#home'});
   await page.evaluate(async () => {
@@ -90,11 +90,44 @@ test('Inicio usa títulos naturales y acciones alineadas sin avisos de copias an
   await expect(page.getByText('Escribe, importa y comparte el trabajo de tu canal.')).toHaveCount(0);
   await expect(page.getByText('Prepara la agenda, reúne al equipo y conserva los acuerdos.')).toHaveCount(0);
   const headings = page.locator('.home-section-heading');
+  await expect(headings).toHaveCount(3);
   for (const heading of await headings.all()) {
     await expect(heading.locator('h2')).toHaveCSS('text-transform', 'none');
-    const [title, action] = await Promise.all([heading.locator('h2').boundingBox(), heading.locator('button, a').boundingBox()]);
-    expect(Math.abs(title.y + title.height / 2 - action.y - action.height / 2)).toBeLessThanOrEqual(1);
   }
   await expect(page.getByText('Hay copias antiguas guardadas en este dispositivo')).toHaveCount(0);
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+});
+
+test('Inicio abre los documentos personales y del canal en su espacio', async ({page}) => {
+  const channel = makeDoc({title: 'Plan del canal'});
+  const personal = makeDoc({title: 'Mis notas privadas', space: 'personal', role: 'owner'});
+  await seedDocs(page, [channel, personal], {hash: '#home'});
+  const recent = page.getByRole('region', {name: 'Documentos recientes'});
+  await expect(recent.getByRole('link', {name: /Plan del canal/})).toBeVisible();
+  await expect(recent.getByRole('link', {name: /Mis notas privadas/})).toContainText('Solo tú');
+  await recent.getByRole('link', {name: /^Personal/}).click();
+  await expect(page).toHaveURL(/#docs-personal$/);
+  await expect(page.locator('.doc-row').filter({hasText: personal.title})).toBeVisible();
+  await expect(page.locator('.doc-row').filter({hasText: channel.title})).toHaveCount(0);
+  await page.getByRole('navigation', {name: 'Espacio de documentos'}).getByRole('link', {name: /Este canal/}).click();
+  await expect(page.locator('.doc-row').filter({hasText: channel.title})).toBeVisible();
+  await expect(page.locator('.doc-row').filter({hasText: personal.title})).toHaveCount(0);
+});
+
+test('el alta rápida de Inicio se consume una vez y se puede pedir de nuevo', async ({page}) => {
+  await seedDocs(page, [], {hash: '#home'});
+  const navigation = page.getByRole('navigation', {name: 'Módulos de Bardo'});
+  await page.getByRole('button', {name: 'Nueva tarea', exact: true}).click();
+  const input = page.getByPlaceholder('¿Qué hay que hacer?');
+  await expect(input).toBeFocused();
+  await input.fill('Tarea creada desde Inicio');
+  await input.press('Enter');
+  await input.press('Escape');
+  await navigation.getByRole('link', {name: 'Inicio', exact: true}).click();
+  await navigation.getByRole('link', {name: 'Tareas', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'Tareas', level: 1})).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await navigation.getByRole('link', {name: 'Inicio', exact: true}).click();
+  await page.getByRole('button', {name: 'Nueva tarea', exact: true}).click();
+  await expect(input).toBeFocused();
 });

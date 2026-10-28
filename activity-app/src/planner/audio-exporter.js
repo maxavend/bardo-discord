@@ -1,4 +1,3 @@
-import JSZip from 'jszip';
 import { createRecordingStorage } from './recording-storage.js';
 
 /**
@@ -301,6 +300,8 @@ export async function exportBlockRecordingsAsZip(blockTitle, recordings, options
   if (!recordings || recordings.length === 0) throw new RecordingUnavailableError(null, 'Este bloque no tiene grabaciones.');
   const {available, missing} = await collectRecordingBlobs(recordings, options);
   if (available.length === 0) throw new RecordingUnavailableError(null, 'El audio de este bloque no está disponible en este dispositivo.');
+  // JSZip solo se descarga al exportar un ZIP, no al abrir Bardo.
+  const {default: JSZip} = await import('jszip');
   const zip = new JSZip();
   const cleanBlockTitle = sanitizeFileName(blockTitle, 'Bloque');
   const folder = zip.folder(cleanBlockTitle);

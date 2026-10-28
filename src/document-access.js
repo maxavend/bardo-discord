@@ -1,15 +1,38 @@
-import {listDocumentChannelAccess} from './db.js';
+import {listDocumentChannelAccess, loadPersonalDocument} from './db.js';
 import {createDiscordPermissionChecker} from './discord-permissions.js';
 
-export async function sessionCanAccessDocument(env, session, documentId) {
-  if (!env?.DB || !session?.guildId || !session?.userId || !documentId) return false;
-  if (!session.channelId) return false;
+/**
+ * Qué puede hacer la sesión con un documento:
+ * - 'channel': está compartido en el canal de la sesión y la persona ve el canal.
+ * - 'owner': es un documento personal suyo.
+ * - 'editor' / 'viewer': documento personal ajeno con el enlace activo.
+ * - null: no puede abrirlo.
+ * Un documento personal nunca se abre por canal, aunque alguien comparta su id.
+ */
+export async function documentRoleForSession(env, session, documentId) {
+  if (!env?.DB || !session?.guildId || !session?.userId || !documentId) return null;
 
+  const personal = await loadPersonalDocument(env.DB, documentId);
+  if (personal) {
+    if (personal.ownerId === String(session.userId)) return 'owner';
+    if (personal.linkAccess === 'edit') return 'editor';
+    if (personal.linkAccess === 'read') return 'viewer';
+    return null;
+  }
+
+  if (!session.channelId) return null;
   const channelIds = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
-  if (!channelIds.includes(session.channelId)) return false;
+  if (!channelIds.includes(session.channelId)) return null;
 
   const checker = createDiscordPermissionChecker(env, session.guildId, session.userId);
-  return checker.canViewChannel(session.channelId);
+  return (await checker.canViewChannel(session.channelId)) ? 'channel' : null;
+}
+
+/** Puede cambiar el contenido (todos menos quien solo lee). */
+export const roleCanWrite = role => role === 'channel' || role === 'owner' || role === 'editor';
+
+export async function sessionCanAccessDocument(env, session, documentId) {
+  return Boolean(await documentRoleForSession(env, session, documentId));
 }
 
 export async function filterDocumentsBySessionAccess(env, session, documents) {

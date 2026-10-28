@@ -53,7 +53,8 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('@discord/embedded-app-sdk')) return 'discord-sdk';
           if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';
-          if (id.includes('@radix-ui') || id.includes('@gravity-ui') || id.includes('lucide-react')) return 'ui-vendor';
+          // Las librerías de UI (Radix, Gravity, Lucide) no van en un chunk propio:
+          // así cada vista carga solo las piezas que usa y el editor no las arrastra al inicio.
           return undefined;
         },
       },

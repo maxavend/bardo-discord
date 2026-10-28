@@ -4,6 +4,12 @@
  * in flow so the document keeps its vertical rhythm and does not jump.
  */
 
+/* With the keyboard open, iOS pans the visual viewport over the layout one;
+   the sticky header would stay above the screen. It follows the visible area. */
+html[data-editor-keyboard="open"] .app-host-header {
+  transform: translateY(var(--bardo-visual-viewport-top, 0px));
+}
+
 html[data-editor-keyboard="open"] .editing-route .editor-toolbar-sticky {
   position: relative;
   top: auto;
@@ -14,7 +20,7 @@ html[data-editor-keyboard="open"] .editing-route .editor-toolbar-sticky {
 html[data-editor-keyboard="open"] .editing-route .editor-toolbar-container {
   position: fixed;
   top: max(
-    calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + var(--bardo-toolbar-gap)),
+    calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + 8px),
     var(--bardo-toolbar-slot-top, 0px)
   );
   left: calc(50% + var(--bardo-visual-viewport-left));

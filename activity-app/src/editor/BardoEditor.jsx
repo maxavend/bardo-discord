@@ -111,6 +111,8 @@ export function BardoEditor({
   readOnly = false,
   readOnlyMessage = '',
   remoteSync = false,
+  // Documento del espacio personal (o que se creará ahí): cambia «volver» y la etiqueta.
+  personal = false,
   onBack,
   onFinish,
   onAutosave,
@@ -293,7 +295,7 @@ export function BardoEditor({
   const saveStateTitle = localSaveFailed
     ? 'No pudimos guardar en este dispositivo. Mantén esta página abierta y vuelve a pulsar Listo.'
     : isNew
-    ? 'Solo tú lo ves hasta que pulses Listo.'
+    ? (personal ? 'Al pulsar Listo se guarda en tu espacio personal. Solo tú lo ves.' : 'Solo tú lo ves hasta que pulses Listo.')
     : (!isDirty && remoteSync && syncState?.message) || SYNC_HINTS[syncKey] || undefined;
 
   const leaveEditor = useCallback((callback) => {
@@ -420,7 +422,7 @@ export function BardoEditor({
 
   return (
     <section className={`doc-route route-active editing-route ${isExiting ? 'editor-transition-is-exiting' : ''}`}>
-      <header className="doc-topbar glass-header app-host-header">
+      <header className="doc-topbar app-host-header">
         <div className="topbar-left flex items-center gap-2">
           <Button
             variant="ghost"
@@ -431,10 +433,10 @@ export function BardoEditor({
               leaveEditor(onBack);
             }}
             className="back-button"
-            aria-label="Volver a Documentos"
+            aria-label={personal ? 'Volver a Personal' : 'Volver a Documentos'}
           >
             <ChevronLeft width={16} height={16} aria-hidden="true" />
-            <span className="header-label">Documentos</span>
+            <span className="header-label">{personal ? 'Personal' : 'Documentos'}</span>
           </Button>
           <Badge
             key={saveState}
@@ -478,7 +480,7 @@ export function BardoEditor({
             <header className="doc-intro">
               <div className="doc-meta flex items-center gap-2 flex-wrap">
                 <Badge variant="secondary" className="text-xs">
-                  {isNew ? 'Borrador privado' : `Creado por ${createdActorName(doc)}`}
+                  {isNew ? (personal ? 'Documento personal' : 'Borrador privado') : `Creado por ${createdActorName(doc)}`}
                 </Badge>
                 {!isNew && (
                   <span className="text-xs text-muted-foreground">

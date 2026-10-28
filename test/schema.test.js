@@ -113,6 +113,15 @@ test('cada export de db.js ejecuta su SQL contra el esquema final sin errores de
     adoptLegacyDocumentsForGuild: () => db.adoptLegacyDocumentsForGuild(d1, 'g1'),
     hasAnyDocumentGuildAccess: () => db.hasAnyDocumentGuildAccess(d1),
     documentHasGuildAccess: () => db.documentHasGuildAccess(d1, 'd1', 'g1'),
+    insertPersonalDocumentStatement: () => db.insertPersonalDocumentStatement(d1, 'd1', 'u1').run(),
+    loadPersonalDocument: () => db.loadPersonalDocument(d1, 'd1'),
+    listPersonalDocuments: async () => {
+      await db.listPersonalDocuments(d1, 'u1');
+      await db.listPersonalDocuments(d1, 'u1', {archived: true, summary: true});
+    },
+    setPersonalDocumentLinkAccess: () => db.setPersonalDocumentLinkAccess(d1, 'd1', 'u1', 'read'),
+    recordPersonalDocumentVisit: () => db.recordPersonalDocumentVisit(d1, 'd1', 'u2'),
+    movePersonalDocumentToChannel: () => db.movePersonalDocumentToChannel(d1, 'd1', 'u1', 'g1', 'c1'),
     saveDocsLaunchIntent: () => db.saveDocsLaunchIntent(d1, 'u1', 'g1', 'd1', 'c1'),
     loadRecentDocsLaunchIntent: () => db.loadRecentDocsLaunchIntent(d1, 'u1', 'g1'),
     deleteDocsLaunchIntent: () => db.deleteDocsLaunchIntent(d1, 'u1', 'g1', 'target:planner'),

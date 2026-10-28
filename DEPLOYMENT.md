@@ -1,5 +1,19 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+## Navbar «renglón», teclado en iOS, sin zoom y tema por cuenta — 28 de octubre de 2026
+
+- Código: `9a9534c` (`main`, con #32, #37 y #34). Worker activo al 100%: `e7ab2a39-ff0c-4c2f-a36a-18772b0840aa` (deploy de GitHub, run 40754177545). Versión anterior: `24b78ebd-c81b-4c85-b694-20441c983716` (compartir enlace, 27 de octubre). Se canceló el deploy pendiente de `889e7ae` (#36): ya iba incluido en este.
+- Migración remota aplicada: `0017_user_theme` (aditiva: `user_settings.theme`). Tema oscuro por defecto y la elección manual guardada en la cuenta (`GET/PATCH /api/settings/personal`).
+- Header: pestañas centradas y fijas sobre el renglón; el punto se estira en trazo al cambiar de módulo (sin lente de vidrio en escritorio). El símbolo de Bardo y el chip «#canal ▾» reemplazan las iniciales del servidor; en móvil, el título del módulo con su punto. «Beta» pasa de franja a chip. Perfil siempre visible a 768–860 px.
+- Editor en iOS con el teclado abierto: el header sigue al área visible y la barra se queda en su hueco hasta que el scroll la lleva bajo el header. Sin zoom (viewport, pellizco y al enfocar campos). Scroll de los diálogos bajo la X.
+- Validación: CI de `main` (tests y build) y el deploy en verde; E2E locales en laptop, tablet, 390 y 320 px; navbar, teclado y zoom revisados en Safari del simulador de iOS. Producción: `/` 200, HTML y chunks idénticos al build de `9a9534c`, viewport sin zoom en el HTML; `/api/docs`, `/api/planner/sessions`, `/api/settings` y `/api/settings/personal` 401 sin sesión. Sin prueba dentro de la app de Discord: falta confirmar el header, la barra del editor con el teclado y que no haya zoom en el WebView.
+
+Rollback a la versión anterior (la columna `theme` es aditiva y esa versión la ignora):
+
+```sh
+npx wrangler rollback 24b78ebd-c81b-4c85-b694-20441c983716 --message 'Volver a 99478f7 (compartir enlace)' --yes
+```
+
 ## Compartir enlace — 27 de octubre de 2026
 
 - Código: `99478f7` (rama `claude/bardo-mock-data-1ef960`, PR #36; aún no está en `main`). Worker activo al 100%: `24b78ebd-c81b-4c85-b694-20441c983716` (`wrangler deploy --keep-vars` local). Versión anterior: `ba7c7b29-8ffa-4e91-9574-dc05db7b1ec0`.
@@ -21,6 +35,21 @@ npx wrangler rollback ba7c7b29-8ffa-4e91-9574-dc05db7b1ec0 --message 'Volver a b
 
 ```sh
 npx wrangler rollback 63b02ad7-ed14-4411-b829-09b06f41ad1f --message 'Volver a e6178df (#35)' --yes
+```
+
+## Identidad «tinta, papel y punto», perfil en el header y selectores que se deslizan — 26 de octubre de 2026
+
+- Código: `a64b251` (PR #33, en `main`). Worker activo al 100%: `ca7dddd7-e779-4168-b724-208408764895` (deploy de GitHub #36). Incluye #30 y #31, que no habían llegado a producción; su deploy pendiente (#30) se canceló porque habría publicado una versión anterior.
+- Identidad: tokens de papel y tinta con una gota de violeta, noche en vez de negro puro, `--punto` para lo que concluye. Títulos en Lexend (autoalojada), Inter con tamaño óptico. Carga con el wordmark dibujado y la onda animada (reemplaza a la mascota). Reunión en vivo: punto para el tema en curso y lo cerrado, renglón de tinta para lo conversado.
+- Header: ícono del servidor y `#canal`; el avatar abre un menú con nombre, rol, Ajustes por alcance y tema (reemplaza los botones sueltos de Ajustes y tema).
+- Selectores de una opción con indicador que se desliza; la lista entra con un fundido al cambiar de pestaña. Respeta movimiento reducido.
+- Sin migraciones ni cambios en el Worker o los comandos. Validación: lint, tipos, `npm run check`, 478 unitarias, 315/316 E2E en 7 viewports (el restante, intermitente, pasa en 5 repeticiones), revisión visual claro/oscuro y escritorio/móvil. Producción: `index.html` idéntico al build de `main`, assets y fuentes 200, APIs protegidas 401 sin sesión.
+- Pendiente en Discord: avatares e ícono del servidor desde el CDN de Discord, rol real en el menú de perfil y carga de fuentes dentro de la Activity.
+
+Rollback a #29 (sin migraciones que deshacer):
+
+```sh
+npx wrangler rollback a091ec8e-283c-4ae6-ac27-72b5bc9be2c2 --message 'Volver a #29 (antes de la nueva identidad)' --yes
 ```
 
 

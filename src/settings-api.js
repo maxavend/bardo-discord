@@ -24,6 +24,7 @@ import {
   saveDetectedGuildTimeZone,
   saveGuildSettings,
   saveUserSettings,
+  USER_THEMES,
 } from './settings-db.js';
 
 const PREFIX = '/api/settings';
@@ -173,6 +174,11 @@ async function routeSettingsApi(request, url, env) {
     return json(await snapshot(env, session));
   }
 
+  // Solo lo personal (el tema al abrir Bardo), sin consultar permisos ni el bot.
+  if (section === 'personal' && request.method === 'GET') {
+    return json({personal: await loadUserSettings(env.DB, session.userId)});
+  }
+
   if (section === 'detected-time-zone') {
     // La primera persona que abre Bardo en un servidor sin zona horaria la define
     // con la de su dispositivo. Nunca pisa una ya elegida.
@@ -189,8 +195,19 @@ async function routeSettingsApi(request, url, env) {
   if (body.error) return body.error;
 
   if (section === 'personal') {
-    if (typeof body.payload.taskDmNotices !== 'boolean') return apiError(422, 'invalid_value', 'Ese valor no es válido.');
-    await saveUserSettings(env.DB, session.userId, {taskDmNotices: body.payload.taskDmNotices});
+    const fields = {};
+    if (has(body.payload, 'taskDmNotices')) {
+      if (typeof body.payload.taskDmNotices !== 'boolean') return apiError(422, 'invalid_value', 'Ese valor no es válido.');
+      fields.taskDmNotices = body.payload.taskDmNotices;
+    }
+    if (has(body.payload, 'theme')) {
+      if (!USER_THEMES.includes(body.payload.theme)) return apiError(422, 'invalid_theme', 'Ese tema no existe.');
+      fields.theme = body.payload.theme;
+    }
+    if (!Object.keys(fields).length) return apiError(422, 'invalid_value', 'Ese valor no es válido.');
+    await saveUserSettings(env.DB, session.userId, fields);
+    // Cambiar solo el tema no necesita el resto de los ajustes (permisos, bot).
+    if (!('taskDmNotices' in fields)) return json({personal: await loadUserSettings(env.DB, session.userId)});
     return json(await snapshot(env, session));
   }
 

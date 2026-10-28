@@ -230,17 +230,66 @@ function useHubLens({active, enabled = true, tabSelector, liftedSize, onNavigate
   };
 }
 
-// Lo que el lente de las pestañas crece al levantarse, a cada lado.
-const TABS_LENS_GROW_X = 10;
-const TABS_LENS_LIFTED_HEIGHT = 44;
-const tabsLensSize = tab => [tab.offsetWidth + TABS_LENS_GROW_X * 2, TABS_LENS_LIFTED_HEIGHT];
+// El punto de la pestaña activa, en px.
+const DOT = 5;
 
-/** Pestañas del header (≥ 768 px). Con el módulo activo, vuelve a su inicio. */
+/**
+ * Al cambiar de módulo, el punto se estira en un renglón hasta la pestaña
+ * nueva y ahí se vuelve a cerrar en punto: primero avanza el borde que va
+ * delante y después lo alcanza el de atrás.
+ */
+function stretchDot(dot, from, to) {
+  const start = from - DOT / 2;
+  const end = to - DOT / 2;
+  const span = Math.abs(to - from) + DOT;
+  const reach = Math.min(start, end);
+  // Estirado es un trazo de 3 px, centrado en la misma línea que el punto.
+  dot.animate([
+    {transform: `translate(${start}px, 0)`, width: `${DOT}px`, height: `${DOT}px`, easing: 'cubic-bezier(0.3, 0, 0.2, 1)'},
+    {transform: `translate(${reach}px, 1px)`, width: `${span}px`, height: '3px', offset: 0.45, easing: 'cubic-bezier(0.5, 0, 0.1, 1)'},
+    {transform: `translate(${end}px, 0)`, width: `${DOT}px`, height: `${DOT}px`},
+  ], {duration: 460});
+}
+
+/**
+ * Pestañas del header (≥ 768 px). Con el módulo activo, vuelve a su inicio.
+ * Sin lente de vidrio: en escritorio no se arrastra entre pestañas; el
+ * movimiento es el del punto de la marca.
+ */
 export function ModuleTabs({active, onNavigate}) {
-  const {navRef, lensHandlers} = useHubLens({active, tabSelector: '.module-hub-tab', liftedSize: tabsLensSize, onNavigate});
+  const navRef = useRef(null);
+  const dotRef = useRef(null);
+  const lastCenter = useRef(null);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return undefined;
+    const place = animate => {
+      const tab = nav.querySelector('.module-hub-tab[aria-current="page"]');
+      if (!tab || !tab.offsetWidth) {
+        delete nav.dataset.ready;
+        lastCenter.current = null;
+        return;
+      }
+      const center = tab.offsetLeft + tab.offsetWidth / 2;
+      nav.style.setProperty('--hub-dot-x', `${center - DOT / 2}px`);
+      nav.dataset.ready = '';
+      const from = lastCenter.current;
+      lastCenter.current = center;
+      if (animate && from !== null && Math.abs(from - center) > 1 && dotRef.current?.animate && !prefersReducedMotion()) {
+        stretchDot(dotRef.current, from, center);
+      }
+    };
+    place(true);
+    // Cambios de ancho (fuentes, ventana): el punto se recoloca sin animar.
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => place(false)) : null;
+    observer?.observe(nav);
+    return () => observer?.disconnect();
+  }, [active]);
+
   return (
-    <nav ref={navRef} aria-label="Módulos de Bardo" className="module-hub-tabs" {...lensHandlers}>
-      <span className="module-hub-tabs-indicator" aria-hidden="true" />
+    <nav ref={navRef} aria-label="Módulos de Bardo" className="module-hub-tabs">
+      <span ref={dotRef} className="module-hub-tabs-indicator" aria-hidden="true" />
       {HUB_MODULES.map(module => (
         <HubLink
           key={module.id}

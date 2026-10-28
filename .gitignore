@@ -23,6 +23,11 @@ activity-app/playwright-report/
 # Portafolio: capturas generadas (se regeneran con portfolio/capture.mjs)
 portfolio/capturas/
 portfolio/.preview/
+portfolio/slides/
+portfolio/covers/
+portfolio/_archivo/
+portfolio/hoja-de-contacto.png
+portfolio/vista-general-slides.png
 
 # Landing (site/): build de Vite.
 site/dist/

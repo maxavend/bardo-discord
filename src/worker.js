@@ -27,7 +27,7 @@ import { handleKanbanApi } from './kanban-api.js';
 import { handleSettingsApi, settingsDefaults } from './settings-api.js';
 import { loadEffectiveSettings } from './settings-db.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
-import { sessionCanAccessDocument } from './document-access.js';
+import { documentRoleForSession, roleCanWrite, sessionCanAccessDocument } from './document-access.js';
 import {
   DISCORD_PERMISSION,
   createDiscordPermissionChecker,
@@ -59,6 +59,7 @@ import {
   insertDocumentStatement,
   listDocumentChannelAccess,
   listDocumentGuildIds,
+  loadPersonalDocument,
   listDocumentsForChannel,
   listPlannerSessionsForChannel,
   loadDocument,
@@ -770,10 +771,15 @@ export async function persistDocumentLaunchContext(db, interaction, documentId, 
     return;
   }
 
-  const guildIds = await listDocumentGuildIds(db, documentId);
+  // Un documento personal no tiene ACL de servidor a propósito: abrir su
+  // enlace nunca lo asigna a un canal (el acceso lo decide su dueño).
+  const personal = await loadPersonalDocument(db, documentId);
+  const guildIds = personal ? [] : await listDocumentGuildIds(db, documentId);
   const statements = [];
 
-  if (!guildIds.length) {
+  if (personal) {
+    // Solo se recuerda el destino del lanzamiento.
+  } else if (!guildIds.length) {
     // Legacy document without any ACL: the guild where its card lives adopts it.
     statements.push(grantDocumentGuildAccessStatement(db, documentId, guildId, invokingUserId));
     if (channelId) {
@@ -886,12 +892,16 @@ function parseDocumentApiPath(pathname) {
  * channel the document is shared with (and that the user can still view).
  * The Activity instance id is no longer required (it was never persisted).
  */
-async function authorizeDocumentRequest(request, env, documentId) {
+async function authorizeDocumentRequest(request, env, documentId, { write = false } = {}) {
   const auth = await requireDocsSession(request, env);
   if (auth.error) return { error: auth.error };
 
-  if (!(await sessionCanAccessDocument(env, auth.session, documentId))) {
+  const role = await documentRoleForSession(env, auth.session, documentId);
+  if (!role) {
     return { error: jsonResponse({ error: 'forbidden', message: 'Este documento no está compartido en este canal de Discord.' }, 403) };
+  }
+  if (write && !roleCanWrite(role)) {
+    return { error: jsonResponse({ error: 'read_only', message: 'Puedes leer este documento, pero no editarlo.' }, 403) };
   }
 
   return { session: auth.session };
@@ -1100,7 +1110,7 @@ async function handleDocumentNormalizeApi(request, documentId, env) {
     return jsonResponse({ error: 'database_unavailable' }, 503);
   }
 
-  const access = await authorizeDocumentRequest(request, env, documentId);
+  const access = await authorizeDocumentRequest(request, env, documentId, { write: true });
   if (access.error) return access.error;
 
   const document = await loadDocument(env.DB, documentId);
@@ -1183,6 +1193,8 @@ export function withFramePolicy(response, env) {
   framed.headers.set('Reporting-Endpoints', `csp="${CSP_REPORT_PATH}"`);
   framed.headers.set('X-Content-Type-Options', 'nosniff');
   framed.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // El HTML se revalida siempre: es lo que apunta a los assets del build nuevo.
+  framed.headers.set('Cache-Control', 'no-cache');
   return framed;
 }
 

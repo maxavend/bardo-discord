@@ -111,6 +111,11 @@ export function serverDocToLocal(item, {archived} = {}) {
     hasSource: Boolean(item.hasSource),
     archived: isArchived,
     archivedAt: item.archivedAt || null,
+    // Espacio y permisos (ver doc-space.js). Sin `space`, el documento es del canal.
+    space: item.space === 'personal' ? 'personal' : 'channel',
+    role: item.role || null,
+    linkAccess: item.linkAccess || null,
+    ownerId: item.ownerId || null,
   };
 }
 
@@ -122,6 +127,8 @@ export function toRemotePayload(doc) {
     title,
     description: String(doc.description || '').trim(),
     markdown: `# ${title}\n\n${body}`.trim(),
+    // Solo cuenta al crear: un documento no cambia de espacio al guardarse.
+    ...(doc.space === 'personal' ? {space: 'personal'} : {}),
   };
 }
 
