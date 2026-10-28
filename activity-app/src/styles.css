@@ -902,24 +902,9 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
   }
 }
 .module-hub-tabs { position: relative; }
-/* Brillo que sigue al dedo mientras el lente está levantado. */
-.module-hub-tabs::before {
-  content: "";
-  position: absolute;
-  inset: calc(50% - 20px) -8px;
-  border-radius: inherit;
-  background: radial-gradient(circle 220px at var(--hub-x, 20%) 50%, color-mix(in oklab, var(--foreground) 9%, transparent), color-mix(in oklab, var(--foreground) 4%, transparent) 60%, transparent);
-  opacity: 0;
-  transition: opacity 160ms ease;
-  pointer-events: none;
-}
-.module-hub-tabs[data-lifted]::before { opacity: 1; transition-duration: 120ms; }
-/* Fondo de la pestaña activa: un lente que se desliza igual que en la barra
-   móvil. Al presionar se levanta (crece, se vuelve vidrio claro y refracta
-   las pestañas que pasa) y al soltar se asienta. */
 /* En reposo es el punto: centrado bajo la pestaña activa y sentado sobre el
-   renglón (el borde de 1 px del header, medio píxel más abajo). Se desliza
-   al cambiar de módulo. */
+   renglón (el borde de 1 px del header, medio píxel más abajo). Al cambiar
+   de módulo se estira en renglón y se vuelve a cerrar (ModuleHub.jsx). */
 .module-hub-tabs-indicator {
   position: absolute;
   top: calc(100% - 2px);
@@ -927,42 +912,14 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
   z-index: 2;
   width: 5px;
   height: 5px;
-  transform: translateX(calc(var(--hub-tab-left, 0px) + var(--hub-tab-width, 0px) / 2 - 2.5px));
-  border: 0;
+  transform: translateX(var(--hub-dot-x, 0px));
   border-radius: 9999px;
   background: var(--punto);
   opacity: 0;
-  transition:
-    transform var(--duration-medium) var(--ease-bounce),
-    width var(--duration-medium) var(--ease-bounce),
-    top 220ms var(--ease-bounce),
-    height 220ms var(--ease-bounce),
-    background-color 140ms ease,
-    box-shadow 140ms ease,
-    opacity 140ms ease;
+  transition: opacity 140ms ease;
   pointer-events: none;
 }
 .module-hub-tabs[data-ready] .module-hub-tabs-indicator { opacity: 1; }
-/* Al presionar, el punto se levanta y se vuelve el lente de vidrio. */
-.module-hub-tabs[data-lifted] .module-hub-tabs-indicator {
-  z-index: 2;
-  top: calc(50% - 22px);
-  height: 44px;
-  width: calc(var(--hub-tab-width, 0px) + 20px);
-  transform: translateX(calc(var(--hub-tab-left, 0px) - 10px));
-  background: color-mix(in oklab, var(--background) 8%, transparent);
-  box-shadow:
-    inset 0 0 0 0.5px color-mix(in oklab, var(--foreground) 16%, transparent),
-    inset 0 1px 1px oklch(1 0 0 / 0.22),
-    inset 0 -1px 1px oklch(1 0 0 / 0.08),
-    0 6px 18px -6px oklch(0 0 0 / 0.45);
-  transition-duration: var(--duration-medium), var(--duration-medium), 220ms, 220ms, 100ms, 100ms;
-}
-.module-hub-tabs[data-refracting] .module-hub-tabs-indicator { backdrop-filter: var(--hub-lens-filter, none); }
-/* Arrastrando, el lente sigue al dedo casi sin retraso. */
-.module-hub-tabs[data-dragging] .module-hub-tabs-indicator { transition-duration: 90ms, var(--duration-medium), 220ms, 220ms, 100ms, 100ms; }
-.module-hub-tabs[data-lifted] .module-hub-tab { color: color-mix(in oklab, var(--foreground) 60%, transparent); }
-.module-hub-tabs[data-lifted] .module-hub-tab[data-hub-target] { color: var(--foreground); }
 
 /* Selectores de una opción (Activos/Archivados, filtros, Ajustes): el fondo
    de la opción activa se desliza con el mismo movimiento que las pestañas del
@@ -1079,8 +1036,12 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
   font-weight: 500;
   white-space: nowrap;
   text-decoration: none;
-  transition: color var(--duration-fast, 150ms) var(--ease-smooth-out, ease), background-color var(--duration-fast, 150ms) var(--ease-smooth-out, ease);
+  transition: color var(--duration-fast, 150ms) var(--ease-smooth-out, ease), background-color var(--duration-fast, 150ms) var(--ease-smooth-out, ease), transform 160ms var(--ease-smooth-out, ease);
+  -webkit-tap-highlight-color: transparent;
 }
+/* Al presionar, la pestaña se hunde un poco: respuesta inmediata, sin vidrio. */
+.module-hub-tab:active { background: color-mix(in oklab, var(--muted) 90%, transparent); transform: scale(0.96); transition-duration: 80ms; }
+@media (prefers-reduced-motion: reduce) { .module-hub-tab:active { transform: none; } }
 @media (hover: hover) { .module-hub-tab:hover { color: var(--foreground); background: color-mix(in oklab, var(--muted) 70%, transparent); } }
 .module-hub-tab[aria-current="page"] { color: var(--foreground); }
 /* Táctil (tablet): la pestaña se ve de 32 px y se toca en 44. */
