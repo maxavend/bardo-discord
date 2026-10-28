@@ -1193,6 +1193,8 @@ export function withFramePolicy(response, env) {
   framed.headers.set('Reporting-Endpoints', `csp="${CSP_REPORT_PATH}"`);
   framed.headers.set('X-Content-Type-Options', 'nosniff');
   framed.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // El HTML se revalida siempre: es lo que apunta a los assets del build nuevo.
+  framed.headers.set('Cache-Control', 'no-cache');
   return framed;
 }
 

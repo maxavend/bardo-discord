@@ -4,7 +4,7 @@ import {Calendar, FileText, ChevronRight, LayoutColumns3, Lock, Persons, Plus} f
 import {loadPlannerEvents, loadPlannerState, loadLiveSessionState, isDefaultEmptySession, isDemoPlannerState, shouldLoadDemoFixture} from './planner/planner-store.js';
 import {currentUserId, ensureKanbanLoaded, useKanbanSnapshot} from './kanban/kanban-runtime.js';
 import {doneColumnId, todayIso} from './kanban/kanban-store.js';
-import {DueChip} from './kanban/kanban-ui.jsx';
+import {DueChip} from './kanban/kanban-due.jsx';
 import {useWorkspace} from './workspace.js';
 import {eventStatusLabel} from './planner/copy-tokens.js';
 import {docSpaceNote, isPersonalDoc, isSharedWithMe} from './doc-space.js';

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
+import { readFile } from 'node:fs/promises';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import {
   CHANNEL,
@@ -558,10 +559,21 @@ test('el HTML de la Activity declara quién puede mostrarla (reporte o bloqueo) 
   const report = await worker.fetch(new Request('http://localhost/?instance_id=i'), { DB: db, ASSETS });
   assert.match(report.headers.get('Content-Security-Policy-Report-Only'), /frame-ancestors 'self' https:\/\/discord\.com https:\/\/\*\.discord\.com https:\/\/\*\.discordsays\.com/);
   assert.equal(report.headers.get('Content-Security-Policy'), null);
+  // El HTML se revalida siempre (apunta a los assets del build nuevo).
+  assert.equal(report.headers.get('Cache-Control'), 'no-cache');
   const enforced = await worker.fetch(new Request('http://localhost/'), { DB: db, ASSETS, CSP_FRAME_MODE: 'enforce' });
   assert.match(enforced.headers.get('Content-Security-Policy'), /frame-ancestors/);
   const posted = await worker.fetch(new Request('http://localhost/api/csp-report', {
     method: 'POST', body: JSON.stringify({ 'csp-report': { 'violated-directive': 'frame-ancestors', 'blocked-uri': 'https://evil.example' } }),
   }), { DB: db });
   assert.equal(posted.status, 204);
+});
+
+test('los assets con hash se cachean un año sin revalidar y el HTML no hereda ese caché', async () => {
+  const rules = (await readFile(new URL('../activity-app/public/_headers', import.meta.url), 'utf8'))
+    .split(/\n(?=\S)/).map(block => block.trim()).filter(block => block && !block.startsWith('#'));
+  const rule = path => rules.find(block => block.split('\n')[0].trim() === path) || '';
+  assert.match(rule('/assets/*'), /Cache-Control: public, max-age=31536000, immutable/);
+  // /* también coincide con /assets/*: si llevara Cache-Control, Cloudflare lo juntaría con el de arriba.
+  assert.doesNotMatch(rule('/*'), /Cache-Control/);
 });

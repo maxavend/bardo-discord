@@ -1,0 +1,1 @@
+var e=`sm:top-[calc(50%+1.75rem)] max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0 max-sm:max-w-full max-sm:rounded-b-none max-sm:duration-200 max-sm:data-open:zoom-in-100 max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:zoom-out-100 max-sm:data-closed:slide-out-to-bottom-10`,t=`-m-6 max-h-[calc(100dvh-6rem)] max-sm:max-h-[88dvh]`;export{t as n,e as t};

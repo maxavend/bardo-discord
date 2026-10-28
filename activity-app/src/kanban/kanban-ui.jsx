@@ -4,6 +4,9 @@ import {cn} from '@/lib/utils';
 import {DISCORD_PALETTES, MemberAvatar, getAllDiscordEntities} from '../planner/PlannerMemberPicker.jsx';
 import {KANBAN_PRIORITY_LABELS} from './kanban-shared.js';
 
+// Vive en kanban-shared.js (sin UI) para que Inicio la use sin cargar Tareas.
+export {formatDueDate} from './kanban-shared.js';
+
 import {SHEET_DIALOG_CLASS, SHEET_DIALOG_SCROLL_CLASS} from '@/components/sheet-dialog.js';
 
 export const KANBAN_DIALOG_CLASS = `kanban-card-dialog sm:max-w-xl ${SHEET_DIALOG_CLASS}`;
@@ -61,47 +64,7 @@ export function PriorityBadge({priority, className}) {
   );
 }
 
-function addDays(iso, days) {
-  const [year, month, day] = iso.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
-
-export function formatDueDate(dueDate, today) {
-  if (!dueDate) return '';
-  if (dueDate === today) return 'Hoy';
-  if (dueDate === addDays(today, 1)) return 'Mañana';
-  if (dueDate === addDays(today, -1)) return 'Ayer';
-  const [year, month, day] = dueDate.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  const sameYear = year === Number(today.slice(0, 4));
-  return new Intl.DateTimeFormat('es-CL', {day: 'numeric', month: 'short', ...(sameYear ? {} : {year: 'numeric'})}).format(date);
-}
-
-export function dueState(card, today, doneId) {
-  if (!card.dueDate || card.columnId === doneId) return 'neutral';
-  if (card.dueDate < today) return 'overdue';
-  if (card.dueDate === today) return 'today';
-  return 'neutral';
-}
-
-export function DueChip({card, today, doneId, className}) {
-  if (!card.dueDate) return null;
-  const state = dueState(card, today, doneId);
-  const label = formatDueDate(card.dueDate, today);
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 text-[11px] font-medium',
-        state === 'overdue' ? 'text-destructive' : state === 'today' ? 'text-foreground' : 'text-muted-foreground',
-        className,
-      )}
-      title={state === 'overdue' ? `Vencida: ${label}` : `Vence: ${label}`}
-    >
-      <span className="sr-only">{state === 'overdue' ? 'Vencida, ' : 'Vence '}</span>
-      {label}
-    </span>
-  );
-}
+export {dueState, DueChip} from './kanban-due.jsx';
 
 export function subtaskProgress(card) {
   const total = card.subtasks?.length || 0;
