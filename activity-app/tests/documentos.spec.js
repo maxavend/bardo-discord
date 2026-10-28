@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {
+  openSubmenu,
   collectRuntimeErrors,
   contrastAgainstBackground,
   expectLibrary,
@@ -26,7 +27,7 @@ async function finishEditing(page) {
 
 async function openTextPreview(page) {
   await page.getByRole('button', {name: 'Más acciones del documento'}).click();
-  await page.getByRole('menuitem', {name: 'Descargar'}).click();
+  await openSubmenu(page, 'Descargar');
   await page.getByRole('menuitem', {name: 'Ver como texto'}).click();
   const dialog = page.getByRole('dialog', {name: 'Texto del documento'});
   await expect(dialog).toBeVisible();
@@ -223,7 +224,7 @@ test('una tarea marcada en el lector sigue marcada tras recargar y se lee bien',
 
   // Igual en tema claro.
   await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
-  await page.getByRole('menuitem', {name: /^Tema/}).click();
+  await openSubmenu(page, /^Tema/);
   await page.getByRole('menuitemradio', {name: 'Claro'}).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('light');
   const lightContrast = await contrastAgainstBackground(reloadedFirst);

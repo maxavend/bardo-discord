@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleDocsApi } from '../src/docs-api.js';
 import { savePlannerSession } from '../src/db.js';
+import * as kdb from '../src/kanban-db.js';
 import {
   CHANNEL,
   GUILD,
@@ -367,4 +368,55 @@ test('archivar y restaurar devuelven el documento con su updatedAt nuevo, válid
     body: { title: 'Tras restaurar', markdown: '# Tras restaurar\n\nhola', baseUpdatedAt: restored.json.document.updatedAt },
   });
   assert.equal(patch.status, 200);
+});
+
+// Enlaces compartidos (diálogo de Discord con custom_id bardo:open:…): quien
+// no puede verlo recibe launchDenied con el tipo, nunca el canal.
+async function launchPayload(env, customId) {
+  const { json } = await call(env, '/api/docs', { headers: { 'x-bardo-custom-id': customId } });
+  return json;
+}
+
+test('GET /api/docs: un enlace a un documento de otro canal del servidor devuelve launchDenied sin el canal', async () => {
+  const { db, env } = await setup();
+  insertDocument(db, { id: 'doc-otro-canal', title: 'Plan secreto', channelIds: ['channel-999'] });
+  const json = await launchPayload(env, 'bardo:open:doc-otro-canal');
+  assert.equal(json.launchDenied, 'doc');
+  assert.equal(json.launchTarget, 'home');
+  assert.equal(json.contextDocumentId, null);
+  assert.ok(!json.documents.some(doc => doc.id === 'doc-otro-canal'));
+  assert.ok(!JSON.stringify(json).includes('channel-999'), 'la respuesta no revela el canal');
+  assert.equal((await launchPayload(env, 'bardo:open:edit:doc-otro-canal')).launchDenied, 'doc');
+});
+
+test('GET /api/docs: enlaces propios, de otro servidor o a algo que no existe no se marcan como denegados', async () => {
+  const { db, env } = await setup();
+  insertDocument(db, { id: 'doc-otro-servidor', guildId: 'guild-999', channelIds: ['channel-x'] });
+  assert.equal((await launchPayload(env, 'bardo:open:doc-1')).launchDenied, null);
+  assert.equal((await launchPayload(env, 'bardo:open:doc-1')).contextDocumentId, 'doc-1');
+  assert.equal((await launchPayload(env, 'bardo:open:doc-otro-servidor')).launchDenied, null);
+  assert.equal((await launchPayload(env, 'bardo:open:no-existe')).launchDenied, null);
+  assert.equal((await launchPayload(env, 'bardo:open:planner-session:no-existe')).launchDenied, null);
+  assert.equal((await launchPayload(env, 'bardo:open:kanban-card:no-existe')).launchDenied, null);
+});
+
+test('GET /api/docs: un enlace a una reunión de otro canal del servidor devuelve launchDenied', async () => {
+  const { db, env } = await setup();
+  await savePlannerSession(db, { id: 'meet-otro', guildId: GUILD, channelId: 'channel-999', title: 'Privada', blocks: [], createdBy: 'user-1', updatedBy: 'user-1' });
+  await savePlannerSession(db, { id: 'meet-aqui', guildId: GUILD, channelId: CHANNEL, title: 'Weekly', blocks: [], createdBy: 'user-1', updatedBy: 'user-1' });
+  assert.equal((await launchPayload(env, 'bardo:open:planner-session:meet-otro')).launchDenied, 'meeting');
+  assert.equal((await launchPayload(env, 'bardo:open:planner-session:meet-aqui')).launchDenied, null);
+});
+
+test('GET /api/docs: un enlace a una tarea de otro canal del servidor devuelve launchDenied; archivada no', async () => {
+  const { db, env } = await setup();
+  for (const [channelId, cardId] of [['channel-999', 'card-otro'], [CHANNEL, 'card-aqui']]) {
+    const board = await kdb.ensureKanbanBoard(db, GUILD, channelId, 'user-1');
+    const { columns } = await kdb.loadKanbanStructure(db, board.id);
+    await kdb.insertKanbanCard(db, board, { id: cardId, columnId: columns[0].id, rank: 'V', title: 'Tarea', tagIds: [], subtasks: [], docIds: [] }, 'user-1');
+  }
+  assert.equal((await launchPayload(env, 'bardo:open:kanban-card:card-otro')).launchDenied, 'task');
+  assert.equal((await launchPayload(env, 'bardo:open:kanban-card:card-aqui')).launchDenied, null);
+  db.run("UPDATE kanban_cards SET archived_at = '2026-10-01T00:00:00.000Z' WHERE id = 'card-otro'");
+  assert.equal((await launchPayload(env, 'bardo:open:kanban-card:card-otro')).launchDenied, null);
 });

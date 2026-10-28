@@ -1,6 +1,7 @@
 import {useState, useEffect, useRef, useCallback} from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
+import { shareBardoLinkWithFeedback } from '../share-link.js';
 import {
   Play,
   Check,
@@ -1027,6 +1028,12 @@ export function PlannerModule({initialTab = 'home', navigation, onSwitchTab, onS
     await onShareDocToChannel(agendaDocData());
   }, [agendaDocData, onShareDocToChannel]);
 
+  // Enlace de Discord que abre esta reunión (su agenda) a quien pueda verla.
+  const handleShareMeetingLink = useCallback(() => {
+    const current = plannerStateRef.current;
+    void shareBardoLinkWithFeedback('meeting', {id: current?.id, title: current?.title});
+  }, []);
+
   const handleCopyAnnouncement = useCallback(async () => {
     const copied = await copyTextToClipboard(generateDiscordAnnouncement(plannerStateRef.current));
     toast(copied
@@ -1491,6 +1498,7 @@ export function PlannerModule({initialTab = 'home', navigation, onSwitchTab, onS
           onUpdateHeaderField={handleUpdateHeaderField}
           onCopyAnnouncement={handleCopyAnnouncement}
           onShareMeeting={onShareDocToChannel ? handleShareMeeting : undefined}
+          onShareMeetingLink={handleShareMeetingLink}
           onSaveAgendaDoc={onSaveDocToLibrary ? handleSaveAgendaDoc : undefined}
           onNewCleanSession={handleCleanSession}
           onDeleteSession={handleDeleteSessionPrompt}

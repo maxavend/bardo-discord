@@ -1,7 +1,7 @@
 import {memo} from 'react';
 import {useSortable} from '@dnd-kit/sortable';
 import {CSS} from '@dnd-kit/utilities';
-import {Archive, ArrowRightLeft, CheckSquare, GripVertical, MessagesSquare, MoreHorizontal} from 'lucide-react';
+import {Archive, ArrowRightLeft, CheckSquare, GripVertical, Link, MessagesSquare, MoreHorizontal} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {cn} from '@/lib/utils';
+import {shareBardoLinkWithFeedback} from '../share-link.js';
 import {AssigneeAvatar, DueChip, PriorityBadge, TagChip, subtaskProgress} from './kanban-ui.jsx';
 
 /** Contenido visual de la tarjeta (también lo usa el "fantasma" al arrastrar). */
@@ -90,6 +91,10 @@ function KanbanCardMenu({card, columns, onMove, onArchive, onOpenThread}) {
               <span>{card.threadId ? 'Ver hilo en Discord' : 'Crear hilo en Discord'}</span>
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => void shareBardoLinkWithFeedback('task', {id: card.id, title: card.title})} className="cursor-pointer">
+            <Link className="size-4 text-muted-foreground" />
+            <span>Compartir enlace</span>
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onArchive(card.id)} className="cursor-pointer">
             <Archive className="size-4 text-muted-foreground" />
             <span>Archivar tarea</span>

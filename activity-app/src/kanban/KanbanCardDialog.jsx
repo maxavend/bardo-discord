@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronDown,
   FileText,
+  Link,
   ListChecks,
   MessagesSquare,
   MoreHorizontal,
@@ -41,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {cn} from '@/lib/utils';
+import {shareBardoLinkWithFeedback} from '../share-link.js';
 import {OverlayScrollArea} from '@/components/ui/scroll-area';
 import {MemberIdPicker} from '../planner/PlannerMemberPicker.jsx';
 import {KANBAN_LIMITS, KANBAN_PRIORITIES, KANBAN_PRIORITY_LABELS, KANBAN_TAG_COLORS} from './kanban-shared.js';
@@ -451,6 +453,9 @@ export function KanbanCardDialog({
                       <DropdownMenuSeparator />
                     </>
                   )}
+                  <DropdownMenuItem onClick={() => void shareBardoLinkWithFeedback('task', {id: card.id, title: card.title})} className="cursor-pointer">
+                    <Link className="size-4 text-muted-foreground" /> Compartir enlace
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onArchive(card.id)} className="cursor-pointer">
                     <Archive className="size-4 text-muted-foreground" /> Archivar tarea
                   </DropdownMenuItem>

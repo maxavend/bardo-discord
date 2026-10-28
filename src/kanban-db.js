@@ -175,6 +175,15 @@ export async function loadKanbanCardOwner(db, cardId) {
   return db.prepare('SELECT board_id FROM kanban_cards WHERE id = ?').bind(cardId).first('board_id');
 }
 
+/** Servidor y canal de una tarea activa, sin acotar por canal (enlaces compartidos). */
+export async function loadKanbanCardScope(db, cardId) {
+  const row = await db.prepare(
+    `SELECT b.guild_id, b.channel_id FROM kanban_cards c JOIN kanban_boards b ON b.id = c.board_id
+     WHERE c.id = ? AND c.archived_at IS NULL`,
+  ).bind(cardId).first();
+  return row ? {guildId: row.guild_id, channelId: row.channel_id} : null;
+}
+
 export async function countActiveKanbanCards(db, boardId) {
   return Number(await db.prepare('SELECT COUNT(*) AS n FROM kanban_cards WHERE board_id = ? AND archived_at IS NULL')
     .bind(boardId).first('n')) || 0;
