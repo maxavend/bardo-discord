@@ -30,6 +30,11 @@ const KICKOFF_FILE = join(HERE, 'mock/archivos/Kickoff · Pagos recurrentes.md')
 // Escritura a ritmo humano: con 0 ms entre teclas el editor encadena commits
 // síncronos hasta el límite de React (no ocurre a velocidad real).
 const TYPE_DELAY = 30;
+// Piezas: oculta la app, el fondo del diálogo y su sombra para fotografiar solo el elemento.
+const PIECE_CSS = 'body>*:not(:has([data-slot$="dialog-content"])){display:none!important}[data-slot$="dialog-overlay"]{display:none!important}'
+  + 'html,body{background:transparent!important}html::before{display:none!important}[data-slot$="dialog-content"]{box-shadow:none!important}'
+  // Base UI keeps 1×1 native checkboxes just outside the dialog edge: invisible in the app, specks in a transparent piece.
+  + '[data-slot$="dialog-content"] input[type="checkbox"]{opacity:0!important}';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Escenas: un flujo = una sesión de navegador; cada `shot` es una pantalla.
@@ -229,7 +234,7 @@ const SCENES = [
       const toCards = page.getByRole('dialog', {name: 'Crear tareas desde los acuerdos'});
       await toCards.getByRole('list', {name: 'Acuerdos'}).waitFor();
       await page.waitForTimeout(500);
-      await shot('16-acuerdos-a-tareas');
+      await shot('16-acuerdos-a-tareas', {piece: '[data-slot="dialog-content"]'});
       await toCards.getByRole('button', {name: /^Crear \d+ tareas?$/}).click();
       await toCards.getByRole('button', {name: 'Ir a Tareas'}).waitFor();
       await shot('17-tareas-creadas');
@@ -274,7 +279,7 @@ const SCENES = [
       const dialog = page.getByRole('dialog', {name: /Tarea #15/});
       await dialog.waitFor();
       await page.waitForTimeout(500);
-      await shot('05-detalle-de-tarea');
+      await shot('05-detalle-de-tarea', {piece: '[data-slot="dialog-content"]', pieceHeight: isMobile ? null : 2200});
       await dialog.evaluate(node => {
         for (const element of [node, ...node.querySelectorAll('*')]) {
           if (element.scrollHeight > element.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(element).overflowY)) element.scrollTop = element.scrollHeight;
@@ -447,7 +452,7 @@ for (const scene of SCENES) {
       }
       const shots = [];
       const ff = time => context.clock.fastForward(time);
-      const shot = async (screen, {settle = true, keepToasts = false} = {}) => {
+      const shot = async (screen, {settle = true, keepToasts = false, piece = null, pieceHeight = null} = {}) => {
         if (settle) {
           if (!keepToasts) await ff('00:06');
           await page.evaluate(() => document.fonts.ready);
@@ -456,6 +461,16 @@ for (const scene of SCENES) {
         const file = join(OUT, scene.flow, screen, `${DEVICE_LABEL[device]}-${THEME_LABEL[theme]}.png`);
         mkdirSync(dirname(file), {recursive: true});
         await page.screenshot({path: file, animations: 'allow', caret: 'initial'});
+        if (piece) {
+          // The element alone (e.g. a dialog), transparent around its rounded corners.
+          // pieceHeight: a taller window so a scrolling dialog fits whole, without its scrollbar.
+          const viewport = page.viewportSize();
+          if (pieceHeight) { await page.setViewportSize({width: viewport.width, height: pieceHeight}); await page.waitForTimeout(400); }
+          const style = await page.addStyleTag({content: PIECE_CSS});
+          await page.locator(piece).last().screenshot({path: file.replace(/\.png$/, '-pieza.png'), omitBackground: true, animations: 'allow', caret: 'initial'});
+          await style.evaluate(node => node.remove());
+          if (pieceHeight) { await page.setViewportSize(viewport); await page.waitForTimeout(400); }
+        }
         shots.push(screen);
         if (args.verbose) console.log(`  [${((Date.now() - T0) / 1000).toFixed(1)}s] · ${scene.flow}/${screen}`);
       };

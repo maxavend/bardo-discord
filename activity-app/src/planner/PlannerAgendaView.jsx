@@ -44,6 +44,7 @@ import {
 import { formatMsToClock } from './session-assistant-engine.js';
 import { RECORDING_STATUS } from './recording-controller.js';
 import { MaterialWavyProgress } from './MaterialWavyProgress.jsx';
+import { MaterialMorphShape } from './MaterialMorphShape.jsx';
 import {
   downloadPointAudio,
   exportBlockRecordingsCombined,
@@ -1389,13 +1390,15 @@ export function PlannerAgendaView({
                   <div className="flex-1 flex flex-col items-center my-1 relative w-full">
                     <div className="relative my-1 z-10 flex items-center justify-center">
                       {isLive ? (
-                        // El tema en curso marca su lugar con el punto del logo; toma
-                        // el color de la urgencia cuando se pausa o se excede.
-                        <span className="grid size-[18px] place-items-center" aria-hidden="true">
-                          <span className={`size-2.5 rounded-full ${blockColor === 'danger' ? 'bg-destructive' : blockColor === 'warning' ? 'bg-warning' : 'bg-punto'}`} />
-                        </span>
+                        <MaterialMorphShape
+                          size={18}
+                          color={blockColor}
+                          isPaused={isPaused}
+                          isActive={true}
+                          isCompleted={false}
+                        />
                       ) : isCompleted ? (
-                        <div className="punto-asienta size-5 rounded-full bg-punto flex items-center justify-center text-primary-foreground">
+                        <div className="punto-asienta size-5 rounded-full bg-success flex items-center justify-center text-success-foreground">
                           <Check className="size-3 stroke-[2.5]" />
                         </div>
                       ) : (
@@ -1415,8 +1418,8 @@ export function PlannerAgendaView({
                           amplitude={3.5}
                         />
                       ) : isCompleted ? (
-                        // Lo ya conversado queda como renglón: recto y en tinta.
-                        <div className="renglon-traza w-[3px] sm:w-[3.5px] h-full bg-foreground/25 rounded-full" />
+                        // Lo ya conversado queda como renglón recto, en verde de completado.
+                        <div className="renglon-traza w-[3px] sm:w-[3.5px] h-full bg-success rounded-full" />
                       ) : (
                         <div className="w-[3px] sm:w-[3.5px] h-full bg-border/40 rounded-full" />
                       )}
@@ -1425,7 +1428,7 @@ export function PlannerAgendaView({
                     {isLast && (
                       <div className="relative mb-2 z-10 flex items-center justify-center">
                         <span className={`size-2 rounded-full ring-2 ring-card block ${
-                          isCompleted ? 'bg-punto' : 'bg-border'
+                          isCompleted ? 'bg-success' : 'bg-border'
                         }`} />
                       </div>
                     )}
