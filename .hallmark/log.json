@@ -1,5 +1,32 @@
 [
  {
+  "mode": "build",
+  "shape": "Split Studio",
+  "theme": "ultraviolet",
+  "axes": "light/geometric-sans/chromatic-violet",
+  "hero": "Banner",
+  "nav": "edge-aligned",
+  "footer": "mast",
+  "imagery": "screenshots 7 (portfolio capture)",
+  "photos": [],
+  "entry": "site/public/index.html",
+  "fingerprint": "split-studio/banner/switcher/split-lead/table-form/split",
+  "sections": [
+   "hero",
+   "switcher",
+   "split (agreements)",
+   "table + form (waitlist)",
+   "split (close)",
+   "footer"
+  ],
+  "signature": "violet full stop closing the headline; an agreement becoming a task",
+  "waived": [
+   "38iii"
+  ],
+  "prompt": "Landing de Bardo fuera de Discord: Agregar a Discord + lista de espera web",
+  "date": "2026-10-28"
+ },
+ {
   "mode": "redesign",
   "depth": "restyle",
   "scope": "app",

@@ -1,0 +1,62 @@
+---
+import LegalLayout from '@/layouts/LegalLayout.astro';
+---
+<LegalLayout
+  title="Privacidad"
+  description="Qué datos usa Bardo, para qué y cómo pedir que se borren."
+  updated="28 de octubre de 2026"
+  updatedIso="2026-10-28"
+>
+  <p class="lead">
+    Bardo guarda lo justo para que tu equipo trabaje en su canal de Discord. Aquí está qué datos usa, para qué y cómo pedir que se borren.
+  </p>
+
+  <h2>Quién es responsable</h2>
+  <p>
+    El responsable de los datos es <span class="fill" data-fill="responsable">nombre o razón social por definir</span>.
+    Para cualquier consulta sobre privacidad escribe a <span class="fill" data-fill="contacto">correo de contacto por definir</span>.
+  </p>
+
+  <h2>Este sitio y la lista de espera</h2>
+  <ul>
+    <li>Si dejas tu correo en la lista de espera, lo guardamos con la fecha en que te inscribiste.</li>
+    <li>Lo usamos solo para avisarte cuando abra la versión web de Bardo. No lo vendemos ni lo compartimos.</li>
+    <li>El sitio no usa cookies, publicidad ni herramientas de analítica. Las fuentes se sirven desde el mismo sitio.</li>
+  </ul>
+
+  <h2>Bardo dentro de Discord</h2>
+  <p>Al abrir Bardo, Discord te pide autorizar el permiso <strong>identify</strong>. Con él, Bardo recibe:</p>
+  <ul>
+    <li>Tu identificador de Discord, tu nombre de usuario, tu nombre visible y tu avatar.</li>
+    <li>El servidor y el canal desde donde abriste Bardo, para mostrarte solo lo de ese canal.</li>
+  </ul>
+  <p>Bardo no lee los mensajes del canal: solo publica avisos, tarjetas de documentos e hilos de tareas. Para saber si puedes ver un canal, consulta tus permisos a Discord.</p>
+
+  <h2>Lo que creas en Bardo</h2>
+  <ul>
+    <li><strong>Docs:</strong> título, descripción, contenido, autoría y fecha del último cambio de cada documento. Los archivos que importas se convierten a documento y el archivo original se elimina.</li>
+    <li><strong>Reuniones:</strong> agenda, tiempos, acuerdos y resumen.</li>
+    <li><strong>Tareas:</strong> tarjetas, responsables, fechas, etiquetas y subtareas. Al asignar una tarea, el bot de Bardo avisa en el canal y envía un mensaje directo sin la descripción.</li>
+    <li><strong>Ajustes:</strong> el nombre del espacio, la zona horaria del canal y tus preferencias.</li>
+  </ul>
+  <p>
+    Todo esto se guarda en Cloudflare (Workers y D1) y lo ve quien tenga acceso a ese canal en Discord.
+    Los borradores y los audios grabados antes quedan en tu dispositivo, no en nuestros servidores.
+  </p>
+
+  <h2>Cuánto tiempo se guarda</h2>
+  <ul>
+    <li>Tu sesión dura 30 días. Una tarea diaria borra las sesiones vencidas.</li>
+    <li>Documentos, reuniones y tareas se guardan hasta que alguien con acceso los elimina.</li>
+    <li>Los correos de la lista de espera se guardan hasta que abra la versión web o pidas que los borremos.</li>
+  </ul>
+
+  <h2>Tus derechos</h2>
+  <p>
+    Puedes pedir ver, corregir, borrar o llevarte tus datos, y oponerte a su uso.
+    Escribe al correo de contacto de arriba y te responderemos.
+  </p>
+
+  <h2>Cambios</h2>
+  <p>Si esta política cambia, actualizaremos la fecha de arriba. Si el cambio es importante, lo avisaremos en Bardo.</p>
+</LegalLayout>

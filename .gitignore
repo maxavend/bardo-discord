@@ -28,3 +28,7 @@ portfolio/covers/
 portfolio/_archivo/
 portfolio/hoja-de-contacto.png
 portfolio/vista-general-slides.png
+
+# Landing (site/): build de Vite.
+site/dist/
+site/.astro/
