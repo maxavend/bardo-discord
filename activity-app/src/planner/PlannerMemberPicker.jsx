@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
@@ -160,16 +161,37 @@ export function splitPeople(value = '') {
   return String(value || '').split(',').map((name) => name.trim().replace(/^@/, '')).filter(Boolean);
 }
 
-/** Discord photo when the person is known, initials on their color otherwise. */
-export function MemberAvatar({name = '', member = undefined, size = 'xs', className = ''}) {
-  const match = member === undefined ? findMemberByName(name) : member;
-  const label = match?.globalName || String(name || '').replace(/^@/, '') || '?';
-  const color = match?.avatarColor
-    || DISCORD_PALETTES[[...label].reduce((sum, char) => sum + char.charCodeAt(0), 0) % DISCORD_PALETTES.length];
+/** Color of a person or role by name, so the same name looks the same everywhere. */
+export function memberColor(label = '') {
+  return DISCORD_PALETTES[[...String(label)].reduce((sum, char) => sum + char.charCodeAt(0), 0) % DISCORD_PALETTES.length];
+}
+
+// The three avatar sizes of the planner, each with initials sized to fit:
+// xs for chips, sm for metadata rows next to text-xs, md for lists and cards.
+const MEMBER_AVATAR_SIZES = {
+  xs: {box: 'size-4', text: 'text-[7px]'},
+  sm: {box: 'size-5', text: 'text-[8.5px]'},
+  md: {box: 'size-6', text: 'text-[10px]'},
+};
+
+/**
+ * Discord photo when the person is known, initials on their color otherwise
+ * («#» for a role). `stacked` adds a ring in the card color so overlapping
+ * avatars stay apart.
+ */
+export function MemberAvatar({name = '', member = undefined, role = false, size = 'sm', stacked = false, className = ''}) {
+  // Always fall back to the directory, so a person keeps their Discord color
+  // even where the caller could not match them.
+  const match = role ? null : member || findMemberByName(name);
+  const label = match?.globalName || String(name || '').replace(/^[@#]/, '') || '?';
+  const color = match?.avatarColor || memberColor(label);
+  const {box, text} = MEMBER_AVATAR_SIZES[size] || MEMBER_AVATAR_SIZES[size === 'xxs' ? 'xs' : 'sm'];
   return (
-    <Avatar size={size} className={`font-bold shrink-0 shadow-2xs ${className}`} style={{ backgroundColor: `${color}30`, color }}>
+    <Avatar className={cn(box, 'shrink-0 after:hidden', stacked && 'ring-2 ring-card', className)} style={{ backgroundColor: `${color}30`, color }}>
       {match?.avatar && <AvatarImage src={match.avatar} alt="" />}
-      <AvatarFallback style={{ backgroundColor: `${color}30`, color }}>{label.slice(0, 2).toUpperCase()}</AvatarFallback>
+      <AvatarFallback className={cn(text, 'font-bold leading-none tracking-tight')} style={{ backgroundColor: `${color}30`, color }}>
+        {role ? '#' : label.slice(0, 2).toUpperCase()}
+      </AvatarFallback>
     </Avatar>
   );
 }
@@ -466,19 +488,7 @@ export function PlannerMemberPicker({
                       className="cursor-pointer"
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Avatar
-                          size="xs"
-                          className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                          style={{
-                            backgroundColor: `${member.avatarColor}30`,
-                            color: member.avatarColor,
-                          }}
-                        >
-                          {member.avatar && <AvatarImage src={member.avatar} alt="" />}
-                          <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
-                            {member.globalName.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <MemberAvatar name={member.globalName} member={member} />
                         <span className="text-xs font-medium text-foreground truncate">{member.globalName}</span>
                         <span className="text-[10.5px] text-muted-foreground shrink-0 max-w-[45%] truncate text-right">{member.inCall ? 'En la actividad' : member.tag}</span>
                       </div>
@@ -705,19 +715,7 @@ export function SearchableParticipantMenu({
                   className="cursor-pointer"
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <Avatar
-                      size="xs"
-                      className="size-5 text-[9px] font-bold shrink-0 shadow-2xs"
-                      style={{
-                        backgroundColor: `${member.avatarColor}30`,
-                        color: member.avatarColor,
-                      }}
-                    >
-                      {member.avatar && <AvatarImage src={member.avatar} alt="" />}
-                          <AvatarFallback style={{ backgroundColor: `${member.avatarColor}30`, color: member.avatarColor }}>
-                        {member.globalName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <MemberAvatar name={member.globalName} member={member} />
                     <span className="text-xs font-medium text-foreground truncate">
                       {member.globalName}
                     </span>

@@ -1,6 +1,7 @@
 import {useState, useEffect, useRef, useCallback} from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
+import { shareBardoLinkWithFeedback } from '../share-link.js';
 import {
   Play,
   Check,
@@ -135,7 +136,7 @@ function eventIdOf(event) {
   return event?.eventId || event?.id || null;
 }
 
-export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibrary, onShareDocToChannel}) {
+export function PlannerModule({initialTab = 'home', navigation, onSwitchTab, onSaveDocToLibrary, onShareDocToChannel}) {
   const [plannerState, setPlannerState] = useState(loadPlannerState);
   const [sessionState, setSessionState] = useState(() => loadLiveSessionState(plannerState));
   const [plannerEvents, setPlannerEvents] = useState(loadPlannerEvents);
@@ -153,9 +154,13 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   const [isEditing, setIsEditing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
 
+  // `navigation` is a new object on every route change, even when the tab name
+  // repeats: a hashchange for "#planner-agenda" can be handled after the hash
+  // already went back to "#planner", so the tab name alone would never change
+  // and the module would stay on the agenda.
   useEffect(() => {
     setActiveTab(initialTab || 'home');
-  }, [initialTab]);
+  }, [initialTab, navigation]);
   const [recordingStatus, setRecordingStatus] = useState(RECORDING_STATUS.IDLE);
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [dismissedUpcomingBanner, setDismissedUpcomingBanner] = useState(false);
@@ -1023,6 +1028,12 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
     await onShareDocToChannel(agendaDocData());
   }, [agendaDocData, onShareDocToChannel]);
 
+  // Enlace de Discord que abre esta reunión (su agenda) a quien pueda verla.
+  const handleShareMeetingLink = useCallback(() => {
+    const current = plannerStateRef.current;
+    void shareBardoLinkWithFeedback('meeting', {id: current?.id, title: current?.title});
+  }, []);
+
   const handleCopyAnnouncement = useCallback(async () => {
     const copied = await copyTextToClipboard(generateDiscordAnnouncement(plannerStateRef.current));
     toast(copied
@@ -1487,6 +1498,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
           onUpdateHeaderField={handleUpdateHeaderField}
           onCopyAnnouncement={handleCopyAnnouncement}
           onShareMeeting={onShareDocToChannel ? handleShareMeeting : undefined}
+          onShareMeetingLink={handleShareMeetingLink}
           onSaveAgendaDoc={onSaveDocToLibrary ? handleSaveAgendaDoc : undefined}
           onNewCleanSession={handleCleanSession}
           onDeleteSession={handleDeleteSessionPrompt}

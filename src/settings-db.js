@@ -39,9 +39,14 @@ export async function loadChannelSettings(db, guildId, channelId) {
   };
 }
 
+export const USER_THEMES = Object.freeze(['dark', 'light', 'system']);
+
 export async function loadUserSettings(db, userId) {
   const row = await db.prepare('SELECT * FROM user_settings WHERE user_id = ?').bind(userId).first();
-  return {taskDmNotices: row ? toBool(row.task_dm_notices) ?? true : true};
+  return {
+    taskDmNotices: row ? toBool(row.task_dm_notices) ?? true : true,
+    theme: USER_THEMES.includes(row?.theme) ? row.theme : null,
+  };
 }
 
 /** Valores efectivos para un canal, con la fuente de cada uno. */
@@ -115,8 +120,15 @@ export async function saveChannelSettings(db, guildId, channelId, fields, userId
     .run();
 }
 
-export async function saveUserSettings(db, userId, {taskDmNotices}) {
-  await db.prepare(`INSERT INTO user_settings (user_id, task_dm_notices, updated_at) VALUES (?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET task_dm_notices = excluded.task_dm_notices, updated_at = excluded.updated_at`)
-    .bind(userId, toInt(taskDmNotices), new Date().toISOString()).run();
+/** Guarda solo los campos presentes; los demás quedan como estaban. */
+export async function saveUserSettings(db, userId, fields) {
+  const has = key => Object.prototype.hasOwnProperty.call(fields, key);
+  await db.prepare(`INSERT INTO user_settings (user_id, task_dm_notices, theme, updated_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      task_dm_notices = CASE WHEN ? THEN excluded.task_dm_notices ELSE user_settings.task_dm_notices END,
+      theme = CASE WHEN ? THEN excluded.theme ELSE user_settings.theme END,
+      updated_at = excluded.updated_at`)
+    .bind(userId, has('taskDmNotices') ? toInt(fields.taskDmNotices) : null, has('theme') ? fields.theme : null,
+      new Date().toISOString(), has('taskDmNotices') ? 1 : 0, has('theme') ? 1 : 0)
+    .run();
 }

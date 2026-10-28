@@ -87,7 +87,7 @@ function SettingsItem({Icon, title, description, onSelect}) {
 export function UserMenu({onOpenSettings}) {
   const profile = useProfile();
   const {channelName} = useWorkspace();
-  const {theme, setTheme} = useTheme('dark');
+  const {theme, setTheme} = useTheme();
   const current = THEMES.find(item => item.value === theme) || THEMES[1];
 
   return (
@@ -97,7 +97,8 @@ export function UserMenu({onOpenSettings}) {
           <ProfileAvatar profile={profile} size="sm" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      {/* En teléfonos angostos no toca los bordes de la pantalla. */}
+      <DropdownMenuContent align="end" collisionPadding={8} className="w-72 max-w-[calc(100vw-16px)]">
         <DropdownMenuLabel className="user-menu-profile">
           <ProfileAvatar profile={profile} size="lg" />
           <span className="flex min-w-0 flex-col gap-0.5">

@@ -215,6 +215,12 @@ export async function prepareBardoProduction(options = {}) {
   // Ignore non-Bardo SDK identifiers instead of interpreting them as documents.
   if (!window.__BARDO_CUSTOM_ID__?.startsWith('bardo:open:')) window.__BARDO_CUSTOM_ID__ = null;
 
+  // A shared link to something this person cannot see: the server answers
+  // with its kind only ("doc", "meeting", "task") and sends them Home, where
+  // the app explains they have no access.
+  window.__BARDO_LAUNCH_DENIED__ = ['doc', 'meeting', 'task'].includes(payload?.launchDenied) ? payload.launchDenied : null;
+  if (window.__BARDO_LAUNCH_DENIED__) window.__BARDO_CUSTOM_ID__ = null;
+
   // Slash commands (/bardo) and some mobile clients launch without a
   // custom_id; the server then returns the destination saved by the
   // interaction. A fresh /bardo Home intent also overrides a stale custom_id
