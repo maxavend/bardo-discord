@@ -1,6 +1,7 @@
 import { OverlayScrollArea } from "@/components/ui/scroll-area";
 import {lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { IconButton } from '@/components/ui/icon-button.jsx';
 import {
   DropdownMenu,
@@ -613,13 +614,16 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
   );
 }
 
+// Acciones del header: píldora de 32 px; bajo 480 px queda solo el ícono.
+const HEADER_BUTTON_CLASS = 'header-compact-button h-8 px-3 font-medium flex items-center gap-1.5';
+
 /** Botón del header con ícono animado: anima al pasar el cursor por el botón o con foco. */
-function HeaderButton({Icon, iconSize = 14, children, ...props}) {
+function HeaderButton({Icon, iconSize = 14, children, className, ...props}) {
   const {iconRef, handlers} = useIconAnimation();
   return (
     <Button
       size="sm"
-      className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5"
+      className={cn(HEADER_BUTTON_CLASS, className)}
       {...handlers}
       {...props}
     >
@@ -628,11 +632,17 @@ function HeaderButton({Icon, iconSize = 14, children, ...props}) {
   );
 }
 
-function DocsHeader({children, actions, className = '', onOpenSettings}) {
+/**
+ * Header de las vistas de Bardo. Con `nav`, tres columnas: lo propio de la
+ * vista a la izquierda, las pestañas del Hub centradas (no se mueven al
+ * cambiar de vista) y las acciones con el perfil a la derecha.
+ */
+function DocsHeader({children, nav = null, actions, className = '', onOpenSettings}) {
   return (
-    <header className={`doc-topbar glass-header app-host-header ${className}`.trim()}>
+    <header className={cn('doc-topbar app-host-header', nav && 'has-hub-tabs', className)}>
       <div className="topbar-left">{children}</div>
-      <div className="topbar-right header-actions">
+      {nav}
+      <div className="topbar-right">
         {actions}
         {/* Perfil: Ajustes por alcance y tema, en un solo lugar. */}
         <UserMenu onOpenSettings={onOpenSettings} />
@@ -681,28 +691,31 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
     <DocsHeader
       onOpenSettings={onOpenSettings}
       className={isHome || isLibrary || isPlanner || isKanban ? 'library-header' : ''}
+      nav={<ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />}
       actions={isKanban ? (
         <div key="kanban-actions" className="header-slot-enter flex items-center gap-2">
-          <Button variant="default" size="sm" onClick={onKanbanNew} aria-label="Nueva tarea" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+          <Button variant="default" size="sm" onClick={onKanbanNew} aria-label="Nueva tarea" className={HEADER_BUTTON_CLASS}>
             <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva tarea</span>
           </Button>
         </div>
       ) : isPlanner ? (
         <div key="planner-actions" className="header-slot-enter flex items-center gap-2">
           {route.tab === 'home' && (
-            <Button variant="default" size="sm" onClick={onPlannerNew} aria-label="Nueva reunión" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+            <Button variant="default" size="sm" onClick={onPlannerNew} aria-label="Nueva reunión" className={HEADER_BUTTON_CLASS}>
               <Plus width={14} height={14} aria-hidden="true" /> <span className="header-label">Nueva reunión</span>
             </Button>
           )}
         </div>
       ) : isLibrary ? (
         <div key="library-actions" className="header-slot-enter flex items-center gap-2">
+          {/* Lo abre el botón «Subir archivo»: fuera del orden de tabulación. */}
           <input
             ref={fileInputRef}
             className="library-file-input"
             type="file"
             accept={UPLOAD_ACCEPT}
-            aria-label="Elegir archivo para subir"
+            tabIndex={-1}
+            aria-hidden="true"
             onChange={event => {
               const file = event.target.files?.[0];
               event.target.value = '';
@@ -712,13 +725,14 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <HeaderButton
             Icon={UploadIcon}
             variant="secondary"
+            className="header-secondary"
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
             aria-label={uploading ? 'Subiendo archivo…' : 'Subir archivo'}
           >
             <span className="header-label">{uploading ? 'Subiendo…' : 'Subir archivo'}</span>
           </HeaderButton>
-          <Button variant="default" size="sm" onClick={onNew} aria-label="Nuevo documento" className="header-compact-button h-8 px-3 font-medium text-xs flex items-center gap-1.5">
+          <Button variant="default" size="sm" onClick={onNew} aria-label="Nuevo documento" className={HEADER_BUTTON_CLASS}>
             <Plus width={15} height={15} aria-hidden="true" /> <span className="header-label">Nuevo</span>
           </Button>
         </div>
@@ -729,8 +743,8 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
               <IconButton label="Compartir en el canal" onClick={() => onAction('publish', doc)}>
                 <PaperPlane width={16} height={16} />
               </IconButton>
-              <Button variant="default" size="sm" onClick={onEdit} className="h-8 px-3.5 ml-1 font-medium text-xs flex items-center gap-1.5">
-                <Pencil width={14} height={14} /> Editar
+              <Button variant="default" size="sm" onClick={onEdit} aria-label="Editar" className={cn(HEADER_BUTTON_CLASS, 'ml-1')}>
+                <Pencil width={14} height={14} aria-hidden="true" /> <span className="header-label">Editar</span>
               </Button>
             </>
           )}
@@ -739,26 +753,25 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
       ) : null}
     >
       {/* La marca es siempre el mismo elemento (no se vuelve a montar ni a
-          animar al cambiar de vista); en una subvista la reemplaza "Volver". */}
+          animar al cambiar de vista); en una subvista la reemplaza «volver». */}
       {isPlannerSubview ? (
         <Button
           key="planner-back"
           variant="ghost"
           size="sm"
           onClick={onBack}
-          aria-label="Volver"
-          className="back-button h-8 px-2 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
+          aria-label="Volver a Reuniones"
+          className="back-button h-8 px-2.5 text-muted-foreground hover:text-foreground font-medium flex items-center gap-1"
         >
-          <ChevronLeft width={15} height={15} /> Volver
+          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">Reuniones</span>
         </Button>
       ) : doc && !isHome && !isLibrary && !isPlanner && !isKanban ? (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : 'Volver a Documentos'} className="back-button h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : 'Volver a Documentos'} className="back-button h-8 px-2.5 text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
       ) : (
         <WorkspaceName key="brand" />
       )}
-      <ModuleTabs active={moduleForRoute(route)} onNavigate={onNavigateModule} />
     </DocsHeader>
   );
 }
@@ -798,7 +811,8 @@ function Library({
           className="library-file-input"
           type="file"
           accept={UPLOAD_ACCEPT}
-          aria-label="Elegir archivo para subir"
+          tabIndex={-1}
+          aria-hidden="true"
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = '';

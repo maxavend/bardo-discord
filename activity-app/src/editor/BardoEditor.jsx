@@ -420,7 +420,7 @@ export function BardoEditor({
 
   return (
     <section className={`doc-route route-active editing-route ${isExiting ? 'editor-transition-is-exiting' : ''}`}>
-      <header className="doc-topbar glass-header app-host-header">
+      <header className="doc-topbar app-host-header">
         <div className="topbar-left flex items-center gap-2">
           <Button
             variant="ghost"

@@ -375,36 +375,22 @@ button { font-size: 14px; }
   .app-root { animation-duration: 1ms !important; }
 }
 
-.glass-header {
-  background: color-mix(in oklab, var(--background) 80%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
-  box-shadow: 0 1px 3px 0 oklch(0 0 0 / 0.04);
-}
-
-/* Activity header is part of the document surface with glass layer */
+/* Vidrio del header. Posición, alto y borde los pone .doc-topbar. */
 .app-host-header {
-  position: sticky;
-  top: calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top));
-  height: var(--bardo-topbar);
-  background: color-mix(in oklab, var(--background) 80%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
   box-shadow: 0 1px 3px 0 oklch(0 0 0 / 0.04);
   isolation: isolate;
   overflow: visible;
-  z-index: 40;
 }
 
-/* One continuous material spans the Discord safe zone and the Bardo navbar. */
+/* Un solo material cubre la zona segura de Discord y el header. El header no
+   difumina por su cuenta: si lo hiciera, este ::before no podría difuminar lo
+   que pasa por la zona segura, fuera de la caja del header. */
 .app-host-header::before {
   content: "";
   position: absolute;
   z-index: 0;
   inset: calc(-1 * var(--bardo-safe-top)) calc(-1 * var(--bardo-safe-right)) 0 calc(-1 * var(--bardo-safe-left));
-  background: color-mix(in oklab, var(--background) 80%, transparent);
+  background: color-mix(in oklab, var(--background) 86%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
   pointer-events: none;
@@ -499,7 +485,8 @@ button { font-size: 14px; }
   min-height: 0;
   padding-bottom: 0;
 }
-html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: hidden; }
+/* Sin scroll vertical, pero con el mismo canal reservado: el header no se mueve. */
+html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 .kanban-board-region { flex: 1 1 auto; min-height: 0; display: flex; margin-top: 16px; }
 .kanban-board {
   --kanban-gutter: max(16px, calc((100% - 1480px) / 2 + 16px));
@@ -578,7 +565,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
 .home .continue-row { text-decoration: none; }
 .topbar-title { display: inline-flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 14px; font-weight: 400; line-height: 1.25; }
 .topbar-title > svg { color: inherit; flex: 0 0 auto; }
-.library-header [data-slot="button"] { font-size: 14px; }
+.has-hub-tabs [data-slot="button"] { font-size: 14px; }
 .library-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 
 .search-wrap { margin: 20px 0 28px; }
@@ -708,6 +695,26 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   border-bottom: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
 }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Escritorio: tres columnas con las pestañas al centro. Los lados se reparten
+   el resto; el izquierdo trunca su texto y el derecho nunca se recorta. */
+@media (min-width: 768px) {
+  .has-hub-tabs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 16px; }
+  .has-hub-tabs > .topbar-right { justify-self: end; }
+}
+/* Hasta 1023 px las pestañas van sin ícono y las acciones secundarias, sin
+   texto: así caben las tres columnas a 768 px. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .has-hub-tabs .module-hub-tab > :not(span) { display: none; }
+  .has-hub-tabs .header-secondary { width: 32px; padding-inline: 0 !important; border-radius: 9999px; }
+  .has-hub-tabs .header-secondary > .header-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 /* Hub de módulos. Escritorio: pestañas en el header, mismo lenguaje que
    TabsList (cápsula muted, activa en background). Móvil: barra inferior. */
 .workspace-label {
@@ -785,6 +792,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   height: 40px;
   margin-inline: -4px -2px;
   padding: 0;
+  flex: none;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -794,8 +802,9 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
    llega a 44 × 44 px sin ocupar más espacio; el anillo de hover solo con
    cursor (en el teléfono quedaba pegado después de tocar). */
 @media (max-width: 767px), (pointer: coarse) {
-  .doc-topbar [data-slot="button"] { position: relative; min-width: 32px; }
-  .doc-topbar [data-slot="button"]::before {
+  /* Base UI cambia el data-slot de los botones que abren un menú o un tooltip. */
+  .doc-topbar :is([data-slot="button"], [data-slot="tooltip-trigger"], [data-slot="dropdown-menu-trigger"]):not(.user-menu-trigger) { position: relative; min-width: 32px; }
+  .doc-topbar :is([data-slot="button"], [data-slot="tooltip-trigger"], [data-slot="dropdown-menu-trigger"]):not(.user-menu-trigger)::before {
     content: "";
     position: absolute;
     top: 50%;
@@ -826,7 +835,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
     align-items: center;
     gap: 2px;
     height: 36px;
-    margin-inline-start: 8px;
+    margin-inline-start: 0;
     padding: 4px;
     border-radius: 9999px;
     /* Cápsula de vidrio: el header ya difumina; aquí, el filo de luz. */
@@ -1143,11 +1152,9 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   :root[data-hub-bar="visible"] .library,
   :root[data-hub-bar="visible"] .planner-module-root { padding-bottom: calc(96px + var(--bardo-safe-bottom, 0px)); }
 }
-.topbar-center { color: var(--muted); font-size: 12px; line-height: 1.3; white-space: nowrap; }
-.topbar-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.topbar-right { display: flex; flex: none; align-items: center; gap: 8px; }
 .icon-button-circle { border-radius: 9999px !important; }
 .theme-mode-trigger { flex: 0 0 auto; }
-.theme-mode-check { margin-left: auto; }
 .header-slot-enter {
   display: flex;
   align-items: center;

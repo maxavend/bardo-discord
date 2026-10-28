@@ -40,7 +40,7 @@ test('la barra móvil solo aparece en la vista principal de cada módulo', async
   await page.getByRole('button', {name: 'Nueva reunión'}).last().click();
   await expect(page.getByPlaceholder('Nombre de la reunión')).toBeVisible();
   await expect(bar).toHaveCount(0);
-  await page.getByRole('button', {name: 'Volver', exact: true}).click();
+  await page.getByRole('button', {name: 'Volver a Reuniones'}).click();
   await expect(page.getByRole('navigation', {name: 'Módulos de Bardo'})).toBeVisible();
   // El contenido nunca queda tapado por la barra.
   const overlap = await page.evaluate(() => {
