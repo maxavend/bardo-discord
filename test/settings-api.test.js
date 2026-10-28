@@ -50,6 +50,20 @@ test('un miembro ve los ajustes, cambia los personales y no puede tocar los del 
   assert.equal((await k.settings('/server', {method: 'PATCH', body: {taskDmNotices: false}})).status, 403);
 });
 
+test('el tema es de cada persona: oscuro hasta que lo cambie, y se guarda sin tocar sus MD', async () => {
+  const k = await settingsEnv(MEMBER);
+  assert.deepEqual((await k.settings('/personal')).json, {personal: {taskDmNotices: true, theme: null}});
+
+  const saved = await k.settings('/personal', {method: 'PATCH', body: {theme: 'light'}});
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.json.personal, {taskDmNotices: true, theme: 'light'});
+
+  await k.settings('/personal', {method: 'PATCH', body: {taskDmNotices: false}});
+  assert.deepEqual((await k.settings('/personal')).json.personal, {taskDmNotices: false, theme: 'light'});
+  assert.equal((await k.settings('/personal', {method: 'PATCH', body: {theme: 'sepia'}})).status, 422);
+  assert.equal((await k.settings('/personal', {method: 'PATCH', body: {}})).status, 422);
+});
+
 test('quien gestiona el canal cambia el espacio (nombre, zona horaria, avisos) pero no el servidor', async () => {
   const k = await settingsEnv(CHANNEL_MANAGER);
   const saved = await k.settings('/space', {method: 'PATCH', body: {name: '  Equipo  Producto ', timeZone: 'America/Bogota', taskChannelNotices: false}});

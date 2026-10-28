@@ -99,7 +99,7 @@
   --sidebar-accent-foreground: oklch(0.3 0.06 300);
   --sidebar-border: oklch(0.905 0.012 305);
   --sidebar-ring: oklch(0.6 0.2 303);
-  --success: oklch(0.627 0.194 149.214);
+  --success: oklch(0.527 0.154 150.069);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.769 0.188 70.08);
   --warning-foreground: oklch(0.28 0.07 46);
@@ -1439,6 +1439,23 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   margin-block: 8px;
   height: calc(100% - 16px);
 }
+/* En diálogos el scroll llega al borde: el thumb se aparta de las esquinas
+   redondeadas y del borde, y el fade solo se encoge dentro del padding (p-7),
+   así el contenido nunca queda cortado sin fade al acercarse al final. */
+[data-slot$="dialog-content"] .overlay-scroll-area {
+  --scroll-fade-reveal: calc(var(--spacing) * 7);
+}
+[data-slot$="dialog-content"] .overlay-scroll-area > [data-slot="scroll-area-scrollbar"] {
+  margin-block: 1.25rem;
+  margin-inline-end: 4px;
+  height: calc(100% - 2.5rem);
+}
+/* Con la X (top-4, size-8) el carril empieza debajo de ella: el thumb no corre
+   pegado al botón al hacer scroll. */
+[data-slot$="dialog-content"]:has(> [data-slot="dialog-close"]) > .overlay-scroll-area > [data-slot="scroll-area-scrollbar"] {
+  margin-top: 3.5rem;
+  height: calc(100% - 4.75rem);
+}
 .session-toolbar-sticky {
   position: sticky;
   top: calc(var(--bardo-visual-viewport-top, 0px) + var(--bardo-safe-top, 0px) + var(--bardo-topbar, 52px) + 8px);
@@ -1887,7 +1904,7 @@ html:has(.app-host-header ~ .kanban-page) { scrollbar-gutter: auto; overflow-y: 
   --sidebar-accent-foreground: oklch(0.95 0.01 305);
   --sidebar-border: oklch(1 0.02 300 / 9%);
   --sidebar-ring: oklch(0.722 0.177 305.5);
-  --success: oklch(0.627 0.194 149.214);
+  --success: oklch(0.527 0.154 150.069);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.769 0.188 70.08);
   --warning-foreground: oklch(0.985 0 0);

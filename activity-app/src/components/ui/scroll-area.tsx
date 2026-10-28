@@ -48,7 +48,7 @@ function ScrollBar({
       data-slot="scroll-area-scrollbar"
       orientation={orientation}
       className={cn(
-        "flex touch-none p-0.5 transition-colors select-none",
+        "flex touch-none p-0.5 opacity-0 transition-opacity duration-200 select-none data-hovering:opacity-100 data-scrolling:opacity-100 motion-reduce:transition-none",
         orientation === "vertical" &&
           "h-full w-2 border-l border-l-transparent",
         orientation === "horizontal" &&
@@ -67,7 +67,8 @@ function ScrollBar({
 
 // Surface stays outside the mask; only overflowing content fades. shadcn's
 // default depth (12% of the height, up to 40px); scroll padding keeps the
-// keyboard-focused item out of the faded edge.
+// keyboard-focused item out of the faded edge. The fade stays on under
+// reduced motion: it is a scroll-linked mask, not movement.
 function OverlayScrollArea({className, viewportProps, contentStyle, ...props}: React.ComponentProps<typeof ScrollArea>) {
   return (
     <ScrollArea
@@ -75,7 +76,7 @@ function OverlayScrollArea({className, viewportProps, contentStyle, ...props}: R
       contentStyle={{minWidth: 0, ...contentStyle}}
       viewportProps={{
         ...viewportProps,
-        className: cn("scroll-fade motion-reduce:scroll-fade-none overscroll-contain scroll-py-10", viewportProps?.className),
+        className: cn("scroll-fade overscroll-contain scroll-py-10", viewportProps?.className),
         style: {maxHeight: "inherit", ...viewportProps?.style},
       }}
       {...props}

@@ -1,0 +1,40 @@
+{
+  "brand": "Bardo",
+  "tagline": "Documentos, reuniones y tareas, sin salir de Discord.",
+  "brief": "Bardo convierte un canal de Discord en un espacio de trabajo: lo que se conversa en una reunión se vuelve documento, acuerdos y tareas. El logo tenía que contar eso sin dibujar documentos ni globos de chat.",
+  "adjectives": ["cercano", "ordenado", "fluido", "con oficio"],
+  "criteria": "Éxito: se distingue de los íconos de documentos y chat, se reconoce a 16 px, funciona a una tinta y convive con el violeta de la app.",
+  "industry": "software",
+  "mockups": ["app-icon", "favicon-tab", "website", "social", "sticker", "readme"],
+  "nav": ["Docs", "Reuniones", "Tareas"],
+  "brand_color": "#8200DB",
+  "greyscale": false,
+  "final": true,
+  "deck_title": "identidad final",
+  "label": "Diseño final",
+  "designer": "Bardo",
+  "concepts": [
+    {
+      "name": "Punto final",
+      "symbol": "../maestros/bardo-simbolo-color.svg",
+      "lockup": "../maestros/bardo-horizontal-color.svg",
+      "symbol_on_tile": "../variantes/bardo-simbolo-white.svg",
+      "symbol_on_dark": "../maestros/bardo-simbolo-oscuro.svg",
+      "lockup_on_dark": "../maestros/bardo-horizontal-oscuro.svg",
+      "stacked_on_tile": "../variantes/bardo-apilado-white.svg",
+      "idea": "La voz se calma, se asienta en un renglón y cierra con punto final: transcribo, y punto.",
+      "rationale": [
+        "La onda es la conversación; el renglón, el documento; el punto violeta, el acuerdo cerrado",
+        "Curvatura continua con radios garantizados (R 28 · 26 · 40) y un solo grosor de trazo",
+        "El wordmark comparte trazo y remates redondos con el símbolo",
+        "Corte propio para 16–32 px y favicon que se adapta a modo claro y oscuro"
+      ]
+    }
+  ],
+  "recommendation": "Usar la versión horizontal como principal, el símbolo en placa violeta como ícono de la Activity y el corte pequeño en favicon.",
+  "next_steps": [
+    "Validar el ícono dentro del portal de desarrolladores de Discord",
+    "Búsqueda profesional de marcas antes de publicar",
+    "Aplicar favicon e ícono en la app (activity-app/public)"
+  ]
+}

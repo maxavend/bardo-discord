@@ -224,8 +224,14 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('Discord theme picks the initial theme and the manual toggle persists', async ({page}) => {
+test('dark by default, even on a light system; the manual toggle persists', async ({page}) => {
   await page.evaluate(() => localStorage.clear());
+  await page.emulateMedia({colorScheme: 'light'});
+  await page.goto('/#docs');
+  await expectLibrary(page);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+
+  // ?theme= solo sirve para pruebas y vistas previas.
   await page.goto('/?theme=light#docs');
   await expectLibrary(page);
   const themeState = () => page.evaluate(() => ({
@@ -238,7 +244,7 @@ test('Discord theme picks the initial theme and the manual toggle persists', asy
   await expectLibrary(page);
   await expect.poll(themeState).toEqual({theme: 'dark', colorScheme: 'dark'});
 
-  // El tema se elige en el menú de perfil; la elección del usuario manda sobre la de Discord.
+  // El tema se elige en el menú de perfil; la elección del usuario manda.
   const openThemeMenu = async () => {
     await page.getByRole('button', {name: 'Ajustes', exact: true}).click();
     await openSubmenu(page, /^Tema/);
@@ -601,6 +607,41 @@ test('menus opened while scrolled keep the sticky chrome and open on screen', as
   expect(chrome.toolbar).toBeGreaterThan(0);
   await page.getByRole('menuitem', {name: 'Limpiar formato'}).click();
   await expect(page.getByText('Formato limpiado')).toBeVisible();
+});
+
+test('with the keyboard open the toolbar stays in place until scrolling reaches the sticky line', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-standard', 'The on-screen keyboard only exists on phones.');
+
+  await openDocFromLibrary(page, monsterTitle);
+  await page.getByRole('button', {name: 'Editar', exact: true}).click();
+  await expect(editorToolbar(page)).toBeVisible();
+  // Medir sin la animación de entrada de la barra.
+  await page.evaluate(() => Promise.all(document.querySelector('.editor-toolbar-sticky').getAnimations().map(animation => animation.finished)));
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const toolbarTop = () => page.evaluate(() => Math.round(document.querySelector('.editor-toolbar-container').getBoundingClientRect().top));
+  const restingTop = await toolbarTop();
+
+  // Teclado abierto: el editor tiene el foco y el viewport visible se achica.
+  await page.locator('.editing-route .doc-body[contenteditable="true"]').focus();
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, 'height', {configurable: true, get: () => 420});
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  });
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.editorKeyboard)).toBe('open');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(toolbarTop).toBe(restingTop);
+
+  await page.evaluate(() => window.scrollTo(0, 2000));
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.editorToolbar)).toBe('pinned');
+  const pinned = await page.evaluate(() => ({
+    header: document.querySelector('.editing-route .doc-topbar').getBoundingClientRect().bottom,
+    toolbar: document.querySelector('.editor-toolbar-container').getBoundingClientRect().top,
+  }));
+  expect(pinned.toolbar - pinned.header).toBeGreaterThanOrEqual(0);
+  expect(pinned.toolbar - pinned.header).toBeLessThan(12);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(toolbarTop).toBe(restingTop);
 });
 
 test('document actions: text preview, markdown download and share outside Discord', async ({page}, testInfo) => {

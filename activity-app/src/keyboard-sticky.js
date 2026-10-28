@@ -4,6 +4,7 @@ const viewport = window.visualViewport;
 let baselineHeight = viewport?.height || window.innerHeight;
 let frame = 0;
 let settleTimer = 0;
+let pinProbe = null;
 
 function editingTextIsFocused() {
   const active = document.activeElement;
@@ -16,13 +17,34 @@ function rememberBaseline() {
   baselineHeight = Math.max(baselineHeight, viewport.height);
 }
 
-// With the keyboard open the toolbar is fixed, but never above its own slot in
-// the document: near the top it stays in place instead of covering the title
-// and leaving an empty gap where it used to be.
-function syncToolbarSlot() {
-  if (root.dataset.editorKeyboard !== 'open') return;
-  const slot = document.querySelector('.editing-route .editor-toolbar-sticky');
-  if (slot) root.style.setProperty('--bardo-toolbar-slot-top', `${slot.getBoundingClientRect().top}px`);
+// The sticky line (below the header) in layout-viewport coordinates, measured
+// with a fixed probe so it includes Discord's safe area.
+function toolbarPinLine() {
+  if (!pinProbe) {
+    pinProbe = document.createElement('div');
+    pinProbe.className = 'editor-toolbar-pin-probe';
+    pinProbe.setAttribute('aria-hidden', 'true');
+    document.body.append(pinProbe);
+  }
+  return pinProbe.getBoundingClientRect().top;
+}
+
+// With the keyboard open the toolbar is pinned only once scrolling has carried
+// it to the sticky line, like position: sticky; before that it stays in place.
+function syncToolbarPin(keyboardOpen) {
+  const wrapper = document.querySelector('.editing-route .editor-toolbar-sticky');
+  const toolbar = wrapper?.querySelector('.editor-toolbar-container');
+  if (!keyboardOpen || !wrapper || !toolbar) {
+    root.removeAttribute('data-editor-toolbar');
+    if (toolbar) root.style.setProperty('--bardo-editor-toolbar-height', `${toolbar.offsetHeight}px`);
+    return;
+  }
+  if (root.dataset.editorToolbar !== 'pinned') {
+    root.style.setProperty('--bardo-editor-toolbar-height', `${toolbar.offsetHeight}px`);
+  }
+  const pinned = wrapper.getBoundingClientRect().top <= toolbarPinLine() + 0.5;
+  if (pinned) root.dataset.editorToolbar = 'pinned';
+  else root.removeAttribute('data-editor-toolbar');
 }
 
 function syncKeyboardState() {
@@ -30,6 +52,7 @@ function syncKeyboardState() {
     root.style.setProperty('--bardo-visual-viewport-top', '0px');
     root.style.setProperty('--bardo-visual-viewport-left', '0px');
     root.removeAttribute('data-editor-keyboard');
+    syncToolbarPin(false);
     return;
   }
 
@@ -42,7 +65,7 @@ function syncKeyboardState() {
 
   if (keyboardOpen) root.dataset.editorKeyboard = 'open';
   else root.removeAttribute('data-editor-keyboard');
-  syncToolbarSlot();
+  syncToolbarPin(keyboardOpen);
 
   if (!focused && reduction < 80) {
     baselineHeight = Math.max(viewport.height, window.innerHeight);
@@ -62,8 +85,7 @@ rememberBaseline();
 viewport?.addEventListener('resize', scheduleSync, {passive: true});
 viewport?.addEventListener('scroll', scheduleSync, {passive: true});
 window.addEventListener('resize', scheduleSync, {passive: true});
-// In the scroll handler itself, so the toolbar follows its slot in the same frame.
-window.addEventListener('scroll', syncToolbarSlot, {passive: true});
+window.addEventListener('scroll', scheduleSync, {passive: true});
 document.addEventListener('focusin', () => {
   // focusin usually fires before the keyboard finishes animating, which makes
   // it the safest moment to preserve the keyboard-free baseline.
@@ -73,6 +95,7 @@ document.addEventListener('focusin', () => {
 document.addEventListener('focusout', () => window.setTimeout(scheduleSync, 0));
 window.addEventListener('orientationchange', () => {
   root.removeAttribute('data-editor-keyboard');
+  root.removeAttribute('data-editor-toolbar');
   window.setTimeout(() => {
     baselineHeight = viewport?.height || window.innerHeight;
     scheduleSync();

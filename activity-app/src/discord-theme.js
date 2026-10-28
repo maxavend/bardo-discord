@@ -1,4 +1,8 @@
 export const THEME_PREFERENCE_KEY = 'bardo-theme-preference';
+// Quién eligió el tema guardado en este dispositivo: la preferencia es de cada
+// persona (se guarda en su cuenta), así que no se hereda de otra cuenta.
+export const THEME_OWNER_KEY = 'bardo-theme-preference-owner';
+export const DEFAULT_THEME = 'dark';
 const LEGACY_THEME_KEYS = ['heroui-theme', 'bardo.theme.preference.v1'];
 
 function normalizeTheme(value) {
@@ -10,9 +14,10 @@ function normalizePreference(value) {
   return normalizeTheme(value) || (String(value || '').trim().toLowerCase() === 'system' ? 'system' : null);
 }
 
-export function getThemePreference() {
+/** Tema elegido a mano en este dispositivo (claro, oscuro o sistema), o null. */
+export function getStoredThemePreference() {
   try {
-    const preference = normalizeTheme(localStorage.getItem(THEME_PREFERENCE_KEY));
+    const preference = normalizePreference(localStorage.getItem(THEME_PREFERENCE_KEY));
     if (preference) return preference;
     for (const legacyKey of LEGACY_THEME_KEYS) {
       const legacyPreference = normalizeTheme(localStorage.getItem(legacyKey));
@@ -21,12 +26,48 @@ export function getThemePreference() {
         return legacyPreference;
       }
     }
-    // Default to discord client theme or system theme on first visit
-    const detected = resolveDiscordTheme({allowSystem: true}) || 'dark';
-    return detected;
+  } catch {}
+  return null;
+}
+
+export function getStoredThemeOwner() {
+  try {
+    return localStorage.getItem(THEME_OWNER_KEY) || null;
   } catch {
-    return 'dark';
+    return null;
   }
+}
+
+export function storeThemePreference(preference, ownerId = null) {
+  const normalized = normalizePreference(preference);
+  if (!normalized) return;
+  try {
+    localStorage.setItem(THEME_PREFERENCE_KEY, normalized);
+    if (ownerId) localStorage.setItem(THEME_OWNER_KEY, String(ownerId));
+  } catch {}
+}
+
+export function clearStoredThemePreference() {
+  try {
+    localStorage.removeItem(THEME_PREFERENCE_KEY);
+    localStorage.removeItem(THEME_OWNER_KEY);
+    for (const legacyKey of LEGACY_THEME_KEYS) localStorage.removeItem(legacyKey);
+  } catch {}
+}
+
+/**
+ * Oscuro salvo que la persona haya elegido otro tema. Ni Discord ni el sistema
+ * cambian el tema por defecto; solo «Sistema», si se elige, los sigue.
+ * `?theme=` sirve para pruebas y vistas previas.
+ */
+export function getThemePreference() {
+  const stored = getStoredThemePreference();
+  if (stored) return stored;
+  try {
+    const queryTheme = normalizeTheme(new URLSearchParams(window.location.search).get('theme'));
+    if (queryTheme) return queryTheme;
+  } catch {}
+  return DEFAULT_THEME;
 }
 
 function resolveSystemTheme() {
@@ -77,7 +118,7 @@ function applyTheme(targetTheme) {
 export function applyDiscordTheme({preference, allowSystem = true} = {}) {
   const selected = normalizePreference(preference) || getThemePreference();
   const resolved = selected === 'system'
-    ? (resolveDiscordTheme({allowSystem: true}) || (allowSystem ? 'light' : 'light'))
+    ? (resolveDiscordTheme({allowSystem}) || DEFAULT_THEME)
     : selected;
   const applied = applyTheme(resolved);
   collectDiscordThemeDiagnostics();

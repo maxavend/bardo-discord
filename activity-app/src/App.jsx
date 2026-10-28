@@ -642,7 +642,7 @@ function DocsHeader({children, actions, className = '', onOpenSettings}) {
 }
 
 function ThemeModeMenu() {
-  const {theme, setTheme} = useTheme('dark');
+  const {theme, setTheme} = useTheme();
   const {iconRef, handlers} = useIconAnimation();
   const isDark = theme === 'dark'
     || (theme === 'system' && typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
@@ -1236,7 +1236,7 @@ function TextPreviewModal({isOpen, doc, onCopy, onCancel}) {
           <DialogTitle>Texto del documento</DialogTitle>
           <DialogDescription className="truncate">{doc?.title || 'Sin título'}</DialogDescription>
         </DialogHeader>
-        <OverlayScrollArea className="min-h-0 max-h-[calc(85dvh-12rem)]" contentClassName="py-2 pr-2">
+        <OverlayScrollArea className="-mx-6 min-h-0 max-h-[calc(85dvh-12rem)]" contentClassName="px-6 py-2">
           <pre className="markdown-preview-content" tabIndex="0" aria-label="Texto del documento">{text}</pre>
         </OverlayScrollArea>
         <DialogFooter>
@@ -2191,6 +2191,7 @@ function App() {
       {route.type === 'planner' && (
         <PlannerModule
           initialTab={route.tab || 'home'}
+          navigation={route}
           onSwitchTab={(tab) => {
             // An action URL is consumed once; Back must not create/open again.
             const options = {replace: route.tab === 'new' || route.tab?.startsWith('session:')};
