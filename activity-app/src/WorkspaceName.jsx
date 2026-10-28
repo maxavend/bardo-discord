@@ -37,6 +37,8 @@ export function WorkspaceName({moduleLabel, onOpenSettings}) {
         <PopoverTrigger
           render={(
             <button type="button" className="workspace-chip" title={[workspace.displayName, where].filter(Boolean).join(' · ')}>
+              {/* En móvil el símbolo va dentro del botón: se toca todo junto. */}
+              <span className="workspace-mark workspace-chip-mark" aria-hidden="true" />
               <span className="workspace-chip-module">{moduleLabel}</span>
               <span className="workspace-chip-space">
                 <span className="workspace-name">{workspace.displayName}</span>

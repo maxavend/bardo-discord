@@ -19,7 +19,7 @@ test.beforeEach(async ({page}) => {
 test('el Hub lleva a cada módulo, marca el actual y ni la marca ni las pestañas se mueven', async ({page}) => {
   const hub = page.getByRole('navigation', {name: 'Módulos de Bardo'});
   await expect(hub).toHaveCount(1);
-  const brand = page.locator('.workspace-mark').first();
+  const brand = page.locator('.workspace-mark:visible').first();
   const positions = new Set();
   const hubPositions = new Set();
   for (const [label, url] of MODULES) {

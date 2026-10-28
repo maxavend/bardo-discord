@@ -729,7 +729,7 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 .workspace-chip-chevron { flex: none; color: var(--muted-foreground); transition: transform var(--duration-fast) var(--ease-smooth-out); }
 .workspace-chip[data-popup-open] .workspace-chip-chevron { transform: rotate(180deg); }
 .workspace-chip-space { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.workspace-chip-module { display: none; }
+.workspace-chip-module, .workspace-chip-mark { display: none; }
 /* Solo se recorta a lo ancho (con «…»): los emojis de los nombres de canal
    son más altos que la línea y no deben cortarse arriba ni abajo. */
 .workspace-name { min-width: 0; overflow-x: clip; overflow-y: visible; text-overflow: ellipsis; white-space: nowrap; }
@@ -819,7 +819,11 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 @media (max-width: 767px) {
   :root { --bardo-topbar: 64px; }
   .workspace-mark { --mark-size: 24px; }
-  .workspace-chip { height: 44px; padding: 0 8px 0 4px; }
+  /* Símbolo, título y flecha son un solo botón con 8 px de aire a los lados;
+     el margen negativo deja el símbolo alineado con el contenido. */
+  .header-identity > .workspace-mark { display: none; }
+  .workspace-chip-mark { display: block; }
+  .workspace-chip { gap: 8px; height: 44px; margin-inline-start: -8px; padding: 0 12px 0 8px; }
   .workspace-chip-space { display: none; }
   .workspace-chip-module {
     display: inline-flex;
@@ -841,6 +845,8 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
     border-radius: 999px;
     background: var(--punto);
   }
+  /* Teléfonos de 320 px: el título cabe completo, con su punto. */
+  @media (max-width: 359px) { .workspace-chip-module { font-size: 17px; } }
 }
 /* Perfil: el avatar abre el menú de ajustes y tema. Área táctil de 40 px. */
 .user-menu-trigger {
@@ -1716,7 +1722,7 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
     .has-hub-tabs .header-compact-button:not(.header-secondary) { width: auto; padding-inline: 12px !important; }
     .has-hub-tabs .header-compact-button:not(.header-secondary) > .header-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; clip-path: none; }
   }
-  .doc-topbar { padding-inline: 12px; }
+  .doc-topbar:not(.has-hub-tabs) { padding-inline: 12px; }
   /* Aire para que los anillos de foco y de menú abierto no toquen al vecino. */
   .topbar-right { gap: 8px; }
   .save-state {
