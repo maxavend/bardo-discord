@@ -222,7 +222,8 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
       <div className="kanban-inner kanban-head flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0">
-            <h1 id="kanban-title" tabIndex={-1} className="font-heading text-lg font-semibold tracking-tight text-foreground">Tareas</h1>
+            {/* En móvil el título ya está en el header. */}
+            <h1 id="kanban-title" tabIndex={-1} className="font-heading text-lg font-semibold tracking-tight text-foreground max-md:sr-only">Tareas</h1>
             {!remote && <p className="hidden text-xs text-muted-foreground md:block">Solo en este dispositivo</p>}
           </div>
           {STATUS_TEXT[status] && (

@@ -29,7 +29,7 @@ test('Inicio muestra la reunión creada y abre su agenda correcta', async ({page
   await page.getByRole('link', {name: 'Nueva reunión', exact: true}).click();
   await page.getByPlaceholder('Nombre de la reunión').fill('Revisión desde Inicio');
   await page.getByRole('button', {name: 'Listo', exact: true}).click();
-  await page.getByRole('button', {name: 'Volver', exact: true}).click();
+  await page.getByRole('button', {name: 'Volver a Reuniones'}).click();
   await page.getByRole('navigation', {name: 'Módulos de Bardo'}).getByRole('link', {name: 'Inicio'}).click();
   await page.getByRole('link', {name: /Revisión desde Inicio/}).click();
   await expect(page.locator('.planner-module-root')).toContainText('Revisión desde Inicio');

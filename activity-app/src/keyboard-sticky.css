@@ -1,35 +1,28 @@
 /*
  * Normal state: the editor toolbar uses the product's native sticky geometry.
- * Keyboard state: the toolbar stays where it is in the document until scrolling
- * brings it to the sticky line; only then the visual toolbar becomes fixed
- * there. Its wrapper keeps the toolbar's height in flow, so the document never
- * jumps.
+ * Keyboard state: only the visual toolbar becomes fixed; its wrapper remains
+ * in flow so the document keeps its vertical rhythm and does not jump.
  */
+
+/* With the keyboard open, iOS pans the visual viewport over the layout one;
+   the sticky header would stay above the screen. It follows the visible area. */
+html[data-editor-keyboard="open"] .app-host-header {
+  transform: translateY(var(--bardo-visual-viewport-top, 0px));
+}
 
 html[data-editor-keyboard="open"] .editing-route .editor-toolbar-sticky {
   position: relative;
   top: auto;
-  height: var(--bardo-editor-toolbar-height, 46px);
+  min-height: 52px;
   z-index: 50;
 }
 
-/* Mismo punto que el sticky normal: abrir el teclado no mueve la barra. */
-.editor-toolbar-pin-probe,
-html[data-editor-keyboard="open"][data-editor-toolbar="pinned"] .editing-route .editor-toolbar-container {
-  top: calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + 8px);
-}
-
-.editor-toolbar-pin-probe {
+html[data-editor-keyboard="open"] .editing-route .editor-toolbar-container {
   position: fixed;
-  left: 0;
-  width: 0;
-  height: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-html[data-editor-keyboard="open"][data-editor-toolbar="pinned"] .editing-route .editor-toolbar-container {
-  position: fixed;
+  top: max(
+    calc(var(--bardo-visual-viewport-top) + var(--bardo-safe-top) + var(--bardo-topbar) + 8px),
+    var(--bardo-toolbar-slot-top, 0px)
+  );
   left: calc(50% + var(--bardo-visual-viewport-left));
   width: min(var(--bardo-content), calc(100vw - var(--bardo-safe-left) - var(--bardo-safe-right) - 28px));
   transform: translateX(-50%) translateZ(0);
@@ -38,7 +31,7 @@ html[data-editor-keyboard="open"][data-editor-toolbar="pinned"] .editing-route .
 }
 
 @media (min-width: 760px) {
-  html[data-editor-keyboard="open"][data-editor-toolbar="pinned"] .editing-route .editor-toolbar-container {
+  html[data-editor-keyboard="open"] .editing-route .editor-toolbar-container {
     width: min(var(--bardo-content), calc(100vw - 48px));
   }
 }

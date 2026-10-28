@@ -16,11 +16,12 @@ test.beforeEach(async ({page}) => {
   await page.reload();
 });
 
-test('el Hub lleva a cada módulo, marca el actual y la marca no se mueve', async ({page}) => {
+test('el Hub lleva a cada módulo, marca el actual y ni la marca ni las pestañas se mueven', async ({page}) => {
   const hub = page.getByRole('navigation', {name: 'Módulos de Bardo'});
   await expect(hub).toHaveCount(1);
-  const brand = page.locator('.workspace-name');
+  const brand = page.locator('.workspace-mark:visible').first();
   const positions = new Set();
+  const hubPositions = new Set();
   for (const [label, url] of MODULES) {
     await hub.getByRole('link', {name: label}).click();
     await expect(page).toHaveURL(url);
@@ -28,8 +29,12 @@ test('el Hub lleva a cada módulo, marca el actual y la marca no se mueve', asyn
     await expect(hub.locator('[aria-current="page"]')).toHaveCount(1);
     const box = await brand.boundingBox();
     positions.add(`${Math.round(box.x)}:${Math.round(box.y)}`);
+    const hubBox = await hub.boundingBox();
+    hubPositions.add(`${Math.round(hubBox.x)}:${Math.round(hubBox.width)}`);
   }
   expect([...positions]).toHaveLength(1);
+  // Escritorio: las pestañas, centradas, quedan en el mismo lugar en todas las vistas.
+  if (!isNarrow(page)) expect([...hubPositions]).toHaveLength(1);
 });
 
 test('la barra móvil solo aparece en la vista principal de cada módulo', async ({page}) => {
@@ -40,7 +45,7 @@ test('la barra móvil solo aparece en la vista principal de cada módulo', async
   await page.getByRole('button', {name: 'Nueva reunión'}).last().click();
   await expect(page.getByPlaceholder('Nombre de la reunión')).toBeVisible();
   await expect(bar).toHaveCount(0);
-  await page.getByRole('button', {name: 'Volver', exact: true}).click();
+  await page.getByRole('button', {name: 'Volver a Reuniones'}).click();
   await expect(page.getByRole('navigation', {name: 'Módulos de Bardo'})).toBeVisible();
   // El contenido nunca queda tapado por la barra.
   const overlap = await page.evaluate(() => {
@@ -93,11 +98,12 @@ test('Ajustes personales: tema y «Al abrir Bardo» se recuerdan', async ({page}
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-test('el aviso de beta se puede cerrar y no vuelve a aparecer', async ({page}) => {
-  const notice = page.getByRole('note', {name: 'Aviso de beta'});
-  await expect(notice).toContainText('Bardo está en beta');
-  await notice.getByRole('button', {name: 'Cerrar aviso de beta'}).click();
-  await expect(notice).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole('note', {name: 'Aviso de beta'})).toHaveCount(0);
+test('el aviso de beta está a mano sin ocupar una franja bajo el header', async ({page}) => {
+  await expect(page.getByText('Bardo está en beta')).toHaveCount(0);
+  // Escritorio: el chip «Beta»; móvil: el menú del espacio, junto al título.
+  if (isNarrow(page)) await page.locator('.workspace-chip').click();
+  else await page.getByRole('button', {name: /Bardo está en beta/}).click();
+  await expect(page.getByText('Bardo está en beta. Si algo no funciona')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Bardo está en beta. Si algo no funciona')).toHaveCount(0);
 });
