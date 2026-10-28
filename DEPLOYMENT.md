@@ -23,6 +23,21 @@ npx wrangler rollback ba7c7b29-8ffa-4e91-9574-dc05db7b1ec0 --message 'Volver a b
 npx wrangler rollback 63b02ad7-ed14-4411-b829-09b06f41ad1f --message 'Volver a e6178df (#35)' --yes
 ```
 
+## Identidad «tinta, papel y punto», perfil en el header y selectores que se deslizan — 26 de octubre de 2026
+
+- Código: `a64b251` (PR #33, en `main`). Worker activo al 100%: `ca7dddd7-e779-4168-b724-208408764895` (deploy de GitHub #36). Incluye #30 y #31, que no habían llegado a producción; su deploy pendiente (#30) se canceló porque habría publicado una versión anterior.
+- Identidad: tokens de papel y tinta con una gota de violeta, noche en vez de negro puro, `--punto` para lo que concluye. Títulos en Lexend (autoalojada), Inter con tamaño óptico. Carga con el wordmark dibujado y la onda animada (reemplaza a la mascota). Reunión en vivo: punto para el tema en curso y lo cerrado, renglón de tinta para lo conversado.
+- Header: ícono del servidor y `#canal`; el avatar abre un menú con nombre, rol, Ajustes por alcance y tema (reemplaza los botones sueltos de Ajustes y tema).
+- Selectores de una opción con indicador que se desliza; la lista entra con un fundido al cambiar de pestaña. Respeta movimiento reducido.
+- Sin migraciones ni cambios en el Worker o los comandos. Validación: lint, tipos, `npm run check`, 478 unitarias, 315/316 E2E en 7 viewports (el restante, intermitente, pasa en 5 repeticiones), revisión visual claro/oscuro y escritorio/móvil. Producción: `index.html` idéntico al build de `main`, assets y fuentes 200, APIs protegidas 401 sin sesión.
+- Pendiente en Discord: avatares e ícono del servidor desde el CDN de Discord, rol real en el menú de perfil y carga de fuentes dentro de la Activity.
+
+Rollback a #29 (sin migraciones que deshacer):
+
+```sh
+npx wrangler rollback a091ec8e-283c-4ae6-ac27-72b5bc9be2c2 --message 'Volver a #29 (antes de la nueva identidad)' --yes
+```
+
 
 
 ## Reuniones: agenda compartible, facilitadores y revisión de acuerdos — 22 de octubre de 2026
