@@ -144,6 +144,9 @@ html, body, #root {
 html {
   isolation: isolate;
   overflow-x: clip;
+  /* Bardo no cambia de tamaño: iOS tampoco agranda el texto por su cuenta. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   overscroll-behavior-y: none;
   scrollbar-gutter: stable;
   scroll-padding-top: calc(var(--bardo-safe-top) + var(--bardo-topbar) + 20px);

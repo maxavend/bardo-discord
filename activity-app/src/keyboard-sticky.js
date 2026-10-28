@@ -16,13 +16,28 @@ function rememberBaseline() {
   baselineHeight = Math.max(baselineHeight, viewport.height);
 }
 
+// Top of an element in document coordinates, from the layout alone. Not
+// getBoundingClientRect(): with the keyboard open, iOS WebKit measures it from
+// the visual viewport, while position: fixed uses the layout viewport.
+function documentTop(element) {
+  let top = 0;
+  for (let node = element; node; node = node.offsetParent) top += node.offsetTop;
+  return top;
+}
+
 // With the keyboard open the toolbar is fixed, but never above its own slot in
 // the document: near the top it stays in place instead of covering the title
-// and leaving an empty gap where it used to be.
+// and leaving an empty gap where it used to be. The slot is passed in layout
+// viewport coordinates, the same ones its `top` uses. visualViewport.pageTop
+// and offsetTop mean the same in every engine (window.scrollY does not: WebKit
+// reports the visual viewport there, Chromium the layout one).
 function syncToolbarSlot() {
   if (root.dataset.editorKeyboard !== 'open') return;
   const slot = document.querySelector('.editing-route .editor-toolbar-sticky');
-  if (slot) root.style.setProperty('--bardo-toolbar-slot-top', `${slot.getBoundingClientRect().top}px`);
+  if (!slot) return;
+  const pageTop = viewport ? viewport.pageTop : window.scrollY;
+  const offsetTop = viewport ? viewport.offsetTop : 0;
+  root.style.setProperty('--bardo-toolbar-slot-top', `${documentTop(slot) - pageTop + offsetTop}px`);
 }
 
 function syncKeyboardState() {

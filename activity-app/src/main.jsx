@@ -12,6 +12,7 @@ import './styles.css';
 import './editor-focus.css';
 import './keyboard-sticky.css';
 import './keyboard-sticky.js';
+import './no-zoom.js';
 
 const BOOT_PERSONALITY_MESSAGES = [
   'Conectando con Discord…',
