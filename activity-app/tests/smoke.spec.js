@@ -145,9 +145,9 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
       viewportWidth: document.body.getBoundingClientRect().width,
       contentInset: searchRect.left,
       contentRightInset: document.body.getBoundingClientRect().width - searchRect.right,
-      headerTargets: [...header.querySelectorAll('button')].map(button => {
+      headerTargets: [...header.querySelectorAll('button')].filter(button => button.getClientRects().length).map(button => {
         const rect = button.getBoundingClientRect();
-        return {name: button.getAttribute('aria-label'), w: rect.width, h: rect.height};
+        return {name: button.getAttribute('aria-label') || button.innerText.replace(/\s+/g, ' ').replace(' ,', ',').trim(), w: rect.width, h: rect.height};
       }),
     };
   });
@@ -169,7 +169,15 @@ test('visual system, theme and responsive geometry stay coherent', async ({page}
   expect(audit.groupBackground).not.toBe('rgba(0, 0, 0, 0)');
   expect(audit.groupBackground).not.toBe(audit.bodyBackground);
   // Ajustes y tema viven en el menú de perfil (sin Discord se llama «Ajustes»).
-  expect(audit.headerTargets.map(target => target.name)).toEqual(['Subir archivo', 'Nuevo documento', 'Ajustes']);
+  // A la izquierda, el menú del espacio (y en escritorio el chip «Beta»).
+  const wide = (page.viewportSize()?.width ?? 1280) >= 768;
+  expect(audit.headerTargets.map(target => target.name)).toEqual([
+    wide ? 'Bardo, espacio y ajustes' : 'Documentos, espacio y ajustes',
+    ...(wide ? ['Bardo está en beta. Más información'] : []),
+    'Subir archivo',
+    'Nuevo documento',
+    'Ajustes',
+  ]);
   // Tolerate only floating-point layout noise (31.999998px), not smaller targets.
   const layoutEpsilon = 0.001;
   expect(audit.headerTargets.every(({w, h}) => w + layoutEpsilon >= 32 && h + layoutEpsilon >= 32), JSON.stringify(audit.headerTargets)).toBeTruthy();

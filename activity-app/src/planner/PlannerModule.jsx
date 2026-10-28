@@ -1434,7 +1434,7 @@ export function PlannerModule({initialTab = 'home', onSwitchTab, onSaveDocToLibr
   })();
 
   return (
-    <div className="planner-module-root w-full px-4 pt-2 relative min-h-[calc(100dvh-var(--bardo-topbar,52px)-var(--bardo-notice-height,0px))]">
+    <div className="planner-module-root w-full px-4 pt-2 relative min-h-[calc(100dvh-var(--bardo-topbar,52px))]">
       {syncStatus && (syncStatus.state === 'error' || syncStatus.state === 'offline') && (
         <div
           role="status"

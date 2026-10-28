@@ -85,11 +85,10 @@ import {PlannerModule} from './planner/PlannerModule.jsx';
 import {AGENDA_DOC_ORIGIN, buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
 import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
-import {ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
+import {HUB_MODULES, ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
 import {WorkspaceName} from './WorkspaceName.jsx';
 import {UserMenu} from './UserMenu.jsx';
 import {SegmentIndicator} from '@/components/ui/segment-indicator';
-import {BetaNotice} from './BetaNotice.jsx';
 import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
 import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
 
@@ -770,7 +769,7 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
         </Button>
       ) : (
-        <WorkspaceName key="brand" />
+        <WorkspaceName key="brand" moduleLabel={HUB_MODULES.find(module => module.id === moduleForRoute(route))?.label} onOpenSettings={onOpenSettings} />
       )}
     </DocsHeader>
   );
@@ -2168,9 +2167,6 @@ function App() {
           docReturn={route.type === 'doc' ? docReturn : null}
           onNavigateModule={href => go(href, {skipTransition: true})}
         />
-      )}
-      {(route.type === 'home' || route.type === 'library' || route.type === 'planner' || route.type === 'kanban' || (route.type === 'doc' && currentDoc)) && (
-        <BetaNotice />
       )}
       {settingsTab && (
         <Suspense fallback={null}>
