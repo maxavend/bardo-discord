@@ -59,6 +59,10 @@ const THREAD_ERRORS = {
   bot_missing_permissions: 'Bardo necesita permiso para crear hilos públicos en este canal. Pídeselo a quien administra el servidor.',
 };
 
+// Último pedido de alta rápida ya atendido; vive fuera del componente para
+// sobrevivir a que Tareas se desmonte al cambiar de módulo.
+let lastHandledQuickAdd = 0;
+
 export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddRequest = 0}) {
   useKanbanPolling(true);
   const engine = getKanbanEngine();
@@ -93,15 +97,18 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
   const isFiltered = filter !== 'all' || Boolean(tagFilter);
   const openCard = cardId ? view.cards[cardId] : null;
 
-  // "Nueva tarea" del header: abre el alta rápida de la primera columna abierta.
+  // "Nueva tarea" (header o Inicio): abre el alta rápida de la primera columna
+  // abierta. Cada pedido se atiende una vez, aunque el módulo se vuelva a montar
+  // o el tablero llegue después.
   useEffect(() => {
-    if (!quickAddRequest || !board) return;
+    if (!quickAddRequest || quickAddRequest <= lastHandledQuickAdd || !board) return;
+    lastHandledQuickAdd = quickAddRequest;
     const target = defaultColumnId(board);
     setFilter('all');
     setTagFilter(null);
     setQuickAddColumnId(target);
     scrollColumnIntoView(target);
-  }, [quickAddRequest]);
+  }, [quickAddRequest, board]);
 
   // Enlace a una tarjeta que ya no está: se busca una vez y, si no existe, se explica.
   useEffect(() => {

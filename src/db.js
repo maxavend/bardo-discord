@@ -282,6 +282,10 @@ export async function deleteDocumentPermanently(db, documentId) {
       .bind(documentId, documentId),
     db.prepare(`DELETE FROM activity_contexts WHERE document_id = ? AND ${archivedGuard}`)
       .bind(documentId, documentId),
+    db.prepare(`DELETE FROM personal_document_visitors WHERE document_id = ? AND ${archivedGuard}`)
+      .bind(documentId, documentId),
+    db.prepare(`DELETE FROM personal_documents WHERE document_id = ? AND ${archivedGuard}`)
+      .bind(documentId, documentId),
     db.prepare('DELETE FROM documents WHERE id = ? AND archived_at IS NOT NULL').bind(documentId),
   ]);
   return Number(results?.at(-1)?.meta?.changes || 0) > 0;
@@ -434,6 +438,9 @@ export async function adoptLegacyDocumentsForGuild(db, guildId, userId = null) {
          WHERE d.archived_at IS NULL
            AND NOT EXISTS (
              SELECT 1 FROM document_guild_access a WHERE a.document_id = d.id
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM personal_documents p WHERE p.document_id = d.id
            )`,
       )
       .bind(guildId, addedAt, userId)
@@ -458,6 +465,118 @@ export async function documentHasGuildAccess(db, documentId, guildId) {
     .bind(documentId, guildId)
     .first();
   return Boolean(row?.allowed);
+}
+
+// ---------------------------------------------------------------------------
+// Documentos personales: de una persona, sin canal (migración 0018).
+
+export const PERSONAL_LINK_ACCESS = Object.freeze(['none', 'read', 'edit']);
+
+export async function loadPersonalDocument(db, documentId) {
+  if (!documentId) return null;
+  const row = await db
+    .prepare('SELECT owner_id, link_access FROM personal_documents WHERE document_id = ?')
+    .bind(documentId)
+    .first();
+  return row ? {ownerId: String(row.owner_id), linkAccess: row.link_access || 'none'} : null;
+}
+
+export function insertPersonalDocumentStatement(db, documentId, ownerId, now = new Date().toISOString()) {
+  return db
+    .prepare(
+      `INSERT INTO personal_documents (document_id, owner_id, link_access, created_at, updated_at)
+       VALUES (?, ?, 'none', ?, ?)`,
+    )
+    .bind(documentId, ownerId, now, now);
+}
+
+/**
+ * Documentos personales de una persona: los suyos y, fuera del archivo, los
+ * ajenos que abrió por un enlace que sigue activo. Mismo formato que
+ * listDocumentsForChannel, más el dueño y el permiso del enlace.
+ */
+export async function listPersonalDocuments(db, userId, {archived = false, limit = 150, summary = false} = {}) {
+  if (!userId) return [];
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 150, 250));
+  const columns = summary ? DOCUMENT_SUMMARY_COLUMNS : DOCUMENT_COLUMNS;
+  const archivedFilter = archived ? 'd.archived_at IS NOT NULL' : 'd.archived_at IS NULL';
+  const order = archived
+    ? "COALESCE(d.archived_at, NULLIF(d.updated_at, ''), d.created_at) DESC"
+    : "COALESCE(NULLIF(d.updated_at, ''), d.created_at) DESC";
+  // El archivo es solo de quien es dueño: un enlace nunca deja ver lo archivado.
+  const audience = archived
+    ? 'p.owner_id = ?'
+    : `(p.owner_id = ? OR (p.link_access != 'none' AND EXISTS (
+         SELECT 1 FROM personal_document_visitors v WHERE v.document_id = d.id AND v.user_id = ?
+       )))`;
+  const result = await db
+    .prepare(
+      `SELECT ${columns}, p.owner_id AS personal_owner_id, p.link_access AS personal_link_access
+       FROM documents d
+       JOIN personal_documents p ON p.document_id = d.id
+       WHERE ${archivedFilter} AND ${audience}
+       ORDER BY ${order}
+       LIMIT ?`,
+    )
+    .bind(...(archived ? [userId] : [userId, userId]), safeLimit)
+    .all();
+
+  return (result?.results || []).map(row => ({
+    ...mapDocumentRow(row),
+    personal: {ownerId: String(row.personal_owner_id), linkAccess: row.personal_link_access || 'none'},
+  }));
+}
+
+/** Solo quien es dueño cambia el enlace. Devuelve true si se escribió. */
+export async function setPersonalDocumentLinkAccess(db, documentId, ownerId, linkAccess) {
+  if (!PERSONAL_LINK_ACCESS.includes(linkAccess)) return false;
+  const result = await db
+    .prepare(
+      `UPDATE personal_documents SET link_access = ?, updated_at = ?
+       WHERE document_id = ? AND owner_id = ?`,
+    )
+    .bind(linkAccess, new Date().toISOString(), documentId, ownerId)
+    .run();
+  return Number(result?.meta?.changes || 0) > 0;
+}
+
+export async function recordPersonalDocumentVisit(db, documentId, userId) {
+  if (!documentId || !userId) return;
+  await db
+    .prepare(
+      `INSERT INTO personal_document_visitors (document_id, user_id, last_opened_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(document_id, user_id) DO UPDATE SET last_opened_at = excluded.last_opened_at`,
+    )
+    .bind(documentId, userId, new Date().toISOString())
+    .run();
+}
+
+/**
+ * Lleva un documento personal a un canal: desde ahí sigue las reglas del canal
+ * y deja de ser personal (y de estar en «Compartidos contigo»). Un solo batch,
+ * con cada paso condicionado a que siga siendo de esa persona. Devuelve true si
+ * se movió.
+ */
+export async function movePersonalDocumentToChannel(db, documentId, ownerId, guildId, channelId) {
+  const now = new Date().toISOString();
+  const ownedGuard = 'EXISTS (SELECT 1 FROM personal_documents WHERE document_id = ? AND owner_id = ?)';
+  const results = await db.batch([
+    db.prepare(
+      `INSERT INTO document_guild_access (document_id, guild_id, added_at, added_by)
+       SELECT ?, ?, ?, ? WHERE ${ownedGuard}
+       ON CONFLICT(document_id, guild_id) DO NOTHING`,
+    ).bind(documentId, guildId, now, ownerId, documentId, ownerId),
+    db.prepare(
+      `INSERT INTO document_channel_access (document_id, guild_id, channel_id, added_at, added_by)
+       SELECT ?, ?, ?, ?, ? WHERE ${ownedGuard}
+       ON CONFLICT(document_id, channel_id) DO NOTHING`,
+    ).bind(documentId, guildId, channelId, now, ownerId, documentId, ownerId),
+    db.prepare(`DELETE FROM personal_document_visitors WHERE document_id = ? AND ${ownedGuard}`)
+      .bind(documentId, documentId, ownerId),
+    db.prepare('DELETE FROM personal_documents WHERE document_id = ? AND owner_id = ?').bind(documentId, ownerId),
+  ]);
+  return Number(results?.at(-1)?.meta?.changes || 0) > 0;
 }
 
 export async function saveDocsLaunchIntent(db, userId, guildId, documentId, channelId = null) {

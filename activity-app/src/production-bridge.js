@@ -576,6 +576,38 @@ export async function prepareBardoProduction(options = {}) {
   };
 
   /**
+   * Documentos personales. Ambas acciones exigen que exista en el servidor
+   * (un personal recién creado se guarda antes) y devuelven el documento en el
+   * formato del store, ya registrado como confirmado.
+   */
+  async function personalDocumentRequest(documentId, path, init, fallback) {
+    const settled = await docsSync.settle(documentId);
+    if (!settled) throw new Error(UNSAVED_MESSAGE);
+    let data;
+    try {
+      data = await request(`/api/docs/${encodeURIComponent(documentId)}/${path}`, init);
+    } catch (error) {
+      throw new Error(userFacingError(error, fallback));
+    }
+    const item = data?.document;
+    if (!item?.id) throw new Error(fallback);
+    docsSync.registerRemote([item]);
+    return serverDocToLocal(item);
+  }
+
+  /** Quién más puede abrir un documento personal con su enlace: 'none', 'read' o 'edit'. */
+  window.__bardoSetDocumentLinkAccess = (documentId, linkAccess) => personalDocumentRequest(
+    documentId, 'sharing', {method:'PATCH', body:{linkAccess}},
+    'No se pudo cambiar quién puede abrir el enlace. Inténtalo de nuevo.',
+  );
+
+  /** Lleva un documento personal al canal actual: desde ahí es del canal. */
+  window.__bardoMoveDocumentToChannel = documentId => personalDocumentRequest(
+    documentId, 'move', {method:'POST'},
+    'No se pudo llevar el documento a este canal. Inténtalo de nuevo.',
+  );
+
+  /**
    * Enlace firmado y de corta duración para descargar un documento (md, docx,
    * pdf) fuera de Discord: el iframe de la Activity no descarga archivos de
    * forma fiable, así que el enlace se abre en el navegador del usuario.
@@ -645,10 +677,12 @@ export async function prepareBardoProduction(options = {}) {
     return serverDocToLocal(item);
   };
 
-  /** Ids de los documentos archivados (sin contenido) para el contador de la pestaña. */
+  /** Archivados (id y espacio, sin contenido) para el contador de cada pestaña. */
   window.__bardoFetchArchivedSummary = async () => {
     const res = await request('/api/docs?archived=1&summary=1');
-    return (Array.isArray(res?.documents) ? res.documents : []).map(item => item?.id).filter(Boolean);
+    return (Array.isArray(res?.documents) ? res.documents : [])
+      .filter(item => item?.id)
+      .map(item => ({id: item.id, space: item.space === 'personal' ? 'personal' : 'channel'}));
   };
 
   window.__bardoDeleteDocumentPermanent = async documentId => {
