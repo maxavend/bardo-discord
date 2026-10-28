@@ -1,10 +1,10 @@
 // Fondo de la opción activa que se desliza entre opciones, como las pestañas
 // del hub. Va como primer hijo de un grupo de selección única (botones con
-// aria-pressed o pestañas con aria-selected) y se mide solo: cualquier cambio
+// aria-pressed, pestañas con aria-selected o enlaces con aria-current) y se mide solo: cualquier cambio
 // de selección o de tamaño lo reubica, sin que el grupo tenga que avisarle.
 import {useLayoutEffect, useRef} from 'react';
 
-const ACTIVE = ':scope > [aria-pressed="true"], :scope > [aria-selected="true"]';
+const ACTIVE = ':scope > [aria-pressed="true"], :scope > [aria-selected="true"], :scope > [aria-current="page"]';
 
 export function SegmentIndicator() {
   const ref = useRef(null);
@@ -34,7 +34,7 @@ export function SegmentIndicator() {
     };
     place();
     const attributes = new MutationObserver(place);
-    attributes.observe(group, {subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-selected'], childList: true});
+    attributes.observe(group, {subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'aria-selected', 'aria-current'], childList: true});
     const size = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
     size?.observe(group);
     return () => {

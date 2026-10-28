@@ -537,6 +537,59 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 .home-notice { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-block: 16px; }
 .home-notice p { flex: 1 1 240px; }
 .home .continue-row { text-decoration: none; }
+/* Inicio: crear sin bajar, lo de ahora primero y las tareas por urgencia. */
+.home-create { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.home-now { margin-top: 28px; }
+.home-now-list { display: flex; flex-direction: column; gap: 8px; }
+.home-now-row[data-live] .continue-accent { background: var(--punto); }
+.home-now-action { display: inline-flex; align-items: center; gap: 2px; color: var(--primary); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.home .continue-row:has(> .home-now-action) { grid-template-columns: 4px minmax(0, 1fr) auto; }
+.home-count { margin-left: 2px; min-width: 20px; padding: 1px 7px; border-radius: 9999px; background: var(--muted); color: var(--foreground); font-size: 12px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.home-section-summary { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.home-section-summary[data-urgent] { color: var(--destructive); font-weight: 600; }
+.home-group + .home-group { margin-top: 12px; }
+.home-group-title { margin: 0 0 4px; padding-inline: 12px; color: var(--muted-foreground); font-size: 12px; font-weight: 600; line-height: 1.4; }
+.home-group[data-group="overdue"] .home-group-title { color: var(--destructive); }
+.home-item-end { display: inline-flex; flex-shrink: 0; align-items: center; gap: 8px; }
+.home-doc-meta { display: flex !important; align-items: center; gap: 4px; }
+.home-doc-meta > svg { flex-shrink: 0; }
+.home-links { display: flex; flex-wrap: wrap; gap: 4px; }
+@media (max-width: 479px) {
+  /* Dos por fila: cuatro botones en una sola línea no caben a 320 px. */
+  .home-create { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-create > * { justify-content: center; min-width: 0; }
+}
+.home-create-short { display: none; }
+@media (max-width: 399px) {
+  .home-create-long { display: none; }
+  .home-create-short { display: inline; }
+}
+
+/* Documentos: los del canal y los personales, con el mismo selector deslizante. */
+.docs-spaces { display: inline-flex; gap: 4px; padding: 3px; margin-top: 20px; border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); border-radius: 9999px; background: color-mix(in oklab, var(--muted) 60%, transparent); }
+.docs-space-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 14px; border-radius: 9999px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; text-decoration: none; transition: color var(--duration-quick) var(--ease-smooth-out); }
+.docs-space-tab:hover, .docs-space-tab[aria-current="page"] { color: var(--foreground); }
+.docs-space-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.docs-space-count { color: var(--muted-foreground); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.docs-space-hint { margin: 10px 0 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+.docs-spaces + .docs-search, .docs-space-hint + .docs-search { margin-top: 16px; }
+
+/* Compartir un documento personal: tres opciones de radio, una elegida. */
+.share-access { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.share-access-option { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-xl, 0.75rem); cursor: pointer; transition: border-color var(--duration-quick) var(--ease-smooth-out), background-color var(--duration-quick) var(--ease-smooth-out); }
+.share-access-option:hover { background: var(--accent); }
+.share-access-option[data-selected] { border-color: var(--primary); background: color-mix(in oklch, var(--card), var(--primary) 4%); }
+.share-access-option input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--primary); }
+.share-access-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+.share-access-copy strong { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.share-access-copy span { display: block; margin-top: 2px; color: var(--muted-foreground); font-size: 13px; line-height: 1.45; }
+.share-access-error { margin: 0; color: var(--destructive); font-size: 13px; }
+.share-access-error:empty { display: none; }
+.share-access-footer { flex-direction: column; align-items: stretch; gap: 12px; }
+.share-access-hint { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.45; }
+
+/* Quien solo puede leer ve el estado de las tareas del documento, sin marcarlas. */
+.check-control:disabled { cursor: default; }
 .topbar-title { display: inline-flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 14px; font-weight: 400; line-height: 1.25; }
 .topbar-title > svg { color: inherit; flex: 0 0 auto; }
 .has-hub-tabs [data-slot="button"] { font-size: 14px; }

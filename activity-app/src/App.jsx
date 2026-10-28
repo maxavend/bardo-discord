@@ -73,6 +73,9 @@ import {
   Xmark,
   Link,
   PaperPlane,
+  FolderArrowRight,
+  Lock,
+  Persons,
 } from '@gravity-ui/icons';
 import {convertDocumentFile} from './production-import-normalizer.js';
 import {htmlToMarkdown, markdownToHtml} from './editor/bardo-markdown.js';
@@ -80,6 +83,8 @@ import {DOCS_KEYS, scopedDocsKey} from './docs-storage.js';
 import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSnapshot} from './docs-text.js';
 import {copyTextToClipboard} from './docs-clipboard.js';
 import {shareBardoLinkWithFeedback} from './share-link.js';
+import {SPACES, canEditDoc, canManageDoc, docRole, docSpace, docSpaceNote, docsInSpace, isPersonalDoc, isSharedWithMe, libraryHashFor} from './doc-space.js';
+import {MoveToChannelDialog, PersonalShareDialog} from './PersonalShareDialog.jsx';
 import {openExternalUrl} from './discord-links.js';
 import {PlannerModule} from './planner/PlannerModule.jsx';
 import {AGENDA_DOC_ORIGIN, buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
@@ -135,7 +140,8 @@ function parseRoute() {
   }
   if (raw === 'kanban') return {type: 'kanban', cardId: null, key: 'kanban'};
   if (raw.startsWith('kanban-card:')) return {type: 'kanban', cardId: raw.slice('kanban-card:'.length) || null, key: raw};
-  if (raw === 'docs' || raw === 'library') return {type: 'library', key: 'library'};
+  if (raw === 'docs' || raw === 'library') return {type: 'library', space: 'channel', key: 'library'};
+  if (raw === 'docs-personal') return {type: 'library', space: 'personal', key: 'docs-personal'};
   if (raw === 'new') return {type: 'new', key: 'new'};
   if (raw.startsWith('edit-')) return {type: 'edit', id: raw.slice(5), key: raw};
   if (raw.startsWith('doc-')) return {type: 'doc', id: raw.slice(4), key: raw};
@@ -205,12 +211,14 @@ function cleanEditorHtml(container) {
 }
 
 
-function enhanceChecklistHtml(html = '') {
+// `readOnly`: quien solo puede leer ve el estado de cada tarea, sin poder marcarla.
+function enhanceChecklistHtml(html = '', {readOnly = false} = {}) {
   const doc = new DOMParser().parseFromString(`<body>${sanitizeRichHtml(html)}</body>`, 'text/html');
   doc.body.querySelectorAll('ul.checklist > li').forEach(li => {
     const button = doc.createElement('button');
     button.type = 'button';
     button.className = 'check-control';
+    if (readOnly) button.disabled = true;
     button.setAttribute('aria-label', li.classList.contains('done') ? 'Marcar como pendiente' : 'Marcar como completado');
     button.setAttribute('aria-pressed', li.classList.contains('done') ? 'true' : 'false');
     button.innerHTML = '<span aria-hidden="true">✓</span>';
@@ -416,6 +424,10 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context =
   const inReader = context === 'reader';
   const blocked = isImportBlocked(doc);
   const isProduction = Boolean(window.__BARDO_PRODUCTION__);
+  const personal = isPersonalDoc(doc);
+  const ownsPersonal = personal && docRole(doc) === 'owner';
+  const canEdit = canEditDoc(doc);
+  const canManage = canManageDoc(doc);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -439,7 +451,7 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context =
         )}
         {!blocked && (
           <>
-            {!inReader && (
+            {!inReader && canEdit && (
               <DropdownMenuItem onClick={() => onAction('edit', doc)}>
                 <Pencil width={15} height={15} className="text-muted-foreground" />
                 <span>Editar</span>
@@ -447,22 +459,28 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context =
             )}
             <DropdownMenuItem onClick={() => onAction('duplicate', doc)}>
               <Copy width={15} height={15} className="text-muted-foreground" />
-              <span>Duplicar</span>
+              <span>{personal && !ownsPersonal ? 'Guardar una copia personal' : 'Duplicar'}</span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onAction('copy', doc)}>
               <FileText width={15} height={15} className="text-muted-foreground" />
               <span>Copiar texto</span>
             </DropdownMenuItem>
-            {!inReader && (
+            {!inReader && !personal && (
               <DropdownMenuItem onClick={() => onAction('publish', doc)}>
                 <PaperPlane width={15} height={15} className="text-muted-foreground" />
                 <span>Compartir en el canal</span>
               </DropdownMenuItem>
             )}
-            {!doc.archived && (
+            {!doc.archived && (!inReader || !personal) && (
               <DropdownMenuItem onClick={() => onAction('share-link', doc)}>
                 <Link width={15} height={15} className="text-muted-foreground" />
-                <span>Compartir enlace</span>
+                <span>{ownsPersonal ? 'Compartir…' : 'Compartir enlace'}</span>
+              </DropdownMenuItem>
+            )}
+            {ownsPersonal && !doc.archived && isProduction && (
+              <DropdownMenuItem onClick={() => onAction('move-to-channel', doc)}>
+                <FolderArrowRight width={15} height={15} className="text-muted-foreground" />
+                <span>Llevar a este canal</span>
               </DropdownMenuItem>
             )}
 
@@ -500,9 +518,9 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context =
           </>
         )}
 
-        <DropdownMenuSeparator />
+        {canManage && <DropdownMenuSeparator />}
 
-        {doc.archived ? (
+        {!canManage ? null : doc.archived ? (
           <>
             <DropdownMenuItem onClick={() => onAction('restore', doc)}>
               <Archive width={15} height={15} className="text-muted-foreground" />
@@ -526,7 +544,8 @@ function DocActionMenu({doc, onAction, triggerLabel = 'Más acciones', context =
 
 function RichBody({html, onChecklistChange, className = ''}) {
   const ref = useRef(null);
-  const rendered = useMemo(() => enhanceChecklistHtml(html), [html]);
+  const readOnly = !onChecklistChange;
+  const rendered = useMemo(() => enhanceChecklistHtml(html, {readOnly}), [html, readOnly]);
   return (
     <div
       ref={ref}
@@ -557,11 +576,14 @@ function RichBody({html, onChecklistChange, className = ''}) {
   );
 }
 
-function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, archivedCount = 0, isArchived = false}) {
+function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, archivedCount = 0, isArchived = false, space = 'channel'}) {
+  const personal = space === 'personal';
   return (
     <Empty className="my-8">
       <EmptyMedia variant="icon">
-        {isArchived ? (
+        {personal && !query && !isArchived ? (
+          <Lock width={20} height={20} className="text-muted-foreground" />
+        ) : isArchived ? (
           <Archive width={20} height={20} className="text-muted-foreground" />
         ) : (
           <Magnifier width={20} height={20} className="text-muted-foreground" />
@@ -573,7 +595,9 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
             ? 'Sin resultados'
             : isArchived
               ? 'No hay documentos archivados'
-              : 'Todavía no hay documentos'}
+              : personal
+                ? 'Tu espacio personal está vacío'
+                : 'Todavía no hay documentos'}
         </EmptyTitle>
         {(query || !isArchived) && (
           <EmptyDescription>
@@ -581,7 +605,9 @@ function EmptyState({query, onClearSearch, onNewDoc, onUpload, onShowArchived, a
               ? (!isArchived && archivedCount > 0
                 ? `Ningún documento activo coincide con «${query}».`
                 : `Ningún documento coincide con «${query}».`)
-              : 'Crea uno o sube un archivo Word, PDF o de texto.'}
+              : personal
+                ? 'Lo que guardes aquí es solo tuyo y lo ves desde cualquier servidor. Puedes compartir su enlace cuando quieras.'
+                : 'Crea uno o sube un archivo Word, PDF o de texto.'}
           </EmptyDescription>
         )}
       </EmptyHeader>
@@ -739,12 +765,22 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
         <div key="document-actions" className="header-slot-enter flex items-center gap-1">
           {!isImportBlocked(doc) && (
             <>
-              <IconButton label="Compartir en el canal" onClick={() => onAction('publish', doc)}>
-                <PaperPlane width={16} height={16} />
-              </IconButton>
-              <Button variant="default" size="sm" onClick={onEdit} aria-label="Editar" className={cn(HEADER_BUTTON_CLASS, 'ml-1')}>
-                <Pencil width={14} height={14} aria-hidden="true" /> <span className="header-label">Editar</span>
-              </Button>
+              {isPersonalDoc(doc) ? (
+                !doc.archived && (
+                  <IconButton label={docRole(doc) === 'owner' ? 'Compartir' : 'Compartir enlace'} onClick={() => onAction('share-link', doc)}>
+                    <Link width={16} height={16} />
+                  </IconButton>
+                )
+              ) : (
+                <IconButton label="Compartir en el canal" onClick={() => onAction('publish', doc)}>
+                  <PaperPlane width={16} height={16} />
+                </IconButton>
+              )}
+              {canEditDoc(doc) && (
+                <Button variant="default" size="sm" onClick={onEdit} aria-label="Editar" className={cn(HEADER_BUTTON_CLASS, 'ml-1')}>
+                  <Pencil width={14} height={14} aria-hidden="true" /> <span className="header-label">Editar</span>
+                </Button>
+              )}
             </>
           )}
           <DocActionMenu doc={doc} context="reader" triggerLabel="Más acciones del documento" onAction={onAction} />
@@ -765,8 +801,8 @@ function PersistentHeader({route, doc, onBack, onEdit, onAction, onNew, onUpload
           <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">Reuniones</span>
         </Button>
       ) : doc && !isHome && !isLibrary && !isPlanner && !isKanban ? (
-        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : 'Volver a Documentos'} className="back-button h-8 px-2.5 text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
-          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : 'Documentos'}</span>
+        <Button key="document-title" variant="ghost" size="sm" onClick={onBack} aria-label={docReturn ? `Volver a ${docReturn.label}` : `Volver a ${isPersonalDoc(doc) ? 'Personal' : 'Documentos'}`} className="back-button h-8 px-2.5 text-muted-foreground hover:text-foreground font-medium flex items-center gap-1">
+          <ChevronLeft width={15} height={15} aria-hidden="true" /> <span className="header-label">{docReturn ? docReturn.label : isPersonalDoc(doc) ? 'Personal' : 'Documentos'}</span>
         </Button>
       ) : (
         <WorkspaceName key="brand" moduleLabel={HUB_MODULES.find(module => module.id === moduleForRoute(route))?.label} onOpenSettings={onOpenSettings} />
@@ -794,9 +830,13 @@ function Library({
   parkedChanges = [],
   onRetryParked,
   onDiscardParked,
+  space = 'channel',
+  onSpaceChange,
+  spaceCounts = {},
 }) {
   const fileInputRef = useRef(null);
   const isArchivedTab = activeTab === 'archived';
+  const isPersonalSpace = space === 'personal';
   const parkedNames = `${parkedChanges.slice(0, 3).map(item => `«${item.title}»`).join(', ')}${parkedChanges.length > 3 ? '…' : ''}`;
   const tabClass = selected => `px-3 py-1 rounded-md font-medium transition-colors ${
     selected ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -818,12 +858,39 @@ function Library({
             if (file) onUpload(file);
           }}
         />
+        {/* Dos espacios: los del canal y los tuyos. Es navegación (cada uno tiene
+            su dirección), así que son enlaces con aria-current. */}
+        <nav className="docs-spaces" aria-label="Espacio de documentos">
+          <SegmentIndicator />
+          {Object.values(SPACES).map(item => (
+            <a
+              key={item.id}
+              href={item.hash}
+              aria-current={space === item.id ? 'page' : undefined}
+              className="docs-space-tab"
+              onClick={event => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onSpaceChange?.(item.id);
+              }}
+            >
+              {item.id === 'personal' ? <Lock width={14} height={14} aria-hidden="true" /> : <Persons width={14} height={14} aria-hidden="true" />}
+              <span>{item.label}</span>
+              {Number.isFinite(spaceCounts[item.id]) && <span className="docs-space-count">{spaceCounts[item.id]}</span>}
+            </a>
+          ))}
+        </nav>
+        {/* Sin documentos, el estado vacío ya lo explica: no repetirlo arriba. */}
+        {isPersonalSpace && !isArchivedTab && activeCount > 0 && (
+          <p className="docs-space-hint">Solo tú los ves, desde cualquier servidor. Comparte su enlace cuando quieras.</p>
+        )}
+
         <InputGroup className="docs-search">
           <InputGroupAddon align="inline-start">
             <Magnifier width={15} height={15} className="text-muted-foreground" />
           </InputGroupAddon>
           <InputGroupInput
-            placeholder={isArchivedTab ? 'Buscar en archivados…' : 'Buscar documentos…'}
+            placeholder={isArchivedTab ? 'Buscar en archivados…' : isPersonalSpace ? 'Buscar en Personal…' : 'Buscar documentos…'}
             value={query}
             onChange={e => setQuery(e.target.value)}
             aria-label="Buscar documentos"
@@ -842,7 +909,7 @@ function Library({
           )}
         </InputGroup>
 
-        {parkedChanges.length > 0 && !isArchivedTab && (
+        {parkedChanges.length > 0 && !isArchivedTab && !isPersonalSpace && (
           <section className="library-section continue-section">
             <div className="doc-inline-notice" role="status">
               <span>
@@ -860,7 +927,7 @@ function Library({
           </section>
         )}
 
-        {draft && !query && !isArchivedTab && (
+        {draft && !query && !isArchivedTab && docSpace(draft) === space && (
           <section className="library-section continue-section">
             <h2 className="section-title">Borrador sin terminar</h2>
             <button className="continue-row" type="button" onClick={onContinueDraft}>
@@ -874,7 +941,7 @@ function Library({
           </section>
         )}
 
-        {continueDoc && !query && !isArchivedTab && (
+        {continueDoc && !query && !isArchivedTab && docSpace(continueDoc) === space && (
           <section className="library-section continue-section">
             <h2 className="section-title">Continuar lectura</h2>
             <button className="continue-row" type="button" onClick={onContinue}>
@@ -916,12 +983,12 @@ function Library({
             )}
           </div>
           {docs.length > 0 ? (
-            // La lista entra de nuevo al cambiar de pestaña (no al buscar).
-            <div className="docs-list tab-swap" key={activeTab}>
+            // La lista entra de nuevo al cambiar de pestaña o de espacio (no al buscar).
+            <div className="docs-list tab-swap" key={`${space}:${activeTab}`}>
               {docs.map(doc => (
                 <article className={`doc-row ${doc.archived ? 'opacity-85' : ''}`} key={doc.id}>
                   <span className="doc-symbol">
-                    {doc.archived ? <Archive width={18} height={18} /> : doc.importStatus === 'failed' ? <TriangleExclamation width={18} height={18} /> : <File width={18} height={18} />}
+                    {doc.archived ? <Archive width={18} height={18} /> : doc.importStatus === 'failed' ? <TriangleExclamation width={18} height={18} /> : isSharedWithMe(doc) ? <Persons width={18} height={18} /> : <File width={18} height={18} />}
                   </span>
                   <button
                     className="doc-row-main"
@@ -936,7 +1003,7 @@ function Library({
                           ? 'No pudimos leer este archivo'
                           : doc.importStatus === 'pending'
                             ? 'Procesando archivo…'
-                            : (doc.origin || 'Creado en Bardo')} · {changeActorName(doc)} · {formatChangeTime(doc)}
+                            : docSpaceNote(doc) || (doc.origin || 'Creado en Bardo')} · {changeActorName(doc)} · {formatChangeTime(doc)}
                     </span>
                   </button>
                   <DocActionMenu
@@ -956,6 +1023,7 @@ function Library({
               onShowArchived={() => onTabChange?.('archived')}
               onNewDoc={onNew}
               onUpload={() => fileInputRef.current?.click()}
+              space={space}
             />
           )}
         </section>
@@ -993,6 +1061,7 @@ function ImportFailedState({doc, onRemove, onDownloadOriginal}) {
 function Reader({
   doc,
   onChecklistChange,
+  onSaveCopy,
   skipTransition = false,
   showSharePrompt = false,
   onShare,
@@ -1017,7 +1086,17 @@ function Reader({
           {doc.archived && (
             <div className="doc-inline-notice" role="status">
               <span>Este documento está archivado.</span>
-              <Button variant="secondary" size="sm" onClick={onRestore}>Restaurar</Button>
+              {canManageDoc(doc) && <Button variant="secondary" size="sm" onClick={onRestore}>Restaurar</Button>}
+            </div>
+          )}
+          {isSharedWithMe(doc) && !doc.archived && (
+            <div className="doc-inline-notice" role="note">
+              <span>
+                {docRole(doc) === 'viewer'
+                  ? `${doc.createdByName || 'Otra persona'} te lo compartió para leer. Para cambiarlo, guarda una copia personal.`
+                  : `${doc.createdByName || 'Otra persona'} te lo compartió. Puedes editarlo; los cambios los ve quien tenga el enlace.`}
+              </span>
+              {docRole(doc) === 'viewer' && <Button variant="secondary" size="sm" onClick={onSaveCopy}>Guardar una copia</Button>}
             </div>
           )}
           {showSharePrompt && !doc.archived && (
@@ -1038,7 +1117,7 @@ function Reader({
         {failed ? (
           <ImportFailedState doc={doc} onRemove={onRemoveFailedImport} onDownloadOriginal={onDownloadOriginal} />
         ) : (
-          <RichBody html={pending ? '' : doc.body} onChecklistChange={pending ? undefined : onChecklistChange} />
+          <RichBody html={pending ? '' : doc.body} onChecklistChange={pending || !canEditDoc(doc) ? undefined : onChecklistChange} />
         )}
       </article>
     </section>
@@ -1305,6 +1384,12 @@ function App() {
   const [sharePromptDocId, setSharePromptDocId] = useState(null);
   // Ids de archivados en el servidor (sin contenido) para el contador de la pestaña.
   const [archivedSummaryIds, setArchivedSummaryIds] = useState(() => new Set());
+  // Espacio de cada archivado del resumen ('channel' o 'personal').
+  const archivedSpacesRef = useRef(new Map());
+  // Espacio del documento nuevo en curso: se guarda con el borrador.
+  const [newDocSpace, setNewDocSpace] = useState(() => docSpace(readDraft()));
+  const newDocSpaceRef = useRef(newDocSpace);
+  newDocSpaceRef.current = newDocSpace;
   // Tarjeta de un documento archivado o eliminado (ver production-bridge).
   const [launchNotice, setLaunchNotice] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -1363,8 +1448,12 @@ function App() {
   }, []);
 
   const docs = store.docs;
+  const librarySpace = route.type === 'library' ? route.space || 'channel' : 'channel';
   const activeDocs = useMemo(() => docs.filter(doc => !doc.archived), [docs]);
-  const archivedDocs = useMemo(() => docs.filter(doc => Boolean(doc.archived)), [docs]);
+  // Reuniones y tareas son del canal: solo enlazan documentos del canal.
+  const channelActiveDocs = useMemo(() => docsInSpace(activeDocs, 'channel'), [activeDocs]);
+  const spaceActiveDocs = useMemo(() => docsInSpace(activeDocs, librarySpace), [activeDocs, librarySpace]);
+  const archivedDocs = useMemo(() => docsInSpace(docs.filter(doc => Boolean(doc.archived)), librarySpace), [docs, librarySpace]);
   // Archivados reales sin abrir la pestaña: los del servidor (resumen) que no
   // estén activos o eliminados aquí, más los archivados en esta sesión.
   const archivedCount = useMemo(() => {
@@ -1374,12 +1463,17 @@ function App() {
     archivedSummaryIds.forEach(id => {
       if (deleted.has(id)) return;
       const local = byId.get(id);
-      if (!local || local.archived) ids.add(id);
+      const space = local ? docSpace(local) : archivedSpacesRef.current.get(id) || 'channel';
+      if (space === librarySpace && (!local || local.archived)) ids.add(id);
     });
     return ids.size;
-  }, [archivedDocs, archivedSummaryIds, docs, store.deletedIds]);
+  }, [archivedDocs, archivedSummaryIds, docs, librarySpace, store.deletedIds]);
+  const spaceCounts = useMemo(() => ({
+    channel: channelActiveDocs.length,
+    personal: activeDocs.length - channelActiveDocs.length,
+  }), [activeDocs.length, channelActiveDocs.length]);
 
-  const displayedDocs = libraryTab === 'archived' ? archivedDocs : activeDocs;
+  const displayedDocs = libraryTab === 'archived' ? archivedDocs : spaceActiveDocs;
   const sortedDocs = useMemo(() => [...displayedDocs].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)), [displayedDocs]);
   const docsById = useMemo(() => new Map(docs.map(doc => [doc.id, doc])), [docs]);
   const currentDoc = route.id ? docsById.get(route.id) : null;
@@ -1399,8 +1493,12 @@ function App() {
   useEffect(() => {
     if (!window.__bardoFetchArchivedSummary) return undefined;
     let cancelled = false;
-    window.__bardoFetchArchivedSummary().then(ids => {
-      if (!cancelled && Array.isArray(ids)) setArchivedSummaryIds(new Set(ids));
+    window.__bardoFetchArchivedSummary().then(items => {
+      if (cancelled || !Array.isArray(items)) return;
+      // Formato anterior: solo ids (todos del canal).
+      const entries = items.map(item => (typeof item === 'string' ? {id: item, space: 'channel'} : item));
+      archivedSpacesRef.current = new Map(entries.map(item => [item.id, item.space]));
+      setArchivedSummaryIds(new Set(entries.map(item => item.id)));
     }).catch(error => console.warn('Bardo Docs: no se pudo contar los archivados', error));
     return () => { cancelled = true; };
   }, []);
@@ -1654,7 +1752,7 @@ function App() {
       const nextRoute = parseRoute();
       if (window.__bardoBeforeNavigate?.(nextRoute) === false) {
         const previous = routeRef.current;
-        const hash = previous.type === 'library' ? 'docs' : previous.key;
+        const hash = previous.key === 'library' ? 'docs' : previous.key;
         history.replaceState(null, '', `#${encodeURI(hash)}`);
         return;
       }
@@ -1758,6 +1856,11 @@ function App() {
       ...source,
       id: newLocalId(),
       title: `${source.title || 'Sin título'} (copia)`,
+      // Una copia de algo compartido contigo es tuya: queda en tu espacio personal.
+      space: docSpace(source),
+      role: isPersonalDoc(source) ? 'owner' : null,
+      linkAccess: isPersonalDoc(source) ? 'none' : null,
+      ownerId: null,
       createdByName: currentEditorName() || source.createdByName,
       updatedByName: currentEditorName() || source.updatedByName,
       // Nunca confirmada por el servidor: no heredar la marca del original.
@@ -1773,7 +1876,7 @@ function App() {
       updatedAt: new Date().toISOString(),
     };
     commitStore(prev => ({...prev, docs: [copy, ...prev.docs]}));
-    showToast('Documento duplicado');
+    showToast(isSharedWithMe(source) ? 'Copia guardada en Personal' : 'Documento duplicado');
     go(`#doc-${copy.id}`);
   }, [commitStore, docsById, go, showToast]);
 
@@ -1796,6 +1899,7 @@ function App() {
         body: markdownToHtml(imported.markdown, imported.title),
         origin: 'Subido a Bardo',
         sourceName: imported.sourceName,
+        space: routeRef.current.type === 'library' ? routeRef.current.space || 'channel' : 'channel',
         createdAt: now,
         updatedAt: now,
         createdByName: currentEditorName(),
@@ -1804,8 +1908,8 @@ function App() {
         stress: false,
       };
       commitStore(prev => ({...prev, docs: [doc, ...prev.docs]}));
-      showToast('Documento creado a partir del archivo');
-      setSharePromptDocId(doc.id);
+      showToast(isPersonalDoc(doc) ? 'Documento personal creado a partir del archivo' : 'Documento creado a partir del archivo');
+      if (!isPersonalDoc(doc)) setSharePromptDocId(doc.id);
       go(`#doc-${doc.id}`);
     } catch (error) {
       console.error('Bardo Docs: no se pudo subir el documento', error);
@@ -1819,13 +1923,15 @@ function App() {
 
   const deleteDoc = useCallback(async (id, action = 'archive') => {
     setModal(null);
+    // Al salir del documento se vuelve a la biblioteca de su espacio.
+    const backHash = libraryHashFor(storeRef.current.docs.find(doc => doc.id === id));
     if (action === 'remove-failed-import') {
       // Importación que no se pudo leer: archivar y luego eliminar definitivamente.
       commitStore(prev => ({
         ...prev,
         docs: prev.docs.map(doc => doc.id === id ? {...doc, archived: true, archivedAt: new Date().toISOString()} : doc),
       }));
-      if (routeRef.current.id === id) go('#docs');
+      if (routeRef.current.id === id) go(backHash);
       if (!window.__bardoDeleteDocumentPermanent) {
         commitStore(prev => ({...prev, docs: prev.docs.filter(doc => doc.id !== id)}));
         showToast('Documento eliminado');
@@ -1870,7 +1976,7 @@ function App() {
         return next;
       });
       showToast('Documento eliminado');
-      if (routeRef.current.id === id) go('#docs');
+      if (routeRef.current.id === id) go(backHash);
       return;
     }
 
@@ -1884,7 +1990,7 @@ function App() {
       } : doc),
     }));
     showToast('Documento archivado');
-    if (routeRef.current.type !== 'library') go('#docs');
+    if (routeRef.current.type !== 'library') go(backHash);
   }, [commitStore, go, showToast]);
 
   const restoreDoc = useCallback(id => {
@@ -1905,26 +2011,33 @@ function App() {
     showToast('Documento restaurado');
   }, [commitStore, showToast]);
 
-  /** Documento nuevo: hoja en blanco, salvo que el usuario elija seguir su borrador. */
-  const startNewDoc = useCallback(() => {
+  /**
+   * Documento nuevo en un espacio ('channel' o 'personal'): hoja en blanco,
+   * salvo que el usuario elija seguir su borrador.
+   */
+  const startNewDoc = useCallback((space = 'channel') => {
+    const target = space === 'personal' ? 'personal' : 'channel';
     const existing = readDraft();
     if (existing) {
-      setModal({type: 'new-doc-choice', draft: existing});
+      setModal({type: 'new-doc-choice', draft: existing, space: target});
       return;
     }
     try { localStorage.removeItem(draftKey()); } catch {}
     setDraft(null);
+    setNewDocSpace(target);
     setNewDocNonce(n => n + 1);
     go('#new');
   }, [go]);
 
   const continueDraft = useCallback(() => {
     setModal(null);
+    setNewDocSpace(docSpace(readDraft()));
     go('#new');
   }, [go]);
 
-  const discardDraftAndStart = useCallback(title => {
+  const discardDraftAndStart = useCallback((title, space = 'channel') => {
     setModal(null);
+    setNewDocSpace(space);
     try {
       if (title) {
         localStorage.setItem(draftKey(), JSON.stringify({title, description: '', body: '<p><br></p>', updatedAt: new Date().toISOString()}));
@@ -2108,7 +2221,7 @@ function App() {
     const doc = targetDoc?.id ? targetDoc : docsById.get(targetDoc);
     if (!doc) return;
     if (action === 'open') openDoc(doc.id);
-    if (action === 'edit') go(`#edit-${doc.id}`, {preserveBody: route.type === 'doc'});
+    if (action === 'edit' && canEditDoc(doc)) go(`#edit-${doc.id}`, {preserveBody: route.type === 'doc'});
     if (action === 'duplicate') duplicateDoc(doc.id);
     if (action === 'archive') setModal({type: 'delete', docId: doc.id, action: 'archive'});
     if (action === 'restore') restoreDoc(doc.id);
@@ -2128,11 +2241,45 @@ function App() {
       if (!window.__bardoPublishDocument) showToast('Para compartir en el canal, abre Bardo en Discord.');
       else setModal({type: 'share', docId: doc.id});
     }
-    if (action === 'share-link') await shareBardoLinkWithFeedback('doc', {id: doc.id, title: doc.title});
+    if (action === 'share-link') {
+      // Un personal propio primero decide quién puede abrir el enlace.
+      if (isPersonalDoc(doc) && docRole(doc) === 'owner') setModal({type: 'personal-share', docId: doc.id});
+      else await shareBardoLinkWithFeedback('doc', {id: doc.id, title: doc.title});
+    }
+    if (action === 'move-to-channel') setModal({type: 'move-to-channel', docId: doc.id});
     if (action === 'text-preview') setModal({type: 'text-preview', docId: doc.id});
     if (action === 'markdown') await exportDoc(doc, 'md');
     if (action === 'pdf' || action === 'docx') await exportDoc(doc, action);
   }, [docsById, duplicateDoc, exportDoc, go, openDoc, restoreDoc, route.type, showToast]);
+
+  /** Aplica la versión del servidor de un documento personal (enlace o espacio nuevos). */
+  const adoptServerDoc = useCallback(serverDoc => {
+    commitStore(prev => ({
+      ...prev,
+      docs: prev.docs.map(doc => (doc.id === serverDoc.id
+        ? {...doc, space: serverDoc.space, role: serverDoc.role, linkAccess: serverDoc.linkAccess, ownerId: serverDoc.ownerId, serverUpdatedAt: serverDoc.serverUpdatedAt || doc.serverUpdatedAt}
+        : doc)),
+    }));
+  }, [commitStore]);
+
+  const setDocLinkAccess = useCallback(async (id, linkAccess) => {
+    if (!window.__bardoSetDocumentLinkAccess) {
+      // Sin Discord (modo local) no hay enlaces: se recuerda la elección aquí.
+      commitStore(prev => ({...prev, docs: prev.docs.map(doc => (doc.id === id ? {...doc, linkAccess} : doc))}));
+      return;
+    }
+    adoptServerDoc(await window.__bardoSetDocumentLinkAccess(id, linkAccess));
+  }, [adoptServerDoc, commitStore]);
+
+  const moveDocToChannel = useCallback(async id => {
+    setModal(null);
+    try {
+      adoptServerDoc(await window.__bardoMoveDocumentToChannel(id));
+      showToast(`Ahora está en ${channelLabel()}`);
+    } catch (error) {
+      showToast(error?.message || 'No se pudo llevar el documento a este canal. Inténtalo de nuevo.');
+    }
+  }, [adoptServerDoc, showToast]);
 
   const editorDocId = route.type === 'edit' ? currentDoc?.id : null;
   const editorRevision = editorDocId ? (revisions[editorDocId] || 0) : 0;
@@ -2153,12 +2300,13 @@ function App() {
             } else if (route.type === 'doc' && docReturn) {
               go(docReturn.hash, {skipTransition: true});
             } else {
-              go('#docs', {restore: scrollMemory.current.get('library') || 0});
+              const hash = libraryHashFor(currentDoc);
+              go(hash, {restore: scrollMemory.current.get(hash === '#docs' ? 'library' : hash.slice(1)) || 0});
             }
           }}
           onEdit={() => currentDoc && go(`#edit-${currentDoc.id}`, {preserveBody: true})}
           onAction={docAction}
-          onNew={startNewDoc}
+          onNew={() => startNewDoc(librarySpace)}
           onUpload={uploadDocument}
           uploading={uploading}
           onPlannerNew={() => go('#planner-new')}
@@ -2187,7 +2335,7 @@ function App() {
         <Suspense fallback={<p className="mt-24 text-center text-sm text-muted-foreground" role="status">Cargando tareas…</p>}>
           <KanbanModule
             cardId={route.cardId}
-            docs={activeDocs}
+            docs={channelActiveDocs}
             go={go}
             quickAddRequest={kanbanQuickAdd}
             onOpenDoc={(docId, returnHash) => {
@@ -2197,7 +2345,19 @@ function App() {
           />
         </Suspense>
       )}
-      {route.type === 'home' && <Home docs={activeDocs} draft={draft} onNewDoc={startNewDoc} onOpenDoc={openDoc} />}
+      {route.type === 'home' && (
+        <Home
+          docs={activeDocs}
+          draft={draft}
+          continueDoc={continueDoc}
+          onNewDoc={startNewDoc}
+          onNewTask={() => {
+            setKanbanQuickAdd(value => value + 1);
+            go('#kanban', {skipTransition: true});
+          }}
+          onOpenDoc={openDoc}
+        />
+      )}
       {route.type === 'planner' && (
         <PlannerModule
           initialTab={route.tab || 'home'}
@@ -2221,15 +2381,18 @@ function App() {
           continueDoc={continueDoc}
           onContinue={() => continueDoc && openDoc(continueDoc.id, true)}
           draft={draft}
-          onContinueDraft={() => go('#new')}
+          onContinueDraft={continueDraft}
           onOpen={openDoc}
-          onNew={startNewDoc}
+          onNew={() => startNewDoc(librarySpace)}
           onUpload={uploadDocument}
           onDocAction={docAction}
           activeTab={libraryTab}
           onTabChange={setLibraryTab}
-          activeCount={activeDocs.length}
+          activeCount={spaceActiveDocs.length}
           archivedCount={archivedCount}
+          space={librarySpace}
+          spaceCounts={spaceCounts}
+          onSpaceChange={space => go(SPACES[space].hash, {replace: true, skipTransition: true})}
           parkedChanges={parkedChanges}
           onRetryParked={retryParkedChanges}
           onDiscardParked={() => setModal({type: 'discard-parked'})}
@@ -2241,6 +2404,7 @@ function App() {
           doc={currentDoc}
           skipTransition={skipNextRouteAnimation.current}
           onChecklistChange={(body, op) => toggleChecklistInReader(currentDoc.id, body, op)}
+          onSaveCopy={() => duplicateDoc(currentDoc.id)}
           showSharePrompt={sharePromptDocId === currentDoc.id && Boolean(window.__bardoPublishDocument)}
           onShare={() => publishDoc(currentDoc.id)}
           onDismissShare={() => setSharePromptDocId(null)}
@@ -2258,9 +2422,10 @@ function App() {
           readOnly={route.type === 'edit' && isImportBlocked(currentDoc)}
           readOnlyMessage={editorReadOnlyMessage}
           remoteSync={isProduction}
+          personal={route.type === 'new' ? newDocSpace === 'personal' : isPersonalDoc(currentDoc)}
           themeModeMenu={ThemeModeMenu}
           onBack={() => (route.type === 'new' || !editorDocId
-            ? go('#docs')
+            ? go(SPACES[route.type === 'new' ? newDocSpace : docSpace(currentDoc)].hash)
             : go(`#doc-${editorDocId}`, {preserveBody: true, skipTransition: true}))}
           onFinish={(snapshot) => {
             if (route.type === 'new' && isEmptyDocSnapshot(snapshot)) {
@@ -2269,7 +2434,7 @@ function App() {
                 localStorage.removeItem(draftKey());
               } catch {}
               setDraft(null);
-              go('#docs');
+              go(SPACES[newDocSpace].hash);
               return;
             }
             if (route.type === 'new') {
@@ -2284,6 +2449,8 @@ function App() {
                 updatedByName: currentEditorName(),
                 builtin: false,
                 stress: false,
+                space: newDocSpace,
+                ...(newDocSpace === 'personal' ? {role: 'owner', linkAccess: 'none'} : {}),
               };
               const nextStore = {...storeRef.current, docs: [doc, ...storeRef.current.docs]};
               // Keep the draft and editor mounted if creating the durable document fails.
@@ -2293,8 +2460,8 @@ function App() {
                 localStorage.removeItem(draftKey());
               } catch {}
               setDraft(null);
-              showToast('Documento creado');
-              setSharePromptDocId(doc.id);
+              showToast(newDocSpace === 'personal' ? 'Documento personal creado' : 'Documento creado');
+              if (newDocSpace !== 'personal') setSharePromptDocId(doc.id);
               go(`#doc-${doc.id}`);
             } else if (editorDocId) {
               if (!saveEditorSnapshot(editorDocId, editorRevision, snapshot)) return false;
@@ -2303,12 +2470,12 @@ function App() {
             }
           }}
           onAutosave={(snapshot) => {
-            if (route.type === 'new') return saveDraft(snapshot);
+            if (route.type === 'new') return saveDraft({...snapshot, space: newDocSpaceRef.current});
             if (editorDocId) return saveEditorSnapshot(editorDocId, editorRevision, snapshot);
             return false;
           }}
           onJournal={(snapshot) => {
-            if (route.type === 'new') saveDraft(snapshot);
+            if (route.type === 'new') saveDraft({...snapshot, space: newDocSpaceRef.current});
             else if (editorDocId) journalEditorSnapshot(editorDocId, editorRevision, snapshot);
           }}
           onOpenLink={(api) => {
@@ -2379,11 +2546,26 @@ function App() {
         onCancel={() => setModal(null)}
       />
 
+      <PersonalShareDialog
+        doc={modal?.type === 'personal-share' ? docsById.get(modal.docId) : null}
+        onChangeAccess={setDocLinkAccess}
+        onShareLink={doc => shareBardoLinkWithFeedback('doc', {id: doc.id, title: doc.title})}
+        canShareLink={Boolean(window.__BARDO_DISCORD_SDK__?.commands?.shareLink)}
+        onClose={() => setModal(null)}
+      />
+
+      <MoveToChannelDialog
+        doc={modal?.type === 'move-to-channel' ? docsById.get(modal.docId) : null}
+        channel={channelLabel()}
+        onConfirm={moveDocToChannel}
+        onCancel={() => setModal(null)}
+      />
+
       <NewDocChoiceDialog
         isOpen={modal?.type === 'new-doc-choice'}
         draft={modal?.type === 'new-doc-choice' ? modal.draft : null}
         onContinue={continueDraft}
-        onStartNew={() => discardDraftAndStart(modal?.title || '')}
+        onStartNew={() => discardDraftAndStart(modal?.title || '', modal?.space)}
         onCancel={() => setModal(null)}
       />
 

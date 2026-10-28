@@ -1,5 +1,5 @@
 import { requireDocsSession } from './discord-auth.js';
-import { sessionCanAccessDocument } from './document-access.js';
+import { documentRoleForSession, roleCanWrite, sessionCanAccessDocument } from './document-access.js';
 import { BARDO_OPEN_PREFIX, normalizeDocumentId } from './document-id.js';
 import { buildDocumentPayload, EDIT_DOC_TARGET_PREFIX } from './components.js';
 import { extractDocumentTitle, paginateMarkdown } from './pagination.js';
@@ -14,10 +14,17 @@ import {
   grantDocumentGuildAccessStatement,
   hasAnyDocumentGuildAccess,
   insertDocumentStatement,
+  insertPersonalDocumentStatement,
   isUniqueConstraintError,
   listDocumentChannelAccess,
   listDocumentsForChannel,
+  listPersonalDocuments,
   loadDocument,
+  loadPersonalDocument,
+  movePersonalDocumentToChannel,
+  PERSONAL_LINK_ACCESS,
+  recordPersonalDocumentVisit,
+  setPersonalDocumentLinkAccess,
   loadDocumentSource,
   loadPlannerSession,
   loadPlannerSessionOwner,
@@ -55,9 +62,18 @@ export function apiError(status, error, message, extra = {}) {
 
 const methodNotAllowed = () => apiError(405, 'method_not_allowed', 'Esta acción no está disponible.');
 
-export function serialize(document) {
+/**
+ * `access` (opcional) describe el espacio: sin él, el documento es del canal.
+ * Para los personales: `role` ('owner', 'editor', 'viewer') y el enlace.
+ */
+export function serialize(document, access = null) {
+  const personal = access?.personal || document.personal || null;
   return {
     id: document.id,
+    space: personal ? 'personal' : 'channel',
+    role: access?.role || (personal ? null : 'channel'),
+    linkAccess: personal ? personal.linkAccess : null,
+    ownerId: personal ? personal.ownerId : null,
     title: document.title || 'Sin título',
     description: document.description || '',
     markdown: document.originalMarkdown || '',
@@ -125,7 +141,7 @@ function parsePath(pathname) {
   const rest = pathname.slice(DOCS_API_PREFIX.length + 1);
   const [encodedId, action, extra] = rest.split('/');
   if (!encodedId || extra) return null;
-  if (action && !['source', 'normalize', 'message', 'restore', 'permanent', 'export-link'].includes(action)) return null;
+  if (action && !['source', 'normalize', 'message', 'restore', 'permanent', 'export-link', 'sharing', 'move'].includes(action)) return null;
 
   try {
     const id = normalizeDocumentId(decodeURIComponent(encodedId));
@@ -178,13 +194,32 @@ async function adoptLegacyLibraryIfSafe(env, session) {
   }
 }
 
-async function requireDocumentAccess(env, documentId, session) {
-  const allowed = await sessionCanAccessDocument(env, session, documentId);
-  if (!allowed) return { error: apiError(403, 'forbidden', 'Este documento no está compartido en este canal de Discord.') };
+function roleFromPersonal(personal, session) {
+  if (!personal) return 'channel';
+  if (personal.ownerId === String(session.userId)) return 'owner';
+  return personal.linkAccess === 'edit' ? 'editor' : 'viewer';
+}
+
+/**
+ * `write`: además de abrirlo, puede cambiarlo. `owner`: solo quien es dueño de
+ * un documento personal (los del canal siguen las reglas de siempre).
+ */
+async function requireDocumentAccess(env, documentId, session, { write = false, owner = false } = {}) {
+  const role = await documentRoleForSession(env, session, documentId);
+  if (!role) return { error: apiError(403, 'forbidden', 'Este documento no está compartido en este canal de Discord.') };
+  if (write && !roleCanWrite(role)) {
+    return { error: apiError(403, 'read_only', 'Puedes leer este documento, pero no editarlo.') };
+  }
+  if (owner && role !== 'owner' && role !== 'channel') {
+    return { error: apiError(403, 'owner_only', 'Solo quien creó este documento personal puede hacer esto.') };
+  }
   const document = await loadDocument(env.DB, documentId);
   if (!document) return { error: apiError(404, 'not_found', 'Este documento ya no existe o fue eliminado.') };
-  return { document };
+  const personal = role === 'channel' ? null : await loadPersonalDocument(env.DB, documentId);
+  return { document, role, personal };
 }
+
+const serializeAccess = access => serialize(access.document, access.personal ? { role: access.role, personal: access.personal } : null);
 
 async function sessionCanViewCurrentChannel(env, session) {
   if (!session?.channelId) return false;
@@ -195,10 +230,24 @@ async function sessionCanViewCurrentChannel(env, session) {
 const PLANNER_SESSION_TARGET_PREFIX = 'planner-session:';
 const KANBAN_CARD_TARGET_PREFIX = 'kanban-card:';
 
-async function documentSharedInSessionChannel(env, session, documentId) {
+/**
+ * Un destino de lanzamiento que la sesión puede abrir: compartido en su canal o
+ * un documento personal suyo o con el enlace activo. Quien abre un documento
+ * personal ajeno lo guarda en «Compartidos contigo». `write` exige poder editar.
+ */
+async function documentOpenableBySession(env, session, documentId, { write = false } = {}) {
   if (!documentId) return false;
-  const channels = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
-  return channels.includes(session.channelId);
+  const personal = await loadPersonalDocument(env.DB, documentId);
+  if (!personal) {
+    const channels = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
+    return channels.includes(session.channelId);
+  }
+  const role = personal.ownerId === String(session.userId)
+    ? 'owner'
+    : { read: 'viewer', edit: 'editor' }[personal.linkAccess] || null;
+  if (!role || (write && !roleCanWrite(role))) return false;
+  if (role !== 'owner') await recordPersonalDocumentVisit(env.DB, documentId, session.userId);
+  return true;
 }
 
 /**
@@ -220,6 +269,13 @@ async function deniedLaunchKind(env, session, requested) {
   }
   if (requested.startsWith('kanban') || requested.startsWith('planner') || requested.startsWith('new-doc')) return null;
   const documentId = requested.startsWith(EDIT_DOC_TARGET_PREFIX) ? requested.slice(EDIT_DOC_TARGET_PREFIX.length) : requested;
+  // Un documento personal con el enlace desactivado se niega igual que uno de
+  // otro canal. Con enlace de lectura, «editar» lo abre en el lector.
+  const personal = await loadPersonalDocument(env.DB, documentId);
+  if (personal) {
+    if (personal.ownerId === String(session.userId)) return null;
+    return personal.linkAccess === 'none' ? 'doc' : null;
+  }
   const channels = await listDocumentChannelAccess(env.DB, documentId, session.guildId);
   return channels.length && !channels.includes(session.channelId) ? 'doc' : null;
 }
@@ -248,14 +304,15 @@ async function resolveLaunchContext(request, env, session) {
 
   if (requested?.startsWith(EDIT_DOC_TARGET_PREFIX)) {
     const documentId = requested.slice(EDIT_DOC_TARGET_PREFIX.length);
-    if (await documentSharedInSessionChannel(env, session, documentId)) {
+    if (await documentOpenableBySession(env, session, documentId, { write: true })) {
       // The click also stored this target as a one-shot intent; consume it so
       // a later launch from the app launcher doesn't reopen the editor.
       await deleteDocsLaunchIntent(env.DB, session.userId, session.guildId, `${LAUNCH_TARGET_PREFIX}${requested}`);
       return { contextDocumentId: documentId, launchTarget: requested };
     }
+    if (await documentOpenableBySession(env, session, documentId)) return { contextDocumentId: documentId, launchTarget: null };
   } else if (requested && !requested.startsWith(LAUNCH_TARGET_PREFIX) && !requested.startsWith('kanban')) {
-    if (await documentSharedInSessionChannel(env, session, requested)) return { contextDocumentId: requested, launchTarget: null };
+    if (await documentOpenableBySession(env, session, requested)) return { contextDocumentId: requested, launchTarget: null };
   }
 
   // Some Discord mobile clients launch the Activity without forwarding the
@@ -269,14 +326,14 @@ async function resolveLaunchContext(request, env, session) {
     const target = intent.documentId.slice(LAUNCH_TARGET_PREFIX.length) || null;
     if (target?.startsWith(EDIT_DOC_TARGET_PREFIX)) {
       const documentId = target.slice(EDIT_DOC_TARGET_PREFIX.length);
-      return await documentSharedInSessionChannel(env, session, documentId)
+      return await documentOpenableBySession(env, session, documentId, { write: true })
         ? { contextDocumentId: documentId, launchTarget: target }
         : none;
     }
     return { contextDocumentId: null, launchTarget: target };
   }
 
-  if (await documentSharedInSessionChannel(env, session, intent.documentId)) {
+  if (await documentOpenableBySession(env, session, intent.documentId)) {
     return { contextDocumentId: intent.documentId, launchTarget: null };
   }
   return none;
@@ -336,7 +393,7 @@ export async function normalizeDocumentImport(env, session, document, payload) {
 
 async function handleNormalize(route, request, env, session) {
   if (request.method !== 'POST') return methodNotAllowed();
-  const access = await requireDocumentAccess(env, route.id, session);
+  const access = await requireDocumentAccess(env, route.id, session, { write: true });
   if (access.error) return access.error;
 
   const body = await readJson(request);
@@ -353,6 +410,9 @@ async function handleMessage(route, request, env, session) {
 
   const access = await requireDocumentAccess(env, route.id, session);
   if (access.error) return access.error;
+  if (access.personal) {
+    return apiError(409, 'personal_document', 'Este documento es personal. Llévalo a este canal o comparte su enlace.');
+  }
   if (!(await createDiscordPermissionChecker(env, session.guildId, session.userId).canSendMessages(session.channelId))) {
     return apiError(403, 'send_forbidden', 'Necesitas permiso para escribir en este canal para compartir aquí.');
   }
@@ -424,30 +484,45 @@ async function handleExportLink(route, request, url, env, session) {
   return json({ url: exportUrl, expiresAt });
 }
 
+const documentTime = document => Date.parse(document.updatedAt || document.createdAt || '') || 0;
+
+/**
+ * Una sola lista con los documentos del canal y los personales (los propios y
+ * los ajenos abiertos por enlace), cada uno con su `space` y `role`. Los
+ * personales no dependen del canal: se ven aunque el canal no.
+ */
 async function handleList(request, url, env, session) {
   const isArchivedQuery = url.searchParams.get('archived') === '1' || url.searchParams.get('status') === 'archived';
   const summary = url.searchParams.get('summary') === '1';
+  const canViewChannel = await sessionCanViewCurrentChannel(env, session);
 
-  if (!(await sessionCanViewCurrentChannel(env, session))) {
-    return json({ documents: [], contextDocumentId: null, guildId: session.guildId, user: sessionUser(session) });
-  }
-
-  const documents = await listDocumentsForChannel(env.DB, session.guildId, session.channelId, {
-    archived: isArchivedQuery,
-    limit: 150,
-    summary,
-  });
-  const { contextDocumentId, launchTarget, launchDenied = null } = isArchivedQuery
+  const { contextDocumentId, launchTarget, launchDenied = null } = isArchivedQuery || !canViewChannel
     ? { contextDocumentId: null, launchTarget: null }
     : await resolveLaunchContext(request, env, session);
 
+  const listOptions = { archived: isArchivedQuery, limit: 150, summary };
+  const [channelDocuments, personalDocuments] = await Promise.all([
+    canViewChannel ? listDocumentsForChannel(env.DB, session.guildId, session.channelId, listOptions) : [],
+    listPersonalDocuments(env.DB, session.userId, listOptions),
+  ]);
+  const documents = [
+    ...channelDocuments.map(document => serialize(document)),
+    ...personalDocuments.map(document => serialize(document, {
+      role: roleFromPersonal(document.personal, session),
+      personal: document.personal,
+    })),
+  ].sort((a, b) => documentTime(b) - documentTime(a));
+
   if (contextDocumentId && !documents.some(document => document.id === contextDocumentId)) {
     const contextDocument = await loadDocument(env.DB, contextDocumentId);
-    if (contextDocument && !contextDocument.archivedAt) documents.unshift(contextDocument);
+    if (contextDocument && !contextDocument.archivedAt) {
+      const personal = await loadPersonalDocument(env.DB, contextDocumentId);
+      documents.unshift(serialize(contextDocument, personal ? { role: roleFromPersonal(personal, session), personal } : null));
+    }
   }
 
   return json({
-    documents: documents.map(serialize),
+    documents,
     contextDocumentId,
     launchTarget,
     launchDenied,
@@ -476,7 +551,9 @@ async function handleCreate(request, env, session) {
   const normalized = normalizeEditorPayload(payload);
   if (normalized.error) return apiError(normalized.status || 400, normalized.error, normalized.message);
 
-  if (!session.channelId || !(await sessionCanViewCurrentChannel(env, session))) {
+  // Un documento personal es de quien lo crea y no necesita canal.
+  const isPersonal = payload?.space === 'personal';
+  if (!isPersonal && (!session.channelId || !(await sessionCanViewCurrentChannel(env, session)))) {
     return apiError(403, 'channel_required', 'Necesitas acceso a este canal de Discord para crear documentos.');
   }
 
@@ -505,25 +582,33 @@ async function handleCreate(request, env, session) {
         updatedBy: session.userId,
         updatedByName: displayName,
       }),
-      grantDocumentGuildAccessStatement(env.DB, documentId, session.guildId, session.userId),
-      grantDocumentChannelAccessStatement(env.DB, documentId, session.guildId, session.channelId, session.userId),
+      ...(isPersonal
+        ? [insertPersonalDocumentStatement(env.DB, documentId, String(session.userId), now)]
+        : [
+          grantDocumentGuildAccessStatement(env.DB, documentId, session.guildId, session.userId),
+          grantDocumentChannelAccessStatement(env.DB, documentId, session.guildId, session.channelId, session.userId),
+        ]),
     ]);
   } catch (error) {
     if (requestedId && isUniqueConstraintError(error)) return existsResponse();
     throw error;
   }
 
-  return json({ document: serialize(await loadDocument(env.DB, documentId)) }, 201);
+  const created = await loadDocument(env.DB, documentId);
+  const personal = isPersonal ? { ownerId: String(session.userId), linkAccess: 'none' } : null;
+  return json({ document: serialize(created, personal ? { role: 'owner', personal } : null) }, 201);
 }
 
-async function handleUpdate(route, request, env, session, existing) {
+async function handleUpdate(route, request, env, session, access) {
+  const existing = access.document;
+  const serializeCurrent = document => serialize(document, access.personal ? { role: access.role, personal: access.personal } : null);
   const body = await readJson(request);
   if (body.error) return body.error;
   const payload = body.payload;
 
   if (existing.importStatus === 'pending') {
     return apiError(409, 'import_pending', 'Bardo todavía está importando este archivo. Espera unos segundos e inténtalo de nuevo.', {
-      document: serialize(existing),
+      document: serializeCurrent(existing),
     });
   }
 
@@ -531,7 +616,7 @@ async function handleUpdate(route, request, env, session, existing) {
     ? payload.baseUpdatedAt.trim()
     : null;
   if (baseUpdatedAt && baseUpdatedAt !== existing.updatedAt) {
-    return apiError(409, 'conflict', 'Otra persona guardó cambios en este documento al mismo tiempo.', { document: serialize(existing) });
+    return apiError(409, 'conflict', 'Otra persona guardó cambios en este documento al mismo tiempo.', { document: serializeCurrent(existing) });
   }
 
   const normalized = normalizeEditorPayload(payload, existing);
@@ -548,18 +633,22 @@ async function handleUpdate(route, request, env, session, existing) {
   if (!written) {
     // Someone saved (or an import started) between our read and our write.
     const code = current?.importStatus === 'pending' ? 'import_pending' : 'conflict';
-    return apiError(409, code, 'Otra persona guardó cambios en este documento al mismo tiempo.', { document: current ? serialize(current) : null });
+    return apiError(409, code, 'Otra persona guardó cambios en este documento al mismo tiempo.', { document: current ? serializeCurrent(current) : null });
   }
-  return json({ document: serialize(current) });
+  return json({ document: serializeCurrent(current) });
 }
 
-async function handlePermanentDelete(route, env, session, existing) {
+async function handlePermanentDelete(route, env, session, access) {
+  const existing = access.document;
   if (!existing.archivedAt) {
     return apiError(409, 'not_archived', 'Archiva el documento antes de eliminarlo definitivamente.');
   }
+  if (access.personal && access.role !== 'owner') {
+    return apiError(403, 'forbidden', 'Solo quien creó el documento puede eliminarlo definitivamente.');
+  }
 
   const isAuthor = existing.createdBy && String(existing.createdBy) === String(session.userId);
-  const canModerate = isAuthor || await createDiscordPermissionChecker(env, session.guildId, session.userId)
+  const canModerate = isAuthor || access.role === 'owner' || await createDiscordPermissionChecker(env, session.guildId, session.userId)
     .canModerateDocuments(session.channelId);
   if (!canModerate) {
     return apiError(403, 'forbidden', 'Solo quien creó el documento o quien modera el canal puede eliminarlo definitivamente.');
@@ -568,6 +657,40 @@ async function handlePermanentDelete(route, env, session, existing) {
   const deleted = await deleteDocumentPermanently(env.DB, route.id);
   if (!deleted) return apiError(409, 'not_archived', 'Alguien restauró este documento, así que no se eliminó.');
   return json({ ok: true, deleted: true, id: route.id });
+}
+
+/** Quién más puede abrir un documento personal con su enlace. */
+async function handleSharing(route, request, env, session) {
+  if (request.method !== 'PATCH' && request.method !== 'PUT') return methodNotAllowed();
+  const access = await requireDocumentAccess(env, route.id, session, { owner: true });
+  if (access.error) return access.error;
+  if (!access.personal) return apiError(409, 'not_personal', 'Solo los documentos personales tienen enlace propio.');
+
+  const body = await readJson(request);
+  if (body.error) return body.error;
+  const linkAccess = body.payload?.linkAccess;
+  if (!PERSONAL_LINK_ACCESS.includes(linkAccess)) {
+    return apiError(400, 'invalid_link_access', 'Elige quién puede abrir el enlace: solo tú, cualquiera para leer o cualquiera para editar.');
+  }
+  if (!(await setPersonalDocumentLinkAccess(env.DB, route.id, String(session.userId), linkAccess))) {
+    return apiError(409, 'not_personal', 'Este documento ya no es personal.');
+  }
+  const personal = await loadPersonalDocument(env.DB, route.id);
+  return json({ document: serialize(access.document, { role: 'owner', personal }) });
+}
+
+/** Lleva un documento personal al canal actual: desde ahí es del canal. */
+async function handleMove(route, request, env, session) {
+  if (request.method !== 'POST') return methodNotAllowed();
+  const access = await requireDocumentAccess(env, route.id, session, { owner: true });
+  if (access.error) return access.error;
+  if (!access.personal) return apiError(409, 'not_personal', 'Este documento ya está en un canal.');
+  if (!session.channelId || !(await sessionCanViewCurrentChannel(env, session))) {
+    return apiError(403, 'channel_required', 'Necesitas acceso a este canal de Discord para llevar documentos aquí.');
+  }
+  const moved = await movePersonalDocumentToChannel(env.DB, route.id, String(session.userId), session.guildId, session.channelId);
+  if (!moved) return apiError(409, 'not_personal', 'Este documento ya no es personal.');
+  return json({ document: serialize(await loadDocument(env.DB, route.id)) });
 }
 
 async function routeDocsApi(request, url, env) {
@@ -588,14 +711,20 @@ async function routeDocsApi(request, url, env) {
   if (!route.collection && route.action === 'normalize') return handleNormalize(route, request, env, session);
   if (!route.collection && route.action === 'message') return handleMessage(route, request, env, session);
   if (!route.collection && route.action === 'export-link') return handleExportLink(route, request, url, env, session);
+  if (!route.collection && route.action === 'sharing') return handleSharing(route, request, env, session);
+  if (!route.collection && route.action === 'move') return handleMove(route, request, env, session);
 
   if (route.collection && request.method === 'GET') return handleList(request, url, env, session);
   if (route.collection && request.method === 'POST') return handleCreate(request, env, session);
   if (route.collection) return methodNotAllowed();
 
-  const access = await requireDocumentAccess(env, route.id, session);
+  // Archivar, restaurar y eliminar: en un documento personal, solo quien es dueño.
+  const managing = route.action === 'restore' || route.action === 'permanent' || request.method === 'DELETE';
+  const writing = request.method === 'PATCH' || request.method === 'PUT';
+  const access = await requireDocumentAccess(env, route.id, session, { write: writing || managing, owner: managing });
   if (access.error) return access.error;
   const existing = access.document;
+  const serializeWithAccess = document => serialize(document, access.personal ? { role: access.role, personal: access.personal } : null);
 
   if (route.action === 'restore') {
     if (request.method !== 'POST') return methodNotAllowed();
@@ -603,18 +732,24 @@ async function routeDocsApi(request, url, env) {
     // Restoring bumps updated_at; return the row so clients refresh their
     // baseUpdatedAt and the next PATCH is not a false conflict.
     const restored = await loadDocument(env.DB, route.id);
-    return json({ ok: true, restored: true, id: route.id, document: restored ? serialize(restored) : null });
+    return json({ ok: true, restored: true, id: route.id, document: restored ? serializeWithAccess(restored) : null });
   }
 
   if (route.action === 'permanent') {
     if (request.method !== 'DELETE') return methodNotAllowed();
-    return handlePermanentDelete(route, env, session, existing);
+    return handlePermanentDelete(route, env, session, access);
   }
 
-  if (request.method === 'GET') return json(serialize(existing));
+  if (request.method === 'GET') {
+    // Quien abre un documento personal ajeno lo vuelve a encontrar en su lista.
+    if (access.role === 'viewer' || access.role === 'editor') {
+      await recordPersonalDocumentVisit(env.DB, route.id, session.userId);
+    }
+    return json(serializeAccess(access));
+  }
 
-  if (request.method === 'PATCH' || request.method === 'PUT') {
-    return handleUpdate(route, request, env, session, existing);
+  if (writing) {
+    return handleUpdate(route, request, env, session, access);
   }
 
   if (request.method === 'DELETE') {
@@ -626,7 +761,7 @@ async function routeDocsApi(request, url, env) {
       sessionDisplayName(session),
     );
     const archived = await loadDocument(env.DB, route.id);
-    return json({ ok: true, archived: true, id: route.id, document: archived ? serialize(archived) : null });
+    return json({ ok: true, archived: true, id: route.id, document: archived ? serializeWithAccess(archived) : null });
   }
 
   return methodNotAllowed();
