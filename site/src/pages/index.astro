@@ -1,0 +1,129 @@
+---
+// The landing is static HTML; only the two demos, the tabs and the waitlist
+// hydrate as React islands, each when it scrolls into view.
+import Layout from '@/layouts/Layout.astro';
+import { LiveMeetingDemo } from '@/components/demo/LiveMeetingDemo';
+import { AgreementsDemo } from '@/components/demo/AgreementsDemo';
+import { SpacesTabs } from '@/components/SpacesTabs';
+import { WaitlistForm } from '@/components/WaitlistForm';
+import { Shot } from '@/components/Shot';
+import Footer from '@/components/Footer.astro';
+import { INSTALL_URL, container, h2, lead, navCta, primaryCta, quietCta } from '@/lib/site';
+import { cn } from '@/lib/utils';
+
+const WHERE = [
+  ['Discord en escritorio y navegador', 'Disponible'],
+  ['Discord en el móvil', 'Disponible'],
+  ['Bardo en la web, con tu cuenta', 'En preparación'],
+];
+---
+<Layout
+  title="Bardo: documentos, reuniones y tareas en Discord"
+  description="Documentos, reuniones y tareas dentro de tu canal de Discord, sin abrir otra herramienta."
+>
+  <a href="#contenido" class="fixed top-4 left-4 z-50 -translate-y-[200%] rounded-full bg-foreground px-4 py-2 text-background focus-visible:translate-y-0">
+    Saltar al contenido
+  </a>
+
+  <header class={cn(container, 'flex min-h-18 items-center justify-between gap-6')}>
+    <a href="/" aria-label="Bardo, inicio" class="inline-flex rounded-sm">
+      <img src="/marca/bardo-horizontal-color.svg" alt="Bardo" width="120" height="33" class="w-30" />
+    </a>
+    <nav aria-label="Principal" class="flex items-center gap-6">
+      <a href="#web" class="text-sm text-secondary-foreground underline-offset-4 hover:text-primary hover:underline active:text-primary max-lg:hidden">Versión web</a>
+      <a href={INSTALL_URL} class={navCta}>Agregar a Discord</a>
+    </nav>
+  </header>
+
+  <main id="contenido">
+    <!-- Hero: Banner, the text on five columns, the live meeting on seven. -->
+    <section aria-labelledby="hero-title" class={cn(container, 'grid items-center gap-x-24 gap-y-10 pt-12 pb-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:pt-14')}>
+      <div class="settle grid gap-6">
+        <h1 id="hero-title" class="max-w-[12ch] text-[clamp(2.75rem,3.6vw+0.75rem,4.25rem)] leading-[1.04]">
+          Lo hablado en Discord queda escrito<span class="text-punto">.</span>
+        </h1>
+        <p class={cn(lead, 'max-w-[34ch]')}>Documentos, reuniones y tareas dentro de tu canal, sin abrir otra herramienta.</p>
+        <div class="mt-2 flex flex-wrap gap-3">
+          <a href={INSTALL_URL} class={primaryCta}>Agregar a Discord</a>
+          <a href="#web" class={quietCta}>Unirme a la versión web</a>
+        </div>
+      </div>
+      <figure class="settle-late m-0">
+        <LiveMeetingDemo client:visible />
+        <figcaption class="mt-3 text-sm text-muted-foreground">Datos de ejemplo. Prueba Siguiente tema.</figcaption>
+      </figure>
+    </section>
+
+    <!-- Spaces: three real screens behind the app's own tabs. -->
+    <section aria-labelledby="spaces-title" class={cn(container, 'relative pt-24 pb-36')}>
+      {/* Footer links land here and pick their tab (SpacesTabs reads the hash). */}
+      <span id="docs" class="absolute top-0"></span><span id="reuniones" class="absolute top-0"></span><span id="tareas" class="absolute top-0"></span>
+      <div class="mb-16 grid gap-4">
+        <h2 id="spaces-title" class={h2}>Un canal, tres espacios</h2>
+        <p class={lead}>Cada canal guarda sus documentos, sus reuniones y su tablero.</p>
+      </div>
+      <SpacesTabs client:visible />
+    </section>
+
+    <!-- The signature: agreements that become tasks, on a step of paper. -->
+    <section aria-labelledby="agreements-title" class="bg-paper-2 py-30">
+      <div class={cn(container, 'grid items-center gap-x-16 gap-y-10 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]')}>
+        <div class="grid content-center gap-6">
+          <h2 id="agreements-title" class={h2}>Cada acuerdo, con responsable</h2>
+          <p class={lead}>Al cerrar la reunión, los acuerdos pasan al tablero en un paso.</p>
+        </div>
+        <figure class="m-0 lg:mx-auto lg:w-full lg:max-w-[40rem]">
+          <AgreementsDemo client:visible />
+          <figcaption class="mt-3 text-sm text-muted-foreground">Datos de ejemplo. Desmarca un acuerdo y crea las tareas.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- Where it runs, and the waitlist for the web version. -->
+    <section id="web" aria-labelledby="where-title" class={cn(container, 'grid items-center justify-between gap-x-16 gap-y-12 py-36 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]')}>
+      <div class="grid gap-8">
+        <h2 id="where-title" class={h2}>Hoy en Discord, pronto en tu navegador</h2>
+        <table class="w-full border-collapse">
+          <caption class="sr-only">Dónde funciona Bardo</caption>
+          <thead>
+            <tr class="text-left text-sm text-muted-foreground">
+              <th scope="col" class="pb-3 font-normal">Dónde</th>
+              <th scope="col" class="pb-3 text-right font-normal">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {WHERE.map(([where, state], index) => (
+              <tr class="border-t border-border">
+                <th scope="row" class="py-4 text-left font-semibold">{where}</th>
+                <td class={cn('py-4 pl-4 text-right whitespace-nowrap', index === WHERE.length - 1 ? 'text-primary' : 'text-secondary-foreground')}>{state}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <WaitlistForm client:visible />
+      </div>
+      <Shot
+        name="09-tablero-movil"
+        phone={false}
+        ratio="aspect-[9/15]"
+        alt="El tablero de tareas de Bardo en Discord para móvil"
+        className="w-full max-w-[22rem] rounded-[2.5rem] justify-self-end max-lg:justify-self-start max-sm:aspect-[9/15]"
+      />
+    </section>
+
+    <!-- Close: the action again, beside one last screen. -->
+    <section aria-labelledby="close-title" class="border-t border-border pt-30 pb-44">
+      <div class={cn(container, 'grid items-center gap-x-16 gap-y-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]')}>
+        <div class="grid gap-6">
+          <h2 id="close-title" class={h2}>Abre Bardo en tu canal</h2>
+          <p class={lead}>Agrégalo a tu servidor y escribe /bardo en cualquier canal.</p>
+          <div><a href={INSTALL_URL} class={primaryCta}>Agregar a Discord</a></div>
+          <p class="text-sm text-muted-foreground">Para agregarlo necesitas el permiso Gestionar servidor.</p>
+        </div>
+        <Shot name="07-resumen" zoom={1.45} alt="El recap de una reunión en Bardo con sus acuerdos, responsables y tiempos" />
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Layout>

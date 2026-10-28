@@ -23,3 +23,7 @@ activity-app/playwright-report/
 # Portafolio: capturas generadas (se regeneran con portfolio/capture.mjs)
 portfolio/capturas/
 portfolio/.preview/
+
+# Landing (site/): build de Vite.
+site/dist/
+site/.astro/

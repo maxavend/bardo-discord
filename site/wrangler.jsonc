@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Sitio público de Bardo (landing + lista de espera). Proyecto aparte del
+  // Worker de Discord (../wrangler.jsonc): se desplegará en otra cuenta de
+  // Cloudflare. Por ahora solo se usa en local con `npm run dev`.
+  "name": "bardo-site",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-19",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bardo-site-db",
+      // Marcador para desarrollo local. Al desplegar, reemplázalo por el id
+      // que entregue `wrangler d1 create bardo-site-db` en la cuenta nueva.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
