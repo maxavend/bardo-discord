@@ -1,7 +1,9 @@
 /*
-  Cache-Control: no-cache
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
+# Cloudflare junta los encabezados de todas las reglas que coinciden: aquí no
+# va Cache-Control para /*, o los assets recibirían «no-cache, …, immutable» y
+# se revalidarían en cada carga. El HTML lleva no-cache desde el Worker.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

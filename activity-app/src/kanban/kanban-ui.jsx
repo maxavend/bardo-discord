@@ -2,7 +2,10 @@
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
 import {DISCORD_PALETTES, MemberAvatar, getAllDiscordEntities} from '../planner/PlannerMemberPicker.jsx';
-import {KANBAN_PRIORITY_LABELS} from './kanban-shared.js';
+import {KANBAN_PRIORITY_LABELS, formatDueDate} from './kanban-shared.js';
+
+// Vive en kanban-shared.js (sin UI) para que Inicio la use sin cargar Tareas.
+export {formatDueDate};
 
 import {SHEET_DIALOG_CLASS, SHEET_DIALOG_SCROLL_CLASS} from '@/components/sheet-dialog.js';
 
@@ -59,22 +62,6 @@ export function PriorityBadge({priority, className}) {
       {KANBAN_PRIORITY_LABELS[priority]}
     </Badge>
   );
-}
-
-function addDays(iso, days) {
-  const [year, month, day] = iso.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
-}
-
-export function formatDueDate(dueDate, today) {
-  if (!dueDate) return '';
-  if (dueDate === today) return 'Hoy';
-  if (dueDate === addDays(today, 1)) return 'Mañana';
-  if (dueDate === addDays(today, -1)) return 'Ayer';
-  const [year, month, day] = dueDate.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  const sameYear = year === Number(today.slice(0, 4));
-  return new Intl.DateTimeFormat('es-CL', {day: 'numeric', month: 'short', ...(sameYear ? {} : {year: 'numeric'})}).format(date);
 }
 
 export function dueState(card, today, doneId) {

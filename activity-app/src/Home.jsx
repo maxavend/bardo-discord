@@ -4,7 +4,7 @@ import {Calendar, FileText, ChevronRight, LayoutColumns3, Plus} from '@gravity-u
 import {loadPlannerEvents, loadPlannerState, loadLiveSessionState, isDefaultEmptySession, isDemoPlannerState, shouldLoadDemoFixture} from './planner/planner-store.js';
 import {currentUserId, ensureKanbanLoaded, useKanbanSnapshot} from './kanban/kanban-runtime.js';
 import {assignedOpenCards, doneColumnId, todayIso} from './kanban/kanban-store.js';
-import {formatDueDate} from './kanban/kanban-ui.jsx';
+import {formatDueDate} from './kanban/kanban-shared.js';
 import {useWorkspace} from './workspace.js';
 import {eventStatusLabel} from './planner/copy-tokens.js';
 

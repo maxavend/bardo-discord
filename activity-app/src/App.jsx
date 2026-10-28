@@ -81,9 +81,7 @@ import {checklistItems, documentPlainText, filterDocumentsByQuery, isEmptyDocSna
 import {copyTextToClipboard} from './docs-clipboard.js';
 import {shareBardoLinkWithFeedback} from './share-link.js';
 import {openExternalUrl} from './discord-links.js';
-import {PlannerModule} from './planner/PlannerModule.jsx';
 import {AGENDA_DOC_ORIGIN, buildMinutesCopy, buildMinutesDoc, minutesContentHash, planMinutesSave} from './planner/minutes-doc.js';
-import {BardoEditor} from './editor/BardoEditor.jsx';
 import {Home} from './Home.jsx';
 import {HUB_MODULES, ModuleBar, ModuleTabs, moduleForRoute, routeShowsHubBar} from './ModuleHub.jsx';
 import {WorkspaceName} from './WorkspaceName.jsx';
@@ -93,7 +91,28 @@ import {isPlannerRemoteEnabled} from './planner/planner-sync.js';
 import {getStartModulePreference, lastModuleHash, rememberLastModule, reportDetectedTimeZone} from './settings/settings-client.js';
 
 // Tareas carga su propio chunk (con dnd-kit) solo al abrirse.
-const KanbanModule = lazy(() => import('./kanban/KanbanModule.jsx'));
+// Los módulos pesados (el editor con Plate, Reuniones y Tareas) no van en la
+// carga inicial: cada vista baja solo lo suyo y el resto se descarga en
+// segundo plano cuando el navegador queda libre (prefetchModules).
+const loadEditor = () => import('./editor/BardoEditor.jsx');
+const loadPlanner = () => import('./planner/PlannerModule.jsx');
+const loadKanban = () => import('./kanban/KanbanModule.jsx');
+const BardoEditor = lazy(() => loadEditor().then(module => ({default: module.BardoEditor})));
+const PlannerModule = lazy(() => loadPlanner().then(module => ({default: module.PlannerModule})));
+const KanbanModule = lazy(loadKanban);
+
+function prefetchModules() {
+  const load = () => {
+    // Un fallo aquí no importa: la vista lo vuelve a pedir al abrirse.
+    for (const loader of [loadEditor, loadPlanner, loadKanban]) loader().catch(() => {});
+  };
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(load, {timeout: 4000});
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(load, 2000);
+  return () => window.clearTimeout(id);
+}
 const SettingsDialog = lazy(() => import('./settings/SettingsDialog.jsx'));
 export {applyDiscordTheme, collectDiscordThemeDiagnostics, resolveDiscordTheme} from './discord-theme.js';
 
@@ -1276,6 +1295,7 @@ function App() {
   }
   const [store, setStoreState] = useState(() => storeRef.current);
   const [route, setRoute] = useState(parseRoute);
+  useEffect(prefetchModules, []);
   // Abrir un documento desde una tarea: "Volver" regresa a esa tarea.
   const [docReturn, setDocReturn] = useState(null);
   const [kanbanQuickAdd, setKanbanQuickAdd] = useState(0);
@@ -2199,6 +2219,7 @@ function App() {
       )}
       {route.type === 'home' && <Home docs={activeDocs} draft={draft} onNewDoc={startNewDoc} onOpenDoc={openDoc} />}
       {route.type === 'planner' && (
+        <Suspense fallback={<p className="mt-24 text-center text-sm text-muted-foreground" role="status">Cargando reuniones…</p>}>
         <PlannerModule
           initialTab={route.tab || 'home'}
           navigation={route}
@@ -2212,6 +2233,7 @@ function App() {
           onSaveDocToLibrary={(docData) => saveMinutesDoc(docData)}
           onShareDocToChannel={shareMeetingDoc}
         />
+        </Suspense>
       )}
       {route.type === 'library' && (
         <Library
@@ -2251,6 +2273,7 @@ function App() {
       )}
 
       {showEditor && (
+        <Suspense fallback={<p className="mt-24 text-center text-sm text-muted-foreground" role="status">Abriendo el editor…</p>}>
         <BardoEditor
           key={route.type === 'new' ? `new:${newDocNonce}` : `${editorDocId}:${editorRevision}`}
           doc={route.type === 'new' ? null : currentDoc}
@@ -2316,6 +2339,7 @@ function App() {
             setModal({type: 'link', api});
           }}
         />
+        </Suspense>
       )}
 
       {route.type !== 'home' && route.type !== 'library' && route.type !== 'planner' && route.type !== 'kanban' && !currentDoc && route.type !== 'new' && (
