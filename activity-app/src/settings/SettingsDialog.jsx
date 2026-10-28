@@ -167,11 +167,11 @@ function BotChecks({bot}) {
 }
 
 function PersonalTab({snapshot, remote, onPatch, saving}) {
-  const {theme, setTheme} = useTheme('system');
+  const {theme, setTheme} = useTheme();
   const [startModule, setStartModule] = useState(getStartModulePreference);
   return (
     <div className="flex flex-col gap-6">
-      <Section title="Apariencia" description="Solo en este dispositivo.">
+      <Section title="Apariencia" description={remote ? 'El tema se guarda en tu cuenta; lo demás, en este dispositivo.' : 'Solo en este dispositivo.'}>
         <Row label="Tema">
           <ToggleGroup
             indicator
@@ -420,7 +420,7 @@ export function SettingsDialog({open, initialTab = 'personal', onClose, remote})
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
       {/* Anclado arriba en escritorio: cambiar de pestaña no lo hace saltar. */}
       <DialogContent scrollable={false} className={cn('sm:max-w-xl', SHEET_DIALOG_CLASS, 'sm:top-[max(4.5rem,9vh)] sm:translate-y-0')}>
-        <OverlayScrollArea className={SHEET_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
+        <OverlayScrollArea className={SHEET_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-7">
           <DialogHeader>
             <DialogTitle>Ajustes</DialogTitle>
           </DialogHeader>

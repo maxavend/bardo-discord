@@ -203,7 +203,7 @@ export function RecapToCardsDialog({open, onClose, plannerState, sessionState, o
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
       <DialogContent scrollable={false} className={`${KANBAN_DIALOG_CLASS} sm:max-w-lg`}>
-        <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-1 pr-3.5">
+        <OverlayScrollArea className={KANBAN_DIALOG_SCROLL_CLASS} contentClassName="grid grid-cols-[minmax(0,1fr)] gap-5 p-7">
         <DialogHeader>
           <DialogTitle>Revisar acuerdos</DialogTitle>
           <DialogDescription>Elige si cada acuerdo pasa a Tareas, se envía por MD a su responsable o se descarta.</DialogDescription>
