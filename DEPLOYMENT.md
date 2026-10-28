@@ -1,5 +1,19 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+## Navbar «renglón», teclado en iOS, sin zoom y tema por cuenta — 28 de octubre de 2026
+
+- Código: `9a9534c` (`main`, con #32, #37 y #34). Worker activo al 100%: `e7ab2a39-ff0c-4c2f-a36a-18772b0840aa` (deploy de GitHub, run 40754177545). Versión anterior: `24b78ebd-c81b-4c85-b694-20441c983716` (compartir enlace, 27 de octubre). Se canceló el deploy pendiente de `889e7ae` (#36): ya iba incluido en este.
+- Migración remota aplicada: `0017_user_theme` (aditiva: `user_settings.theme`). Tema oscuro por defecto y la elección manual guardada en la cuenta (`GET/PATCH /api/settings/personal`).
+- Header: pestañas centradas y fijas sobre el renglón; el punto se estira en trazo al cambiar de módulo (sin lente de vidrio en escritorio). El símbolo de Bardo y el chip «#canal ▾» reemplazan las iniciales del servidor; en móvil, el título del módulo con su punto. «Beta» pasa de franja a chip. Perfil siempre visible a 768–860 px.
+- Editor en iOS con el teclado abierto: el header sigue al área visible y la barra se queda en su hueco hasta que el scroll la lleva bajo el header. Sin zoom (viewport, pellizco y al enfocar campos). Scroll de los diálogos bajo la X.
+- Validación: CI de `main` (tests y build) y el deploy en verde; E2E locales en laptop, tablet, 390 y 320 px; navbar, teclado y zoom revisados en Safari del simulador de iOS. Producción: `/` 200, HTML y chunks idénticos al build de `9a9534c`, viewport sin zoom en el HTML; `/api/docs`, `/api/planner/sessions`, `/api/settings` y `/api/settings/personal` 401 sin sesión. Sin prueba dentro de la app de Discord: falta confirmar el header, la barra del editor con el teclado y que no haya zoom en el WebView.
+
+Rollback a la versión anterior (la columna `theme` es aditiva y esa versión la ignora):
+
+```sh
+npx wrangler rollback 24b78ebd-c81b-4c85-b694-20441c983716 --message 'Volver a 99478f7 (compartir enlace)' --yes
+```
+
 ## Compartir enlace — 27 de octubre de 2026
 
 - Código: `99478f7` (rama `claude/bardo-mock-data-1ef960`, PR #36; aún no está en `main`). Worker activo al 100%: `24b78ebd-c81b-4c85-b694-20441c983716` (`wrangler deploy --keep-vars` local). Versión anterior: `ba7c7b29-8ffa-4e91-9574-dc05db7b1ec0`.
