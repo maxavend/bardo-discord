@@ -3,6 +3,7 @@
 // ends on the violet dot. Night ground, the logo's dark version.
 import { INSTALL_URL, container } from '@/lib/site';
 import { cn } from '@/lib/utils';
+import { FooterSignature } from './FooterSignature';
 
 const GROUPS = [
   {
@@ -28,31 +29,24 @@ const GROUPS = [
     ],
   },
 ];
-const link = 'rounded-sm whitespace-nowrap text-night-ink underline-offset-4 decoration-punto-night hover:underline active:text-punto-night';
+const link = 'rounded-sm text-night-ink underline-offset-4 decoration-punto-night hover:underline active:text-punto-night';
 ---
 <footer class="footer-night bg-night pt-28 pb-10 text-night-ink">
   <div class={container}>
-    <p class="max-w-[22ch] font-heading text-[clamp(2rem,3vw+1rem,3.5rem)] leading-[1.08] tracking-[-0.025em] text-balance">
-      Lo que se conversa en el canal queda escrito, y punto.
-    </p>
+    <div data-motion-group><p data-motion-item class="max-w-[22ch] font-heading font-medium text-[clamp(2rem,3vw+1rem,3.5rem)] leading-[1.08] tracking-[-0.025em] text-balance">
+      Lo que se conversa en el canal queda escrito, y punto<span class="text-punto-night">.</span>
+    </p></div>
 
-    <!-- The logo's idea as the page's last rule: a wave that settles into a line and ends on the dot. -->
-    <div class="mt-14 flex items-center" aria-hidden="true">
-      <svg viewBox="0 0 40 24" class="h-10 w-16 shrink-0 overflow-visible text-night-ink" fill="none">
-        <path d="M2 13 C5 8 7.5 6 10 6 C13.5 6 15 17 19 17 C22.5 17 24 10 27 10 C29.5 10 31 14.5 33 14.5 C35 14.5 36 12 38 12 L40 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="h-[2.5px] flex-1 rounded-full bg-night-ink"></span>
-      <span class="ml-[2.5px] size-[0.6rem] shrink-0 rounded-full bg-punto-night"></span>
-    </div>
+    <FooterSignature client:idle />
 
-    <div class="mt-16 grid gap-x-16 gap-y-12 md:grid-cols-[minmax(0,1fr)_auto]">
+    <div data-motion-reveal class="mt-16 grid gap-x-16 gap-y-12 lg:grid-cols-[minmax(0,1fr)_auto]">
       <div class="grid content-start justify-items-start gap-4">
         <a href="/" aria-label="Bardo, inicio" class="inline-flex rounded-sm">
           <img src="/marca/bardo-horizontal-oscuro.svg" alt="Bardo" width="923" height="256" loading="lazy" class="w-40" />
         </a>
         <p class="max-w-[30ch] text-night-muted">Documentos, reuniones y tareas dentro de tu canal de Discord.</p>
       </div>
-      <div class="flex flex-wrap gap-x-16 gap-y-10">
+      <div class="footer-links grid min-w-0 grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:gap-x-16">
         {GROUPS.map(group => (
           <nav aria-label={group.label}>
             <p class="text-sm text-night-muted">{group.label}</p>
@@ -65,7 +59,7 @@ const link = 'rounded-sm whitespace-nowrap text-night-ink underline-offset-4 dec
     </div>
 
     <div class={cn('mt-20 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-t border-night-rule pt-6 text-sm text-night-muted')}>
-      <p>© 2026 Bardo</p>
+      <p>© 2026 Bardo · Maximiliano Avendaño. Todos los derechos reservados.</p>
       <p>Las demos y capturas usan datos ficticios.</p>
     </div>
   </div>

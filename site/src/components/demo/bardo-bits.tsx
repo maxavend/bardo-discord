@@ -1,22 +1,16 @@
 // Small pieces of the Activity, rebuilt without its runtime (Discord SDK,
 // directory, stores): same markup and classes as planner/PlannerMemberPicker.jsx
-// and kanban/kanban-ui.jsx, fed with the fictional Lumen sample data.
+// and kanban/kanban-ui.jsx, fed with the landing’s fictional multiverse data.
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import demo from '@/lib/demo-data.json';
 
 export type Member = { name: string; color: MemberColor };
 type MemberColor = 'blurple' | 'green' | 'yellow' | 'pink' | 'sky' | 'red' | 'purple' | 'orange';
 
-export const MEMBERS = {
-  sofia: { name: 'Sofía Herrera', color: 'blurple' },
-  tomas: { name: 'Tomás Fuentes', color: 'purple' },
-  camila: { name: 'Camila Rivas', color: 'green' },
-  josefina: { name: 'Josefina Lagos', color: 'green' },
-  ignacia: { name: 'Ignacia Vera', color: 'purple' },
-  andres: { name: 'Andrés Muñoz', color: 'red' },
-} satisfies Record<string, Member>;
+export const MEMBERS = demo.members as Record<keyof typeof demo.members, Member>;
 
 const AVATAR_SIZES = {
   sm: { box: 'size-5', text: 'text-[8.5px]' },
@@ -29,7 +23,7 @@ export function MemberAvatar({ member, size = 'sm', className }: { member: Membe
   return (
     <Avatar className={cn(box, 'shrink-0 after:hidden', className)} style={tint}>
       <AvatarFallback className={cn(text, 'font-bold leading-none tracking-tight')} style={tint}>
-        {member.name.slice(0, 2).toUpperCase()}
+        {member.name.split(' ').map(word => word[0]).slice(0, 2).join('').toUpperCase()}
       </AvatarFallback>
     </Avatar>
   );
@@ -69,9 +63,16 @@ export function useLiveMotion<T extends Element>() {
     const sync = () => setReduced(query.matches);
     sync();
     query.addEventListener('change', sync);
-    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.2 });
-    if (ref.current) observer.observe(ref.current);
-    return () => { query.removeEventListener('change', sync); observer.disconnect(); };
+    let intersecting = false;
+    const updateVisibility = () => setVisible(intersecting && !document.hidden);
+    const observer = typeof IntersectionObserver === 'function' ? new IntersectionObserver(([entry]) => {
+      intersecting = entry.isIntersecting;
+      updateVisibility();
+    }, { threshold: 0.2 }) : null;
+    if (ref.current && observer) observer.observe(ref.current);
+    if (!observer) { intersecting = true; updateVisibility(); }
+    document.addEventListener('visibilitychange', updateVisibility);
+    return () => { query.removeEventListener('change', sync); observer?.disconnect(); document.removeEventListener('visibilitychange', updateVisibility); };
   }, []);
   return { ref, visible, reduced };
 }

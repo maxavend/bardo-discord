@@ -2,23 +2,29 @@
 // Legal pages: the site's header and footer around one readable column.
 import Layout from '@/layouts/Layout.astro';
 import Footer from '@/components/Footer.astro';
+import BrandMark from '@/components/BrandMark.astro';
+import ThemeToggle from '@/components/ThemeToggle.astro';
 import { INSTALL_URL, container, navCta } from '@/lib/site';
 import { cn } from '@/lib/utils';
+import { ChevronLeft } from 'lucide-react';
 
 interface Props { title: string; description: string; updated: string; updatedIso: string }
 const { title, description, updated, updatedIso } = Astro.props;
 ---
 <Layout title={`${title} · Bardo`} description={description}>
-  <header class={cn(container, 'flex min-h-18 items-center justify-between gap-6')}>
-    <a href="/" aria-label="Bardo, inicio" class="inline-flex rounded-sm">
-      <img src="/marca/bardo-horizontal-color.svg" alt="Bardo" width="120" height="33" class="w-30" />
+  <header class={cn(container, 'site-header flex min-h-18 items-center justify-between gap-6')}>
+    <a href="/" aria-label="Bardo, inicio" class="site-brand inline-flex rounded-sm">
+      <BrandMark />
     </a>
-    <a href={INSTALL_URL} class={navCta}>Agregar a Discord</a>
+    <div class="site-header-actions flex max-w-full items-center gap-2 sm:gap-6">
+      <a href={INSTALL_URL} class={navCta}>Agregar a Discord</a>
+      <ThemeToggle />
+    </div>
   </header>
 
   <main id="contenido" class={cn(container, 'pt-16 pb-36')}>
     <article class="legal mx-auto max-w-[44rem]">
-      <a href="/" class="text-sm text-secondary-foreground underline-offset-4 hover:text-primary hover:underline active:text-primary">Volver a Bardo</a>
+      <a href="/" class="inline-flex items-center gap-1.5 text-sm text-secondary-foreground underline-offset-4 hover:text-primary hover:underline active:text-primary"><ChevronLeft size={16} aria-hidden="true" />Volver a Bardo</a>
       <h1 class="mt-8 text-[clamp(2.25rem,3vw+1rem,3.5rem)] leading-[1.05]">{title}</h1>
       <p class="mt-4 text-sm text-muted-foreground">Actualizado el <time datetime={updatedIso}>{updated}</time></p>
       <slot />

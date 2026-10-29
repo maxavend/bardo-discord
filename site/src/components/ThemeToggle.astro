@@ -1,0 +1,11 @@
+---
+import {Moon, Sun} from 'lucide-react';
+import {buttonVariants} from '@/components/ui/button';
+import {cn} from '@/lib/utils';
+---
+<button type="button" data-theme-toggle disabled aria-pressed="false" aria-label="Activar modo oscuro" class={cn(buttonVariants({variant: 'ghost', size: 'icon'}), 'site-theme-toggle')}>
+  <span class="t-icon-swap" data-theme-icon data-state="a" aria-hidden="true">
+    <Moon className="t-icon size-5" data-icon="a" />
+    <Sun className="t-icon size-5" data-icon="b" />
+  </span>
+</button>

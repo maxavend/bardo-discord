@@ -57,6 +57,7 @@ export function MaterialMorphShape({
   isPaused = false,
   isActive = true,
   isCompleted = false,
+  durationMs = 0,
   className = '',
 }) {
   const paths = useMemo(() => {
@@ -130,7 +131,7 @@ export function MaterialMorphShape({
   // Frecuencia dinámica: aumenta velocidad cuando se acaba el tiempo (<5m o overtime).
   const isDanger = color === 'danger' || color === 'destructive';
   const isWarn = color === 'warning' || color === 'amber';
-  const morphDurationMs = isDanger ? 1600 : isWarn ? 3200 : 8000;
+  const morphDurationMs = durationMs > 0 ? durationMs : (isDanger ? 1600 : isWarn ? 3200 : 8000);
   const rotationDuration = isDanger ? '3s' : isWarn ? '6s' : '16s';
   const [pathD, setPathD] = useState(paths.circle.d);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
@@ -235,7 +236,7 @@ export function MaterialMorphShape({
         width={size}
         height={size}
         style={{animationDuration: rotationDuration}}
-        className={`m3-morph-svg ${colorClass} ${isPaused ? 'is-paused' : ''}`}
+        className={`m3-morph-svg ${colorClass} ${isPaused || !isActive || reducedMotion ? 'is-paused' : ''}`}
         fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
       >
