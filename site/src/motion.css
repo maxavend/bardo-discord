@@ -1,0 +1,568 @@
+/* Selected transitions-dev patterns, integrated for Bardo. */
+/* transitions-dev — copy this :root block into your project once.
+   Every transition snippet reads from these semantic names. */
+:root {
+  /* ── Motion tokens — shared scale ──────────────────────────────
+     Reference these with var(--…) anywhere in your project. The
+     transitions below ship literal values so each snippet works on
+     its own; `transitions refine` maps hardcoded values back to
+     these tokens. */
+  /* Durations */
+  --duration-stagger: 40ms;  /* per-item stagger offset */
+  --duration-micro: 80ms;  /* tooltip/path delay, shake segment, large stagger */
+  --duration-quick: 150ms;  /* modal/dropdown close, text swap, tooltip appear */
+  --duration-fast: 250ms;  /* icon swap, dropdown/modal open, tabs sliding, page slide */
+  --duration-medium: 350ms;  /* panel close, toast close */
+  --duration-slow: 400ms;  /* panel open, skeleton content reveal, input clear */
+  --duration-very-slow: 500ms;  /* emphasis moments, badge appear, text reveal, success check */
+  /* Easings */
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);  /* modal/dropdown/panel open + close, page slide, resize, position change */
+  --ease-in-out: ease-in-out;  /* icon swap, text swap, text reveal, skeleton reveal */
+  --ease-out: ease-out;  /* tooltip open / close */
+  --ease-linear: linear;  /* shimmer, skeleton pulse, spinner */
+  /* Distances */
+  --distance-micro: 4px;  /* text swap */
+  --distance-small: 6px;  /* error shake (small segment) */
+  --distance-base: 8px;  /* badge diagonal reveal, page slide, error shake (large segment) */
+  --distance-medium: 12px;  /* text reveal */
+  --distance-large: 30px;  /* check badge appear */
+  /* Scales */
+  --scale-large: 0.96;  /* modal open / close */
+  --scale-medium: 0.97;  /* dropdown open */
+  --scale-small: 0.98;  /* tooltip open */
+  --scale-tiny: 0.99;  /* dropdown close */
+  /* Blur */
+  --blur-small: 2px;  /* panel reveal, icon swap, text swap, skeleton reveal, number pop-in */
+  --blur-medium: 3px;  /* page slide, text reveal */
+  --blur-large: 8px;  /* success check open */
+
+
+  --resize-dur: 300ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --panel-open-dur: 400ms;
+  --panel-close-dur: 350ms;
+  --panel-translate-y: 100px;
+  --panel-blur: 2px;
+  --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+  --check-opacity-dur: 500ms;
+  --check-rotate-dur: 500ms;
+  --check-rotate-from: 80deg;
+  --check-bob-dur: 500ms;
+  --check-y-amount: 40px;
+  --check-blur-dur: 500ms;
+  --check-blur-from: 10px;
+  --check-path-dur: 500ms;
+  --check-path-delay: 80ms;
+  --check-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-opacity: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-rotate: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-bob: cubic-bezier(0.34, 1.35, 0.64, 1);
+  --check-ease-path: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-text-muted: rgba(15, 15, 15, 0.8);
+  --tabs-text-active: #0f0f0f;
+  --tabs-bar-bg: #f1f1f1;
+  --tabs-pill-bg: #ffffff;
+  --stagger-dur: 500ms;
+  --stagger-distance: 12px;
+  --stagger-stagger: 40ms;
+  --stagger-blur: 3px;
+  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-box: 150ms;
+  --check-draw: 350ms;
+  --check-delay: 0ms;
+  --check-uncheck: 150ms;
+  --check-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --text-soft-dur: 200ms;
+  --text-soft-blur: 2px;
+  --text-soft-ease: ease-in-out;
+  --text-soft-resize-dur: 240ms;
+  --text-soft-resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Card resize · transitions-dev */
+.t-resize {
+  transition:
+    width  var(--resize-dur) var(--resize-ease),
+    height var(--resize-dur) var(--resize-ease);
+  will-change: width, height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-resize { transition: none !important; }
+}
+
+/* Panel reveal · transitions-dev */
+.t-panel-slide {
+  transform: translateY(var(--panel-translate-y));
+  opacity: 0;
+  filter: blur(var(--panel-blur));
+  pointer-events: none;
+  transition:
+    transform var(--panel-close-dur) var(--panel-ease),
+    opacity   var(--panel-close-dur) var(--panel-ease),
+    filter    var(--panel-close-dur) var(--panel-ease);
+  will-change: transform, opacity, filter;
+}
+.t-panel-slide[data-open="true"] {
+  transform: translateY(0);
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transition:
+    transform var(--panel-open-dur) var(--panel-ease),
+    opacity   var(--panel-open-dur) var(--panel-ease),
+    filter    var(--panel-open-dur) var(--panel-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-panel-slide { transition: none !important; }
+}
+
+/* Icon swap · transitions-dev */
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity   var(--icon-swap-dur) var(--icon-swap-ease),
+    filter    var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  /* No will-change: it would freeze each icon's raster at its 0.25 start
+     scale, so a large icon scales up blurry and pixelated. */
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-icon-swap .t-icon { transition: none !important; }
+}
+
+/* Success check · transitions-dev */
+/* Wrapper drives the appear animation; it doesn't own any
+   sizing or color so you can drop in any icon. */
+.t-success-check {
+  display: inline-block;
+  transform-origin: center;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+}
+/* overflow: visible keeps the stroke from clipping while it
+   draws; display: block kills the inline whitespace under SVGs. */
+.t-success-check svg { display: block; overflow: visible; }
+/* Stroke-draw setup. Replace 20 with the result of
+   path.getTotalLength() for your path; round caps mean any
+   sub-pixel overshoot is invisible. */
+.t-success-check svg path {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+}
+
+.t-success-check[data-state="in"] {
+  animation:
+    t-check-fade   var(--check-opacity-dur) var(--check-ease-opacity) forwards,
+    t-check-rotate var(--check-rotate-dur)  var(--check-ease-rotate)  forwards,
+    t-check-blur   var(--check-blur-dur)    var(--check-ease-out)     forwards,
+    t-check-bob    var(--check-bob-dur)     var(--check-ease-bob)     forwards;
+}
+.t-success-check[data-state="in"] svg path {
+  animation: t-check-draw var(--check-path-dur) var(--check-ease-path) var(--check-path-delay, 0ms) forwards;
+}
+
+@keyframes t-check-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes t-check-rotate {
+  from { transform: rotate(var(--check-rotate-from)); }
+  to   { transform: rotate(0deg); }
+}
+@keyframes t-check-blur {
+  from { filter: blur(var(--check-blur-from)); }
+  to   { filter: blur(0); }
+}
+@keyframes t-check-bob {
+  from { translate: 0 var(--check-y-amount); }
+  to   { translate: 0 0; }
+}
+@keyframes t-check-draw { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .t-success-check { animation: none !important; opacity: 1; }
+  .t-success-check svg path { animation: none !important; stroke-dashoffset: 0 !important; }
+}
+
+/* Tabs sliding · transitions-dev */
+/* The bar is just a flex container with padding for the pill
+   to sit inside. Tabs sit on z-index: 1, the pill on z-index: 0,
+   so labels read above the pill background. */
+.t-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 48px;
+  background: var(--tabs-bar-bg);
+}
+.t-tab {
+  position: relative;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  height: 30px;
+  padding: 4px 12px;
+  color: var(--tabs-text-muted);
+  cursor: pointer;
+  border-radius: 48px;
+  z-index: 1;
+  transition: color var(--tabs-dur) var(--tabs-ease);
+}
+.t-tab:not([aria-selected="true"]):hover,
+.t-tab[aria-selected="true"] {
+  color: var(--tabs-text-active);
+}
+
+/* The pill: width + transform are written inline by JS so
+   the transition tweens between the previous and next
+   measured positions. */
+.t-tabs-pill {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  height: 30px;
+  width: 0;
+  background: var(--tabs-pill-bg);
+  border-radius: 48px;
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width     var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+  z-index: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-tabs-pill, .t-tab { transition: none !important; }
+}
+
+/* Texts reveal · transitions-dev */
+/* Lines start translated down + blurred + invisible; .is-shown
+   on the parent flips them to their resting state. The second
+   line's transition-delay holds it back by --stagger-stagger
+   so the eye lands on the headline first. */
+.t-stagger-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(var(--stagger-distance));
+  filter: blur(var(--stagger-blur));
+  transition:
+    opacity   var(--stagger-dur) var(--stagger-ease),
+    transform var(--stagger-dur) var(--stagger-ease),
+    filter    var(--stagger-dur) var(--stagger-ease);
+  will-change: transform, opacity, filter;
+}
+.t-stagger-line--2 { transition-delay: var(--stagger-stagger); }
+
+.t-stagger.is-shown .t-stagger-line {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+/* Exit decouples from the stagger: same fade for every line,
+   no Y return, no blur — so the disappearance reads as a
+   single quiet fade instead of a reverse reveal. */
+.t-stagger.is-hiding .t-stagger-line {
+  opacity: 0;
+  transform: translateY(0);
+  filter: blur(0);
+  transition:
+    opacity 200ms ease,
+    transform 0s linear,
+    filter 0s linear;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-stagger-line { transition: none !important; }
+}
+
+/* Checkbox check · transitions-dev */
+.t-check {
+  transition:
+    background var(--check-box) var(--check-ease),
+    box-shadow var(--check-box) var(--check-ease);
+}
+.t-check svg path {
+  stroke-dasharray: var(--check-len, 15);
+  stroke-dashoffset: var(--check-len, 15);
+  transition: stroke-dashoffset var(--check-uncheck) var(--check-ease);
+}
+.t-check[aria-checked="true"] svg path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--check-draw) var(--check-ease) var(--check-delay);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-check, .t-check svg path { transition: none !important; }
+}
+
+/* Text swap soft · transitions-dev */
+/* Both texts share one grid cell, so they cross-blur in place; the
+   cell's width eases between them. */
+.t-text-soft {
+  display: inline-grid;
+  justify-items: var(--text-soft-align, start);
+  transition: width var(--text-soft-resize-dur) var(--text-soft-resize-ease);
+}
+.t-text-soft > span {
+  grid-area: 1 / 1;
+  white-space: pre;
+  transition:
+    filter  var(--text-soft-dur) var(--text-soft-ease),
+    opacity var(--text-soft-dur) var(--text-soft-ease);
+}
+.t-text-soft-new {
+  opacity: 0;
+  filter: blur(var(--text-soft-blur));
+}
+.t-text-soft.is-swapping .t-text-soft-old {
+  opacity: 0;
+  filter: blur(var(--text-soft-blur));
+}
+.t-text-soft.is-swapping .t-text-soft-new {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Bardo tuning: the patterns own timing; the existing tokens own appearance. */
+:root {
+  --tabs-bar-bg: var(--muted);
+  --tabs-pill-bg: var(--background);
+  --tabs-text-muted: color-mix(in oklab, var(--foreground) 60%, transparent);
+  --tabs-text-active: var(--foreground);
+  --panel-translate-y: var(--distance-medium);
+  --icon-swap-start-scale: 0.65;
+  --check-rotate-from: -12deg;
+  --check-y-amount: var(--distance-base);
+  --check-blur-from: var(--blur-small);
+  --text-soft-dur: var(--duration-quick);
+  --text-soft-resize-dur: var(--duration-fast);
+  --stagger-dur: var(--duration-very-slow);
+  --stagger-stagger: var(--duration-stagger);
+}
+
+html { scroll-behavior: smooth; }
+[data-motion-item].t-stagger-line { display: var(--motion-display, block); transition-delay: calc(var(--motion-index, 0) * var(--stagger-stagger)); }
+.t-stagger-line--3 { transition-delay: calc(var(--stagger-stagger) * 2); }
+.motion-settled, .motion-settled .t-stagger-line { will-change: auto; }
+.t-resize:not([data-resizing]) { will-change: auto; }
+
+a { transition: color var(--duration-quick) var(--ease-out), text-decoration-color var(--duration-quick) var(--ease-out); }
+[data-slot="button"] {
+  transition-duration: var(--duration-quick);
+  transition-timing-function: var(--ease-smooth-out);
+}
+[data-slot="button"]:active:not(:disabled) { transform: translateY(1px); }
+@media (hover: hover) and (pointer: fine) {
+  [data-slot="button"]:hover:not(:disabled):not(:active) { transform: translateY(-1px); }
+}
+
+/* The incumbent pill keeps its dimensions and Base UI keeps focus/keyboard ownership. */
+.t-tabs { gap: 0; padding: 4px; }
+.t-tabs .t-tab { height: calc(100% - 1px); padding: 4px 20px; }
+.t-tabs:not([data-segment-ready]) .t-tabs-pill { opacity: 0; }
+.t-tabs[data-segment-ready] .t-tab { background: transparent; }
+/* Product stories stay in normal flow; the copy leads on narrow screens. */
+.site-hero { min-height: calc(70svh - 4.5rem); padding-block: 64px; }
+/* Comfortaa carries the rounded lettering into the marketing headlines. */
+.site-hero h1 { font-weight: 600; letter-spacing: -0.035em; line-height: 1.12; }
+.site-home h2, .space-feature-copy h3, .legal h1, .legal h2 { font-weight: 600; }
+.site-home > section:nth-child(n+3) { position: relative; }
+.site-home > section:nth-child(n+3)::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: min(calc(100% - 32px), 1312px); height: 1px;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  pointer-events: none;
+}
+@keyframes hero-entry {
+  from { opacity: 0; transform: translateY(12px); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-entry-reveal] [data-motion-item], [data-entry-reveal] > figure {
+    animation: hero-entry 600ms var(--ease-smooth-out) both;
+  }
+  [data-entry-reveal] [data-motion-item]:nth-child(2) { animation-delay: 60ms; }
+  [data-entry-reveal] [data-motion-item]:nth-child(3) { animation-delay: 120ms; }
+  [data-entry-reveal] > figure { animation-delay: 120ms; }
+}
+.heading-stop { color: var(--punto); }
+.site-home > .site-availability { padding-bottom: 48px; }
+.site-home > .site-close { padding-top: 48px; padding-bottom: 96px; }
+.spaces-section {
+  --spaces-background: color-mix(in oklab, var(--paper-2) 94%, var(--primary));
+  --spaces-fade: clamp(64px, 10vw, 128px);
+  background: linear-gradient(to bottom, var(--paper), var(--spaces-background) var(--spaces-fade), var(--spaces-background) calc(100% - var(--spaces-fade)), var(--paper));
+}
+.dark .spaces-section { --spaces-background: oklch(0.19 0.032 300); }
+@media (min-width: 64rem) { .site-hero { padding-block: clamp(32px, 5svh, 72px); } }
+.space-product-shot { overflow: hidden; border-radius: 12px; box-shadow: 0 12px 28px -20px color-mix(in oklab, var(--night) 45%, transparent); }
+.spaces-intro { display: grid; gap: 16px; margin-bottom: 64px; }
+.spaces-intro p { margin: 0; }
+.spaces-features { display: grid; gap: 88px; }
+.space-feature { display: grid; gap: 32px; align-items: center; min-width: 0; scroll-margin-top: 32px; }
+.space-feature-copy { display: grid; gap: 24px; min-width: 0; }
+.space-feature-copy h3 { max-width: 24ch; font-size: clamp(1.5rem, 1.2vw + 1rem, 2rem); line-height: 1.2; }
+.space-feature-copy ul { font-size: 1rem; line-height: 1.6; border-color: color-mix(in oklab, var(--rule-strong) 60%, transparent); }
+.space-feature-copy li { padding-block: 18px; border-color: color-mix(in oklab, var(--rule-strong) 60%, transparent); }
+.space-feature-image { min-width: 0; }
+@media (min-width: 64rem) {
+  .spaces-intro { grid-template-columns: 1fr 1fr; align-items: end; gap: 64px; margin-bottom: 80px; }
+  .spaces-features { gap: 128px; }
+  .space-feature { grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 64px; }
+  .space-feature-image { grid-column: 1; grid-row: 1; }
+  .space-feature-copy { grid-column: 2; grid-row: 1; }
+  .space-feature:nth-child(even) { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
+  .space-feature:nth-child(even) .space-feature-copy { grid-column: 1; }
+  .space-feature:nth-child(even) .space-feature-image { grid-column: 2; }
+}
+@media (max-width: 39.999rem) {
+  .space-feature-image { width: min(100%, 22rem); justify-self: center; }
+}
+
+.agreement-stage { --panel-close-dur: var(--duration-quick); --panel-translate-y: var(--distance-base); }
+.agreement-row { transition: border-color var(--duration-quick) var(--ease-out), background-color var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out); }
+.agreement-row:has([aria-checked="true"]) { background: color-mix(in oklab, var(--primary) 2%, var(--card)); }
+.agreement-stage [aria-busy="true"] { pointer-events: none; }
+.live-point { transition: background-color var(--duration-fast) var(--ease-smooth-out), color var(--duration-fast) var(--ease-smooth-out); }
+.live-point-icon { display: inline-grid; flex: none; width: 16px; height: 16px; margin-top: 2px; place-items: center; }
+.live-point-icon > * { grid-area: 1 / 1; }
+.live-point-icon .t-icon-swap { display: grid; place-items: center; }
+.live-topic { min-width: 0; max-width: 100%; overflow: hidden; }
+.live-topic > span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.t-success-check svg path { stroke-dasharray: var(--success-path-length, 20); stroke-dashoffset: var(--success-path-length, 20); }
+.t-check svg polyline { stroke-dasharray: var(--check-len, 15); stroke-dashoffset: var(--check-len, 15); transition: stroke-dashoffset var(--check-uncheck) var(--check-ease); }
+.t-check[aria-checked="true"] svg polyline { stroke-dashoffset: 0; transition: stroke-dashoffset var(--check-draw) var(--check-ease) var(--check-delay); }
+[data-slot="checkbox-indicator"][data-unchecked] { display: grid; }
+
+/* The line fills once and settles; the morph ball keeps moving at its endpoint. */
+.footer-signature { position: relative; height: 48px; color: var(--night-ink); }
+.footer-signature-mark { position: absolute; inset: 0 28px 0 0; display: flex; align-items: center; opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+.footer-signature-mark > span { height: 3.5px; flex: 1; border-radius: 2px; background: currentColor; }
+.footer-signature-mark[data-visible="true"] { opacity: 1; }
+.footer-signature-pulse { position: absolute; inset: 0; width: 100%; height: 48px; color: var(--punto-night); transition: color var(--duration-fast) var(--ease-out); }
+.footer-signature[data-phase="morph"] .footer-signature-pulse { color: var(--night-ink); }
+.footer-signature:not([data-phase="wave"]):not([data-phase="morph"]) .footer-signature-pulse { visibility: hidden; }
+.footer-signature-dot { position: absolute; right: 0; top: 14px; opacity: 0; transform: scale(0.5); transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-smooth-out); }
+.footer-signature-dot[data-visible="true"] { opacity: 1; transform: scale(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  [data-motion-group] .t-stagger-line { opacity: 1; transform: none; filter: none; }
+  [data-motion-reveal] { opacity: 1; transform: none; filter: none; pointer-events: auto; }
+  .footer-signature-mark, .footer-signature-dot { opacity: 1; transform: none; }
+  .footer-signature-pulse { visibility: hidden; }
+  [data-slot="button"] { transform: none !important; }
+  .t-icon-swap .t-icon { filter: none !important; transform: none !important; }
+  .t-check svg polyline { transition: none !important; }
+  .t-check[aria-checked="true"] svg polyline { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-text-soft,
+  .t-text-soft > span { transition: none !important; }
+}
+
+/* Skeleton loader and reveal · transitions-dev */
+:root { --pulse-dur: 1000ms; --pulse-count: 1; --pulse-min: 0.5; --reveal-dur: 400ms; --reveal-blur: 2px; --reveal-ease: ease-in-out; }
+/* The wrap stacks two layers on the same coordinates. The
+   skeleton owns the cold pulse + the fade-out side of the
+   reveal; the content owns the fade-in side. They share the
+   same duration / ease so the swap reads as one motion. */
+.t-skel { position: relative; }
+.t-skel-skeleton,
+.t-skel-content {
+  position: absolute;
+  inset: 0;
+}
+
+.t-skel-skeleton {
+  z-index: 1;
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter  var(--reveal-dur) var(--reveal-ease);
+}
+.t-skel-content {
+  z-index: 2;
+  opacity: 0;
+  filter: blur(var(--reveal-blur));
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter  var(--reveal-dur) var(--reveal-ease);
+}
+.t-skel.is-revealed .t-skel-skeleton {
+  opacity: 0;
+  filter: blur(var(--reveal-blur));
+}
+.t-skel.is-revealed .t-skel-content {
+  opacity: 1;
+  filter: blur(0);
+}
+/* Snap-back when replaying: kill transitions so the reverse
+   (revealed → skeleton) is instant. Drop `.is-resetting`
+   after a forced reflow and the next reveal animates again. */
+.t-skel.is-resetting .t-skel-skeleton,
+.t-skel.is-resetting .t-skel-content {
+  transition: none !important;
+}
+
+/* Pulse: place the animation on the bar/avatar children, not
+   on the skeleton itself, so the skeleton's opacity / filter
+   stay free for the cross-fade transition above. */
+.t-skel-skeleton.is-pulsing > * {
+  animation: t-skel-pulse var(--pulse-dur) ease-in-out var(--pulse-count);
+}
+@keyframes t-skel-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: var(--pulse-min); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-skel-skeleton, .t-skel-content {
+    transition: none !important;
+  }
+  .t-skel-skeleton.is-pulsing > * { animation: none !important; }
+}
+.shot-loader { position: relative; aspect-ratio: var(--shot-aspect); overflow: hidden; border-radius: inherit; }
+.shot-loader:not(.t-skel) > .t-skel-skeleton { display: none; }
+.shot-loader:not(.t-skel) > .t-skel-content { position: relative; opacity: 1; filter: none; }
+.shot-skeleton { padding: 6%; display: grid; grid-template-rows: 7% 10% 4% 1fr; gap: 6%; background: var(--card); pointer-events: none; }
+.shot-skeleton > div { background: color-mix(in oklab, var(--foreground) 9%, var(--card)); border-radius: 6px; }
+.shot-skeleton-title { width: 66%; }
+.shot-skeleton-line { width: 82%; }
+.shot-loader [data-shot-error]:not([hidden]) { position: absolute; inset: 0; display: grid; place-content: center; padding: 24px; background: var(--card); color: var(--muted-foreground); text-align: center; }
+.shot-loader[data-state="error"] picture { visibility: hidden; }
+.spaces-showcase { --panel-translate-y: 16px; --panel-blur: 2px; --panel-open-dur: 550ms; }
+@media (width < 40rem) { .shot-loader { aspect-ratio: var(--shot-mobile-aspect); } }
+.spaces-intro > p[data-motion-reveal] { transition-delay: 60ms; }
+.space-feature-copy li[data-motion-reveal]:nth-child(2) { transition-delay: 40ms; }
+.space-feature-copy li[data-motion-reveal]:nth-child(3) { transition-delay: 80ms; }

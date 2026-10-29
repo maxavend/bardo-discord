@@ -32,6 +32,24 @@
         ],
         "createdAt": "2026-10-13T17:03:56.309Z",
         "reason": "Agent review: declaration-only legacy token --ease-bounce-strong from 7f1922fc; no source consumers found, so no bounce animation occurs. Reassess if activated."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.34, 1.35, 0.64, 1)",
+        "files": [
+          "site/src/motion.css"
+        ],
+        "createdAt": "2026-10-28T22:38:36.757Z",
+        "reason": "Agent: retained the transitions-dev success-check pattern explicitly requested for the landing; only the completed-step check uses this easing with an 8px settle and reduced-motion support."
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "site/src/motion.css"
+        ],
+        "createdAt": "2026-10-28T22:38:36.854Z",
+        "reason": "Agent: this stylesheet integrates the requested transitions-dev text-swap-soft, tabs and card-resize patterns; bounded width/height transitions preserve label and panel continuity after user actions. Responsive checks passed at 320-1440px and 200 percent text; reduced motion disables the transitions."
       }
     ]
   }

@@ -8,7 +8,7 @@ const { title, description } = Astro.props;
 <html lang="es" class="overflow-x-clip">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta property="og:title" content={title} />
@@ -20,8 +20,20 @@ const { title, description } = Astro.props;
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#8200DB" />
+    <script is:inline>
+      (() => {
+        let theme;
+        try { theme = localStorage.getItem('bardo-site-theme'); } catch {}
+        if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#211c25' : '#faf5ff';
+      })();
+    </script>
   </head>
   <body class="overflow-x-clip">
     <slot />
+    <script>import '@/lib/theme';</script>
   </body>
 </html>

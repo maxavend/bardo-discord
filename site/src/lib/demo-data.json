@@ -1,0 +1,26 @@
+{
+  "workspace": "Escuadrón Hyrule",
+  "meeting": "Consejo de Hyrule",
+  "block": "Rumbo al Templo del Tiempo",
+  "members": {
+    "samus": {"name":"Samus Aran","color":"blurple"},
+    "zelda": {"name":"Zelda Hyrule","color":"purple"},
+    "link": {"name":"Link de Hyrule","color":"green"},
+    "daenerys": {"name":"Daenerys Targaryen","color":"pink"},
+    "oak": {"name":"Profesor Oak","color":"orange"},
+    "mario": {"name":"Mario Mario","color":"red"},
+    "kirby": {"name":"Kirby","color":"pink"},
+    "misty": {"name":"Misty de Celeste","color":"sky"}
+  },
+  "points": [
+    {"title":"Trazar la ruta al Templo del Tiempo","member":"samus"},
+    {"title":"Preparar dragones para el viaje","member":"daenerys"},
+    {"title":"Revisar el inventario de pociones","member":"link"}
+  ],
+  "agreements": [
+    {"id":"a1","text":"Reunir las tres piezas de la Trifuerza antes del viernes.","from":"Rumbo al Templo del Tiempo","member":"link","tag":{"name":"Hyrule","color":"green"},"priority":"high"},
+    {"id":"a2","text":"Entrenar a Charizard para la ruta del volcán.","from":"Rumbo al Templo del Tiempo","member":"daenerys","tag":{"name":"Pokémon","color":"yellow"}},
+    {"id":"a3","text":"Completar la Pokédex del Bosque Verde.","from":"Expedición Pokémon","member":"oak","tag":{"name":"Exploración","color":"orange"},"subtasks":"0/3"},
+    {"id":"a4","text":"Compartir el mapa de Zebes en #sala-de-misiones.","from":"Próximas misiones","member":"samus","tag":{"name":"Metroid","color":"purple"}}
+  ]
+}

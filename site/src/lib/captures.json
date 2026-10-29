@@ -1,0 +1,116 @@
+{
+  "source": {
+    "ref": "origin/main",
+    "sha": "38b1474ea60ce1dd79becba2295c80d4f3cc2a94",
+    "activityTree": "aafbffed4ca22e18fb868fa43e59952ecbc269aa",
+    "capturedAt": "2026-10-29T00:11:59.071Z",
+    "fixture": "site/scripts/gamer-fixture.mjs",
+    "fixtureVersion": "gamer-v1"
+  },
+  "captures": {
+    "03-lector": {
+      "light": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/03-lector/desktop-light.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/03-lector/mobile-light.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      },
+      "dark": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/03-lector/desktop-dark.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/03-lector/mobile-dark.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      }
+    },
+    "05-agenda": {
+      "light": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/05-agenda/desktop-light.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/05-agenda/mobile-light.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      },
+      "dark": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/05-agenda/desktop-dark.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/05-agenda/mobile-dark.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      }
+    },
+    "07-resumen": {
+      "light": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/07-resumen/desktop-light.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/07-resumen/mobile-light.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      },
+      "dark": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/07-resumen/desktop-dark.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/07-resumen/mobile-dark.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      }
+    },
+    "09-tablero": {
+      "light": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/09-tablero/desktop-light.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/09-tablero/mobile-light.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      },
+      "dark": {
+        "desktop": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/09-tablero/desktop-dark.webp",
+          "width": 2880,
+          "height": 1800
+        },
+        "mobile": {
+          "src": "/capturas/38b1474ea60c/gamer-v1/09-tablero/mobile-dark.webp",
+          "width": 1170,
+          "height": 2532
+        }
+      }
+    }
+  }
+}
