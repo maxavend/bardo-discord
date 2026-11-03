@@ -334,3 +334,7 @@
 
 /* Legal navigation keeps the same minimum touch target as the landing. */
 .legal > a:first-child { min-height: 44px; align-items: center; }
+
+/* The root canvas extends the footer colour into Safari's bottom overscroll. */
+html { background-color: var(--night); }
+body { background-color: var(--paper); }
