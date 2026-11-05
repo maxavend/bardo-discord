@@ -16,13 +16,23 @@ function json(route, status, body) {
   return route.fulfill({status, contentType: 'application/json', body: JSON.stringify(body)});
 }
 
+/** El Worker marca el HTML solo en el dominio web; aquí se simula esa marca. */
+async function asWebApp(page) {
+  await page.route(url => url.pathname === '/', async route => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace('<head>', '<head><meta name="bardo-web" content="1">');
+    await route.fulfill({response, body});
+  });
+}
+
 async function expectNoHorizontalOverflow(page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
 test('sin sesión pide entrar con Discord y explica el error del login', async ({page}) => {
-  await page.route('**/api/web/session', route => json(route, 401, {error: 'auth_required'}));
+  await asWebApp(page);
+  await page.route('**/api/web/session', route => json(route, 200, {user: null}));
   await page.goto('/?auth_error=cancelled');
 
   await expect(page.getByRole('heading', {name: 'Entra a Bardo'})).toBeVisible();
@@ -34,6 +44,7 @@ test('sin sesión pide entrar con Discord y explica el error del login', async (
 });
 
 test('con sesión y sin canal muestra el selector, busca y abre con teclado', async ({page}) => {
+  await asWebApp(page);
   await page.route('**/api/web/session', route => json(route, 200, {user: USER}));
   await page.route('**/api/web/channels', route => json(route, 200, {
     guilds: [{id: '200', name: 'Estudio Bardo', icon: null, channels: manyChannels}],
@@ -59,6 +70,7 @@ test('con sesión y sin canal muestra el selector, busca y abre con teclado', as
 });
 
 test('sin servidores explica por qué y permite reintentar', async ({page}) => {
+  await asWebApp(page);
   await page.route('**/api/web/session', route => json(route, 200, {user: USER}));
   let calls = 0;
   await page.route('**/api/web/channels', route => {
@@ -75,6 +87,7 @@ test('sin servidores explica por qué y permite reintentar', async ({page}) => {
 });
 
 test('un canal sin permiso vuelve al selector con el motivo', async ({page}) => {
+  await asWebApp(page);
   await page.route('**/api/web/session', route => json(route, 200, {user: USER}));
   await page.route('**/api/web/channels', route => json(route, 200, {
     guilds: [{id: '200', name: 'Estudio Bardo', icon: null, channels: manyChannels.slice(0, 2)}],
@@ -87,12 +100,21 @@ test('un canal sin permiso vuelve al selector con el motivo', async ({page}) => 
   await expect(page.getByText('canal-0')).toBeVisible();
 });
 
-test('con la web apagada sigue el modo local y el zoom queda permitido', async ({page}) => {
-  await page.route('**/api/web/session', route => json(route, 404, {error: 'web_disabled'}));
+test('con la web apagada no consulta nada, sigue el modo local y permite zoom', async ({page}) => {
+  const asked = [];
+  const errors = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/api/web/')) asked.push(request.url());
+  });
+  page.on('console', message => {
+    if (message.type() === 'error' && !/favicon/i.test(message.text())) errors.push(message.text());
+  });
   await page.goto('/');
 
-  await expect(page.getByRole('heading', {name: 'Entra a Bardo'})).toHaveCount(0);
   await expect(page.locator('.app-root')).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Entra a Bardo'})).toHaveCount(0);
+  expect(asked).toEqual([]);
+  expect(errors).toEqual([]);
   const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
   expect(viewport).not.toContain('user-scalable=no');
 });

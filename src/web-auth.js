@@ -84,6 +84,21 @@ export function isWebRequest(url, env) {
   return Boolean(origin) && url.origin === origin;
 }
 
+/**
+ * Marca el HTML servido en el dominio web. Sin esta marca el cliente ni siquiera
+ * consulta la sesión, así que con la web apagada nada cambia fuera de Discord.
+ * Se pide sin condiciones: un HTML en caché de antes de activar no traería la marca.
+ */
+export async function fetchWebAppHtml(request, env) {
+  const response = await env.ASSETS.fetch(new Request(request.url, {method: 'GET'}));
+  if (!(response.headers.get('content-type') || '').includes('text/html')) return response;
+  const html = (await response.text()).replace(/<head(\s[^>]*)?>/i, match => `${match}<meta name="bardo-web" content="1">`);
+  const marked = new Response(html, response);
+  marked.headers.delete('content-length');
+  marked.headers.delete('etag');
+  return marked;
+}
+
 /** En localhost no hay HTTPS: ahí la cookie no lleva Secure ni el prefijo __Host-. */
 function cookieSettings(env) {
   const secure = new URL(webOrigin(env)).protocol === 'https:';

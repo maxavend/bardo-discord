@@ -27,7 +27,7 @@ import { handleKanbanApi } from './kanban-api.js';
 import { handleSettingsApi, settingsDefaults } from './settings-api.js';
 import { loadEffectiveSettings } from './settings-db.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
-import { handleWebAuth } from './web-auth.js';
+import { fetchWebAppHtml, handleWebAuth, isWebRequest } from './web-auth.js';
 import { handleWebApi } from './web-api.js';
 import { cleanupWebAndMcp } from './web-db.js';
 import { handleMcpOAuth } from './mcp-oauth.js';
@@ -1290,7 +1290,8 @@ async function routeRequest(request, env, ctx) {
   }
 
   if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS) {
-    return withFramePolicy(await env.ASSETS.fetch(request), env);
+    const isWebPage = request.method === 'GET' && url.pathname === '/' && isWebRequest(url, env);
+    return withFramePolicy(isWebPage ? await fetchWebAppHtml(request, env) : await env.ASSETS.fetch(request), env);
   }
 
   return new Response('Method not allowed', { status: 405 });

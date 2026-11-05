@@ -90,6 +90,8 @@ function launchCustomId(params) {
   return target.startsWith('bardo:open:') ? target : `bardo:open:${target}`;
 }
 
+const webAppEnabled = () => Boolean(document.querySelector('meta[name="bardo-web"]'));
+
 async function readSession() {
   let response;
   try {
@@ -97,11 +99,10 @@ async function readSession() {
   } catch {
     return {offline: true};
   }
-  // Web apagada, o un servidor de desarrollo sin Worker: sigue el modo local.
-  if (response.status === 404 || !(response.headers.get('content-type') || '').includes('application/json')) return null;
-  if (response.status === 401) return {signedOut: true};
   if (!response.ok) return {offline: true};
-  return response.json().catch(() => null);
+  const payload = await response.json().catch(() => null);
+  if (!payload) return {offline: true};
+  return payload.user ? payload : {signedOut: true};
 }
 
 async function openChannel(user, guildId, channelId, customId) {
@@ -155,9 +156,9 @@ async function openChannel(user, guildId, channelId, customId) {
  * Si no: el mismo resultado que la autenticación dentro de Discord.
  */
 export async function bootWebApp() {
+  if (!webAppEnabled()) return null;
   const authError = takeAuthError();
   const session = await readSession();
-  if (!session) return null;
   if (session.offline) return {gate: 'error', message: 'No pudimos conectar con Bardo. Revisa tu conexión e inténtalo de nuevo.'};
   if (session.signedOut) return {gate: 'signin', message: authError};
 

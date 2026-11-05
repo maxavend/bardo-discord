@@ -107,9 +107,13 @@ test('el selector muestra solo servidores de la persona y canales que puede ver'
 test('sin sesión, la API web pide iniciar sesión', async () => {
   const {env} = createWebEnv();
   const browser = createBrowser(worker, env);
-  for (const path of ['/api/web/session', '/api/web/channels', '/api/web/connections']) {
+  for (const path of ['/api/web/channels', '/api/web/connections']) {
     assert.equal((await browser.fetch(path)).status, 401, path);
   }
+  // No haber entrado no es un error: la consola queda limpia para quien visita.
+  const session = await browser.fetch('/api/web/session');
+  assert.equal(session.status, 200);
+  assert.equal((await session.json()).user, null);
 });
 
 test('el token de canal funciona en las APIs de siempre y comprueba Discord', async () => {
@@ -177,7 +181,7 @@ test('cerrar sesión revoca también los tokens de canal', async () => {
   assert.equal((await browser.fetch('/api/web/logout', {method: 'POST'})).status, 200);
   assert.equal(db.rows('SELECT * FROM web_sessions').length, 0);
   assert.equal(db.rows('SELECT * FROM docs_sessions').length, 0);
-  assert.equal((await browser.fetch('/api/web/session')).status, 401);
+  assert.equal((await (await browser.fetch('/api/web/session')).json()).user, null);
 });
 
 test('una sesión vencida no sirve y la limpieza diaria la borra', async () => {
@@ -185,9 +189,40 @@ test('una sesión vencida no sirve y la limpieza diaria la borra', async () => {
   const browser = createBrowser(worker, env);
   await browser.login();
   db.run("UPDATE web_sessions SET expires_at = '2020-01-01T00:00:00.000Z'");
-  assert.equal((await browser.fetch('/api/web/session')).status, 401);
+  assert.equal((await (await browser.fetch('/api/web/session')).json()).user, null);
   await cleanupWebAndMcp(db);
   assert.equal(db.rows('SELECT * FROM web_sessions').length, 0);
+});
+
+const fakeAssets = () => {
+  const requests = [];
+  return {
+    requests,
+    fetch: async request => {
+      requests.push(request);
+      return new Response('<!doctype html><html lang="es"><head><title>Bardo</title></head></html>', {
+        headers: {'Content-Type': 'text/html; charset=utf-8', ETag: '"abc"', 'Content-Length': '70'},
+      });
+    },
+  };
+};
+
+test('solo el dominio web marca el HTML, y sin caché de antes de activar', async () => {
+  const ASSETS = fakeAssets();
+  const {env} = createWebEnv({}, {ASSETS});
+
+  const web = await worker.fetch(new Request(`${WEB_ORIGIN}/`, {headers: {'If-None-Match': '"abc"'}}), env);
+  assert.match(await web.text(), /<head><meta name="bardo-web" content="1"><title>/);
+  assert.equal(web.headers.get('etag'), null);
+  assert.equal(web.headers.get('content-length'), null);
+  assert.equal(ASSETS.requests[0].headers.get('if-none-match'), null);
+
+  const activity = await worker.fetch(new Request('https://otro.test/'), env);
+  assert.doesNotMatch(await activity.text(), /bardo-web/);
+  assert.equal(activity.headers.get('etag'), '"abc"');
+
+  const off = createEnv(createTestDb(), {ASSETS: fakeAssets()});
+  assert.doesNotMatch(await (await worker.fetch(new Request(`${WEB_ORIGIN}/`), off)).text(), /bardo-web/);
 });
 
 test('en localhost la cookie funciona sin HTTPS', async () => {

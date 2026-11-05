@@ -103,12 +103,14 @@ async function routeWebApi(request, url, env) {
   }
 
   const session = await readWebSession(request, env);
-  if (!session) return signInRequired();
 
+  // No haber entrado es un estado normal de la web, no un error.
   if (path === 'session') {
     if (request.method !== 'GET') return methodNotAllowed();
-    return webJson({user: webUser(session), expiresAt: session.expiresAt});
+    return webJson(session ? {user: webUser(session), expiresAt: session.expiresAt} : {user: null});
   }
+
+  if (!session) return signInRequired();
   if (path === 'channels') {
     if (request.method !== 'GET') return methodNotAllowed();
     return webJson(await listUserChannels(env, session.userId));
