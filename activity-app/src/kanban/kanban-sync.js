@@ -270,7 +270,7 @@ export function createKanbanEngine({
           server = {...server, cards};
           onNotice({message: data.message || 'Esa tarea ya no existe en este canal.'});
         } else if (error.status === 401) {
-          onNotice({message: data.message || 'Tu sesión de Bardo expiró. Cierra Bardo y vuelve a abrirlo desde Discord.'});
+          onNotice({message: data.message || 'Tu sesión de Bardo expiró. Cierra Bardo y vuelve a abrirlo.'});
         } else {
           onNotice({message: data.message || 'No se pudo guardar el cambio. Inténtalo de nuevo.', cardId: op.id});
         }

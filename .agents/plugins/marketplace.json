@@ -1,0 +1,20 @@
+{
+  "name": "bardo",
+  "interface": {
+    "displayName": "Bardo"
+  },
+  "plugins": [
+    {
+      "name": "bardo",
+      "source": {
+        "source": "local",
+        "path": "./plugins/bardo"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

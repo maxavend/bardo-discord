@@ -7,6 +7,7 @@ import {
   isSameOriginMutation,
   isWebRequest,
   logoutWebSession,
+  overRateLimit,
   readWebSession,
   webError,
   webJson,
@@ -20,6 +21,8 @@ const ID_PATTERN = /^[\w-]{1,64}$/;
 const CONNECTIONS_PATH = /^connections\/([\w-]{1,64})$/;
 // Los tokens de canal viven en memoria y salen de nuevo en cada carga de página.
 const CHANNEL_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Cada apertura consulta a Discord sin caché, y el límite del bot es compartido.
+const CHANNEL_OPENS_PER_MINUTE = 30;
 
 function webUser(session) {
   return {
@@ -35,6 +38,9 @@ const signInRequired = () => webError(401, 'auth_required', 'Inicia sesión con 
 const crossOrigin = () => webError(403, 'cross_origin', 'Esta solicitud no viene de Bardo.');
 
 async function handleChannelSession(request, env, session) {
+  if (overRateLimit(`channel-session:${session.userId}`, CHANNEL_OPENS_PER_MINUTE)) {
+    return webError(429, 'rate_limited', 'Abriste muchos canales seguidos. Espera un minuto y vuelve a intentarlo.');
+  }
   let payload;
   try {
     payload = await request.json();

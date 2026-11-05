@@ -406,11 +406,12 @@ test('la autorización no redirige a direcciones sin registrar y exige PKCE', as
   const unknown = await browser.fetch(`/oauth/authorize?${query({client_id: 'nadie'})}`);
   assert.equal(unknown.status, 400);
 
-  const plain = await browser.fetch(`/oauth/authorize?${query({code_challenge_method: 'plain'})}`);
-  assert.equal(new URL(plain.headers.get('location')).searchParams.get('error'), 'invalid_request');
-
-  const otherResource = await browser.fetch(`/oauth/authorize?${query({resource: 'https://evil.test/mcp'})}`);
-  assert.equal(new URL(otherResource.headers.get('location')).searchParams.get('error'), 'invalid_target');
+  // Una solicitud mal formada nunca redirige: el registro es público y serviría para saltar a otro sitio.
+  for (const extra of [{code_challenge_method: 'plain'}, {resource: 'https://evil.test/mcp'}, {response_type: 'token'}, {scope: 'nada'}]) {
+    const rejected = await browser.fetch(`/oauth/authorize?${query(extra)}`);
+    assert.equal(rejected.status, 400, JSON.stringify(extra));
+    assert.equal(rejected.headers.get('location'), null, JSON.stringify(extra));
+  }
 
   // El puerto de loopback puede cambiar (Claude Code y Codex usan uno temporal).
   const otherPort = await browser.fetch(`/oauth/authorize?${query({redirect_uri: 'http://127.0.0.1:50000/callback'})}`);
@@ -420,6 +421,18 @@ test('la autorización no redirige a direcciones sin registrar y exige PKCE', as
   assert.match(html, /&lt;b&gt;Evil/);
   assert.equal(otherPort.headers.get('x-frame-options'), 'DENY');
   assert.match(otherPort.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+});
+
+test('la pantalla de autorización deja que el navegador envíe su Origin', async () => {
+  // Con «no-referrer», un formulario envía «Origin: null» y nunca se podría aceptar.
+  const context = createWebEnv();
+  const fetchFn = workerFetch(context.env);
+  let url;
+  await auth(new MemoryProvider(value => { url = value; }), {serverUrl: `${WEB_ORIGIN}/mcp`, fetchFn});
+  const browser = createBrowser(worker, context.env);
+  await browser.login();
+  const page = await browser.fetch(`${url.pathname}${url.search}`);
+  assert.equal(page.headers.get('referrer-policy'), 'same-origin');
 });
 
 test('la autorización solo se acepta desde la web y con la sesión que la abrió', async () => {

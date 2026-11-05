@@ -87,6 +87,9 @@ test('return_to no permite salir del sitio', () => {
   assert.equal(safeReturnTo('https://evil.test/x'), '/');
   assert.equal(safeReturnTo('//evil.test/x'), '/');
   assert.equal(safeReturnTo('/\\evil.test'), '/');
+  for (const path of ['/.//evil.test/x', '/..//evil.test/x', '/%2e//evil.test/x', '/././/evil.test']) {
+    assert.equal(safeReturnTo(path), '/', path);
+  }
   assert.equal(safeReturnTo('/oauth/authorize?a=1'), '/oauth/authorize?a=1');
 });
 
@@ -133,6 +136,28 @@ test('el token de canal funciona en las APIs de siempre y comprueba Discord', as
   const request = new Request(`${WEB_ORIGIN}/api/docs`, {headers: {Authorization: `Bearer ${token}`}});
   const docs = await handleDocsApi(request, new URL(request.url), env);
   assert.equal(docs.status, 200);
+});
+
+test('abrir canales e iniciar sesión tienen límite', async () => {
+  const {env} = createWebEnv({userId: 'persona-con-prisa'});
+  const browser = createBrowser(worker, env);
+  await browser.login();
+  let status = 0;
+  for (let attempt = 0; attempt < 31; attempt += 1) {
+    status = (await browser.fetch('/api/web/channel-session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({guildId: GUILD, channelId: PRIVATE_CHANNEL}),
+    })).status;
+  }
+  assert.equal(status, 429);
+
+  const visitor = createBrowser(worker, env);
+  let location = '';
+  for (let attempt = 0; attempt < 31; attempt += 1) {
+    location = (await visitor.fetch('/auth/discord')).headers.get('location');
+  }
+  assert.equal(location, '/?auth_error=too_many');
 });
 
 test('cerrar sesión revoca también los tokens de canal', async () => {

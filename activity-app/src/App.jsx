@@ -2574,7 +2574,7 @@ function App() {
         doc={modal?.type === 'personal-share' ? docsById.get(modal.docId) : null}
         onChangeAccess={setDocLinkAccess}
         onShareLink={doc => shareBardoLinkWithFeedback('doc', {id: doc.id, title: doc.title})}
-        canShareLink={Boolean(window.__BARDO_DISCORD_SDK__?.commands?.shareLink)}
+        canShareLink={Boolean(window.__BARDO_WEB__ || window.__BARDO_DISCORD_SDK__?.commands?.shareLink)}
         onClose={() => setModal(null)}
       />
 

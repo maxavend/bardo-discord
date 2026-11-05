@@ -17,7 +17,7 @@ const LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0];
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 const WRITES_PER_MINUTE = 60;
-const CALLS_PER_MINUTE = 300;
+const CALLS_PER_MINUTE = 120;
 const callLog = new Map();
 
 const INSTRUCTIONS = `Bardo guarda documentos, reuniones y tareas por canal de Discord.

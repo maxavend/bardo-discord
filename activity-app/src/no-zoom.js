@@ -2,16 +2,24 @@
 // covers Discord's WebView and the zoom on focusing a field; Safari ignores it
 // for pinch, so its gesture events are cancelled here, along with ctrl+wheel
 // (trackpad pinch on desktop).
-const cancel = event => event.preventDefault();
+// Fuera de Discord es un sitio web normal y el zoom es accesibilidad: se permite.
+const isDiscord = /\.discordsays\.com$/i.test(window.location.hostname || '')
+  || /[?&](instance_id|frame_id)=/.test(window.location.search);
 
-for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
-  document.addEventListener(type, cancel, {passive: false});
+if (isDiscord) {
+  const cancel = event => event.preventDefault();
+
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+    document.addEventListener(type, cancel, {passive: false});
+  }
+
+  document.addEventListener('touchmove', event => {
+    if (event.touches.length > 1) event.preventDefault();
+  }, {passive: false});
+
+  window.addEventListener('wheel', event => {
+    if (event.ctrlKey) event.preventDefault();
+  }, {passive: false});
+} else {
+  document.querySelector('meta[name="viewport"]')?.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
-
-document.addEventListener('touchmove', event => {
-  if (event.touches.length > 1) event.preventDefault();
-}, {passive: false});
-
-window.addEventListener('wheel', event => {
-  if (event.ctrlKey) event.preventDefault();
-}, {passive: false});

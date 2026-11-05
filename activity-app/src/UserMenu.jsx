@@ -2,7 +2,7 @@
 // este servidor, los ajustes por alcance y el tema. Reemplaza los botones
 // sueltos de Ajustes y de tema.
 import {useEffect, useState} from 'react';
-import {Display, Hashtag, Moon, Person, Server, Sun} from '@gravity-ui/icons';
+import {ArrowRightArrowLeft, ArrowRightFromSquare, Display, Hashtag, Moon, Person, PlugConnection, Server, Sun} from '@gravity-ui/icons';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {useTheme} from '@/lib/theme';
 import {useWorkspace} from './workspace.js';
+import {WebConnectionsDialog} from './web/WebConnectionsDialog.jsx';
+import {goToChannelPicker, isWebApp, signOutOfWeb} from './web/web-session.js';
 
 const THEMES = [
   {value: 'light', label: 'Claro', Icon: Sun},
@@ -42,7 +44,8 @@ function readProfile() {
   const name = member?.globalName || user.global_name || user.username || 'Tú';
   return {
     name,
-    username: user.username || null,
+    // En la web solo se guarda un nombre: no se repite como si fuera un @usuario.
+    username: user.username && user.username !== name ? user.username : null,
     avatar: member?.avatar || (user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=64` : null),
     role: role ? {name: role.name, color: role.color || null} : null,
   };
@@ -89,8 +92,11 @@ export function UserMenu({onOpenSettings}) {
   const {channelName} = useWorkspace();
   const {theme, setTheme} = useTheme();
   const current = THEMES.find(item => item.value === theme) || THEMES[1];
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const web = isWebApp();
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className="user-menu-trigger" aria-label={profile ? `Tu perfil y ajustes, ${profile.name}` : 'Ajustes'}>
@@ -136,7 +142,21 @@ export function UserMenu({onOpenSettings}) {
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        {web && <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={goToChannelPicker}>
+            <ArrowRightArrowLeft aria-hidden="true" className="text-muted-foreground" />Cambiar de canal
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setConnectionsOpen(true)}>
+            <PlugConnection aria-hidden="true" className="text-muted-foreground" />Conexiones de IA
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void signOutOfWeb()}>
+            <ArrowRightFromSquare aria-hidden="true" className="text-muted-foreground" />Cerrar sesión
+          </DropdownMenuItem>
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
+    {web && <WebConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} />}
+    </>
   );
 }

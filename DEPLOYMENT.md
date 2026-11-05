@@ -1,5 +1,45 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+## Web y MCP: pasos para activarlos
+
+La web y el servidor MCP llegan **apagados**: mientras `WEB_ORIGIN` no esté configurado, sus rutas responden 404 y la Activity sigue igual. Hacer merge a `main` aplica la migración `0020_web_and_mcp` (aditiva) y luego despliega el código.
+
+Si despliegas a mano con `npm run deploy`, aplica primero la migración: sin ella, el inicio de sesión de la Activity falla porque el código ya escribe la columna nueva.
+
+```sh
+npx wrangler d1 migrations apply bardo-db --remote
+```
+
+Para activarlos:
+
+1. En el [portal de Discord](https://discord.com/developers/applications), en **OAuth2 → Redirects**, agrega exactamente:
+
+   ```text
+   https://bardo-discord.bardo-discord.workers.dev/auth/discord/callback
+   ```
+
+2. Configura el origen público (sin barra final):
+
+   ```sh
+   npx wrangler secret put WEB_ORIGIN
+   # Valor: https://bardo-discord.bardo-discord.workers.dev
+   ```
+
+3. Abre esa dirección fuera de Discord, entra con Discord y elige un canal.
+4. Conecta una herramienta:
+
+   ```sh
+   claude mcp add --transport http bardo https://bardo-discord.bardo-discord.workers.dev/mcp
+   codex mcp add bardo --url https://bardo-discord.bardo-discord.workers.dev/mcp
+   codex mcp login bardo
+   ```
+
+   En Claude Code, autoriza con `/mcp`. La conexión aparece en el menú de usuario, en **Conexiones de IA**, y se puede revocar desde ahí.
+
+Con otro dominio, cambia la dirección en el paso 1, en `WEB_ORIGIN` y en `plugins/bardo/.mcp.json` y `plugins/bardo/mcp.json`.
+
+Para apagarlos sin desplegar, ejecuta `npx wrangler secret delete WEB_ORIGIN`. Las sesiones y permisos quedan guardados, pero dejan de funcionar.
+
 ## Proyectos en Tareas, ojitos al cargar y header móvil — 5 de noviembre de 2026
 
 - Tareas: nuevo campo **Proyecto** (la «épica», en lenguaje simple): cada tarea tiene a lo más uno. Se asigna o crea desde el detalle, se administra en «Proyectos…», se filtra desde la cabecera y lo que se crea con un proyecto filtrado queda en ese proyecto. Eliminarlo pide confirmación y deja sus tareas sin proyecto. Etiquetas y proyectos también se pueden renombrar.

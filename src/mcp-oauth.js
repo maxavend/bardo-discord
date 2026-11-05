@@ -3,7 +3,16 @@
 // la única identidad: quien autoriza inicia sesión en la web y decide aquí qué
 // puede hacer cada cliente. Los tokens se guardan como hash y se pueden revocar.
 import {hashToken} from './discord-auth.js';
-import {isSameOriginMutation, isWebRequest, pkceChallenge, randomToken, readWebSession, webOrigin} from './web-auth.js';
+import {
+  clientAddress,
+  isSameOriginMutation,
+  isWebRequest,
+  overRateLimit,
+  pkceChallenge,
+  randomToken,
+  readWebSession,
+  webOrigin,
+} from './web-auth.js';
 import {
   consumeMcpAuthCode,
   consumeMcpConsent,
@@ -69,23 +78,7 @@ const FORBIDDEN_REDIRECT_SCHEMES = new Set(['javascript:', 'data:', 'file:', 'vb
 
 const REGISTER_LIMIT_PER_MINUTE = 10;
 const TOKEN_LIMIT_PER_MINUTE = 60;
-const attemptLog = new Map();
-
-/** Límite por isolate: frena abusos de endpoints públicos sin tocar la base. */
-function overLimit(request, bucket, perMinute, now = Date.now()) {
-  const ip = request.headers.get('cf-connecting-ip') || 'local';
-  const key = `${bucket}:${ip}`;
-  const recent = (attemptLog.get(key) || []).filter(at => now - at < 60_000);
-  if (recent.length >= perMinute) {
-    attemptLog.set(key, recent);
-    return true;
-  }
-  recent.push(now);
-  attemptLog.set(key, recent);
-  if (attemptLog.size > 5_000) attemptLog.delete(attemptLog.keys().next().value);
-  return false;
-}
-
+const overLimit = (request, bucket, perMinute) => overRateLimit(`${bucket}:${clientAddress(request)}`, perMinute);
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -223,8 +216,8 @@ function escapeHtml(value) {
 }
 
 // Mismos colores de Bardo. Sin scripts ni recursos externos, salvo el avatar.
-const PAGE_STYLE = `:root{color-scheme:dark;--bg:#16171b;--surface:#1f2026;--border:#33353d;--text:#f2f2f4;--muted:#a9abb4;--accent:#7c6cf0;--on-accent:#fff}
-@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#f6f6f8;--surface:#fff;--border:#dcdde2;--text:#1f2328;--muted:#5d6068;--accent:#5b4bd6}}
+const PAGE_STYLE = `:root{color-scheme:dark;--bg:oklch(.2 .014 292);--surface:oklch(.24 .016 292);--border:oklch(1 .02 300/.09);--text:oklch(.965 .006 305);--muted:oklch(.74 .02 300);--accent:oklch(.722 .177 305.5);--on-accent:oklch(.2 .04 300)}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:oklch(.985 .005 305);--surface:oklch(1 0 0);--border:oklch(.905 .012 305);--text:oklch(.2 .025 300);--muted:oklch(.5 .025 300);--accent:oklch(.496 .265 301.924);--on-accent:oklch(.985 .01 308)}}
 *{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
 main{width:100%;max-width:30rem;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px}
 h1{font-size:1.25rem;line-height:1.3;margin:0 0 8px}p{margin:0 0 12px}.muted{color:var(--muted);font-size:.875rem}
@@ -245,7 +238,9 @@ function htmlPage(title, body, status = 200) {
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'no-referrer',
+      // No «no-referrer»: con ella, el navegador envía «Origin: null» al aceptar el
+      // formulario y la protección contra CSRF rechazaría toda autorización.
+      'Referrer-Policy': 'same-origin',
       // Sin form-action: Chrome lo aplica también a la redirección hacia el cliente.
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
     },
@@ -313,18 +308,21 @@ async function showConsent(request, url, env) {
     return errorPage('Dirección de retorno no válida', 'La app pidió volver a una dirección que no tiene registrada.');
   }
 
+  // Los errores se muestran aquí y no se redirigen. El registro es público: una
+  // solicitud mal formada no debe servir para saltar a un sitio ajeno sin que la
+  // persona haya visto ni aceptado nada.
+  const fail = description => errorPage('Solicitud de autorización no válida', `${description} Vuelve a conectar la app desde tu herramienta.`);
   const state = params.get('state');
-  const fail = (error, description) => redirectToClient(redirectUri, {error, error_description: description, state, iss: webOrigin(env)});
-  if (params.get('response_type') !== 'code') return fail('unsupported_response_type', 'Solo se admite response_type=code.');
+  if (params.get('response_type') !== 'code') return fail('Solo se admite response_type=code.');
   const codeChallenge = params.get('code_challenge') || '';
   if (params.get('code_challenge_method') !== 'S256' || !CODE_CHALLENGE_PATTERN.test(codeChallenge)) {
-    return fail('invalid_request', 'PKCE con S256 es obligatorio.');
+    return fail('PKCE con S256 es obligatorio.');
   }
-  if (state && state.length > MAX_STATE_LENGTH) return fail('invalid_request', 'El parámetro state es demasiado largo.');
+  if (state && state.length > MAX_STATE_LENGTH) return fail('El parámetro state es demasiado largo.');
   const resource = params.get('resource');
-  if (resource && resource !== resourceUrl(env)) return fail('invalid_target', 'Este servidor solo autoriza su propio MCP.');
+  if (resource && resource !== resourceUrl(env)) return fail('Este servidor solo autoriza su propio MCP.');
   const scopes = requestedScopes(params.get('scope'));
-  if (!scopes.length) return fail('invalid_scope', 'Ninguno de los permisos pedidos existe.');
+  if (!scopes.length) return fail('Ninguno de los permisos pedidos existe.');
   if (!scopes.includes(SCOPE_READ)) scopes.unshift(SCOPE_READ);
 
   const session = await readWebSession(request, env);

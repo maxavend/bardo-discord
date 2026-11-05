@@ -48,20 +48,23 @@ const TIMESLICE_MS = 1000;
 export function describeMicrophoneError(error, {isMobile = false} = {}) {
   const name = String(error?.name || '');
   const message = String(error?.message || '');
-  const howToAllow = isMobile
+  const onWeb = typeof window !== 'undefined' && Boolean(window.__BARDO_WEB__);
+  const howToAllow = onWeb
+    ? 'Permite el micrófono desde el ícono del candado junto a la dirección y vuelve a intentarlo.'
+    : isMobile
     ? 'En tu teléfono abre Ajustes → Aplicaciones → Discord → Permisos y activa el Micrófono. Luego vuelve a abrir la actividad.'
     : 'En Discord abre Ajustes de usuario → Voz y video y revisa que tu micrófono esté elegido. Si usas Discord en el navegador, permite el micrófono desde el ícono del candado junto a la dirección y vuelve a intentarlo.';
   if (name === 'NotAllowedError' || name === 'SecurityError' || /denied|permission|not allowed/i.test(message)) {
     return `Bardo no tiene permiso para usar tu micrófono. ${howToAllow}`;
   }
   if (name === 'NotFoundError' || name === 'OverconstrainedError' || /not found|no device/i.test(message)) {
-    return 'No encontramos un micrófono conectado. Conecta uno (o elige otro en Discord: Ajustes de usuario → Voz y video) e inténtalo de nuevo.';
+    return onWeb ? 'No encontramos un micrófono conectado. Conecta uno e inténtalo de nuevo.' : 'No encontramos un micrófono conectado. Conecta uno (o elige otro en Discord: Ajustes de usuario → Voz y video) e inténtalo de nuevo.';
   }
   if (name === 'NotReadableError' || name === 'AbortError' || /in use|could not start|not readable/i.test(message)) {
     return 'Tu micrófono está ocupado por otra aplicación o no responde. Cierra esa aplicación o vuelve a conectar el micrófono e inténtalo de nuevo.';
   }
   if (/no soporta/i.test(message)) {
-    return 'Este dispositivo no permite grabar audio desde la actividad. Prueba desde Discord en el computador.';
+    return onWeb ? 'Este navegador no permite grabar audio. Prueba con otro navegador o desde Discord.' : 'Este dispositivo no permite grabar audio desde la actividad. Prueba desde Discord en el computador.';
   }
   return `No se pudo usar el micrófono. ${howToAllow}`;
 }

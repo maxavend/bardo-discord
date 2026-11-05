@@ -1,4 +1,5 @@
 import {installBardoApiSession} from './production-launch-auth.js';
+import {bootWebApp} from './web/web-session.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const AUTH_TIMEOUT_MS = 15000;
@@ -103,6 +104,9 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
   onStageChange('activity_boot_started');
 
   if (!isEmbeddedActivity()) {
+    // En su dominio, la web pide iniciar sesión; si no está activa, modo local.
+    const web = await bootWebApp();
+    if (web) return web;
     logBreadcrumb('render_ready', {mode: 'standalone'});
     return {
       embedded: false,

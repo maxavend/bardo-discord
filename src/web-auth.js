@@ -20,12 +20,31 @@ const CALLBACK_PATH = '/auth/discord/callback';
 
 export const WEB_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+// Cada intento escribe en D1 y nadie ha iniciado sesión todavía.
+const LOGINS_PER_MINUTE = 30;
 
 const PRIVATE_HEADERS = {
   'Cache-Control': 'private, no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
 };
+
+const attemptLog = new Map();
+
+/** Límite por isolate para rutas caras o públicas: no toca la base ni agrega infraestructura. */
+export function overRateLimit(key, perMinute, now = Date.now()) {
+  const recent = (attemptLog.get(key) || []).filter(at => now - at < 60_000);
+  if (recent.length >= perMinute) {
+    attemptLog.set(key, recent);
+    return true;
+  }
+  recent.push(now);
+  attemptLog.set(key, recent);
+  if (attemptLog.size > 5_000) attemptLog.delete(attemptLog.keys().next().value);
+  return false;
+}
+
+export const clientAddress = request => request.headers.get('cf-connecting-ip') || 'local';
 
 export function base64UrlEncode(bytes) {
   let binary = '';
@@ -94,7 +113,8 @@ export function safeReturnTo(value) {
   if (!path.startsWith('/') || path.startsWith('//') || /[\\\u0000-\u001f]/.test(path)) return '/';
   try {
     const parsed = new URL(path, 'https://bardo.invalid');
-    if (parsed.origin !== 'https://bardo.invalid') return '/';
+    // También tras normalizar: «/.//sitio» termina siendo «//sitio».
+    if (parsed.origin !== 'https://bardo.invalid' || parsed.pathname.startsWith('//')) return '/';
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return '/';
@@ -135,6 +155,7 @@ export async function readWebSession(request, env) {
 
 async function startLogin(request, url, env) {
   if (!env.DISCORD_CLIENT_SECRET) return redirect('/?auth_error=not_configured');
+  if (overRateLimit(`login:${clientAddress(request)}`, LOGINS_PER_MINUTE)) return redirect('/?auth_error=too_many');
   const state = randomToken();
   const binding = randomToken();
   const codeVerifier = randomToken(48);

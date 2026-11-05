@@ -75,8 +75,13 @@ export function createWebEnv(options = {}, extra = {}) {
 }
 
 /** Navegador mínimo: guarda las cookies entre peticiones al Worker. */
+let nextBrowser = 0;
+
 export function createBrowser(worker, env) {
   const jar = new Map();
+  // Cada navegador viene de su propia dirección: los límites por IP son reales.
+  nextBrowser += 1;
+  const address = `203.0.113.${nextBrowser}`;
   const browser = {
     jar,
     async fetch(path, {method = 'GET', headers = {}, body, origin = method === 'GET' ? null : WEB_ORIGIN} = {}) {
@@ -85,7 +90,7 @@ export function createBrowser(worker, env) {
         method,
         body,
         redirect: 'manual',
-        headers: {...headers, ...(cookie ? {cookie} : {}), ...(origin ? {origin} : {})},
+        headers: {'cf-connecting-ip': address, ...headers, ...(cookie ? {cookie} : {}), ...(origin ? {origin} : {})},
       }), env);
       for (const line of response.headers.getSetCookie()) {
         const [pair, ...attributes] = line.split(';');
