@@ -2,15 +2,17 @@
 
 ## Proyectos en Tareas, ojitos al cargar y header móvil — 5 de noviembre de 2026
 
+- Código: `28e2900` (`main`, PR #43). Worker activo al 100%: `3d3e45be-c731-42ca-8ad1-af8993302b80` (`wrangler deploy --keep-vars` local, con la cuenta de Cloudflare que tiene el Worker). Versión anterior: `e7ab2a39-ff0c-4c2f-a36a-18772b0840aa`.
 - Tareas: nuevo campo **Proyecto** (la «épica», en lenguaje simple): cada tarea tiene a lo más uno. Se asigna o crea desde el detalle, se administra en «Proyectos…», se filtra desde la cabecera y lo que se crea con un proyecto filtrado queda en ese proyecto. Eliminarlo pide confirmación y deja sus tareas sin proyecto. Etiquetas y proyectos también se pueden renombrar.
 - Etiquetas largas: los colores ya no se salen de la fila (antes, hasta 120 px a 320 de ancho). En móvil los círculos se ven de 16 px y el área táctil sigue en 24 × 32 px.
 - Pantalla de carga: sin el `filter: blur` que desenfocaba el texto cada 3 s, al cambiar de mensaje. Vuelven los ojitos en lugar del wordmark; con movimiento reducido se quedan quietos.
 - Header móvil: solo el símbolo y la flecha, sin desbordes. El título del módulo pasa al menú que abre el símbolo y sigue en el nombre accesible del botón.
-- Migración remota nueva: `0019_kanban_projects` (aditiva: tabla `kanban_projects` y columna `kanban_cards.project_id`). Se aplica antes del Worker en `deploy.yml`.
-- Este deploy también lleva lo que seguía sin aprobar desde `9a9534c`: #40 (carga inicial) y #41 (Inicio y espacio personal, con la migración `0018_personal_documents`).
-- Validación antes de subir: `npm run check`, 515 unitarias y E2E de los proyectos del CI. Un fallo de `geometry.spec.js` a 320 px bajo carga no se repitió en 6 corridas aisladas.
+- Migraciones remotas aplicadas antes del Worker: `0018_personal_documents` y `0019_kanban_projects` (aditivas: tablas nuevas y columna `kanban_cards.project_id`).
+- Este deploy también lleva lo que seguía sin aprobar desde `9a9534c`: #40 (carga inicial) y #41 (Inicio y espacio personal).
+- Validación: `npm run check`, 515 unitarias, E2E de los proyectos del CI (un fallo de `geometry.spec.js` a 320 px bajo carga no se repitió en 6 corridas aisladas) y CI de `main` en verde. Producción: `/` 200, HTML y assets iguales a `main`, `/api/kanban/board` y `/api/kanban/projects` 401 sin sesión, 5 tareas y 39 documentos intactos. Pendiente: probar en Discord con una sesión real, que aquí no se pudo.
+- Importante: el deploy por GitHub sigue trabado por el run `40768216050` de `f36fdaf`, que espera aprobación desde el 28 de octubre. Hay que cancelarlo o rechazarlo y no aprobarlo: devolvería producción a ese commit. El `wrangler` local debe estar conectado a la cuenta de Gmail; con otra, responde 7403 o 10000.
 
-Rollback a la última versión registrada de `9a9534c` (la columna y la tabla nuevas son aditivas y esa versión las ignora):
+Rollback a la versión anterior (las tablas y la columna nuevas son aditivas y esa versión las ignora):
 
 ```sh
 npx wrangler rollback e7ab2a39-ff0c-4c2f-a36a-18772b0840aa --message 'Volver a 9a9534c' --yes
