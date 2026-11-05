@@ -1,8 +1,16 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
-## Web y MCP: pasos para activarlos
+## Web y MCP — 5 de noviembre de 2026
 
-La web y el servidor MCP llegan **apagados**: mientras `WEB_ORIGIN` no esté configurado, sus rutas responden 404 y la Activity sigue igual. Hacer merge a `main` aplica la migración `0020_web_and_mcp` (aditiva) y luego despliega el código.
+- Código: `c3ebc11` (`main`, PR #45). Worker activo al 100%: `4d9ca9f2-9a9f-4565-a316-d1c8b348ea71`, con `WEB_ORIGIN` configurado. Versión del código recién desplegado, sin encender: `f38c4e0d-a34b-4037-837f-a2b2aef22b6d`. Versión anterior: `3d3e45be-c731-42ca-8ad1-af8993302b80`.
+- Migración remota aplicada: `0020_web_and_mcp` (aditiva: tablas nuevas y columna `docs_sessions.web_session_hash`).
+- Web y MCP encendidos en `https://bardo-discord.bardo-discord.workers.dev`, y agregada la redirección OAuth `/auth/discord/callback` en el portal de Discord.
+- Validación en producción: `/api/web/session` 200, `/auth/discord` redirige a Discord con PKCE, `/mcp` 401 con la dirección de autorización, `/api/docs` e interacciones sin firma 401. Pendiente: entrar con una cuenta real de Discord y autorizar una herramienta desde una sesión real de Claude Code o Codex.
+- El run `40768216050` de `f36fdaf`, que trababa los deploys por GitHub, quedó cancelado.
+
+### Cómo se despliega
+
+Hacer merge a `main` no despliega por sí solo: el entorno `production` de GitHub pide aprobación. Al aprobar el run, el workflow aplica las migraciones y luego despliega. Un push nuevo a `main` puede cancelar un deploy que sigue en cola.
 
 Si despliegas a mano con `npm run deploy`, aplica primero la migración: sin ella, el inicio de sesión de la Activity falla porque el código ya escribe la columna nueva.
 
@@ -10,35 +18,27 @@ Si despliegas a mano con `npm run deploy`, aplica primero la migración: sin ell
 npx wrangler d1 migrations apply bardo-db --remote
 ```
 
-Para activarlos:
+### Conectar una herramienta
 
-1. En el [portal de Discord](https://discord.com/developers/applications), en **OAuth2 → Redirects**, agrega exactamente:
+```sh
+claude mcp add --transport http bardo https://bardo-discord.bardo-discord.workers.dev/mcp
+codex mcp add bardo --url https://bardo-discord.bardo-discord.workers.dev/mcp
+codex mcp login bardo
+```
 
-   ```text
-   https://bardo-discord.bardo-discord.workers.dev/auth/discord/callback
-   ```
+En Claude Code, autoriza con `/mcp`. La conexión aparece en el menú de usuario, en **Conexiones de IA**, y se puede revocar desde ahí.
 
-2. Configura el origen público (sin barra final):
+### Cambiar de dominio o apagar
 
-   ```sh
-   npx wrangler secret put WEB_ORIGIN
-   # Valor: https://bardo-discord.bardo-discord.workers.dev
-   ```
+Con otro dominio, cambia la redirección en el portal de Discord, `WEB_ORIGIN` y la dirección en `plugins/bardo/.mcp.json` y `plugins/bardo/mcp.json`.
 
-3. Abre esa dirección fuera de Discord, entra con Discord y elige un canal.
-4. Conecta una herramienta:
+Para apagar la web y el MCP sin desplegar, ejecuta `npx wrangler secret delete WEB_ORIGIN`. Las sesiones y permisos quedan guardados, pero dejan de funcionar.
 
-   ```sh
-   claude mcp add --transport http bardo https://bardo-discord.bardo-discord.workers.dev/mcp
-   codex mcp add bardo --url https://bardo-discord.bardo-discord.workers.dev/mcp
-   codex mcp login bardo
-   ```
+Rollback del código a la versión anterior (las tablas y la columna nuevas son aditivas y esa versión las ignora):
 
-   En Claude Code, autoriza con `/mcp`. La conexión aparece en el menú de usuario, en **Conexiones de IA**, y se puede revocar desde ahí.
-
-Con otro dominio, cambia la dirección en el paso 1, en `WEB_ORIGIN` y en `plugins/bardo/.mcp.json` y `plugins/bardo/mcp.json`.
-
-Para apagarlos sin desplegar, ejecuta `npx wrangler secret delete WEB_ORIGIN`. Las sesiones y permisos quedan guardados, pero dejan de funcionar.
+```sh
+npx wrangler rollback 3d3e45be-c731-42ca-8ad1-af8993302b80 --message 'Volver a 28e2900' --yes
+```
 
 ## Proyectos en Tareas, ojitos al cargar y header móvil — 5 de noviembre de 2026
 
