@@ -193,6 +193,112 @@ test('la página no se desborda a lo ancho y no tiene scroll vertical vacío', a
   expect(errors).toEqual([]);
 });
 
+/** Nada de la fila (nombre, colores, botones) se sale de su contenedor. */
+async function expectRowsContained(dialog) {
+  const rows = dialog.getByRole('listitem');
+  for (const row of await rows.all()) {
+    const overflow = await row.evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return node.scrollWidth > node.clientWidth
+        || [...node.querySelectorAll('*')].some(child => {
+          const rect = child.getBoundingClientRect();
+          return rect.width > 0 && (rect.right > box.right + 0.5 || rect.left < box.left - 0.5);
+        });
+    });
+    expect(overflow).toBe(false);
+  }
+}
+
+async function openBoardMenu(page, item) {
+  await page.getByRole('button', {name: 'Más opciones del tablero'}).click();
+  await page.getByRole('menuitem', {name: item}).click();
+}
+
+test('móvil: el título del módulo va en el menú del símbolo, no en el header', async ({page}) => {
+  test.skip(!isNarrow(page), 'en escritorio las pestañas ya dicen el módulo');
+  const trigger = page.getByRole('button', {name: /^Tareas\s*, espacio y ajustes$/});
+  await expect(trigger).toBeVisible();
+  expect((await trigger.boundingBox()).width).toBeLessThanOrEqual(80);
+  await trigger.click();
+  await expect(page.locator('.workspace-popover-module')).toHaveText('Tareas');
+  await expect(page.locator('.workspace-popover-module')).toBeVisible();
+});
+
+test('un nombre largo de etiqueta o proyecto no desborda su fila', async ({page}) => {
+  const errors = collectRuntimeErrors(page);
+  await openBoardMenu(page, 'Etiquetas…');
+  const tags = page.getByRole('dialog', {name: 'Etiquetas del tablero'});
+  await tags.getByRole('textbox', {name: 'Nombre de la nueva etiqueta'}).fill('W'.repeat(24));
+  await tags.getByRole('button', {name: 'Agregar'}).click();
+  await expect(tags.getByRole('listitem')).toHaveCount(1);
+  await expectRowsContained(tags);
+  if (isNarrow(page)) {
+    // El círculo es pequeño, pero el área táctil sigue siendo de al menos 24 px.
+    const swatch = tags.getByRole('radiogroup', {name: /^Color de la etiqueta/}).getByRole('radio').first();
+    const hit = await swatch.boundingBox();
+    const dot = await swatch.locator('span').boundingBox();
+    expect(dot.width).toBeLessThanOrEqual(18);
+    expect(hit.width).toBeGreaterThanOrEqual(24);
+    expect(hit.height).toBeGreaterThanOrEqual(24);
+  }
+  await page.keyboard.press('Escape');
+
+  await openBoardMenu(page, 'Proyectos…');
+  const projects = page.getByRole('dialog', {name: 'Proyectos del tablero'});
+  await projects.getByRole('textbox', {name: 'Nombre del nuevo proyecto'}).fill('W'.repeat(40));
+  await projects.getByRole('button', {name: 'Agregar'}).click();
+  await expect(projects.getByRole('listitem')).toHaveCount(1);
+  await expectRowsContained(projects);
+  expect(errors).toEqual([]);
+});
+
+test('proyectos: asignar, filtrar, crear dentro del filtro y eliminar sin perder tareas', async ({page}) => {
+  const errors = collectRuntimeErrors(page);
+  await quickAdd(page, ['Maquetar portada', 'Comprar café']);
+
+  await page.getByRole('button', {name: /Abrir tarea #1/}).click();
+  const dialog = page.getByRole('dialog', {name: /Tarea #1/});
+  await dialog.getByRole('button', {name: 'Elegir proyecto'}).click();
+  await page.getByRole('textbox', {name: 'Nombre del nuevo proyecto'}).fill('Web nueva');
+  await page.getByRole('button', {name: 'Crear y asignar'}).click();
+  await expect(dialog.getByRole('button', {name: 'Proyecto: Web nueva. Cambiar'})).toBeVisible();
+  await dialog.getByRole('button', {name: 'Listo'}).click();
+
+  const todo = column(page, 'Por hacer');
+  await expect(todo.getByRole('listitem').filter({hasText: 'Maquetar portada'})).toContainText('Web nueva');
+  await expect(todo.getByRole('listitem').filter({hasText: 'Comprar café'})).not.toContainText('Web nueva');
+
+  // Filtrar deja solo sus tareas, y lo que se crea ahí queda dentro del proyecto.
+  await page.getByRole('button', {name: 'Filtrar por proyecto: Todos los proyectos'}).click();
+  await page.getByRole('menuitemradio', {name: /Web nueva/}).click();
+  await expect(todo.getByRole('listitem')).toHaveCount(1);
+  await page.getByRole('button', {name: 'Agregar tarea'}).first().click();
+  const input = page.getByPlaceholder('¿Qué hay que hacer?');
+  await input.fill('Elegir fotos');
+  await input.press('Enter');
+  await input.press('Escape');
+  await expect(todo.getByRole('listitem').filter({hasText: 'Elegir fotos'})).toContainText('Web nueva');
+
+  await page.reload();
+  await expect(todo.getByRole('listitem')).toHaveCount(3);
+
+  // Eliminar pide confirmación y las tareas siguen ahí, sin proyecto.
+  await openBoardMenu(page, 'Proyectos…');
+  const projects = page.getByRole('dialog', {name: 'Proyectos del tablero'});
+  await projects.getByRole('button', {name: 'Eliminar proyecto Web nueva'}).click();
+  await expect(projects).toContainText('Sus 2 tareas no se borran');
+  await projects.getByRole('button', {name: 'Cancelar'}).click();
+  await expect(projects.getByRole('button', {name: 'Eliminar proyecto Web nueva'})).toBeFocused();
+  await projects.getByRole('button', {name: 'Eliminar proyecto Web nueva'}).click();
+  await projects.getByRole('button', {name: 'Sí, eliminar'}).click();
+  await expect(projects).toContainText('Todavía no hay proyectos.');
+  await page.keyboard.press('Escape');
+  await expect(todo.getByRole('listitem')).toHaveCount(3);
+  await expect(todo).not.toContainText('Web nueva');
+  await expect(page.getByRole('button', {name: /Filtrar por proyecto/})).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('acuerdos de una reunión → tareas, sin duplicar al repetir', async ({page}) => {
   await page.goto('/?theme=dark#planner');
   await page.getByRole('button', {name: 'Nueva reunión'}).last().click();

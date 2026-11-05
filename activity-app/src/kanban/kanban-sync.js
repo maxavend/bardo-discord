@@ -29,7 +29,7 @@ export const KANBAN_PENDING_KEY = 'bardo.kanban.pending.v1';
 export const KANBAN_PATCH_DEBOUNCE_MS = 800;
 export const KANBAN_POLL_MS = 4000;
 
-const STRUCTURE_OPS = new Set(['addColumn', 'renameColumn', 'setDoneColumn', 'reorderColumns', 'deleteColumn', 'addTag', 'updateTag', 'deleteTag']);
+const STRUCTURE_OPS = new Set(['addColumn', 'renameColumn', 'setDoneColumn', 'reorderColumns', 'deleteColumn', 'addTag', 'updateTag', 'deleteTag', 'addProject', 'updateProject', 'deleteProject']);
 
 export function newKanbanId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -58,7 +58,7 @@ export function localStarterState() {
   const columns = DEFAULT_KANBAN_COLUMNS.map((column, position) => ({
     id: `local-col-${position}`, name: column.name, position, isDone: column.isDone,
   }));
-  return {...emptyServerState(), board: {id: 'local-board', guildId: null, channelId: null, columns, tags: []}, cursor: 0};
+  return {...emptyServerState(), board: {id: 'local-board', guildId: null, channelId: null, columns, tags: [], projects: []}, cursor: 0};
 }
 
 function patchPayload(op) {
@@ -88,6 +88,7 @@ function createPayload(op) {
     tagIds: card.tagIds || [],
     subtasks: card.subtasks || [],
     docIds: card.docIds || [],
+    projectId: card.projectId || null,
     assigneeId: card.assignee?.id || null,
     assigneeName: card.assignee?.name || null,
   };
@@ -110,6 +111,9 @@ function requestFor(op) {
     case 'addTag': return ['/api/kanban/tags', {method: 'POST', body: {id: op.tagId, name: op.name, color: op.color}}];
     case 'updateTag': return [`/api/kanban/tags/${enc(op.id)}`, {method: 'PATCH', body: op.fields}];
     case 'deleteTag': return [`/api/kanban/tags/${enc(op.id)}`, {method: 'DELETE'}];
+    case 'addProject': return ['/api/kanban/projects', {method: 'POST', body: {id: op.projectId, name: op.name, color: op.color}}];
+    case 'updateProject': return [`/api/kanban/projects/${enc(op.id)}`, {method: 'PATCH', body: op.fields}];
+    case 'deleteProject': return [`/api/kanban/projects/${enc(op.id)}`, {method: 'DELETE'}];
     default: return null;
   }
 }
@@ -311,6 +315,7 @@ export function createKanbanEngine({
           ...server.board,
           columns: server.board.columns.map(({pending: _pending, ...column}) => column),
           tags: server.board.tags.map(({pending: _pending, ...tag}) => tag),
+          projects: (server.board.projects || []).map(({pending: _pending, ...project}) => project),
         }};
       }
       persist();
@@ -494,6 +499,13 @@ export function createKanbanEngine({
     },
     updateTag: (id, fields) => structure({type: 'updateTag', id, fields}),
     deleteTag: id => structure({type: 'deleteTag', id}),
+    addProject: (name, color) => {
+      const projectId = newKanbanId();
+      structure({type: 'addProject', projectId, name, color});
+      return projectId;
+    },
+    updateProject: (id, fields) => structure({type: 'updateProject', id, fields}),
+    deleteProject: id => structure({type: 'deleteProject', id}),
     openThread: id => call(`/api/kanban/cards/${enc(id)}/thread`, {method: 'POST'}),
     retryNotice: id => call(`/api/kanban/cards/${enc(id)}/notify`, {method: 'POST'}),
     fetchCard: id => call(`/api/kanban/cards/${enc(id)}`),

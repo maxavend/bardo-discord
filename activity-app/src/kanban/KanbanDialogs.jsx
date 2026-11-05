@@ -1,5 +1,5 @@
-import {useEffect, useState} from 'react';
-import {RotateCcw, Trash2} from 'lucide-react';
+import {useEffect, useRef, useState} from 'react';
+import {Pencil, RotateCcw, Trash2} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
@@ -15,8 +15,8 @@ import {
 import {Field, FieldLabel} from '@/components/ui/field';
 import {IconButton} from '@/components/ui/icon-button.jsx';
 import {cn} from '@/lib/utils';
-import {KANBAN_LIMITS, KANBAN_TAG_COLORS} from './kanban-shared.js';
-import {TAG_COLOR_HEX, TAG_COLOR_LABELS, TagChip} from './kanban-ui.jsx';
+import {KANBAN_LIMITS} from './kanban-shared.js';
+import {ColorPicker, ProjectChip, TagChip} from './kanban-ui.jsx';
 
 /** Nombre de una columna nueva o renombrada. */
 export function ColumnNameDialog({open, title, submitLabel, initialName = '', onSubmit, onClose}) {
@@ -153,53 +153,175 @@ export function ArchivedCardsDialog({open, loadArchived, onRestore, onClose, rem
   );
 }
 
-export function TagsDialog({open, tags, onAdd, onUpdate, onDelete, onClose}) {
+const TAG_COPY = {
+  title: 'Etiquetas del tablero',
+  description: 'Borrar una etiqueta la quita de sus tareas.',
+  empty: 'Todavía no hay etiquetas.',
+  placeholder: 'Nueva etiqueta',
+  full: `Máximo ${KANBAN_LIMITS.tags} etiquetas`,
+  duplicate: 'Ya existe una etiqueta con ese nombre.',
+  newName: 'Nombre de la nueva etiqueta',
+  newColor: 'Color de la nueva etiqueta',
+  color: name => `Color de la etiqueta ${name}`,
+  rename: name => `Renombrar etiqueta ${name}`,
+  remove: name => `Eliminar etiqueta ${name}`,
+};
+
+const PROJECT_COPY = {
+  title: 'Proyectos del tablero',
+  description: 'El proyecto dice a qué pertenece una tarea, y cada tarea tiene uno solo. Las etiquetas son para todo lo demás.',
+  empty: 'Todavía no hay proyectos.',
+  placeholder: 'Nuevo proyecto',
+  full: `Máximo ${KANBAN_LIMITS.projects} proyectos`,
+  duplicate: 'Ya existe un proyecto con ese nombre.',
+  newName: 'Nombre del nuevo proyecto',
+  newColor: 'Color del nuevo proyecto',
+  color: name => `Color del proyecto ${name}`,
+  rename: name => `Renombrar proyecto ${name}`,
+  remove: name => `Eliminar proyecto ${name}`,
+  confirmRemove: name => `¿Eliminar el proyecto «${name}»?`,
+};
+
+function LabelRow({item, items, copy, maxName, renderChip, removeNotice, onUpdate, onDelete}) {
+  const [draft, setDraft] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const rowRef = useRef(null);
+  const restoreFocus = useRef(false);
+  const restoreRemoveFocus = useRef(false);
+  const editing = draft !== null;
+  const value = (draft ?? '').trim();
+  const duplicate = editing && items.some(other => other.id !== item.id && other.name.toLowerCase() === value.toLowerCase());
+
+  useEffect(() => {
+    if (editing || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    rowRef.current?.querySelector('[data-label-rename]')?.focus();
+  }, [editing]);
+
+  useEffect(() => {
+    if (confirming || !restoreRemoveFocus.current) return;
+    restoreRemoveFocus.current = false;
+    rowRef.current?.querySelector('[data-label-remove]')?.focus();
+  }, [confirming]);
+
+  const commit = () => {
+    if (value && !duplicate && value !== item.name) onUpdate(item.id, {name: value.slice(0, maxName)});
+    setDraft(null);
+  };
+
+  // Se confirma en la misma fila: un segundo diálogo encima de este dejaba el
+  // tablero oculto para lectores de pantalla si ambos se cerraban a la vez.
+  if (confirming) {
+    return (
+      <li ref={rowRef} className="flex flex-col gap-2 rounded-xl border border-border/60 px-2.5 py-2">
+        <p className="min-w-0 break-words text-xs">
+          <span className="font-medium">{copy.confirmRemove(item.name)}</span> <span className="text-muted-foreground">{removeNotice(item)}</span>
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button
+            autoFocus
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2.5 text-xs"
+            onClick={() => {
+              restoreRemoveFocus.current = true;
+              setConfirming(false);
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button variant="destructive" size="sm" className="h-7 px-2.5 text-xs" onClick={() => onDelete(item.id)}>Sí, eliminar</Button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li ref={rowRef} className="flex flex-wrap items-center gap-x-1 rounded-xl border border-border/60 px-2.5 py-1.5 sm:flex-nowrap">
+      {/* El nombre se parte en líneas y nunca empuja a los colores. En móvil los
+          colores van en su propia línea, a todo el ancho de la fila. */}
+      <div className="flex min-w-0 flex-1 items-center">
+        {editing ? (
+          <Input
+            autoFocus
+            value={draft}
+            maxLength={maxName}
+            onChange={event => setDraft(event.target.value)}
+            onBlur={commit}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                restoreFocus.current = true;
+                event.currentTarget.blur();
+              }
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                restoreFocus.current = true;
+                setDraft(null);
+              }
+            }}
+            aria-label={copy.rename(item.name)}
+            aria-invalid={duplicate || undefined}
+            className="h-7 min-w-0 text-xs"
+          />
+        ) : renderChip(item)}
+      </div>
+      <ColorPicker
+        compact
+        value={item.color}
+        onChange={color => onUpdate(item.id, {color})}
+        label={copy.color(item.name)}
+        className="order-last w-full sm:order-none sm:mx-1 sm:w-auto sm:shrink-0 sm:flex-nowrap"
+      />
+      <IconButton label={copy.rename(item.name)} size="icon-xs" data-label-rename="" onClick={() => setDraft(item.name)}>
+        <Pencil className="size-3.5" />
+      </IconButton>
+      <IconButton label={copy.remove(item.name)} size="icon-xs" data-label-remove="" onClick={() => (removeNotice ? setConfirming(true) : onDelete(item.id))}>
+        <Trash2 className="size-3.5" />
+      </IconButton>
+    </li>
+  );
+}
+
+/** Lista de nombre + color del tablero: etiquetas y proyectos se administran igual. */
+function LabelsDialog({open, items, copy, maxItems, maxName, renderChip, removeNotice, onAdd, onUpdate, onDelete, onClose}) {
   const [name, setName] = useState('');
   const [color, setColor] = useState('blue');
-  const full = tags.length >= KANBAN_LIMITS.tags;
+  const full = items.length >= maxItems;
   const value = name.trim();
-  const duplicate = tags.some(tag => tag.name.toLowerCase() === value.toLowerCase());
+  const duplicate = items.some(item => item.name.toLowerCase() === value.toLowerCase());
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Etiquetas del tablero</DialogTitle>
-          <DialogDescription>Borrar una etiqueta la quita de sus tareas.</DialogDescription>
+          <DialogTitle>{copy.title}</DialogTitle>
+          <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
-        {tags.length > 0 ? (
+        {items.length > 0 ? (
           <ul className="flex flex-col gap-1">
-            {tags.map(tag => (
-              <li key={tag.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-2.5 py-1.5">
-                <TagChip tag={tag} />
-                <div className="ml-auto flex items-center gap-0.5" role="radiogroup" aria-label={`Color de la etiqueta ${tag.name}`}>
-                  {KANBAN_TAG_COLORS.map(option => (
-                    <button
-                      key={option}
-                      type="button"
-                      role="radio"
-                      aria-checked={tag.color === option}
-                      aria-label={TAG_COLOR_LABELS[option]}
-                      onClick={() => onUpdate(tag.id, {color: option})}
-                      className={cn('size-4 rounded-full border-2', tag.color === option ? 'border-foreground' : 'border-transparent')}
-                      style={{backgroundColor: TAG_COLOR_HEX[option]}}
-                    />
-                  ))}
-                </div>
-                <IconButton label={`Eliminar etiqueta ${tag.name}`} size="icon-xs" onClick={() => onDelete(tag.id)}>
-                  <Trash2 className="size-3.5" />
-                </IconButton>
-              </li>
+            {items.map(item => (
+              <LabelRow
+                key={item.id}
+                item={item}
+                items={items}
+                copy={copy}
+                maxName={maxName}
+                renderChip={renderChip}
+                removeNotice={removeNotice}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+              />
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Todavía no hay etiquetas.</p>
+          <p className="text-sm text-muted-foreground">{copy.empty}</p>
         )}
         <form
           className="flex flex-col gap-2"
           onSubmit={event => {
             event.preventDefault();
             if (!value || full || duplicate) return;
-            onAdd(value.slice(0, KANBAN_LIMITS.tagName), color);
+            onAdd(value.slice(0, maxName), color);
             setName('');
           }}
         >
@@ -207,34 +329,36 @@ export function TagsDialog({open, tags, onAdd, onUpdate, onDelete, onClose}) {
             <Input
               value={name}
               disabled={full}
-              maxLength={KANBAN_LIMITS.tagName}
+              maxLength={maxName}
               onChange={event => setName(event.target.value)}
-              placeholder={full ? `Máximo ${KANBAN_LIMITS.tags} etiquetas` : 'Nueva etiqueta'}
-              aria-label="Nombre de la nueva etiqueta"
+              placeholder={full ? copy.full : copy.placeholder}
+              aria-label={copy.newName}
               aria-invalid={duplicate || undefined}
               className="h-9"
             />
             <Button type="submit" disabled={!value || full || duplicate}>Agregar</Button>
           </div>
-          {duplicate && <p className="text-xs text-destructive">Ya existe una etiqueta con ese nombre.</p>}
-          {!full && (
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Color de la nueva etiqueta">
-              {KANBAN_TAG_COLORS.map(option => (
-                <button
-                  key={option}
-                  type="button"
-                  role="radio"
-                  aria-checked={color === option}
-                  aria-label={TAG_COLOR_LABELS[option]}
-                  onClick={() => setColor(option)}
-                  className={cn('size-6 rounded-full border-2', color === option ? 'border-foreground' : 'border-transparent')}
-                  style={{backgroundColor: TAG_COLOR_HEX[option]}}
-                />
-              ))}
-            </div>
-          )}
+          {duplicate && <p className="text-xs text-destructive">{copy.duplicate}</p>}
+          {!full && <ColorPicker value={color} onChange={setColor} label={copy.newColor} />}
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+const renderTagChip = tag => <TagChip tag={tag} wrap />;
+const renderProjectChip = project => <ProjectChip project={project} wrap />;
+
+export function TagsDialog({tags, ...props}) {
+  return <LabelsDialog {...props} items={tags} copy={TAG_COPY} maxItems={KANBAN_LIMITS.tags} maxName={KANBAN_LIMITS.tagName} renderChip={renderTagChip} />;
+}
+
+export function ProjectsDialog({projects, cards, ...props}) {
+  // Eliminar un proyecto no toca sus tareas, pero tampoco se puede deshacer.
+  const removeNotice = project => {
+    const count = Object.values(cards).filter(card => card.projectId === project.id).length;
+    if (count === 0) return 'Ninguna tarea activa lo usa. No se puede deshacer.';
+    return `${count === 1 ? 'Su tarea no se borra: quedará' : `Sus ${count} tareas no se borran: quedarán`} sin proyecto. No se puede deshacer.`;
+  };
+  return <LabelsDialog {...props} items={projects} copy={PROJECT_COPY} maxItems={KANBAN_LIMITS.projects} maxName={KANBAN_LIMITS.projectName} renderChip={renderProjectChip} removeNotice={removeNotice} />;
 }

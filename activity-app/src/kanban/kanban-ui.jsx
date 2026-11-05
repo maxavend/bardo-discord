@@ -1,8 +1,9 @@
 // Piezas visuales pequeñas de Tareas, con los mismos tokens que Reuniones.
+import {Folder} from 'lucide-react';
 import {Badge} from '@/components/ui/badge';
 import {cn} from '@/lib/utils';
 import {DISCORD_PALETTES, MemberAvatar, getAllDiscordEntities} from '../planner/PlannerMemberPicker.jsx';
-import {KANBAN_PRIORITY_LABELS} from './kanban-shared.js';
+import {KANBAN_PRIORITY_LABELS, KANBAN_TAG_COLORS} from './kanban-shared.js';
 
 // Vive en kanban-shared.js (sin UI) para que Inicio la use sin cargar Tareas.
 export {formatDueDate} from './kanban-shared.js';
@@ -44,15 +45,70 @@ export function AssigneeAvatar({assignee, className}) {
   return <MemberAvatar name={member.globalName} member={member} size="md" className={className} />;
 }
 
-export function TagChip({tag, className, children}) {
+/** `wrap` parte el nombre en varias líneas; sin él, se corta con «…» y el nombre completo queda en el title. */
+function ChipName({name, wrap}) {
+  return wrap
+    ? <span className="min-w-0 break-words">{name}</span>
+    : <span className="truncate" title={name}>{name}</span>;
+}
+
+export function TagChip({tag, wrap = false, className, children}) {
   if (!tag) return null;
   return (
-    <span className={cn('inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 px-1.5 py-px text-[10.5px] font-medium text-foreground', className)}>
+    <span className={cn('inline-flex min-w-0 max-w-full items-center gap-1 border border-border/70 px-1.5 py-px text-[10.5px] font-medium text-foreground', wrap ? 'rounded-xl' : 'rounded-full', className)}>
       <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full" style={{backgroundColor: TAG_COLOR_HEX[tag.color] || TAG_COLOR_HEX.gray}} />
-      <span className="truncate">{tag.name}</span>
+      <ChipName name={tag.name} wrap={wrap} />
       {children}
     </span>
   );
+}
+
+/** El proyecto dice a qué pertenece la tarea; sin borde, para no confundirlo con una etiqueta. */
+export function ProjectChip({project, wrap = false, className}) {
+  if (!project) return null;
+  const color = TAG_COLOR_HEX[project.color] || TAG_COLOR_HEX.gray;
+  return (
+    <span className={cn('inline-flex min-w-0 max-w-full items-center gap-1 text-[11px] font-medium text-muted-foreground', className)}>
+      <Folder aria-hidden="true" className="size-3 shrink-0" style={{color}} fill="currentColor" />
+      <span className="sr-only">Proyecto:</span>
+      <ChipName name={project.name} wrap={wrap} />
+    </span>
+  );
+}
+
+/**
+ * En móvil el círculo se ve de 16 px, pero el botón que lo envuelve mide 24 × 32:
+ * se ve fino sin perder el área táctil. `compact` es la versión de escritorio
+ * para filas angostas (16 px); si no, 24 px.
+ */
+export function ColorPicker({value, onChange, label, className, compact = false}) {
+  return (
+    <div className={cn('flex flex-wrap', compact ? 'sm:gap-0.5' : 'sm:gap-1.5', className)} role="radiogroup" aria-label={label}>
+      {KANBAN_TAG_COLORS.map(option => (
+        <button
+          key={option}
+          type="button"
+          role="radio"
+          aria-checked={value === option}
+          aria-label={TAG_COLOR_LABELS[option]}
+          onClick={() => onChange(option)}
+          className={cn('flex h-8 w-6 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-ring', compact ? 'sm:size-4' : 'sm:size-6')}
+        >
+          <span
+            aria-hidden="true"
+            className={cn('size-4 rounded-full border-2 transition-transform', !compact && 'sm:size-6', value === option ? 'border-foreground scale-110' : 'border-transparent')}
+            style={{backgroundColor: TAG_COLOR_HEX[option]}}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Primer color que nadie usa todavía, para no pedir una decisión al crear al vuelo. */
+export function nextLabelColor(items = []) {
+  const used = new Set(items.map(item => item.color));
+  return KANBAN_TAG_COLORS.find(color => color !== 'gray' && !used.has(color)) || 'blue';
 }
 
 export function PriorityBadge({priority, className}) {

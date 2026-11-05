@@ -18,8 +18,9 @@ function ServerIcon({name, src}) {
 /**
  * Identidad del header: el símbolo de Bardo y, al lado, el espacio. En
  * escritorio, un chip con el canal (las pestañas ya dicen el módulo); en
- * móvil, el título del módulo con su punto. Los dos abren el mismo menú:
- * servidor, canal, el aviso de beta y los ajustes del canal.
+ * móvil, solo el símbolo: el título del módulo pasa al menú, para que no
+ * desborde el header, y sigue en el nombre accesible del botón. Los dos abren
+ * el mismo menú: servidor, canal, el aviso de beta y los ajustes del canal.
  */
 export function WorkspaceName({moduleLabel, onOpenSettings}) {
   const workspace = useWorkspace();
@@ -49,6 +50,7 @@ export function WorkspaceName({moduleLabel, onOpenSettings}) {
           )}
         />
         <PopoverContent align="start" sideOffset={8} className="workspace-popover w-80 gap-3 p-3">
+          {moduleLabel && <p className="workspace-popover-module md:hidden">{moduleLabel}</p>}
           <div className="workspace-popover-head">
             {workspace.guildName
               ? <ServerIcon name={workspace.guildName} src={workspace.guildIcon} />

@@ -50,6 +50,7 @@ export function applyStructure(state, board) {
       channelId: board.channelId ?? state.board?.channelId ?? null,
       columns: sortColumns(board.columns),
       tags: [...(board.tags || [])],
+      projects: [...(board.projects || [])],
     },
     structureRev: Math.max(state.structureRev, board.rev ?? 0),
   };
@@ -142,7 +143,7 @@ export function applyOp(state, op) {
       const number = Math.max(0, ...Object.values(cards).map(card => card.number || 0)) + 1;
       cards[op.card.id] = {
         number: op.card.number || number,
-        description: '', assignee: null, priority: 'normal', dueDate: null, tagIds: [], subtasks: [], docIds: [],
+        description: '', assignee: null, priority: 'normal', dueDate: null, tagIds: [], subtasks: [], docIds: [], projectId: null,
         sourceRef: null, threadId: null, threadPending: false, notifications: {channel: null, dm: null},
         version: 1, rev: -1, completedAt: null, archivedAt: null, createdAt: nowIso(), updatedAt: nowIso(),
         ...op.card,
@@ -180,6 +181,8 @@ function applyStructureOp(state, op) {
   if (!state.board) return state;
   let columns = state.board.columns.map(column => ({...column}));
   let tags = [...state.board.tags];
+  // Los tableros guardados antes de existir los proyectos no traen la lista.
+  let projects = [...(state.board.projects || [])];
   let cards = state.cards;
   switch (op.type) {
     case 'addColumn':
@@ -223,10 +226,21 @@ function applyStructureOp(state, op) {
       cards = Object.fromEntries(Object.entries(cards).map(([id, card]) => [id,
         card.tagIds?.includes(op.id) ? {...card, tagIds: card.tagIds.filter(tagId => tagId !== op.id)} : card]));
       break;
+    case 'addProject':
+      projects.push({id: op.projectId, name: op.name, color: op.color, pending: true});
+      break;
+    case 'updateProject':
+      projects = projects.map(project => (project.id === op.id ? {...project, ...op.fields} : project));
+      break;
+    case 'deleteProject':
+      projects = projects.filter(project => project.id !== op.id);
+      cards = Object.fromEntries(Object.entries(cards).map(([id, card]) => [id,
+        card.projectId === op.id ? {...card, projectId: null} : card]));
+      break;
     default:
       return state;
   }
-  return {...state, cards, board: {...state.board, columns: sortColumns(columns), tags}};
+  return {...state, cards, board: {...state.board, columns: sortColumns(columns), tags, projects}};
 }
 
 export function applyOps(state, ops) {
@@ -255,12 +269,16 @@ export function todayIso(now = new Date(), timeZone = defaultTimeZone()) {
   }
 }
 
-export function filterCards(cards, {filter = 'all', userId = null, tagId = null, query = '', today = todayIso(), doneId = null} = {}) {
+/** Valor del filtro de proyecto para ver las tareas que no tienen ninguno. */
+export const NO_PROJECT_FILTER = 'none';
+
+export function filterCards(cards, {filter = 'all', userId = null, tagId = null, projectId = null, query = '', today = todayIso(), doneId = null} = {}) {
   const text = query.trim().toLowerCase();
   return Object.fromEntries(Object.entries(cards).filter(([, card]) => {
     if (filter === 'mine' && card.assignee?.id !== userId) return false;
     if (filter === 'overdue' && !(card.dueDate && card.dueDate < today && card.columnId !== doneId)) return false;
     if (tagId && !card.tagIds?.includes(tagId)) return false;
+    if (projectId === NO_PROJECT_FILTER ? card.projectId : (projectId && card.projectId !== projectId)) return false;
     if (text && !`#${card.number} ${card.title} ${card.description} ${card.assignee?.name || ''}`.toLowerCase().includes(text)) return false;
     return true;
   }));

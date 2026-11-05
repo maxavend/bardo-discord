@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Archive, ChevronDown, MoreHorizontal, Tags} from 'lucide-react';
+import {Archive, ChevronDown, Folder, MoreHorizontal, Tags} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {ToggleGroup, ToggleGroupItem} from '@/components/ui/toggle-group';
 import {
@@ -19,6 +19,7 @@ import {toast} from '@/lib/toast';
 import {openExternalUrl} from '../discord-links.js';
 import {PlannerUndoToast} from '../planner/PlannerUndoToast.jsx';
 import {
+  NO_PROJECT_FILTER,
   cardsInColumn,
   defaultColumnId,
   doneColumnId,
@@ -34,8 +35,8 @@ import {
 } from './kanban-runtime.js';
 import {KanbanBoard} from './KanbanBoard.jsx';
 import {KanbanCardDialog} from './KanbanCardDialog.jsx';
-import {ArchivedCardsDialog, ColumnNameDialog, DeleteColumnDialog, TagsDialog} from './KanbanDialogs.jsx';
-import {TagChip, discordChannelUrl} from './kanban-ui.jsx';
+import {ArchivedCardsDialog, ColumnNameDialog, DeleteColumnDialog, ProjectsDialog, TagsDialog} from './KanbanDialogs.jsx';
+import {ProjectChip, TagChip, discordChannelUrl, nextLabelColor} from './kanban-ui.jsx';
 
 const FILTER_LABELS = {all: 'Todas', mine: 'Mías', overdue: 'Vencidas'};
 
@@ -71,30 +72,36 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
   const board = view.board;
   const columns = useMemo(() => board?.columns || [], [board]);
   const tags = useMemo(() => board?.tags || [], [board]);
+  const projects = useMemo(() => board?.projects || [], [board]);
   const [filter, setFilter] = useState('all');
   const [tagFilter, setTagFilter] = useState(null);
+  const [projectChoice, setProjectFilter] = useState(null);
   const [quickAddColumnId, setQuickAddColumnId] = useState(null);
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteColumn, setDeleteColumn] = useState(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   const [undo, setUndo] = useState(null);
   const today = todayIso();
   const doneId = doneColumnId(board);
   const userId = currentUserId();
   const missingNotified = useRef(null);
-
+  // Si otra persona elimina el proyecto que se está filtrando, se vuelve a ver todo.
+  const activeProject = projects.find(project => project.id === projectChoice) || null;
+  const projectFilter = activeProject ? activeProject.id : (projectChoice === NO_PROJECT_FILTER ? NO_PROJECT_FILTER : null);
+  const projectFilterLabel = activeProject?.name || (projectFilter ? 'Sin proyecto' : 'Todos los proyectos');
 
   const visibleCards = useMemo(
-    () => filterCards(view.cards, {filter, userId, tagId: tagFilter, today, doneId}),
-    [view.cards, filter, userId, tagFilter, today, doneId],
+    () => filterCards(view.cards, {filter, userId, tagId: tagFilter, projectId: projectFilter, today, doneId}),
+    [view.cards, filter, userId, tagFilter, projectFilter, today, doneId],
   );
   const allCounts = useMemo(() => {
     const counts = {};
     for (const card of Object.values(view.cards)) counts[card.columnId] = (counts[card.columnId] || 0) + 1;
     return counts;
   }, [view.cards]);
-  const isFiltered = filter !== 'all' || Boolean(tagFilter);
+  const isFiltered = filter !== 'all' || Boolean(tagFilter) || Boolean(projectFilter);
   const openCard = cardId ? view.cards[cardId] : null;
 
   // "Nueva tarea" (header o Inicio): abre el alta rápida de la primera columna
@@ -106,6 +113,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
     const target = defaultColumnId(board);
     setFilter('all');
     setTagFilter(null);
+    setProjectFilter(null);
     setQuickAddColumnId(target);
     scrollColumnIntoView(target);
   }, [quickAddRequest, board]);
@@ -137,9 +145,12 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
     go('#kanban', {skipTransition: true, replace: true});
   }, [engine, go]);
 
+  // Con un proyecto filtrado, la tarea nueva es de ese proyecto: si no, se
+  // perdería de vista justo al crearla.
+  const projectForNewCards = activeProject?.id;
   const createCard = useCallback((columnId, title) => {
-    engine.createCard({title, columnId});
-  }, [engine]);
+    engine.createCard({title, columnId, ...(projectForNewCards ? {projectId: projectForNewCards} : {})});
+  }, [engine, projectForNewCards]);
 
   const moveToColumn = useCallback((id, columnId) => {
     const last = cardsInColumn(engine.getSnapshot().view.cards, columnId).filter(card => card.id !== id).at(-1);
@@ -229,14 +240,36 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
       <div className="kanban-inner kanban-head flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="min-w-0">
-            {/* En móvil el título ya está en el header. */}
+            {/* En móvil el título está en el menú del símbolo y en la barra inferior. */}
             <h1 id="kanban-title" tabIndex={-1} className="font-heading text-lg font-semibold tracking-tight text-foreground max-md:sr-only">Tareas</h1>
             {!remote && <p className="hidden text-xs text-muted-foreground md:block">Solo en este dispositivo</p>}
           </div>
           {STATUS_TEXT[status] && (
             <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{STATUS_TEXT[status]}</span>
           )}
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
+            {projects.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={(
+                    <Button variant="outline" size="sm" data-kanban-toolbar-control="" aria-label={`Filtrar por proyecto: ${projectFilterLabel}`} className="h-8 min-w-0 max-w-36 gap-1 px-3 text-xs md:max-w-52">
+                      <span className="truncate">{projectFilterLabel}</span> <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+                    </Button>
+                  )}
+                />
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuRadioGroup value={projectFilter || 'all'} onValueChange={value => setProjectFilter(value === 'all' ? null : value)}>
+                    <DropdownMenuRadioItem value="all" className="cursor-pointer">Todos los proyectos</DropdownMenuRadioItem>
+                    {projects.map(project => (
+                      <DropdownMenuRadioItem key={project.id} value={project.id} className="cursor-pointer">
+                        <ProjectChip project={project} />
+                      </DropdownMenuRadioItem>
+                    ))}
+                    <DropdownMenuRadioItem value={NO_PROJECT_FILTER} className="cursor-pointer">Sin proyecto</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {/* Móvil: un solo chip de filtro en vez de tres botones. */}
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -295,6 +328,9 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
                   </>
                 )}
                 <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => setProjectsOpen(true)} className="cursor-pointer">
+                    <Folder className="size-4 text-muted-foreground" /> Proyectos…
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setTagsOpen(true)} className="cursor-pointer">
                     <Tags className="size-4 text-muted-foreground" /> Etiquetas…
                   </DropdownMenuItem>
@@ -310,10 +346,11 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
         {isFiltered && (
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" role="status">
             <span>
-              {filter === 'mine' ? 'Solo tus tareas' : filter === 'overdue' ? 'Solo tareas vencidas' : 'Filtrado por etiqueta'}
+              {filter === 'mine' ? 'Solo tus tareas' : filter === 'overdue' ? 'Solo tareas vencidas' : tagFilter ? 'Filtrado por etiqueta' : 'Filtrado por proyecto'}
+              {projectFilter && <> · {activeProject ? <ProjectChip project={activeProject} /> : 'Sin proyecto'}</>}
               {tagFilter && <> · <TagChip tag={tags.find(tag => tag.id === tagFilter)} /></>}
             </span>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setFilter('all'); setTagFilter(null); }}>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setFilter('all'); setTagFilter(null); setProjectFilter(null); }}>
               Quitar filtros
             </Button>
           </div>
@@ -329,6 +366,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
           cards={visibleCards}
           allCounts={allCounts}
           tags={tags}
+          projects={projects}
           today={today}
           doneId={doneId}
           quickAddColumnId={quickAddColumnId}
@@ -359,6 +397,7 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
           onMove={moveToColumn}
           onArchive={archiveCard}
           onCreateTag={(name, color) => engine.addTag(name, color)}
+          onCreateProject={name => engine.addProject(name, nextLabelColor(projects))}
           onOpenThread={openThread}
           onRetryNotice={retryNotice}
           onOpenDoc={docId => {
@@ -412,6 +451,15 @@ export function KanbanModule({cardId = null, docs = [], go, onOpenDoc, quickAddR
           if (tagFilter === id) setTagFilter(null);
         }}
         onClose={() => setTagsOpen(false)}
+      />
+      <ProjectsDialog
+        open={projectsOpen}
+        projects={projects}
+        cards={view.cards}
+        onAdd={(name, color) => engine.addProject(name, color)}
+        onUpdate={(id, fields) => engine.updateProject(id, fields)}
+        onDelete={id => engine.deleteProject(id)}
+        onClose={() => setProjectsOpen(false)}
       />
       <PlannerUndoToast
         toast={undo}

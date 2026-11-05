@@ -32,6 +32,7 @@ export function KanbanBoard({
   cards,
   allCounts,
   tags,
+  projects,
   today,
   doneId,
   quickAddColumnId,
@@ -48,6 +49,7 @@ export function KanbanBoard({
   filtered,
 }) {
   const tagsById = useMemo(() => new Map(tags.map(tag => [tag.id, tag])), [tags]);
+  const projectsById = useMemo(() => new Map(projects.map(project => [project.id, project])), [projects]);
   const baseItems = useMemo(() => {
     const map = Object.fromEntries(columns.map(column => [column.id, []]));
     const sorted = Object.values(cards).sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : (a.id < b.id ? -1 : 1)));
@@ -158,6 +160,7 @@ export function KanbanBoard({
       totalCount={allCounts[column.id] || 0}
       columns={columns}
       tagsById={tagsById}
+      projectsById={projectsById}
       today={today}
       doneId={doneId}
       quickAddActive={quickAddColumnId === column.id}
@@ -202,7 +205,7 @@ export function KanbanBoard({
       <DragOverlay dropAnimation={prefersReducedMotion() ? null : undefined}>
         {activeCard ? (
           <div className="kanban-card-overlay flex w-[256px] max-w-[85vw] flex-col gap-2 rounded-xl border border-primary/60 bg-card px-3 py-2.5 shadow-lg cursor-grabbing">
-            <KanbanCardBody card={activeCard} tagsById={tagsById} today={today} doneId={doneId} />
+            <KanbanCardBody card={activeCard} tagsById={tagsById} projectsById={projectsById} today={today} doneId={doneId} />
           </div>
         ) : null}
       </DragOverlay>

@@ -258,12 +258,45 @@ button { font-size: 14px; }
   gap: 24px;
   margin: 0;
   color: var(--foreground);
-  animation: boot-stage-swap 500ms ease-in-out 80ms both;
+  animation: boot-stage-enter 500ms ease-in-out 80ms both;
 }
 
-/* Wordmark dibujado; la onda se anima dentro del SVG. */
-.bardo-loader { display: block; width: 176px; height: 49px; }
-.bardo-loader img { display: block; width: 100%; height: 100%; }
+.bardo-loader {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 64px;
+  isolation: isolate;
+  overflow: visible;
+  color: var(--foreground);
+}
+.bardo-loader::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 32px;
+  corner-shape: squircle;
+  background: #f7eadc;
+}
+.bardo-loader__eyes {
+  display: flex;
+  gap: 21px;
+  align-items: center;
+  animation: bardo-eye-look-and-blink 3.8s infinite cubic-bezier(.45, .05, .55, .95);
+  will-change: transform;
+}
+.bardo-loader__eye {
+  width: 11px;
+  height: 26px;
+  display: block;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 62% 18%, rgba(255,255,255,.42) 0 5%, transparent 7%),
+    linear-gradient(100deg, #0d0d0e 0%, #29292b 55%, #111113 100%);
+  transform-origin: center;
+}
 
 .boot-retry-button {
   min-height: 36px;
@@ -290,7 +323,8 @@ button { font-size: 14px; }
   font-weight: 450;
   letter-spacing: -.02em;
   line-height: 1.3;
-  animation: boot-stage-swap 500ms ease-in-out both;
+  /* Se reinicia con cada mensaje: sin `filter`, para no desenfocar el texto. */
+  animation: boot-stage-enter 500ms ease-in-out both;
 }
 .boot-hint,
 .boot-error-message {
@@ -336,9 +370,17 @@ button { font-size: 14px; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes boot-stage-swap {
-  from { opacity: 0; transform: translateY(12px); filter: blur(3px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+@keyframes bardo-eye-look-and-blink {
+  0%, 100% { transform: translate(0, 0) scaleY(1); }
+  14%, 26% { transform: translate(-7px, 0) scaleY(1); }
+  40%, 52% { transform: translate(7px, 0) scaleY(1); }
+  62% { transform: translate(0, 0) scaleY(1); }
+  66% { transform: translate(0, 0) scaleY(.06); }
+  70% { transform: translate(0, 0) scaleY(1); }
+  78%, 84% { transform: translate(5px, -2px) scaleY(1); }
+  90% { transform: translate(0, 0) scaleY(1); }
+  93% { transform: translate(0, 0) scaleY(.06); }
+  96% { transform: translate(0, 0) scaleY(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -347,6 +389,9 @@ button { font-size: 14px; }
     animation-duration: 1ms !important;
   }
   .app-root { animation-duration: 1ms !important; }
+  .boot-loader,
+  .boot-stage,
+  .bardo-loader__eyes { animation: none; }
 }
 
 /* Vidrio del header. Posición, alto y borde los pone .doc-topbar. */
@@ -744,7 +789,7 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 }
 /* Identidad del header: el símbolo de Bardo y el chip del espacio. En
    escritorio el chip muestra el canal (las pestañas ya dicen el módulo); en
-   móvil, el título del módulo con su punto. Los dos abren el menú del espacio. */
+   móvil, solo el símbolo. Los dos abren el menú del espacio. */
 .header-identity { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* Símbolo pequeño de Bardo (el corte para menos de 40 px): la onda y el
    renglón toman la tinta del tema y un degradado pinta solo el punto. */
@@ -846,6 +891,28 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
   line-height: 18px;
 }
 /* Menú del espacio. */
+.workspace-popover-module {
+  display: flex;
+  align-items: baseline;
+  margin: 0;
+  padding: 2px 2px 0;
+  color: var(--foreground);
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+/* El punto de la identidad, como en el título de cada módulo. */
+.workspace-popover-module::after {
+  content: "";
+  flex: none;
+  width: 0.2em;
+  height: 0.2em;
+  margin-left: 0.06em;
+  border-radius: 999px;
+  background: var(--punto);
+}
 .workspace-popover-head { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 2px 2px 0; }
 .workspace-popover-head .workspace-icon { width: 36px; height: 36px; border-radius: 10px; font-size: 13px; }
 .workspace-popover-head .workspace-mark { --mark-size: 28px; }
@@ -870,39 +937,28 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 .workspace-popover-action > svg { color: var(--muted-foreground); }
 @media (hover: hover) { .workspace-popover-action:hover { background: var(--accent); } }
 .workspace-popover-action:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-/* Móvil: el símbolo y el título del módulo, con su punto; el canal está en el
-   menú. El header crece a 64 px para que las áreas táctiles de 44 px respiren. */
+/* Móvil: solo el símbolo; el título del módulo y el canal están en el menú.
+   El header crece a 64 px para que las áreas táctiles de 44 px respiren. */
 @media (max-width: 767px) {
   :root { --bardo-topbar: 64px; }
   .workspace-mark { --mark-size: 24px; }
-  /* Símbolo, título y flecha son un solo botón con 8 px de aire a los lados;
-     el margen negativo deja el símbolo alineado con el contenido. */
+  /* Símbolo y flecha son un solo botón con 8 px de aire a los lados; el margen
+     negativo deja el símbolo alineado con el contenido. */
   .header-identity > .workspace-mark { display: none; }
   .workspace-chip-mark { display: block; }
   .workspace-chip { gap: 8px; height: 44px; margin-inline-start: -8px; padding: 0 12px 0 8px; }
   .workspace-chip-space { display: none; }
+  /* El título del módulo se ve en el menú; aquí solo es parte del nombre
+     accesible del botón. */
   .workspace-chip-module {
-    display: inline-flex;
-    align-items: baseline;
-    min-width: 0;
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
-    font-size: 19px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    text-overflow: ellipsis;
+    clip-path: inset(50%);
     white-space: nowrap;
   }
-  .workspace-chip-module::after {
-    content: "";
-    flex: none;
-    width: 0.2em;
-    height: 0.2em;
-    margin-left: 0.06em;
-    border-radius: 999px;
-    background: var(--punto);
-  }
-  /* Teléfonos de 320 px: el título cabe completo, con su punto. */
-  @media (max-width: 359px) { .workspace-chip-module { font-size: 17px; } }
 }
 /* Perfil: el avatar abre el menú de ajustes y tema. Área táctil de 40 px. */
 .user-menu-trigger {

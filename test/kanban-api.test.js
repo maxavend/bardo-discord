@@ -38,6 +38,40 @@ test('crear una tarjeta la numera, la deja en "Por hacer" y otro canal no la ve'
   assert.equal((await k.call(`/cards/${json.card.id}`, {method: 'PATCH', token: 'token-b', body: {title: 'x'}})).status, 404);
 });
 
+test('proyectos: una tarea tiene uno solo y eliminarlo no borra sus tareas', async () => {
+  const k = await setupKanban();
+  const created = await k.call('/projects', {method: 'POST', body: {id: 'proyecto-cliente-1', name: 'Web nueva', color: 'blue'}});
+  assert.equal(created.status, 201);
+  const {projectId} = created.json;
+  assert.equal(projectId, 'proyecto-cliente-1');
+  assert.deepEqual(created.json.board.projects.map(project => project.name), ['Web nueva']);
+  assert.equal((await k.call('/projects', {method: 'POST', body: {name: 'WEB NUEVA'}})).json.error, 'project_exists');
+  assert.equal((await k.call('/projects', {method: 'POST', body: {name: '   '}})).json.error, 'name_required');
+  assert.equal((await k.call('/projects', {method: 'POST', body: {name: 'X', color: 'neon'}})).json.error, 'invalid_color');
+
+  // Un proyecto de otro canal o inexistente no se puede asignar.
+  const card = (await k.createCard({title: 'Con proyecto', projectId})).json.card;
+  assert.equal(card.projectId, projectId);
+  assert.equal((await k.createCard({title: 'Sin proyecto', projectId: 'inexistente'})).json.card.projectId, null);
+  assert.equal((await k.call(`/cards/${card.id}`, {method: 'PATCH', body: {projectId: null}})).json.card.projectId, null);
+  const patched = await k.call(`/cards/${card.id}`, {method: 'PATCH', body: {projectId}});
+  assert.equal(patched.json.card.projectId, projectId);
+
+  const renamed = await k.call(`/projects/${projectId}`, {method: 'PATCH', body: {name: 'Sitio nuevo', color: 'green'}});
+  assert.deepEqual(renamed.json.board.projects, [{id: projectId, name: 'Sitio nuevo', color: 'green'}]);
+
+  // El poll tiene que enterarse de que la tarea quedó sin proyecto.
+  const {board: before} = await k.board();
+  assert.equal((await k.call(`/projects/${projectId}`, {method: 'DELETE'})).status, 200);
+  const delta = (await k.call(`/board?since=${before.rev}`)).json;
+  assert.deepEqual(delta.board.projects, []);
+  assert.deepEqual(delta.cards.map(item => [item.id, item.projectId]), [[card.id, null]]);
+  assert.equal((await k.call(`/projects/${projectId}`, {method: 'DELETE'})).json.error, 'project_not_found');
+
+  for (let i = 0; i < 12; i += 1) await k.call('/projects', {method: 'POST', body: {name: `P${i}`}});
+  assert.equal((await k.call('/projects', {method: 'POST', body: {name: 'Decimotercero'}})).json.error, 'project_limit');
+});
+
 test('crear con id del cliente es idempotente', async () => {
   const k = await setupKanban();
   const id = 'client-card-0001';
