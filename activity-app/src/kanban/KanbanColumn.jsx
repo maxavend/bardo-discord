@@ -149,6 +149,7 @@ function KanbanColumnImpl({
   totalCount,
   columns,
   tagsById,
+  projectsById,
   today,
   doneId,
   quickAddActive,
@@ -200,6 +201,7 @@ function KanbanColumnImpl({
               card={cardsById[id]}
               columns={columns}
               tagsById={tagsById}
+              projectsById={projectsById}
               today={today}
               doneId={doneId}
               onOpen={onOpenCard}

@@ -4,6 +4,7 @@
 export const KANBAN_LIMITS = Object.freeze({
   columns: 6,
   tags: 8,
+  projects: 12,
   subtasks: 30,
   docs: 5,
   activeCards: 500,
@@ -11,6 +12,7 @@ export const KANBAN_LIMITS = Object.freeze({
   description: 2000,
   columnName: 40,
   tagName: 24,
+  projectName: 40,
   subtaskText: 200,
   assigneeName: 100,
 });

@@ -14,22 +14,24 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {cn} from '@/lib/utils';
 import {shareBardoLinkWithFeedback} from '../share-link.js';
-import {AssigneeAvatar, DueChip, PriorityBadge, TagChip, subtaskProgress} from './kanban-ui.jsx';
+import {AssigneeAvatar, DueChip, PriorityBadge, ProjectChip, TagChip, subtaskProgress} from './kanban-ui.jsx';
 
 /** Contenido visual de la tarjeta (también lo usa el "fantasma" al arrastrar). */
-export function KanbanCardBody({card, tagsById, today, doneId}) {
+export function KanbanCardBody({card, tagsById, projectsById, today, doneId}) {
   const {total, done} = subtaskProgress(card);
   const tags = (card.tagIds || []).map(id => tagsById.get(id)).filter(Boolean);
+  const project = card.projectId ? projectsById.get(card.projectId) : null;
   return (
     <>
-      {/* Las filas de arriba dejan sitio al asa y al menú (esquina superior derecha). */}
+      {/* La primera fila deja sitio al asa y al menú (esquina superior derecha). */}
+      {project && <ProjectChip project={project} className="pr-11" />}
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 pr-11">
+        <div className={cn('flex flex-wrap gap-1', !project && 'pr-11')}>
           {tags.slice(0, 3).map(tag => <TagChip key={tag.id} tag={tag} />)}
           {tags.length > 3 && <span className="text-[10.5px] text-muted-foreground">+{tags.length - 3}</span>}
         </div>
       )}
-      <p className={cn('text-[13px] font-medium leading-snug text-foreground break-words line-clamp-3', tags.length === 0 && 'pr-11', card.columnId === doneId && 'text-muted-foreground')}>
+      <p className={cn('text-[13px] font-medium leading-snug text-foreground break-words line-clamp-3', !project && tags.length === 0 && 'pr-11', card.columnId === doneId && 'text-muted-foreground')}>
         {card.title}
       </p>
       <div className="flex items-center gap-2 min-h-6">
@@ -105,7 +107,7 @@ function KanbanCardMenu({card, columns, onMove, onArchive, onOpenThread}) {
   );
 }
 
-function KanbanCardImpl({card, columns, tagsById, today, doneId, onOpen, onMove, onArchive, onOpenThread, dragDisabled}) {
+function KanbanCardImpl({card, columns, tagsById, projectsById, today, doneId, onOpen, onMove, onArchive, onOpenThread, dragDisabled}) {
   const {
     attributes,
     listeners,
@@ -141,7 +143,7 @@ function KanbanCardImpl({card, columns, tagsById, today, doneId, onOpen, onMove,
         aria-label={`Abrir tarea #${card.number}: ${card.title}`}
       />
       <div className="pointer-events-none flex flex-col gap-2">
-        <KanbanCardBody card={card} tagsById={tagsById} today={today} doneId={doneId} />
+        <KanbanCardBody card={card} tagsById={tagsById} projectsById={projectsById} today={today} doneId={doneId} />
       </div>
       <div className="absolute right-1.5 top-1.5 flex items-center">
         <button

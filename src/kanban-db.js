@@ -39,6 +39,8 @@ function rowToTag(row) {
   return {id: row.id, name: row.name, color: row.color};
 }
 
+const rowToProject = rowToTag;
+
 function rowToNotification(row) {
   return row ? {status: row.status, errorCode: row.error_code || null} : null;
 }
@@ -58,6 +60,7 @@ export function rowToCard(row, notifications = null) {
     tagIds: parseJsonList(row.tag_ids_json),
     subtasks: parseJsonList(row.subtasks_json),
     docIds: parseJsonList(row.doc_ids_json),
+    projectId: row.project_id || null,
     sourceRef: row.source_ref || null,
     messageId: row.message_id || null,
     threadId: row.thread_id || null,
@@ -109,11 +112,16 @@ export async function ensureKanbanBoard(db, guildId, channelId, userId) {
 }
 
 export async function loadKanbanStructure(db, boardId) {
-  const [columns, tags] = await Promise.all([
+  const [columns, tags, projects] = await Promise.all([
     db.prepare('SELECT * FROM kanban_columns WHERE board_id = ? ORDER BY position, id').bind(boardId).all(),
     db.prepare('SELECT * FROM kanban_tags WHERE board_id = ? ORDER BY name COLLATE NOCASE').bind(boardId).all(),
+    db.prepare('SELECT * FROM kanban_projects WHERE board_id = ? ORDER BY name COLLATE NOCASE').bind(boardId).all(),
   ]);
-  return {columns: columns.results.map(rowToColumn), tags: tags.results.map(rowToTag)};
+  return {
+    columns: columns.results.map(rowToColumn),
+    tags: tags.results.map(rowToTag),
+    projects: projects.results.map(rowToProject),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -248,15 +256,15 @@ export async function insertKanbanCard(db, board, card, userId) {
   const result = await db.batch([
     bumpRev(db, board.id, userId, now),
     db.prepare(`INSERT INTO kanban_cards (id, board_id, column_id, number, rank, title, description, assignee_id, assignee_name,
-        priority, due_date, tag_ids_json, subtasks_json, doc_ids_json, source_ref, version, board_rev, completed_at,
+        priority, due_date, tag_ids_json, subtasks_json, doc_ids_json, project_id, source_ref, version, board_rev, completed_at,
         created_at, created_by, updated_at, updated_by)
-      VALUES (?, ?, ?, (SELECT next_number FROM kanban_boards WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ${REV},
+      VALUES (?, ?, ?, (SELECT next_number FROM kanban_boards WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ${REV},
         CASE WHEN (SELECT is_done FROM kanban_columns WHERE id = ?) = 1 THEN ? ELSE NULL END, ?, ?, ?, ?)
       ON CONFLICT DO NOTHING`).bind(
       card.id, board.id, card.columnId, board.id, card.rank, card.title, card.description || '',
       card.assignee?.id || null, card.assignee?.name || null, card.priority || 'normal', card.dueDate || null,
       JSON.stringify(card.tagIds || []), JSON.stringify(card.subtasks || []), JSON.stringify(card.docIds || []),
-      card.sourceRef || null, board.id, card.columnId, now, now, userId, now, userId,
+      card.projectId || null, card.sourceRef || null, board.id, card.columnId, now, now, userId, now, userId,
     ),
     db.prepare('UPDATE kanban_boards SET next_number = next_number + 1 WHERE id = ?').bind(board.id),
   ]);
@@ -277,6 +285,7 @@ const PATCH_COLUMNS = {
   tagIds: 'tag_ids_json',
   subtasks: 'subtasks_json',
   docIds: 'doc_ids_json',
+  projectId: 'project_id',
 };
 
 /**
@@ -447,6 +456,39 @@ export async function deleteKanbanTag(db, boardId, tagId, userId) {
       WHERE board_id = ? AND EXISTS (SELECT 1 FROM json_each(kanban_cards.tag_ids_json) WHERE value = ?)`)
       .bind(tagId, boardId, boardId, tagId),
     db.prepare('DELETE FROM kanban_tags WHERE id = ? AND board_id = ?').bind(tagId, boardId),
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Proyectos
+
+export async function addKanbanProject(db, boardId, {name, color}, userId, id = crypto.randomUUID()) {
+  const now = new Date().toISOString();
+  await db.batch([
+    bumpRev(db, boardId, userId, now),
+    db.prepare('INSERT INTO kanban_projects (id, board_id, name, color, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, boardId, name, color, now),
+  ]);
+  return id;
+}
+
+export async function updateKanbanProject(db, boardId, projectId, {name, color}, userId) {
+  const now = new Date().toISOString();
+  await db.batch([
+    bumpRev(db, boardId, userId, now),
+    db.prepare('UPDATE kanban_projects SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ? AND board_id = ?')
+      .bind(name ?? null, color ?? null, projectId, boardId),
+  ]);
+}
+
+/** Elimina un proyecto: sus tareas (también archivadas) quedan sin proyecto. */
+export async function deleteKanbanProject(db, boardId, projectId, userId) {
+  const now = new Date().toISOString();
+  await db.batch([
+    bumpRev(db, boardId, userId, now),
+    db.prepare(`UPDATE kanban_cards SET project_id = NULL, board_rev = ${REV} WHERE board_id = ? AND project_id = ?`)
+      .bind(boardId, boardId, projectId),
+    db.prepare('DELETE FROM kanban_projects WHERE id = ? AND board_id = ?').bind(projectId, boardId),
   ]);
 }
 

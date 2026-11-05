@@ -46,7 +46,7 @@ Usa siempre la misma palabra para lo mismo.
 | Partes de una reunión | **agenda**, **bloque**, **tema**, **acuerdo**, **acta**, **resumen** | recap, punto, minuta (salvo «acta») |
 | Quien guía la reunión | **quien facilita** | host, moderador |
 | Pieza de Tareas | **tarea** (en el tablero también «tarjeta» solo para lo visual) | ticket, issue, card |
-| Partes de una tarea | **responsable**, **fecha límite**, **prioridad**, **etiqueta**, **subtarea** | asignado, deadline, label, tag |
+| Partes de una tarea | **responsable**, **fecha límite**, **prioridad**, **proyecto**, **etiqueta**, **subtarea** | asignado, deadline, épica, label, tag |
 | Columnas | **columna**; la final es **«Hecho»** | lista, estado |
 | Sacar de la vista sin borrar | **archivar** / **restaurar** | ocultar, papelera |
 | Borrar para siempre | **eliminar** (y decir que no se puede deshacer) | borrar definitivamente |

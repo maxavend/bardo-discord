@@ -5,10 +5,6 @@ import {syncThemePreference} from './theme-sync.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
 import '@fontsource-variable/inter/opsz.css';
-import wordmarkLiveLight from './assets/brand/wordmark-vivo-claro.svg';
-import wordmarkLiveDark from './assets/brand/wordmark-vivo-oscuro.svg';
-import wordmarkLight from './assets/brand/wordmark-claro.svg';
-import wordmarkDark from './assets/brand/wordmark-oscuro.svg';
 import './styles.css';
 import './editor-focus.css';
 import './keyboard-sticky.css';
@@ -54,12 +50,14 @@ function ActivityBootShell({leaving = false}) {
     <main className={`boot-screen${leaving ? ' boot-screen--leaving' : ''}`} data-theme={theme} aria-live="polite">
       <section className="boot-content" aria-label="Cargando Bardo">
         <div className="boot-loader" role="status">
-          {/* El logo completo: la onda ondula mientras Bardo abre el espacio.
-              Con movimiento reducido, el logo quieto. */}
-          <picture className="bardo-loader">
-            <source media="(prefers-reduced-motion: reduce)" srcSet={theme === 'dark' ? wordmarkDark : wordmarkLight} />
-            <img src={theme === 'dark' ? wordmarkLiveDark : wordmarkLiveLight} alt="Cargando Bardo" width="176" height="49" />
-          </picture>
+          {/* Los ojitos miran y parpadean mientras Bardo abre el espacio.
+              Con movimiento reducido, se quedan quietos. */}
+          <div className="bardo-loader" role="img" aria-label="Cargando Bardo">
+            <div className="bardo-loader__eyes" aria-hidden="true">
+              <span className="bardo-loader__eye" />
+              <span className="bardo-loader__eye" />
+            </div>
+          </div>
           <div className="boot-copy">
             <span key={messageIndex} className="boot-stage">{BOOT_PERSONALITY_MESSAGES[messageIndex]}</span>
             <p className="boot-hint">Documentos, reuniones y tareas de tu canal</p>

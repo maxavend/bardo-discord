@@ -21,11 +21,13 @@ import {
 } from '../activity-app/src/kanban/kanban-shared.js';
 import {
   addKanbanColumn,
+  addKanbanProject,
   addKanbanTag,
   claimKanbanThread,
   countActiveKanbanCards,
   countKanbanCardsInColumn,
   deleteKanbanColumn,
+  deleteKanbanProject,
   deleteKanbanTag,
   ensureKanbanBoard,
   finishKanbanThread,
@@ -46,6 +48,7 @@ import {
   reorderKanbanColumns,
   setKanbanCardArchived,
   setKanbanDoneColumn,
+  updateKanbanProject,
   updateKanbanTag,
 } from './kanban-db.js';
 import {notifyAssignment, notifyBulkAssignment} from './kanban-notify.js';
@@ -89,7 +92,7 @@ export function parseKanbanRoute(pathname) {
     if (id === 'reorder' && !action) return {resource, reorder: true};
     if (!action) return {resource, id};
   }
-  if (resource === 'tags' && !action) return {resource, id: id || null};
+  if ((resource === 'tags' || resource === 'projects') && !action) return {resource, id: id || null};
   return {invalid: true};
 }
 
@@ -125,6 +128,7 @@ function boardPayload(board, structure) {
     channelId: board.channelId,
     columns: structure.columns,
     tags: structure.tags,
+    projects: structure.projects,
   };
 }
 
@@ -181,6 +185,11 @@ async function cardFieldsFromPayload(env, session, payload, structure, {partial}
       }
     }
     fields.docIds = docIds;
+  }
+  if (has('projectId')) {
+    const projectId = payload.projectId ? String(payload.projectId) : null;
+    // Como con las etiquetas: si otra persona lo eliminó entretanto, no es un error.
+    fields.projectId = projectId && structure.projects.some(project => project.id === projectId) ? projectId : null;
   }
   if (has('assigneeId')) {
     const assigneeId = payload.assigneeId ? String(payload.assigneeId).trim() : '';
@@ -602,59 +611,98 @@ async function handleColumns(route, request, url, env, session) {
   return methodNotAllowed();
 }
 
-function cleanTag(payload, {partial}) {
-  const tag = {};
+// Etiquetas y proyectos son la misma pieza: nombre + color, a nivel de tablero.
+const LABEL_KINDS = {
+  tags: {
+    code: 'tag',
+    idKey: 'tagId',
+    maxItems: KANBAN_LIMITS.tags,
+    maxName: KANBAN_LIMITS.tagName,
+    add: addKanbanTag,
+    update: updateKanbanTag,
+    remove: deleteKanbanTag,
+    text: {
+      nameRequired: 'La etiqueta necesita un nombre.',
+      invalidColor: 'Elige uno de los colores disponibles para la etiqueta.',
+      exists: 'Ya existe una etiqueta con ese nombre.',
+      limit: `El tablero puede tener hasta ${KANBAN_LIMITS.tags} etiquetas.`,
+      invalidId: 'No se reconoce esa etiqueta. Recarga el tablero e inténtalo de nuevo.',
+      notFound: 'Esa etiqueta ya no existe.',
+    },
+  },
+  projects: {
+    code: 'project',
+    idKey: 'projectId',
+    maxItems: KANBAN_LIMITS.projects,
+    maxName: KANBAN_LIMITS.projectName,
+    add: addKanbanProject,
+    update: updateKanbanProject,
+    remove: deleteKanbanProject,
+    text: {
+      nameRequired: 'El proyecto necesita un nombre.',
+      invalidColor: 'Elige uno de los colores disponibles para el proyecto.',
+      exists: 'Ya existe un proyecto con ese nombre.',
+      limit: `El tablero puede tener hasta ${KANBAN_LIMITS.projects} proyectos.`,
+      invalidId: 'No se reconoce ese proyecto. Recarga el tablero e inténtalo de nuevo.',
+      notFound: 'Ese proyecto ya no existe.',
+    },
+  },
+};
+
+function cleanLabel(kind, payload, {partial}) {
+  const label = {};
   if (!partial || 'name' in payload) {
-    const name = String(payload.name ?? '').trim().slice(0, KANBAN_LIMITS.tagName);
-    if (!name) return {error: apiError(422, 'name_required', 'La etiqueta necesita un nombre.')};
-    tag.name = name;
+    const name = String(payload.name ?? '').trim().slice(0, kind.maxName);
+    if (!name) return {error: apiError(422, 'name_required', kind.text.nameRequired)};
+    label.name = name;
   }
   if (!partial || 'color' in payload) {
     const color = payload.color ?? 'gray';
-    if (!KANBAN_TAG_COLORS.includes(color)) return {error: apiError(422, 'invalid_color', 'Elige uno de los colores disponibles para la etiqueta.')};
-    tag.color = color;
+    if (!KANBAN_TAG_COLORS.includes(color)) return {error: apiError(422, 'invalid_color', kind.text.invalidColor)};
+    label.color = color;
   }
-  return {tag};
+  return {label};
 }
 
 function isUniqueError(error) {
   return /UNIQUE constraint failed/i.test(String(error?.message || error));
 }
 
-async function handleTags(route, request, env, session) {
+async function handleLabels(resource, route, request, env, session) {
+  const kind = LABEL_KINDS[resource];
   const board = await ensureKanbanBoard(env.DB, session.guildId, session.channelId, session.userId);
-  const {tags} = await loadKanbanStructure(env.DB, board.id);
-  const duplicate = () => apiError(409, 'tag_exists', 'Ya existe una etiqueta con ese nombre.');
+  const items = (await loadKanbanStructure(env.DB, board.id))[resource];
+  const duplicate = () => apiError(409, `${kind.code}_exists`, kind.text.exists);
 
   if (!route.id) {
     if (request.method !== 'POST') return methodNotAllowed();
-    if (tags.length >= KANBAN_LIMITS.tags) return apiError(422, 'tag_limit', `El tablero puede tener hasta ${KANBAN_LIMITS.tags} etiquetas.`);
+    if (items.length >= kind.maxItems) return apiError(422, `${kind.code}_limit`, kind.text.limit);
     const body = await readJsonBody(request);
     if (body.error) return body.error;
-    const parsed = cleanTag(body.payload, {partial: false});
+    const parsed = cleanLabel(kind, body.payload, {partial: false});
     if (parsed.error) return parsed.error;
     const requestedId = clientId(body.payload.id);
-    if (requestedId === false) return apiError(422, 'invalid_id', 'No se reconoce esa etiqueta. Recarga el tablero e inténtalo de nuevo.');
-    if (requestedId && tags.some(tag => tag.id === requestedId)) {
-      return json({board: await freshBoardPayload(env, session), tagId: requestedId});
+    if (requestedId === false) return apiError(422, 'invalid_id', kind.text.invalidId);
+    if (requestedId && items.some(item => item.id === requestedId)) {
+      return json({board: await freshBoardPayload(env, session), [kind.idKey]: requestedId});
     }
     try {
-      const id = await addKanbanTag(env.DB, board.id, parsed.tag, session.userId, requestedId || undefined);
-      return json({board: await freshBoardPayload(env, session), tagId: id}, 201);
+      const id = await kind.add(env.DB, board.id, parsed.label, session.userId, requestedId || undefined);
+      return json({board: await freshBoardPayload(env, session), [kind.idKey]: id}, 201);
     } catch (error) {
       if (isUniqueError(error)) return duplicate();
       throw error;
     }
   }
 
-  if (!tags.some(tag => tag.id === route.id)) return apiError(404, 'tag_not_found', 'Esa etiqueta ya no existe.');
+  if (!items.some(item => item.id === route.id)) return apiError(404, `${kind.code}_not_found`, kind.text.notFound);
   if (request.method === 'PATCH') {
     const body = await readJsonBody(request);
     if (body.error) return body.error;
-    const parsed = cleanTag(body.payload, {partial: true});
+    const parsed = cleanLabel(kind, body.payload, {partial: true});
     if (parsed.error) return parsed.error;
     try {
-      await updateKanbanTag(env.DB, board.id, route.id, parsed.tag, session.userId);
+      await kind.update(env.DB, board.id, route.id, parsed.label, session.userId);
     } catch (error) {
       if (isUniqueError(error)) return duplicate();
       throw error;
@@ -662,7 +710,7 @@ async function handleTags(route, request, env, session) {
     return json({board: await freshBoardPayload(env, session)});
   }
   if (request.method === 'DELETE') {
-    await deleteKanbanTag(env.DB, board.id, route.id, session.userId);
+    await kind.remove(env.DB, board.id, route.id, session.userId);
     return json({board: await freshBoardPayload(env, session)});
   }
   return methodNotAllowed();
@@ -687,7 +735,7 @@ async function routeKanbanApi(request, url, env, ctx) {
   if (route.resource === 'board') return handleBoard(request, url, env, session);
   if (route.resource === 'cards') return handleCards(route, request, url, env, ctx, session);
   if (route.resource === 'columns') return handleColumns(route, request, url, env, session);
-  return handleTags(route, request, env, session);
+  return handleLabels(route.resource, route, request, env, session);
 }
 
 export async function handleKanbanApi(request, url, env, ctx = {waitUntil: () => {}}) {

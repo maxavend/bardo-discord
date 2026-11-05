@@ -11,6 +11,7 @@ export const KANBAN_FIELD_LABELS = {
   tagIds: 'las etiquetas',
   subtasks: 'las subtareas',
   docIds: 'los documentos',
+  projectId: 'el proyecto',
   assignee: 'el responsable',
 };
 

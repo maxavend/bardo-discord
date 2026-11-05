@@ -2,8 +2,10 @@ import {useEffect, useId, useRef, useState} from 'react';
 import {
   Archive,
   CalendarDays,
+  Check,
   ChevronDown,
   FileText,
+  Folder,
   Link,
   ListChecks,
   MessagesSquare,
@@ -45,8 +47,8 @@ import {cn} from '@/lib/utils';
 import {shareBardoLinkWithFeedback} from '../share-link.js';
 import {OverlayScrollArea} from '@/components/ui/scroll-area';
 import {MemberIdPicker} from '../planner/PlannerMemberPicker.jsx';
-import {KANBAN_LIMITS, KANBAN_PRIORITIES, KANBAN_PRIORITY_LABELS, KANBAN_TAG_COLORS} from './kanban-shared.js';
-import {KANBAN_DIALOG_CLASS, KANBAN_DIALOG_SCROLL_CLASS, AssigneeAvatar, TAG_COLOR_HEX, TAG_COLOR_LABELS, TagChip, discordChannelUrl, dueState, formatDueDate} from './kanban-ui.jsx';
+import {KANBAN_LIMITS, KANBAN_PRIORITIES, KANBAN_PRIORITY_LABELS} from './kanban-shared.js';
+import {KANBAN_DIALOG_CLASS, KANBAN_DIALOG_SCROLL_CLASS, AssigneeAvatar, ColorPicker, ProjectChip, TAG_COLOR_HEX, TagChip, discordChannelUrl, dueState, formatDueDate} from './kanban-ui.jsx';
 import {newKanbanId} from './kanban-sync.js';
 
 const NOTICE_ERRORS = {
@@ -242,28 +244,86 @@ function TagPicker({card, tags, onToggle, onCreateTag}) {
                 aria-label="Nombre de la nueva etiqueta"
                 className="h-8 text-xs"
               />
-              {!boardFull && (
-                <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Color de la etiqueta">
-                  {KANBAN_TAG_COLORS.map(option => (
-                    <button
-                      key={option}
-                      type="button"
-                      role="radio"
-                      aria-checked={color === option}
-                      aria-label={TAG_COLOR_LABELS[option]}
-                      onClick={() => setColor(option)}
-                      className={cn('size-6 rounded-full border-2 transition-transform', color === option ? 'border-foreground scale-110' : 'border-transparent')}
-                      style={{backgroundColor: TAG_COLOR_HEX[option]}}
-                    />
-                  ))}
-                </div>
-              )}
+              {!boardFull && <ColorPicker value={color} onChange={setColor} label="Color de la etiqueta" />}
               <Button type="submit" size="sm" className="h-7 text-xs" disabled={!name.trim() || boardFull}>Crear y aplicar</Button>
             </form>
           </div>
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+function ProjectPicker({card, projects, onChange, onCreateProject}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const current = projects.find(project => project.id === card.projectId) || null;
+  const full = projects.length >= KANBAN_LIMITS.projects;
+  const choose = id => {
+    if (id !== (card.projectId || null)) onChange(id);
+    setOpen(false);
+  };
+  const create = () => {
+    const value = name.trim().slice(0, KANBAN_LIMITS.projectName);
+    if (!value) return;
+    const existing = projects.find(project => project.name.toLowerCase() === value.toLowerCase());
+    if (existing) choose(existing.id);
+    else if (!full) choose(onCreateProject(value));
+    setName('');
+  };
+  const options = [null, ...projects];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={(
+          <Button variant="outline" size="sm" className="h-8 w-full justify-start gap-2 px-2 text-xs font-medium" aria-label={current ? `Proyecto: ${current.name}. Cambiar` : 'Elegir proyecto'}>
+            <Folder className={cn('size-3.5 shrink-0', !current && 'text-muted-foreground')} style={current ? {color: TAG_COLOR_HEX[current.color]} : undefined} fill={current ? 'currentColor' : 'none'} />
+            <span className={cn('truncate', !current && 'text-muted-foreground')}>{current?.name || 'Sin proyecto'}</span>
+            <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </Button>
+        )}
+      />
+      <PopoverContent align="start" className="w-72 p-2">
+        <div className="flex flex-col gap-1">
+          <div role="radiogroup" aria-label="Proyecto de la tarea" className="scroll-fade flex max-h-56 flex-col gap-0.5 overflow-y-auto">
+            {options.map(project => {
+              const selected = (project?.id ?? null) === (card.projectId || null);
+              return (
+                <button
+                  key={project?.id ?? 'none'}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => choose(project?.id ?? null)}
+                  className="flex min-h-7 shrink-0 items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  <Check className={cn('size-3.5 shrink-0', !selected && 'invisible')} aria-hidden="true" />
+                  {project ? <ProjectChip project={project} wrap /> : <span className="text-muted-foreground">Sin proyecto</span>}
+                </button>
+              );
+            })}
+          </div>
+          <form
+            className="mt-1 flex flex-col gap-2 border-t border-border/60 pt-2"
+            onSubmit={event => {
+              event.preventDefault();
+              create();
+            }}
+          >
+            <Input
+              value={name}
+              disabled={full}
+              maxLength={KANBAN_LIMITS.projectName}
+              onChange={event => setName(event.target.value)}
+              placeholder={full ? `Máximo ${KANBAN_LIMITS.projects} proyectos por tablero` : 'Nuevo proyecto'}
+              aria-label="Nombre del nuevo proyecto"
+              className="h-8 text-xs"
+            />
+            <Button type="submit" size="sm" className="h-7 text-xs" disabled={!name.trim() || full}>Crear y asignar</Button>
+          </form>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -375,6 +435,7 @@ export function KanbanCardDialog({
   onMove,
   onArchive,
   onCreateTag,
+  onCreateProject,
   onOpenThread,
   onRetryNotice,
   onOpenDoc,
@@ -386,6 +447,7 @@ export function KanbanCardDialog({
   closeRef.current = onClose;
   const columns = board?.columns || [];
   const tags = board?.tags || [];
+  const projects = board?.projects || [];
   const column = columns.find(item => item.id === card.columnId);
   const doneId = columns.find(item => item.isDone)?.id || null;
   const problems = noticeProblems(card);
@@ -505,6 +567,15 @@ export function KanbanCardDialog({
                 />
               </PopoverContent>
             </Popover>
+          </Field>
+          <Field className="gap-1.5 sm:col-span-2">
+            <FieldLabel className="text-xs font-semibold text-muted-foreground"><Folder className="size-3.5" aria-hidden="true" /> Proyecto</FieldLabel>
+            <ProjectPicker
+              card={card}
+              projects={projects}
+              onChange={projectId => patch({projectId})}
+              onCreateProject={onCreateProject}
+            />
           </Field>
         </div>
 
