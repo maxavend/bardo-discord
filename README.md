@@ -305,6 +305,42 @@ La zona horaria define «hoy», las tareas vencidas y las fechas de `/tarea` y `
 
 ---
 
+## Bardo en el navegador y con IA
+
+Además de la Activity, Bardo puede usarse como una web aparte y desde herramientas de IA. Ambas opciones se activan con `WEB_ORIGIN` y usan el mismo Worker y los mismos datos que la Activity. Los pasos están en [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Web
+
+- Se entra solo con Discord: no hay cuentas propias y solo se pide el permiso `identify`.
+- Aparecen los servidores donde están la persona y el bot, con los canales que esa persona puede ver.
+- Para cambiar de canal, usa el nombre del espacio en el encabezado o el menú de usuario.
+- Diferencias con la Activity: no se ve quién está conectado a la Activity, y compartir copia una dirección en lugar de abrir el diálogo de Discord.
+
+### Servidor MCP
+
+Claude Code, Codex y otros clientes compatibles se conectan a `/mcp` y autorizan con OAuth en el navegador. Cada herramienta actúa con el nombre de quien la autorizó y pasa por los mismos permisos que la interfaz.
+
+| Permiso | Permite | Al autorizar |
+| --- | --- | --- |
+| `bardo:read` | Ver canales, documentos, reuniones, tareas y personas | Siempre incluido |
+| `bardo:write` | Crear, editar y archivar. Asignar una tarea puede avisar a esa persona | Marcado |
+| `bardo:share` | Publicar en canales, enviar mensajes directos, abrir enlaces, crear hilos y eliminar para siempre | Sin marcar |
+
+Las escrituras quedan registradas durante 90 días en `mcp_audit`, con la persona, el cliente, la herramienta y el destino. El plugin de [`plugins/bardo`](plugins/bardo) trae el servidor y las instrucciones de uso:
+
+```bash
+claude plugin marketplace add maxavend/bardo-discord
+claude plugin install bardo@bardo
+```
+
+```bash
+codex plugin marketplace add maxavend/bardo-discord
+```
+
+En Codex, después instálalo desde el directorio de plugins.
+
+---
+
 ## Comandos de Discord
 
 Bardo registra actualmente los siguientes comandos:
@@ -432,6 +468,7 @@ Además:
 - los archivos binarios temporales de importación no permanecen almacenados después de normalizarse;
 - los documentos utilizan identificadores opacos;
 - Bardo evita generar menciones accidentales al publicar sus Components en Discord.
+- en la web y el MCP, los tokens se guardan solo como hash, el token de Discord no se conserva y la autorización exige PKCE; el contenido que entrega el MCP se marca como información, no como instrucciones.
 
 ---
 
@@ -610,6 +647,10 @@ npm run dev
 ```
 
 El comando construye primero la Activity y luego inicia Wrangler.
+
+### Web y MCP en local
+
+Crea `.dev.vars` con `WEB_ORIGIN=http://localhost:8787` y `DISCORD_CLIENT_SECRET`, y agrega `http://localhost:8787/auth/discord/callback` como redirect en el portal de Discord. Sin `WEB_ORIGIN`, fuera de Discord se abre el modo local de siempre.
 
 ### Validaciones
 

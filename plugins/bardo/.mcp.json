@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bardo": {
+      "type": "http",
+      "url": "https://bardo-discord.bardo-discord.workers.dev/mcp"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "bardo": {
+      "type": "streamable-http",
+      "url": "https://bardo-discord.bardo-discord.workers.dev/mcp"
+    }
+  }
+}

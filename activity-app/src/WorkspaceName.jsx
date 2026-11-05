@@ -1,8 +1,9 @@
 import {useState} from 'react';
-import {ChevronDown, Gear} from '@gravity-ui/icons';
+import {ArrowRightArrowLeft, ChevronDown, Gear} from '@gravity-ui/icons';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {BetaChip, BetaNote} from './BetaNotice.jsx';
 import {useWorkspace} from './workspace.js';
+import {goToChannelPicker, isWebApp} from './web/web-session.js';
 
 /** Ícono del servidor de Discord; sin imagen, sus iniciales, como en Discord. */
 function ServerIcon({name, src}) {
@@ -61,6 +62,12 @@ export function WorkspaceName({moduleLabel, onOpenSettings}) {
             </span>
           </div>
           <BetaNote className="md:hidden" />
+          {isWebApp() && (
+            <button type="button" className="workspace-popover-action" onClick={goToChannelPicker}>
+              <ArrowRightArrowLeft width={16} height={16} aria-hidden="true" />
+              Cambiar de canal
+            </button>
+          )}
           {onOpenSettings && (
             <button type="button" className="workspace-popover-action" onClick={() => { setOpen(false); onOpenSettings('space'); }}>
               <Gear width={16} height={16} aria-hidden="true" />

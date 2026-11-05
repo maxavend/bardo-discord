@@ -1,4 +1,4 @@
-import React, {lazy, useState, useEffect, useCallback} from 'react';
+import React, {lazy, Suspense, useState, useEffect, useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
 import {applyDiscordTheme, collectDiscordThemeDiagnostics} from './discord-theme.js';
 import {syncThemePreference} from './theme-sync.js';
@@ -19,6 +19,8 @@ const BOOT_PERSONALITY_MESSAGES = [
 
 const appModulePromise = import('./App.jsx');
 const App = lazy(() => appModulePromise);
+// Pantallas previas al canal en la web: Discord nunca las descarga.
+const WebGate = lazy(() => import('./web/WebGate.jsx').then(module => ({default: module.WebGate})));
 
 // Si el enlace abre una vista pesada (editor, Reuniones, Tareas), su módulo
 // se descarga junto con App y no después: sin cascada al entrar directo.
@@ -135,6 +137,7 @@ function ActivityRoot() {
   const [stage, setStage] = useState('activity_boot_started');
   const [errorMessage, setErrorMessage] = useState('');
   const [productionState, setProductionState] = useState({active: false, ready: true, documentId: null});
+  const [webGate, setWebGate] = useState(null);
   const loadingPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).get('bardo_loading') === '1';
 
   const runBootstrap = useCallback(async () => {
@@ -142,6 +145,7 @@ function ActivityRoot() {
     setStatus('booting');
     setBootLeaving(false);
     setErrorMessage('');
+    setWebGate(null);
 
     try {
       const auth = await authenticateBardoDiscord({
@@ -156,6 +160,13 @@ function ActivityRoot() {
         window.setTimeout(resolve, 100);
       });
       applyDiscordTheme();
+
+      // Web sin canal abierto: entrar con Discord o elegir dónde trabajar.
+      if (auth.gate) {
+        setWebGate(auth);
+        setStatus('gate');
+        return;
+      }
 
       if (auth.embedded && !auth.ready) {
         window.__BARDO_PRODUCTION__ = true;
@@ -220,6 +231,10 @@ function ActivityRoot() {
 
   if (loadingPreview) {
     return <><ActivityBootShell stage="activity_boot_started" /><ThemeDiagnosticsOverlay /></>;
+  }
+
+  if (status === 'gate') {
+    return <Suspense fallback={<ActivityBootShell />}><WebGate gate={webGate} onRetry={runBootstrap} /></Suspense>;
   }
 
   if (status === 'booting') {

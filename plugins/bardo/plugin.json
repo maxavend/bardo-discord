@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bardo",
+  "version": "1.0.0",
+  "description": "Documentos, reuniones y tareas de tus canales de Discord en Bardo."
+}

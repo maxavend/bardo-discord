@@ -18,9 +18,16 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/",
-      "/api/*"
+      "/api/*",
+      "/auth/*",
+      "/oauth/*",
+      "/mcp",
+      "/.well-known/*"
     ]
   },
+  // Bardo en el navegador y servidor MCP: apagados hasta configurar la variable
+  // WEB_ORIGIN (por ejemplo https://bardo-discord.bardo-discord.workers.dev).
+  // Pasos en DEPLOYMENT.md, sección «Web y MCP». El deploy usa --keep-vars.
   "d1_databases": [
     {
       "binding": "DB",

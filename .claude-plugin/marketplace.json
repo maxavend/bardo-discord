@@ -1,0 +1,14 @@
+{
+  "name": "bardo",
+  "description": "Plugin oficial de Bardo para trabajar con documentos, reuniones y tareas desde herramientas de IA.",
+  "owner": {
+    "name": "Bardo"
+  },
+  "plugins": [
+    {
+      "name": "bardo",
+      "source": "./plugins/bardo",
+      "description": "Documentos, reuniones y tareas de tus canales de Discord en Bardo."
+    }
+  ]
+}

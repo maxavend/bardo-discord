@@ -1,0 +1,9 @@
+{
+  "name": "bardo",
+  "displayName": "Bardo",
+  "version": "1.0.0",
+  "description": "Documentos, reuniones y tareas de tus canales de Discord en Bardo.",
+  "author": {"name": "Bardo", "url": "https://bardo.maxavend.com"},
+  "homepage": "https://bardo.maxavend.com",
+  "keywords": ["bardo", "discord", "documentos", "reuniones", "tareas", "mcp"]
+}

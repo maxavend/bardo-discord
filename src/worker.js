@@ -27,6 +27,11 @@ import { handleKanbanApi } from './kanban-api.js';
 import { handleSettingsApi, settingsDefaults } from './settings-api.js';
 import { loadEffectiveSettings } from './settings-db.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
+import { fetchWebAppHtml, handleWebAuth, isWebRequest } from './web-auth.js';
+import { handleWebApi } from './web-api.js';
+import { cleanupWebAndMcp } from './web-db.js';
+import { handleMcpOAuth } from './mcp-oauth.js';
+import { handleMcp } from './mcp-server.js';
 import { documentRoleForSession, roleCanWrite, sessionCanAccessDocument } from './document-access.js';
 import {
   DISCORD_PERMISSION,
@@ -963,8 +968,8 @@ async function handleDocumentExportApi(request, url, documentId, env) {
       : { ok: false, reason: 'invalid' };
     if (!grant.ok) {
       return grant.reason === 'expired'
-        ? downloadErrorPage(410, 'El enlace de descarga expiró', 'Los enlaces duran 5 minutos. Vuelve a Bardo en Discord y pulsa de nuevo «Descargar».')
-        : downloadErrorPage(403, 'Este enlace de descarga no es válido', 'Vuelve a Bardo en Discord y pulsa de nuevo «Descargar».');
+        ? downloadErrorPage(410, 'El enlace de descarga expiró', 'Los enlaces duran 5 minutos. Vuelve a Bardo y pulsa de nuevo «Descargar».')
+        : downloadErrorPage(403, 'Este enlace de descarga no es válido', 'Vuelve a Bardo y pulsa de nuevo «Descargar».');
     }
   } else {
     const access = await authorizeDocumentRequest(request, env, documentId);
@@ -983,7 +988,7 @@ async function handleDocumentExportApi(request, url, documentId, env) {
   // El permiso se revisa de nuevo al descargar: si el documento dejó de estar
   // compartido en ese canal o la persona perdió acceso, el enlace ya no sirve.
   if (grant && !(await sessionCanAccessDocument(env, grant, documentId))) {
-    return downloadErrorPage(403, 'Ya no tienes acceso a este documento', 'Vuelve a Bardo en Discord para ver qué documentos puedes abrir.');
+    return downloadErrorPage(403, 'Ya no tienes acceso a este documento', 'Vuelve a Bardo para ver qué documentos puedes abrir.');
   }
 
   const baseName = exportFileName(document.title || document.sourceName || 'documento');
@@ -1227,6 +1232,13 @@ async function routeRequest(request, env, ctx) {
     return request.method === 'POST' ? handleCspReport(request) : new Response(null, { status: 405 });
   }
 
+  // Web y MCP: apagados (404) mientras WEB_ORIGIN no esté configurado.
+  const webResponse = await handleWebAuth(request, url, env)
+    || await handleWebApi(request, url, env)
+    || await handleMcpOAuth(request, url, env)
+    || await handleMcp(request, url, env, ctx);
+  if (webResponse) return webResponse;
+
   const authApiResponse = await handleDiscordAuthApi(request, url, env);
   if (authApiResponse) return authApiResponse;
 
@@ -1258,7 +1270,7 @@ async function routeRequest(request, env, ctx) {
         return await handleDocumentExportApi(request, url, route.documentId, env);
       } catch (error) {
         console.error('Error exportando documento (enlace firmado):', error);
-        return downloadErrorPage(500, 'No pudimos preparar la descarga', 'Vuelve a Bardo en Discord e inténtalo de nuevo en unos segundos.');
+        return downloadErrorPage(500, 'No pudimos preparar la descarga', 'Vuelve a Bardo e inténtalo de nuevo en unos segundos.');
       }
     }
 
@@ -1278,7 +1290,8 @@ async function routeRequest(request, env, ctx) {
   }
 
   if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS) {
-    return withFramePolicy(await env.ASSETS.fetch(request), env);
+    const isWebPage = request.method === 'GET' && url.pathname === '/' && isWebRequest(url, env);
+    return withFramePolicy(isWebPage ? await fetchWebAppHtml(request, env) : await env.ASSETS.fetch(request), env);
   }
 
   return new Response('Method not allowed', { status: 405 });
@@ -1308,6 +1321,7 @@ export default {
     if (!env?.DB) return;
     const work = cleanupExpiredRecords(env.DB)
       .then(result => console.log('Bardo cleanup', result))
+      .then(() => cleanupWebAndMcp(env.DB))
       .catch(error => console.error('Bardo cleanup failed', error));
     if (typeof ctx?.waitUntil === 'function') ctx.waitUntil(work);
     await work;

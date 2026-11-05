@@ -39,7 +39,7 @@ function bytesToHex(bytes) {
   return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 
-async function hashToken(token) {
+export async function hashToken(token) {
   const data = new TextEncoder().encode(token);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return bytesToHex(new Uint8Array(digest));
@@ -51,7 +51,7 @@ function newSessionToken() {
   return base64Url(bytes);
 }
 
-async function authFetch(url, init, env) {
+export async function authFetch(url, init, env) {
   let response;
   try { response = await (env.DISCORD_FETCH || fetch)(url, init); }
   catch (cause) { throw new DiscordUnavailableError('Discord OAuth network failure', {cause}); }
@@ -164,8 +164,39 @@ function authError(status, code, message) {
 
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión de Bardo expiró. Cierra y vuelve a abrir Bardo para continuar.';
 
+// Sesiones de llamadas internas del servidor MCP. Se atan al objeto Request, que
+// solo existe dentro del proceso: ninguna petición externa puede fijar una.
+const internalSessions = new WeakMap();
+
+/**
+ * Hace que las APIs de contenido atiendan `request` como esa persona en ese
+ * canal, con exactamente las mismas comprobaciones de permisos de siempre.
+ */
+export function withInternalSession(request, session) {
+  internalSessions.set(request, session);
+  return request;
+}
+
+/** Token de un canal para una persona ya identificada. Quien llama comprueba el acceso. */
+export async function mintChannelSession(env, {userId, username, avatar, guildId, channelId, expiresAt, webSessionHash = null}) {
+  const token = newSessionToken();
+  await saveDocsSession(env.DB, await hashToken(token), {
+    userId,
+    guildId,
+    channelId,
+    username: username || null,
+    avatar: avatar || null,
+    createdAt: new Date().toISOString(),
+    expiresAt,
+    webSessionHash,
+  });
+  return {token};
+}
+
 export async function requireDocsSession(request, env) {
   if (!env.DB) return { error: apiError(503, 'database_unavailable', 'Bardo no está disponible en este momento. Inténtalo de nuevo en unos minutos.') };
+  const internal = internalSessions.get(request);
+  if (internal) return { session: internal, tokenHash: null };
   const authorization = request.headers.get('authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { error: apiError(401, 'auth_required', 'Abre Bardo desde Discord para iniciar sesión.') };

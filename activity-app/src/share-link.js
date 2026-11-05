@@ -5,7 +5,9 @@
  * Quien lo abre solo llega si puede verlo en Discord; si no, Bardo le dice que
  * no tiene acceso, sin revelar dónde está.
  */
+import {copyTextToClipboard} from './docs-clipboard.js';
 import {toast} from './lib/toast.js';
+import {isWebApp, webChannelUrl} from './web/web-session.js';
 
 // Discord muestra el mensaje junto al enlace; un título larguísimo lo ensucia.
 const MAX_TITLE = 80;
@@ -34,6 +36,15 @@ function shortTitle(title) {
 export async function shareBardoLink(kind, {id, title}, {sdk = globalThis.window?.__BARDO_DISCORD_SDK__} = {}) {
   const target = SHARE_TARGETS[kind]?.(id);
   if (!target || !id) return 'error';
+  // En la web no existe el diálogo de Discord: se copia la dirección directa.
+  if (isWebApp()) {
+    const url = webChannelUrl(window.__BARDO_GUILD_ID__, window.__BARDO_CHANNEL_ID__, target);
+    try {
+      return await copyTextToClipboard(url) === false ? 'error' : 'copied';
+    } catch {
+      return 'error';
+    }
+  }
   if (!sdk?.commands?.shareLink) return 'unavailable';
   try {
     const result = await sdk.commands.shareLink({
