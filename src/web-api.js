@@ -2,6 +2,8 @@
 // tokens por canal y conexiones de IA. Las APIs de contenido no cambian: reciben
 // el mismo Bearer por canal que usa la Activity.
 import {mintChannelSession} from './discord-auth.js';
+import {readRequestText, RequestBodyTooLargeError} from './request-body.js';
+import {enforceUserRateLimit} from './request-security.js';
 import {canUserViewChannel, discordUnavailableResponse, isDiscordUnavailableError} from './discord-permissions.js';
 import {
   isSameOriginMutation,
@@ -59,8 +61,9 @@ async function handleChannelSession(request, env, session) {
   }
   let payload;
   try {
-    payload = await request.json();
-  } catch {
+    payload = JSON.parse(await readRequestText(request, 8 * 1024));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return webError(413, 'payload_too_large', 'La solicitud es demasiado grande.');
     return webError(400, 'invalid_json', 'No pudimos leer la solicitud. Inténtalo de nuevo.');
   }
   const guildId = typeof payload?.guildId === 'string' ? payload.guildId.trim() : '';
@@ -119,6 +122,10 @@ async function routeWebApi(request, url, env) {
   }
 
   const session = await readWebSession(request, env);
+  if (session) {
+    const limited = await enforceUserRateLimit(env, session.userId);
+    if (limited) return limited;
+  }
 
   // No haber entrado es un estado normal de la web, no un error.
   if (path === 'session') {

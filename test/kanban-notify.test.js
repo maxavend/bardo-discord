@@ -102,6 +102,77 @@ test('un 429 de Discord queda como rate_limited, sin reintentos automáticos', a
   assert.equal((await k.call(`/cards/${card.id}`)).json.card.notifications.channel.errorCode, 'rate_limited');
 });
 
+test('reintentar un aviso no filtra la tarea a un responsable que perdió acceso', async () => {
+  let revoked = false;
+  const k = await setupKanban({respond: ({method, path}) => {
+    if (revoked && method === 'GET' && path === `/channels/${CHANNEL}`) {
+      return Response.json({id: CHANNEL, guild_id: GUILD, type: 0,
+        permission_overwrites: [{type: 1, id: ASSIGNEE, allow: '0', deny: '1024'}]});
+    }
+    if (!revoked && method === 'POST' && path.startsWith('/channels/dm-')) {
+      return Response.json({code: 50007}, {status: 403});
+    }
+    return null;
+  }});
+  k.env.DISCORD_PERMISSION_CACHE_TTL_MS = 60_000;
+  const {card} = (await k.createCard({title: 'Información privada', assigneeId: ASSIGNEE})).json;
+  await k.flush();
+  const sentBefore = k.discord.sent.length;
+  revoked = true;
+  const retry = await k.call(`/cards/${card.id}/notify`, {method: 'POST'});
+  assert.equal(retry.status, 422);
+  assert.equal(retry.json.error, 'assignee_no_access');
+  await k.flush();
+  assert.equal(k.discord.sent.length, sentBefore, 'no abre ni envía MD tras perder acceso');
+});
+
+test('los MD individuales y agrupados vuelven a comprobar permisos al entregar', async () => {
+  for (const bulk of [false, true]) {
+    let revoked = false;
+    const k = await setupKanban({respond: ({method, path}) => {
+      if (method === 'POST' && path === `/channels/${CHANNEL}/messages`) revoked = true;
+      if (revoked && method === 'GET' && path === `/channels/${CHANNEL}`) {
+        return Response.json({id: CHANNEL, guild_id: GUILD, type: 0,
+          permission_overwrites: [{type: 1, id: ASSIGNEE, allow: '0', deny: '1024'}]});
+      }
+      return null;
+    }});
+    k.env.DISCORD_PERMISSION_CACHE_TTL_MS = 60_000;
+    const response = bulk
+      ? await k.call('/cards/bulk', {method: 'POST', body: {
+        source: {type: 'planner', sessionId: 's1'},
+        cards: [{title: 'Acuerdo privado', sourceRef: 'planner:s1:d1', assigneeId: ASSIGNEE}],
+      }})
+      : await k.createCard({title: 'Información privada', assigneeId: ASSIGNEE});
+    assert.equal(response.status, 201);
+    await k.flush();
+    assert.equal(dmOpens(k.discord.sent).length, 0, 'no envía el contenido por MD');
+    const card = bulk ? response.json.created[0] : response.json.card;
+    assert.deepEqual((await k.call(`/cards/${card.id}`)).json.card.notifications.dm,
+      {status: 'failed', errorCode: 'no_access'});
+  }
+});
+
+test('si Discord no puede comprobar los permisos al entregar un MD, no se envía y permite reintentar', async () => {
+  let unavailable = false;
+  const k = await setupKanban({respond: ({method, path}) => {
+    if (method === 'POST' && path === `/channels/${CHANNEL}/messages`) unavailable = true;
+    if (unavailable && method === 'GET' && path === `/guilds/${GUILD}/members/${ASSIGNEE}`) {
+      return Response.json({retry_after: 1}, {status: 503});
+    }
+    return null;
+  }});
+  const {card} = (await k.createCard({title: 'Contenido privado', assigneeId: ASSIGNEE})).json;
+  await k.flush();
+  assert.equal(dmOpens(k.discord.sent).length, 0);
+  assert.deepEqual((await k.call(`/cards/${card.id}`)).json.card.notifications.dm,
+    {status: 'failed', errorCode: 'discord_unavailable'});
+  unavailable = false;
+  assert.equal((await k.call(`/cards/${card.id}/notify`, {method: 'POST'})).status, 202);
+  await k.flush();
+  assert.equal(dmOpens(k.discord.sent).length, 1);
+});
+
 test('acuerdos de reunión → tareas: idempotente, un resumen en el canal y un MD por persona', async () => {
   const k = await setupKanban();
   const items = [
@@ -163,6 +234,38 @@ test('hilo sin mensaje previo crea un hilo público en el canal', async () => {
   const threadCall = k.discord.sent.find(call => call.path.endsWith('/threads'));
   assert.equal(threadCall.path, `/channels/${CHANNEL}/threads`);
   assert.equal(threadCall.body.type, 11);
+});
+
+test('el bot no crea hilos por alguien sin permisos de crear o escribir en hilos', async () => {
+  for (const deniedBit of [1n << 35n, 1n << 38n]) {
+    const k = await setupKanban({respond: ({method, path}) => (
+      method === 'GET' && path === `/channels/${CHANNEL}`
+        ? Response.json({id: CHANNEL, guild_id: GUILD, type: 0,
+          permission_overwrites: [{type: 1, id: USER, allow: '0', deny: String(deniedBit)}]})
+        : null
+    )});
+    const {card} = (await k.createCard({title: 'Hilo no permitido'})).json;
+    const denied = await k.call(`/cards/${card.id}/thread`, {method: 'POST'});
+    assert.equal(denied.status, 403);
+    assert.equal(denied.json.error, 'thread_forbidden');
+    assert.equal(k.discord.sent.length, 0, 'no crea hilos ni publica mensajes');
+    assert.equal((await k.call(`/cards/${card.id}`)).json.card.threadPending, false);
+  }
+});
+
+test('crear un hilo comprueba la membresía actual incluso con un permiso positivo cacheado', async () => {
+  let revoked = false;
+  const k = await setupKanban({respond: ({method, path}) => (
+    revoked && method === 'GET' && path === `/guilds/${GUILD}/members/${USER}`
+      ? Response.json({}, {status: 404}) : null
+  )});
+  k.env.DISCORD_PERMISSION_CACHE_TTL_MS = 60_000;
+  const {card} = (await k.createCard({title: 'Hilo privado'})).json;
+  revoked = true;
+  const denied = await k.call(`/cards/${card.id}/thread`, {method: 'POST'});
+  assert.equal(denied.status, 403);
+  assert.equal(denied.json.error, 'thread_forbidden');
+  assert.equal(k.discord.sent.length, 0);
 });
 
 test('hilos: canal de voz → 409; bot sin permisos → 403 con la lista; 429 → 503', async () => {

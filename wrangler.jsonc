@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bardo-discord",
+  "workers_dev": true,
+  // Do not expose older versions with production bindings through preview URLs.
+  "preview_urls": false,
   "main": "src/worker.js",
   "compatibility_date": "2026-08-19",
   "compatibility_flags": [
@@ -35,6 +38,13 @@
       "database_id": "db89af73-dc24-491e-bf57-975f7bd6c085",
       "migrations_dir": "migrations"
     }
+  ],
+  // Approximate per-location abuse limits, shared between Worker instances.
+  // Namespace IDs are reserved for Bardo in this account; keep them unique.
+  "ratelimits": [
+    { "name": "AUTH_RATE_LIMITER", "namespace_id": "1539704001", "simple": { "limit": 120, "period": 60 } },
+    { "name": "API_RATE_LIMITER", "namespace_id": "1539704002", "simple": { "limit": 300, "period": 60 } },
+    { "name": "INTERACTION_RATE_LIMITER", "namespace_id": "1539704003", "simple": { "limit": 60, "period": 60 } }
   ],
   // Daily housekeeping handled by `scheduled()` in src/worker.js: removes
   // expired auth sessions, stale launch intents and old Activity contexts.

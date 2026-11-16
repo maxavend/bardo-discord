@@ -1,4 +1,4 @@
-import {docxBombReason} from './zip-guard.js';
+import {docxContentReason} from './zip-guard.js';
 
 export const MAX_PDF_PAGES = 80;
 /** Mismo límite que el servidor para el contenido de un documento (1,8 MB). */
@@ -113,6 +113,9 @@ async function importPdf(arrayBuffer, title) {
 }
 
 async function importDocx(arrayBuffer, title) {
+  const bombReason = await docxContentReason(arrayBuffer);
+  if (bombReason) throw new ImportError('unreadable', bombReason);
+
   const [mammothModule, turndownModule, gfmModule] = await Promise.all([
     import('mammoth'),
     import('turndown'),
@@ -121,10 +124,6 @@ async function importDocx(arrayBuffer, title) {
   const mammoth = mammothModule.default || mammothModule;
   const TurndownService = turndownModule.default || turndownModule;
   const gfm = gfmModule.gfm || gfmModule.default?.gfm;
-
-  // Antes de descomprimir: un .docx que se infla a cientos de MB congelaría Bardo.
-  const bombReason = docxBombReason(arrayBuffer);
-  if (bombReason) throw new ImportError('too_large', bombReason);
 
   let result;
   try {

@@ -451,6 +451,20 @@ async function openThread(request, env, ctx, session, board, card) {
       {missing: state.missingThreadPermissions});
   }
 
+  // The bot creates the thread and posts its first message on this person's
+  // behalf. Its own permissions cannot replace the person's permissions.
+  const actorPermissions = await createDiscordPermissionChecker(
+    {...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, session.guildId, session.userId,
+  ).computeChannelPermissions(session.channelId).catch(error => {
+    if (isDiscordUnavailableError(error)) throw error;
+    return 0n;
+  });
+  const required = DISCORD_PERMISSION.VIEW_CHANNEL | DISCORD_PERMISSION.SEND_MESSAGES
+    | DISCORD_PERMISSION.CREATE_PUBLIC_THREADS | DISCORD_PERMISSION.SEND_MESSAGES_IN_THREADS;
+  if ((actorPermissions & required) !== required) {
+    return apiError(403, 'thread_forbidden', 'Necesitas permiso para crear hilos públicos y escribir en ellos en este canal.');
+  }
+
   if (!(await claimKanbanThread(env.DB, board.id, card.id))) {
     return json({card: await loadKanbanCard(env.DB, board.id, card.id)}, 202);
   }
@@ -485,6 +499,8 @@ async function retryNotice(request, env, ctx, session, board, structure, card) {
   if (request.method !== 'POST') return methodNotAllowed();
   if (!card.assignee) return apiError(422, 'no_assignee', 'Esta tarea no tiene responsable a quien avisar.');
   if (!session.canSendMessages) return apiError(403, 'send_forbidden', 'Necesitas permiso para escribir en este canal para avisar.');
+  const assigneeError = await assigneeAccessError({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, session, card.assignee);
+  if (assigneeError) return assigneeError;
   ctx.waitUntil(notifyAssignment(env, {
     board, card, actor: actorFrom(session), columnName: columnName(structure, card.columnId), retry: true,
   }));

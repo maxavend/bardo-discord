@@ -57,6 +57,16 @@ test('Discord channel member overwrite can deny VIEW_CHANNEL', async () => {
   assert.equal(await checker.canViewChannel('channel-123'), false);
 });
 
+test('SEND_MESSAGES cannot bypass a denied VIEW_CHANNEL through the bot', async () => {
+  const checker = createDiscordPermissionChecker({
+    DISCORD_TOKEN: 'test-token',
+    DISCORD_FETCH: createDiscordFetch({channelOverwrites: [{
+      id: 'user-123', type: 1, allow: '2048', deny: '1024',
+    }]}),
+  }, 'guild-123', 'user-123');
+  assert.equal(await checker.canSendMessages('channel-123'), false);
+});
+
 test('Discord permission checks fail closed if the channel belongs to another guild', async () => {
   const checker = createDiscordPermissionChecker({
     DISCORD_TOKEN: 'test-token',

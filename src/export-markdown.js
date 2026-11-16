@@ -33,6 +33,8 @@ export function unescapeMarkdown(text) {
 
 const SAFE_LINK_RE = /^(?:https?:|mailto:|tel:)/i;
 const MAX_INLINE_DEPTH = 12;
+const MAX_TABLE_COLUMNS = 128;
+const MAX_TABLE_CELLS = 10_000;
 const BR_RE = /<br\s*\/?>/iy;
 const TAG_RE = /<(u|kbd|ins|mark|sup|sub|span)\b[^>\n]{0,200}>/iy;
 const AUTOLINK_RE = /<((?:https?:\/\/|mailto:)[^\s<>]+)>/iy;
@@ -508,6 +510,7 @@ export function parseBlocks(markdown, depth = 0) {
     }
 
     if (isTableStart(lines, index)) {
+      const start = index;
       const header = splitTableRow(line);
       const align = splitTableRow(lines[index + 1]).map(cell => (
         cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left'
@@ -519,6 +522,12 @@ export function parseBlocks(markdown, depth = 0) {
         index += 1;
       }
       const columns = rows.reduce((max, row) => Math.max(max, row.length), header.length);
+      // The padded rectangle must stay bounded, even if the input is a wide
+      // header followed by thousands of short rows. Preserve it as text.
+      if (columns > MAX_TABLE_COLUMNS || columns * (rows.length + 1) > MAX_TABLE_CELLS) {
+        blocks.push({ type: 'code', lang: '', text: lines.slice(start, index).join('\n') });
+        continue;
+      }
       const pad = row => Array.from({ length: columns }, (_, column) => parseInline(row[column] || ''));
       blocks.push({ type: 'table', align, header: pad(header), rows: rows.map(pad) });
       continue;

@@ -2,9 +2,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
-import { PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFPage } from 'pdf-lib';
 import { parseBlocks, parseInline, runsToText, unescapeMarkdown } from '../src/export-markdown.js';
-import { generateDocxDocument, generatePdfDocument } from '../src/export-format.js';
+import { generateDocxDocument, generatePdfDocument, MAX_PDF_EXPORT_PAGES } from '../src/export-format.js';
 import worker, { attachmentDisposition } from '../src/worker.js';
 import { createExportToken } from '../src/export-token.js';
 
@@ -217,7 +217,8 @@ test('entradas extremas (10 000 ">" anidados, tabla de 200 000 filas) no lanzan 
   await generateDocxDocument({ title: 'Citas', originalMarkdown: nested });
   const table = ['| a | b |', '| --- | --- |', ...Array.from({ length: 200_000 }, () => '| 1 | 2 |')].join('\n');
   const [block] = parseBlocks(table);
-  assert.equal(block.rows.length, 200_000);
+  assert.equal(block.type, 'code');
+  assert.equal(block.text, table, 'una tabla desmesurada conserva el texto sin expandir celdas');
   const deep = `${'**a '.repeat(3000)}z${'**'.repeat(3000)}`;
   assert.ok(runsToText(parseInline(deep)).includes('z'));
 });
@@ -232,4 +233,16 @@ test('un enlace firmado que falla muestra la página en español, no un JSON 500
   assert.equal(response.status, 500);
   assert.match(response.headers.get('content-type'), /text\/html/);
   assert.match(await response.text(), /No pudimos preparar la descarga/);
+});
+
+test('PDF: permite exactamente 300 páginas y rechaza la siguiente sin devolver un archivo truncado', async () => {
+  // A few KB of blank code lines expand to hundreds of PDF pages. With the
+  // existing A4 layout, 56 lines fit below the title and 61 on later pages.
+  const lines = 56 + (MAX_PDF_EXPORT_PAGES - 1) * 61;
+  const document = count => ({title: 'Límite', originalMarkdown: `\`\`\`\n${'\n'.repeat(count)}\`\`\``});
+  const bytes = await generatePdfDocument(document(lines));
+  assert.equal((await PDFDocument.load(bytes)).getPageCount(), MAX_PDF_EXPORT_PAGES);
+  await assert.rejects(generatePdfDocument(document(lines + 1)), error => (
+    error.code === 'export_too_large' && /máximo de 300 páginas/.test(error.message)
+  ));
 });

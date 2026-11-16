@@ -1,5 +1,6 @@
 import {installBardoApiSession} from './production-launch-auth.js';
 import {bootWebApp} from './web/web-session.js';
+import {createGuardedDiscordSdk} from './discord-message-guard.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const AUTH_TIMEOUT_MS = 15000;
@@ -121,7 +122,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
   try {
     const clientId = resolveClientId();
     const {DiscordSDK} = await import('@discord/embedded-app-sdk');
-    const sdk = new DiscordSDK(clientId);
+    const sdk = createGuardedDiscordSdk(DiscordSDK, clientId);
 
     onStageChange('sdk_ready');
     await withTimeout(sdk.ready(), SDK_READY_TIMEOUT_MS, 'Discord SDK ready');

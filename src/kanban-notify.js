@@ -7,6 +7,7 @@ import {
   buildKanbanDmPayload,
 } from './components.js';
 import {postChannelMessage, sendDirectMessage} from './discord-bot.js';
+import {canUserViewChannel, isDiscordUnavailableError} from './discord-permissions.js';
 import {loadEffectiveSettings, loadUserSettings} from './settings-db.js';
 import {settingsDefaults} from './settings-api.js';
 import {
@@ -37,7 +38,18 @@ async function sendDmNotice(env, {board, cards, actor, messageId, channelName, c
     if (await claim(card.id, assigneeId, 'dm')) owned.push(card);
   }
   if (!owned.length) return;
-  const result = await sendDirectMessage(env, assigneeId, buildKanbanDmPayload({
+  // Assignment was authorized earlier, but delivery/retry may happen after the
+  // recipient loses access. Never reuse a positive permission cache to send
+  // private channel content outside Discord's channel boundary.
+  let result = null;
+  try {
+    if (!(await canUserViewChannel({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, board.guildId, assigneeId, board.channelId))) {
+      result = {ok: false, code: 'no_access'};
+    }
+  } catch (error) {
+    result = {ok: false, code: isDiscordUnavailableError(error) ? 'discord_unavailable' : 'no_access'};
+  }
+  result ||= await sendDirectMessage(env, assigneeId, buildKanbanDmPayload({
     cards: owned,
     guildId: board.guildId,
     channelId: board.channelId,

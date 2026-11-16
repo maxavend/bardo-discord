@@ -11,6 +11,7 @@ import {
   discordUnavailableResponse,
   isDiscordUnavailableError,
 } from './discord-permissions.js';
+import {enforceUserRateLimit} from './request-security.js';
 
 const AUTH_TOKEN_PATH = '/api/auth/token';
 const DISCORD_CLIENT_ID = '1539704001535156254';
@@ -212,6 +213,9 @@ export async function requireDocsSession(request, env) {
     await deleteDocsSession(env.DB, tokenHash);
     return { error: apiError(401, 'session_expired', SESSION_EXPIRED_MESSAGE) };
   }
+
+  const limited = await enforceUserRateLimit(env, session.userId);
+  if (limited) return {error: limited};
 
   return { session, tokenHash };
 }

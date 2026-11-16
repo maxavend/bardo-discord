@@ -89,6 +89,35 @@ test('el enlace descarga sin sesión, como adjunto con nombre UTF-8', async () =
   }
 });
 
+test('exportar un PDF desmesurado devuelve 413 legible con sesión y con enlace firmado', async () => {
+  const {db, env} = await setup();
+  insertDocument(db, {id: 'long-pdf', markdown: `\`\`\`\n${'\n'.repeat(20_000)}\`\`\``});
+  const response = await worker.fetch(new Request('https://bardo.example/api/documents/long-pdf/export?format=pdf', {
+    headers: authHeaders(),
+  }), env);
+  assert.equal(response.status, 413);
+  assert.equal((await response.json()).error, 'export_too_large');
+
+  const {json} = await exportLink(env, 'long-pdf', {format: 'pdf'});
+  const signed = await worker.fetch(new Request(json.url), env);
+  assert.equal(signed.status, 413);
+  assert.match(signed.headers.get('Content-Type'), /text\/html/);
+  assert.match(await signed.text(), /300 páginas/);
+});
+
+test('el enlace firmado usa el mismo límite por usuario que la sesión y no genera archivos al excederlo', async () => {
+  const {env} = await setup();
+  const {json} = await exportLink(env, 'doc-1', {format: 'pdf'});
+  let key;
+  env.API_RATE_LIMITER = {async limit(options) { key = options.key; return {success: false}; }};
+  env.DB = {prepare() { throw new Error('must not generate document'); }};
+  const response = await worker.fetch(new Request(json.url), env);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('Retry-After'), '60');
+  assert.match(response.headers.get('Content-Type'), /text\/html/);
+  assert.equal(key, `bardo:user:${USER}`);
+});
+
 test('un enlace solo sirve para su documento y formato, y vence', async () => {
   const { db, env } = await setup();
   insertDocument(db, { id: 'doc-2' });

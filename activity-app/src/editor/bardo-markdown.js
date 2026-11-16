@@ -99,9 +99,16 @@ const TOKEN_CLOSE = '';
 const TOKEN_RE = /(\d+)/g;
 const SAFE_URL_RE = /^(https?:\/\/|mailto:|tel:)/i;
 const ESCAPABLE = new Set('\\`*_{}[]()#+-.!|~<>'.split(''));
+// Bound expensive inline regexes and the size of the generated DOM. Unusual
+// documents retain their text when formatting would exceed these budgets.
+const MAX_INLINE_CHARACTERS = 16_384;
+const MAX_BLOCK_DEPTH = 12;
+const MAX_TABLE_COLUMNS = 128;
+const MAX_TABLE_CELLS = 10_000;
 
 /** Renderiza Markdown inline a HTML seguro. Los saltos de línea se vuelven <br>. */
 export function renderInline(value = '') {
+  if (String(value).length > MAX_INLINE_CHARACTERS) return escapeHtml(value).replace(/\n/g, '<br>');
   const tokens = [];
   const stash = html => {
     tokens.push(html);
@@ -355,7 +362,8 @@ function parseList(lines, start) {
   return {html, next: index};
 }
 
-function parseBlocks(lines) {
+function parseBlocks(lines, blockDepth = 0) {
+  if (blockDepth >= MAX_BLOCK_DEPTH) return `<pre><code>${escapeHtml(lines.join('\n'))}</code></pre>`;
   const html = [];
   let index = 0;
 
@@ -402,12 +410,13 @@ function parseBlocks(lines) {
         summary = decodeBasicEntities(raw).replace(/\s+/g, ' ').trim() || 'Detalles';
         return '';
       });
-      const inner = parseBlocks(content.split('\n'));
+      const inner = parseBlocks(content.split('\n'), blockDepth + 1);
       html.push(`<details class="spoiler"><summary>${escapeHtml(summary)}</summary>${inner || '<p><br></p>'}</details>`);
       continue;
     }
 
     if (hasUnescapedPipe(line) && isTableSeparator(lines[index + 1] || '')) {
+      const start = index;
       const headers = splitTableRow(line);
       index += 2;
       const rows = [];
@@ -415,7 +424,13 @@ function parseBlocks(lines) {
         rows.push(splitTableRow(lines[index]));
         index += 1;
       }
-      const columns = Math.max(headers.length, ...rows.map(row => row.length));
+      const columns = rows.reduce((max, row) => Math.max(max, row.length), headers.length);
+      // Padding a wide header for many narrow rows can turn a small upload
+      // into millions of cells. Keep oversized tables readable as source.
+      if (columns > MAX_TABLE_COLUMNS || columns * (rows.length + 1) > MAX_TABLE_CELLS) {
+        html.push(`<pre><code>${escapeHtml(lines.slice(start, index).join('\n'))}</code></pre>`);
+        continue;
+      }
       const emptyHeader = headers.every(cell => !cell);
       const head = emptyHeader
         ? ''

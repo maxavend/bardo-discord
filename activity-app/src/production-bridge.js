@@ -10,6 +10,7 @@ import {
   userFacingError,
 } from './production-docs-sync.js';
 import {normalizePendingImports} from './production-import-normalizer.js';
+import {createGuardedDiscordSdk} from './discord-message-guard.js';
 import {
   DOCS_KEYS,
   hasUnownedLocalData,
@@ -113,7 +114,7 @@ async function initSdk() {
   if (!params.has('instance_id')) return null;
   try {
     const {DiscordSDK} = await import('@discord/embedded-app-sdk');
-    const sdk = new DiscordSDK(resolveClientId());
+    const sdk = createGuardedDiscordSdk(DiscordSDK, resolveClientId());
     await sdk.ready();
     return sdk;
   } catch (error) {

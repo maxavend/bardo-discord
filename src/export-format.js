@@ -149,6 +149,7 @@ const COLORS = {
 };
 
 const HEADING_SIZES = { 1: 16, 2: 14, 3: 12 };
+export const MAX_PDF_EXPORT_PAGES = 300;
 
 /**
  * Genera un PDF real a partir del documento: títulos, párrafos con negrita y
@@ -157,6 +158,14 @@ const HEADING_SIZES = { 1: 16, 2: 14, 3: 12 };
  */
 export async function generatePdfDocument(document) {
   const pdfDoc = await PDFDocument.create();
+  const addPage = () => {
+    if (pdfDoc.getPageCount() >= MAX_PDF_EXPORT_PAGES) {
+      const error = new Error(`Este documento supera el máximo de ${MAX_PDF_EXPORT_PAGES} páginas para exportar a PDF. Divídelo en documentos más pequeños o descárgalo como Markdown o Word.`);
+      error.code = 'export_too_large';
+      throw error;
+    }
+    return pdfDoc.addPage([PDF.pageWidth, PDF.pageHeight]);
+  };
   const fonts = {
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
     bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
@@ -165,12 +174,12 @@ export async function generatePdfDocument(document) {
     mono: await pdfDoc.embedFont(StandardFonts.Courier),
   };
   const contentWidth = PDF.pageWidth - PDF.marginX * 2;
-  let page = pdfDoc.addPage([PDF.pageWidth, PDF.pageHeight]);
+  let page = addPage();
   let y = PDF.pageHeight - PDF.marginTop;
 
   const ensureSpace = (height) => {
     if (y - height < PDF.marginBottom) {
-      page = pdfDoc.addPage([PDF.pageWidth, PDF.pageHeight]);
+      page = addPage();
       y = PDF.pageHeight - PDF.marginTop;
     }
   };
@@ -359,7 +368,7 @@ export async function generatePdfDocument(document) {
         y = top - height - size;
         firstLine += count;
         if (firstLine < totalLines) {
-          page = pdfDoc.addPage([PDF.pageWidth, PDF.pageHeight]);
+          page = addPage();
           y = PDF.pageHeight - PDF.marginTop;
         }
       }

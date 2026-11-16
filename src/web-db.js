@@ -95,13 +95,13 @@ export async function saveMcpConsent(db, idHash, consent) {
     .run();
 }
 
-export async function consumeMcpConsent(db, idHash) {
+export async function consumeMcpConsent(db, idHash, sessionHash) {
   const row = await db
     .prepare(
-      `DELETE FROM mcp_consents WHERE id_hash = ?
+      `DELETE FROM mcp_consents WHERE id_hash = ? AND session_hash = ?
        RETURNING session_hash, client_id, redirect_uri, state, code_challenge, scope, expires_at`,
     )
-    .bind(idHash)
+    .bind(idHash, sessionHash)
     .first();
   if (!row) return null;
   return {
@@ -129,13 +129,14 @@ export async function saveMcpGrantWithCode(db, grant, code) {
 }
 
 /** Marca el código como usado y lo devuelve; `alreadyUsed` delata una repetición. */
-export async function consumeMcpAuthCode(db, codeHash, now) {
+export async function consumeMcpAuthCode(db, codeHash, now, {clientId, redirectUri, codeChallenge}) {
   const claimed = await db
     .prepare(
       `UPDATE mcp_auth_codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL
+       AND client_id = ? AND redirect_uri = ? AND code_challenge = ?
        RETURNING grant_id, client_id, redirect_uri, code_challenge, expires_at`,
     )
-    .bind(now, codeHash)
+    .bind(now, codeHash, clientId, redirectUri, codeChallenge)
     .first();
   if (claimed) {
     return {
@@ -146,7 +147,10 @@ export async function consumeMcpAuthCode(db, codeHash, now) {
       expiresAt: claimed.expires_at,
     };
   }
-  const used = await db.prepare('SELECT grant_id FROM mcp_auth_codes WHERE code_hash = ?').bind(codeHash).first();
+  const used = await db.prepare(
+    `SELECT grant_id FROM mcp_auth_codes WHERE code_hash = ? AND used_at IS NOT NULL
+     AND client_id = ? AND redirect_uri = ? AND code_challenge = ?`,
+  ).bind(codeHash, clientId, redirectUri, codeChallenge).first();
   return used ? {alreadyUsed: true, grantId: used.grant_id} : null;
 }
 
@@ -200,19 +204,21 @@ export async function loadMcpAccess(db, tokenHash, now) {
 }
 
 /** Marca el refresh como usado; `alreadyUsed` delata un token robado o repetido. */
-export async function consumeMcpRefreshToken(db, tokenHash, now) {
+export async function consumeMcpRefreshToken(db, tokenHash, now, clientId) {
   const claimed = await db
     .prepare(
       `UPDATE mcp_tokens SET used_at = ?
        WHERE token_hash = ? AND kind = 'refresh' AND used_at IS NULL AND expires_at > ?
+       AND grant_id IN (SELECT id FROM mcp_grants WHERE client_id = ? AND revoked_at IS NULL AND expires_at > ?)
        RETURNING grant_id`,
     )
-    .bind(now, tokenHash, now)
+    .bind(now, tokenHash, now, clientId, now)
     .first();
   if (claimed) return {grantId: claimed.grant_id};
   const previous = await db
-    .prepare("SELECT grant_id, used_at FROM mcp_tokens WHERE token_hash = ? AND kind = 'refresh'")
-    .bind(tokenHash)
+    .prepare(`SELECT t.grant_id, t.used_at FROM mcp_tokens t JOIN mcp_grants g ON g.id = t.grant_id
+      WHERE t.token_hash = ? AND t.kind = 'refresh' AND g.client_id = ?`)
+    .bind(tokenHash, clientId)
     .first();
   return previous?.used_at ? {alreadyUsed: true, usedAt: previous.used_at, grantId: previous.grant_id} : null;
 }

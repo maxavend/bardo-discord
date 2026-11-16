@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
 import {handleDocsApi} from '../src/docs-api.js';
+import {handleWebApi} from '../src/web-api.js';
 import {safeReturnTo} from '../src/web-auth.js';
 import {cleanupWebAndMcp} from '../src/web-db.js';
 import {listUserChannels} from '../src/web-channels.js';
@@ -211,6 +212,40 @@ test('el token de canal funciona en las APIs de siempre y comprueba Discord', as
   const request = new Request(`${WEB_ORIGIN}/api/docs`, {headers: {Authorization: `Bearer ${token}`}});
   const docs = await handleDocsApi(request, new URL(request.url), env);
   assert.equal(docs.status, 200);
+});
+
+test('crear una sesión de canal cancela JSON excesivo antes de consultar Discord', async () => {
+  const {env, calls, db} = createWebEnv();
+  const browser = createBrowser(worker, env);
+  await browser.login();
+  const before = calls.length;
+  let cancelled = false;
+  const body = new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(8193)); },
+    cancel() { cancelled = true; },
+  }, {highWaterMark: 0});
+  const cookie = [...browser.jar].map(([key, value]) => `${key}=${value}`).join('; ');
+  const request = new Request(`${WEB_ORIGIN}/api/web/channel-session`, {
+    method: 'POST', body, duplex: 'half', headers: {cookie, Origin: WEB_ORIGIN},
+  });
+  const response = await handleWebApi(request, new URL(request.url), env);
+  assert.equal(response.status, 413);
+  assert.equal(cancelled, true);
+  assert.equal(calls.length, before);
+  assert.equal(db.rows('SELECT * FROM docs_sessions').length, 0);
+});
+
+test('la API web limita por identidad antes de cargar canales desde Discord', async () => {
+  const {env, calls} = createWebEnv();
+  const browser = createBrowser(worker, env);
+  await browser.login();
+  const before = calls.length;
+  const keys = [];
+  env.API_RATE_LIMITER = {limit: async ({key}) => { keys.push(key); return {success: false}; }};
+  const response = await browser.fetch('/api/web/channels');
+  assert.equal(response.status, 429);
+  assert.equal(calls.length, before);
+  assert.deepEqual(keys, [`bardo:user:${USER}`]);
 });
 
 test('abrir canales e iniciar sesión tienen límite', async () => {

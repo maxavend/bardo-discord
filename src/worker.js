@@ -57,6 +57,8 @@ import { KANBAN_LIMITS, compareCards } from '../activity-app/src/kanban/kanban-s
 import { fileStem, getSourceType, isTextSourceType, sourceLabel, SOURCE_TYPES } from './import-format.js';
 import { docxBombReason } from '../activity-app/src/zip-guard.js';
 import { REU_DESCRIPTION_MAX, REU_DURATION_MAX_MINUTES, TITLE_MAX } from './limits.js';
+import {readRequestBytes, RequestBodyTooLargeError} from './request-body.js';
+import {bodyTooLargeResponse, boundRequestBody, enforceInteractionRateLimit, enforcePublicRateLimit, enforceUserRateLimit} from './request-security.js';
 import {
   cleanupExpiredRecords,
   grantDocumentChannelAccessStatement,
@@ -199,11 +201,13 @@ export async function downloadAttachment(attachment, sourceType, fetchImpl = fet
     throw userError(`No se pudo descargar el archivo desde Discord (código ${response.status}). Vuelve a subirlo con \`/doc-upload\`.`);
   }
 
-  const declaredLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_STORED_DOCUMENT_BYTES) throw tooLargeError();
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > MAX_STORED_DOCUMENT_BYTES) throw tooLargeError();
+  let bytes;
+  try {
+    bytes = await readRequestBytes(response, MAX_STORED_DOCUMENT_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) throw tooLargeError();
+    throw error;
+  }
   if (sourceType === SOURCE_TYPES.DOCX) {
     // Nunca se guarda un .docx que se infla al abrirlo: congelaría Bardo a todo el canal.
     const reason = docxBombReason(bytes);
@@ -971,6 +975,13 @@ async function handleDocumentExportApi(request, url, documentId, env) {
         ? downloadErrorPage(410, 'El enlace de descarga expiró', 'Los enlaces duran 5 minutos. Vuelve a Bardo y pulsa de nuevo «Descargar».')
         : downloadErrorPage(403, 'Este enlace de descarga no es válido', 'Vuelve a Bardo y pulsa de nuevo «Descargar».');
     }
+    const limited = await enforceUserRateLimit(env, grant.userId);
+    if (limited) {
+      const {message} = await limited.json();
+      const response = downloadErrorPage(limited.status, 'No pudimos preparar la descarga', message);
+      response.headers.set('Retry-After', limited.headers.get('Retry-After'));
+      return response;
+    }
   } else {
     const access = await authorizeDocumentRequest(request, env, documentId);
     if (access.error) return access.error;
@@ -1141,6 +1152,14 @@ async function handleDiscordInteraction(request, env, ctx) {
     return new Response('Invalid request signature headers', { status: 401 });
   }
 
+  // A valid signature alone never expires. Reject old/future signed requests
+  // before verifying/dispatching so captured interactions cannot be replayed later.
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!/^\d{1,12}$/.test(timestamp) || !/^[a-f0-9]{128}$/i.test(signature)
+      || Number(timestamp) < nowSeconds - 300 || Number(timestamp) > nowSeconds + 60) {
+    return new Response('Invalid request signature timestamp', {status: 401});
+  }
+
   const rawBody = await request.text();
   const publicKey = env.DISCORD_PUBLIC_KEY;
 
@@ -1163,6 +1182,12 @@ async function handleDiscordInteraction(request, env, ctx) {
 
   if (interaction.type === InteractionType.PING) {
     return jsonResponse({ type: InteractionResponseType.PONG });
+  }
+
+  const userId = interaction.member?.user?.id || interaction.user?.id;
+  if (userId) {
+    const limited = await enforceInteractionRateLimit(env, userId);
+    if (limited) return limited;
   }
 
   if (interaction.type === InteractionType.APPLICATION_COMMAND) {
@@ -1269,6 +1294,9 @@ async function routeRequest(request, env, ctx) {
       try {
         return await handleDocumentExportApi(request, url, route.documentId, env);
       } catch (error) {
+        if (error?.code === 'export_too_large') {
+          return downloadErrorPage(413, 'El documento es demasiado largo', error.message);
+        }
         console.error('Error exportando documento (enlace firmado):', error);
         return downloadErrorPage(500, 'No pudimos preparar la descarga', 'Vuelve a Bardo e inténtalo de nuevo en unos segundos.');
       }
@@ -1300,8 +1328,15 @@ async function routeRequest(request, env, ctx) {
 export default {
   async fetch(request, env, ctx = { waitUntil: () => {} }) {
     try {
+      const limited = await enforcePublicRateLimit(request, env);
+      if (limited) return limited;
+      request = await boundRequestBody(request);
       return await routeRequest(request, env, ctx);
     } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) return bodyTooLargeResponse();
+      if (error?.code === 'export_too_large') {
+        return jsonResponse({error: 'export_too_large', message: error.message}, 413, PRIVATE_HEADERS);
+      }
       if (isDiscordUnavailableError(error)) return discordUnavailableResponse(error);
       console.error('Unhandled Bardo Worker error:', error);
       return jsonResponse(

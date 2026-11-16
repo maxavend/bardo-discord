@@ -38,6 +38,16 @@ npm run build
 
 El generador extrae el artefacto `activity/` del commit indicado y lo captura con el escenario ficticio del portafolio, sin acceder a datos de producción. Requiere Chrome/Chromium, las dependencias de `activity-app` y `cwebp`. El manifiesto se publica solo cuando terminan las 16 capturas. El build comprueba que estén todas y falla si el árbol de la referencia local cambió; hay que regenerarlas después de actualizar esa referencia. En una exportación sin Git se comprueba la integridad de rutas y archivos.
 
+Para recompilar únicamente una actualización de seguridad o dependencias sin cambiar las capturas históricas, se puede seleccionar explícitamente el commit ya registrado en el manifiesto:
+
+```bash
+BARDO_CAPTURE_SOURCE=pinned npm run build
+```
+
+Este modo conserva el manifiesto y las imágenes. Exige que el SHA registrado exista como commit, que su árbol `activity/` coincida exactamente con el registrado y que los hashes Git de las 16 imágenes locales sean idénticos a los archivos comprometidos en `HEAD`. Falla si falta Git, el commit o una imagen, o si cambian sus bytes. El log identifica las capturas como históricas y declara que no se actualizaron. La compilación normal sigue verificando la referencia mutable del manifiesto; el modo `pinned` no sirve para afirmar que las capturas reflejan la interfaz actual.
+
+La verificación de ambos modos y de capturas alteradas se ejecuta con `node --test scripts/verify-captures.test.mjs`.
+
 ## Tema
 
 La landing usa los tokens claro y Noche de la Activity. Sigue el sistema hasta que se usa el botón de tema; la elección se guarda en `bardo-site-theme`, se conserva al recargar y se comparte con las páginas legales. Las capturas y el logo cambian con el tema. La preferencia se aplica antes del primer render para evitar un destello claro.
@@ -48,7 +58,7 @@ La landing usa los tokens claro y Noche de la Activity. Sigue el sistema hasta q
 2. Confirmar que la app de Discord permite instalarse en otros servidores (Developer Portal → Installation). El botón «Agregar a Discord» usa `client_id=1539704001535156254`.
 3. Revisar `/privacidad` y `/terminos` y definir un canal para solicitudes sobre datos antes de recoger correos reales. Los textos públicos usan una redacción neutral, sin campos de identidad o contacto pendientes.
 
-Los personajes, misiones y acuerdos de las demos se comparten desde `src/lib/demo-data.json`. Las capturas conservan la UI exacta de `main`; solo cambian los datos locales de ejemplo.
+Los personajes, misiones y acuerdos de las demos se comparten desde `src/lib/demo-data.json`. Las capturas conservan la UI exacta del commit registrado en `src/lib/captures.json`; solo cambian los datos locales de ejemplo.
 
 ## Seguridad
 

@@ -2,6 +2,29 @@
 
 Los registros describen el estado en su fecha. La versión vigente y las verificaciones más recientes aparecen primero.
 
+## Protección de producción — 16 de noviembre de 2026
+
+- App `bardo-discord`: versión `e0991d4e-1764-4924-a406-dc260005408b`, al 100 %. Anterior: `02a2ba66-3dec-456f-861c-78845d3ffcdd`.
+- Sitio `bardo-site`, perfil `maxavend-domain`: versión `93b80a1c-19ba-46ec-9b02-803afca2f101`, al 100 %. Anterior: `bfd76b49-7a22-4ca1-af44-ee2af31d98d9`.
+- Ambos publicados localmente con `--keep-vars`; secretos y D1 preservados, sin migraciones pendientes. No se modificó contenido de usuarios. El código, los assets y la configuración de seguridad se versionan junto con este registro; los próximos despliegues deben partir de esta revisión o una posterior.
+- Correcciones de OAuth/PKCE y consentimiento, permisos de hilos y mensajes directos, límites de cuerpos HTTP, descompresión DOCX, Markdown/PDF y guard del SDK de Discord. Tres bindings verificados en producción: autenticación 120/min por IP y grupo, API 300/min por usuario e interacciones 60/min por usuario firmado. Contadores aproximados por ubicación de Cloudflare.
+- URLs de previews deshabilitadas en ambos Workers; la app conserva su URL oficial y el sitio solo su dominio personalizado. Discord: rol Bardo sin Administrador, limitado a ver, enviar y trabajar con hilos (`309237648384`). Conservado el intent de miembros necesario para el directorio.
+- Dependencias corregidas: Wrangler 4.163.0, Hono y Astro 7.4.12. La auditoría npm queda en cero avisos para backend y sitio; los avisos residuales de la app y sus mitigaciones se detallan en `SECURITY.md`.
+- Validación: `npm run check`, typechecks, 634 pruebas de Node, nueve pruebas del Worker del sitio y dry-runs correctos. El build completo del sitio usó `BARDO_CAPTURE_SOURCE=pinned`: valida el commit, árbol y hashes de las 16 capturas históricas conservadas; no son capturas nuevas del código actual.
+- Producción: 18 comprobaciones HTTP correctas; HTML y assets de entrada coinciden con el build (incluida la marca web insertada por el servidor), APIs privadas/MCP rechazan sesiones ausentes, OAuth anuncia S256, cuerpo excesivo responde 413 y llamadas sin autorización/firma se rechazan. Configuración y despliegues corroborados por API. No se ejecutó una prueba de carga ni un recorrido autenticado en el cliente real de Discord.
+- Discord, actualización posterior autorizada: las futuras instalaciones en servidores solicitan los mismos cuatro permisos (`309237648384`), incluido crear hilos públicos y sin Administrador. PATCH aplicado y GET posterior verificado; scopes y configuración de instalación de usuario conservados. No requirió otro despliegue de los Workers.
+- Límites: CSP de frames de Activity continúa en reporte; mínimo TLS/WAF de la zona no verificados por falta de permiso de lectura; logs persistentes y alertas de seguridad no configurados por este cambio.
+- Evidencia local sanitizada: `.wrangler/checkpoints/security-2026-11-16/` (excluida de Git), con estados anteriores/posteriores de Cloudflare y Discord y `production-smoke.json`.
+
+Recuperación de código y assets, sin revertir la base de datos. Estas versiones anteriores no contienen las correcciones de seguridad; usarlas solo para resolver una regresión urgente y volver a publicar las correcciones:
+
+```sh
+node_modules/.bin/wrangler rollback 02a2ba66-3dec-456f-861c-78845d3ffcdd --message 'Recuperación por regresión del despliegue de seguridad' --yes
+node_modules/.bin/wrangler rollback bfd76b49-7a22-4ca1-af44-ee2af31d98d9 --config site/wrangler.jsonc --profile maxavend-domain --message 'Recuperación del sitio por regresión' --yes
+```
+
+Conservar previews deshabilitadas y comprobar otra vez bindings y porcentaje activo después de una recuperación. No restaurar Administrador en Discord como parte de un rollback del código.
+
 ## Inicio por servidor con resumen de contenido — 16 de noviembre de 2026
 
 - Aplicación `bardo-discord`: versión `02a2ba66-3dec-456f-861c-78845d3ffcdd`, publicada con `--keep-vars`. Anterior: `9b62094d-11ff-431b-9cf9-be13e1e22f04`. Sin migraciones ni cambios de secretos; la landing conserva su versión anterior.

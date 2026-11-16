@@ -9,6 +9,8 @@ import {
 import {TOOLS, ToolError, runTool, toolsForScopes, validateArguments} from './mcp-tools.js';
 import {isWebRequest, webOrigin} from './web-auth.js';
 import {recordMcpAudit} from './web-db.js';
+import {readRequestText, RequestBodyTooLargeError} from './request-body.js';
+import {enforceUserRateLimit} from './request-security.js';
 
 const SERVER_INFO = {name: 'bardo', title: 'Bardo', version: '1.0.0'};
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'];
@@ -172,11 +174,11 @@ async function dispatch(message, grant, env, ctx, url) {
 }
 
 async function readBody(request) {
-  const declared = Number(request.headers.get('content-length') || 0);
-  if (declared > MAX_BODY_BYTES) return {tooLarge: true};
-  const text = await request.text();
-  if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) return {tooLarge: true};
-  return {text};
+  try {
+    return {text: await readRequestText(request, MAX_BODY_BYTES)};
+  } catch (error) {
+    return error instanceof RequestBodyTooLargeError ? {tooLarge: true} : {text: ''};
+  }
 }
 
 /** Devuelve null si la ruta no es suya; 404 con la web apagada. */
@@ -188,6 +190,13 @@ export async function handleMcp(request, url, env, ctx = {waitUntil: () => {}}) 
 
   const grant = await authenticateMcpRequest(request, env);
   if (!grant) return unauthorized(request, env);
+  const limited = await enforceUserRateLimit(env, grant.userId);
+  if (limited) {
+    const {message} = await limited.json();
+    return rpcResponse(request, rpcError(null, -32000, message), limited.status, {
+      'Retry-After': limited.headers.get('retry-after'),
+    });
+  }
 
   // Sin SSE ni sesiones: el protocolo define 405 para GET y DELETE en este caso.
   if (request.method !== 'POST') {

@@ -3,6 +3,7 @@
 // la única identidad: quien autoriza inicia sesión en la web y decide aquí qué
 // puede hacer cada cliente. Los tokens se guardan como hash y se pueden revocar.
 import {hashToken} from './discord-auth.js';
+import {readRequestText, RequestBodyTooLargeError} from './request-body.js';
 import {
   clientAddress,
   isSameOriginMutation,
@@ -70,6 +71,7 @@ const MAX_CLIENT_NAME_LENGTH = 80;
 const MAX_STATE_LENGTH = 2048;
 const MAX_REGISTER_BYTES = 8 * 1024;
 const MAX_TOKEN_BODY_BYTES = 8 * 1024;
+const MAX_CONSENT_BODY_BYTES = 8 * 1024;
 const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
 const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
 
@@ -172,9 +174,13 @@ async function handleRegister(request, env) {
   if (overLimit(request, 'register', REGISTER_LIMIT_PER_MINUTE)) {
     return oauthError('temporarily_unavailable', 'Demasiados registros seguidos. Espera un minuto.', 429);
   }
-  const text = await request.text().catch(() => '');
-  if (new TextEncoder().encode(text).byteLength > MAX_REGISTER_BYTES) {
-    return oauthError('invalid_client_metadata', 'La solicitud es demasiado grande.', 413);
+  let text;
+  try {
+    text = await readRequestText(request, MAX_REGISTER_BYTES);
+  } catch (error) {
+    return error instanceof RequestBodyTooLargeError
+      ? oauthError('invalid_client_metadata', 'La solicitud es demasiado grande.', 413)
+      : oauthError('invalid_client_metadata', 'No se pudo leer la solicitud.');
   }
   let metadata;
   try {
@@ -319,8 +325,7 @@ async function showConsent(request, url, env) {
     return fail('PKCE con S256 es obligatorio.');
   }
   if (state && state.length > MAX_STATE_LENGTH) return fail('El parámetro state es demasiado largo.');
-  const resource = params.get('resource');
-  if (resource && resource !== resourceUrl(env)) return fail('Este servidor solo autoriza su propio MCP.');
+  if (params.getAll('resource').some(resource => resource !== resourceUrl(env))) return fail('Este servidor solo autoriza su propio MCP.');
   const scopes = requestedScopes(params.get('scope'));
   if (!scopes.length) return fail('Ninguno de los permisos pedidos existe.');
   if (!scopes.includes(SCOPE_READ)) scopes.unshift(SCOPE_READ);
@@ -349,9 +354,19 @@ async function submitConsent(request, env) {
   const session = await readWebSession(request, env);
   if (!session) return errorPage('Tu sesión expiró', 'Vuelve a conectar la app desde tu herramienta.', 401);
 
-  const form = await request.formData().catch(() => null);
+  let form;
+  try {
+    // The consent form only sends URL-encoded text; never parse uploaded files.
+    const contentType = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (contentType !== 'application/x-www-form-urlencoded') return errorPage('Solicitud no válida', 'El formulario no es válido.');
+    form = new URLSearchParams(await readRequestText(request, MAX_CONSENT_BODY_BYTES));
+  } catch (error) {
+    return error instanceof RequestBodyTooLargeError
+      ? errorPage('Solicitud no válida', 'La solicitud es demasiado grande.', 413)
+      : errorPage('Solicitud no válida', 'No se pudo leer el formulario.');
+  }
   const consentId = form?.get('consent');
-  const consent = typeof consentId === 'string' && consentId ? await consumeMcpConsent(env.DB, await hashToken(consentId)) : null;
+  const consent = typeof consentId === 'string' && consentId ? await consumeMcpConsent(env.DB, await hashToken(consentId), session.tokenHash) : null;
   if (!consent || !(Date.parse(consent.expiresAt) > Date.now()) || consent.sessionHash !== session.tokenHash) {
     return errorPage('Esta autorización expiró', 'Vuelve a conectar la app desde tu herramienta.');
   }
@@ -418,19 +433,21 @@ async function exchangeCode(params, env) {
   if (resource && resource !== resourceUrl(env)) return oauthError('invalid_target', 'Este servidor solo emite tokens para su propio MCP.');
 
   const nowIso = new Date().toISOString();
-  const record = await consumeMcpAuthCode(env.DB, await hashToken(code), nowIso);
+  // Prove possession before consuming or revoking a code. An intercepted code
+  // alone must not let another client invalidate the legitimate authorization.
+  const record = await consumeMcpAuthCode(env.DB, await hashToken(code), nowIso, {
+    clientId, redirectUri, codeChallenge: await pkceChallenge(verifier),
+  });
   if (!record) return invalidGrant('El código no es válido.');
   if (record.alreadyUsed) {
     // Un código repetido puede ser un robo: se revoca lo emitido con él.
     await revokeMcpGrant(env.DB, record.grantId, nowIso);
     return invalidGrant('Este código ya se usó.');
   }
-  if (record.clientId !== clientId || record.redirectUri !== redirectUri) return invalidGrant('El código no corresponde a este cliente.');
   if (!(Date.parse(record.expiresAt) > Date.now())) return invalidGrant('El código expiró.');
-  if (await pkceChallenge(verifier) !== record.codeChallenge) return invalidGrant('La verificación PKCE falló.');
 
   const grant = await loadMcpGrant(env.DB, record.grantId);
-  if (!grant || grant.revokedAt || grant.clientId !== clientId) return invalidGrant('Esta autorización fue revocada.');
+  if (!grant || grant.revokedAt || grant.clientId !== clientId || !(Date.parse(grant.expiresAt) > Date.now())) return invalidGrant('Esta autorización fue revocada o expiró.');
   return issueTokens(env, grant);
 }
 
@@ -440,7 +457,7 @@ async function exchangeRefreshToken(params, env) {
   if (!refreshToken || !clientId) return oauthError('invalid_request', 'Faltan refresh_token o client_id.');
 
   const nowIso = new Date().toISOString();
-  const record = await consumeMcpRefreshToken(env.DB, await hashToken(refreshToken), nowIso);
+  const record = await consumeMcpRefreshToken(env.DB, await hashToken(refreshToken), nowIso, clientId);
   if (!record) return invalidGrant('El token no es válido o expiró.');
 
   const grant = await loadMcpGrant(env.DB, record.grantId);
@@ -459,9 +476,18 @@ async function handleToken(request, env) {
   if (overLimit(request, 'token', TOKEN_LIMIT_PER_MINUTE)) {
     return oauthError('temporarily_unavailable', 'Demasiados intentos seguidos. Espera un minuto.', 429);
   }
-  const text = await request.text().catch(() => '');
-  if (new TextEncoder().encode(text).byteLength > MAX_TOKEN_BODY_BYTES) return oauthError('invalid_request', 'La solicitud es demasiado grande.', 413);
+  let text;
+  try {
+    text = await readRequestText(request, MAX_TOKEN_BODY_BYTES);
+  } catch (error) {
+    return error instanceof RequestBodyTooLargeError
+      ? oauthError('invalid_request', 'La solicitud es demasiado grande.', 413)
+      : oauthError('invalid_request', 'No se pudo leer la solicitud.');
+  }
   const params = new URLSearchParams(text);
+  if (params.getAll('resource').some(resource => resource !== resourceUrl(env))) {
+    return oauthError('invalid_target', 'Este servidor solo emite tokens para su propio MCP.');
+  }
   const grantType = params.get('grant_type');
   if (grantType === 'authorization_code') return exchangeCode(params, env);
   if (grantType === 'refresh_token') return exchangeRefreshToken(params, env);

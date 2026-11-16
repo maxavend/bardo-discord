@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleDiscordAuthApi, requireDocsSession } from '../src/discord-auth.js';
+import {createTestDb, insertSession} from './helpers/sqlite-d1.js';
 
 function createAuthMockDb() {
   const sessions = new Map();
@@ -104,6 +105,31 @@ test('requireDocsSession responde en español con código estable', async () => 
   const data = await res.error.json();
   assert.equal(data.error, 'session_not_found');
   assert.match(data.message, /Tu sesión de Bardo expiró/);
+});
+
+test('los tokens válidos del mismo usuario comparten su límite antes de consultar Discord', async () => {
+  const db = createTestDb();
+  await insertSession(db, {token: 'first-token'});
+  await insertSession(db, {token: 'second-token', channelId: 'another-channel'});
+  const keys = [];
+  const env = {DB: db, API_RATE_LIMITER: {limit: async ({key}) => {
+    keys.push(key);
+    return {success: false};
+  }}};
+  for (const token of ['first-token', 'second-token']) {
+    const result = await requireDocsSession(new Request('https://example.com/api/docs', {
+      headers: {Authorization: `Bearer ${token}`},
+    }), env);
+    assert.equal(result.error.status, 429);
+    assert.equal(result.session, undefined);
+  }
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], keys[1], 'cambiar de token o canal no cambia el presupuesto');
+  const invalid = await requireDocsSession(new Request('https://example.com/api/docs', {
+    headers: {Authorization: 'Bearer unknown'},
+  }), env);
+  assert.equal(invalid.error.status, 401);
+  assert.equal(keys.length, 2, 'una petición sin identidad no consume el límite de otro usuario');
 });
 
 test('OAuth rate limits and outages preserve retryable status instead of logging the user out', async () => {

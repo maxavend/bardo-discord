@@ -351,7 +351,10 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     const bit = [10, 11, 12].includes(channel?.type)
       ? DISCORD_PERMISSION.SEND_MESSAGES_IN_THREADS
       : DISCORD_PERMISSION.SEND_MESSAGES;
-    return (permissions & bit) === bit;
+    // VIEW_CHANNEL is an implicit prerequisite in Discord. A retained SEND
+    // bit must never let the bot speak in a channel the caller cannot open.
+    const required = DISCORD_PERMISSION.VIEW_CHANNEL | bit;
+    return (permissions & required) === required;
   };
 
   // Moderation of shared documents (permanent deletion) mirrors Discord's own

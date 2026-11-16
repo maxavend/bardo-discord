@@ -6,7 +6,8 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {auth} from '@modelcontextprotocol/sdk/client/auth.js';
 import worker from '../src/worker.js';
-import {isAllowedRedirectUri, redirectUriMatches} from '../src/mcp-oauth.js';
+import {handleMcpOAuth, isAllowedRedirectUri, redirectUriMatches} from '../src/mcp-oauth.js';
+import {handleMcp} from '../src/mcp-server.js';
 import {TOOLS, validateArguments} from '../src/mcp-tools.js';
 import {CHANNEL, GUILD, USER, insertDocument} from './helpers/sqlite-d1.js';
 import {PRIVATE_CHANNEL, WEB_ORIGIN, createBrowser, createWebDiscordFetch, createWebEnv} from './helpers/web-fixtures.js';
@@ -321,6 +322,32 @@ test('PKCE incorrecto no entrega tokens', async () => {
   });
   assert.equal(response.status, 400);
   assert.equal(context.db.rows('SELECT * FROM mcp_tokens').length, 0);
+  assert.equal(context.db.row('SELECT used_at FROM mcp_auth_codes').used_at, null, 'una prueba PKCE falsa no gasta el código');
+  assert.equal(await auth(provider, {serverUrl: `${WEB_ORIGIN}/mcp`, authorizationCode: location.searchParams.get('code'), fetchFn}), 'AUTHORIZED');
+});
+
+test('un código interceptado no permite invalidar un grant sin el verificador y cliente correctos', async () => {
+  const context = createWebEnv();
+  const {provider, code, fetchFn} = await connect(context);
+  for (const altered of [
+    {client_id: 'cliente-ajeno'},
+    {redirect_uri: 'https://evil.test/callback'},
+    {code_verifier: 'x'.repeat(50)},
+  ]) {
+    const response = await fetchFn(`${WEB_ORIGIN}/oauth/token`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', code,
+        client_id: provider.savedClient.client_id,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: provider.verifier,
+        ...altered,
+      }).toString(),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(context.db.row('SELECT revoked_at FROM mcp_grants').revoked_at, null);
+    assert.equal(context.db.rows('SELECT * FROM mcp_tokens').length, 2);
+  }
 });
 
 async function refresh(env, provider, refreshToken) {
@@ -329,6 +356,88 @@ async function refresh(env, provider, refreshToken) {
     body: new URLSearchParams({grant_type: 'refresh_token', refresh_token: refreshToken, client_id: provider.savedClient.client_id}).toString(),
   }), env);
 }
+
+test('un refresh de otro cliente o recurso no consume el token legítimo', async () => {
+  const context = createWebEnv();
+  const {provider, fetchFn} = await connect(context);
+  for (const alteration of [{client_id: 'cliente-ajeno'}, {resource: 'https://evil.test/mcp'}]) {
+    const response = await fetchFn(`${WEB_ORIGIN}/oauth/token`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'refresh_token', refresh_token: provider.savedTokens.refresh_token,
+        client_id: provider.savedClient.client_id, ...alteration,
+      }).toString(),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(context.db.row("SELECT used_at FROM mcp_tokens WHERE kind = 'refresh'").used_at, null);
+    assert.equal(context.db.row('SELECT revoked_at FROM mcp_grants').revoked_at, null);
+  }
+  const duplicateResource = new URLSearchParams({
+    grant_type: 'refresh_token', refresh_token: provider.savedTokens.refresh_token,
+    client_id: provider.savedClient.client_id, resource: `${WEB_ORIGIN}/mcp`,
+  });
+  duplicateResource.append('resource', 'https://evil.test/mcp');
+  assert.equal((await fetchFn(`${WEB_ORIGIN}/oauth/token`, {method: 'POST', body: duplicateResource.toString()})).status, 400);
+  assert.equal((await refresh(context.env, provider, provider.savedTokens.refresh_token)).status, 200);
+});
+
+function oversizedStreamingRequest(path, size, headers = {}) {
+  let pulls = 0;
+  let cancelled = false;
+  const body = new ReadableStream({
+    pull(controller) {
+      pulls += 1;
+      if (pulls === 1) controller.enqueue(new Uint8Array(size));
+      else controller.error(new Error('El endpoint leyó más allá del límite'));
+    },
+    cancel() { cancelled = true; },
+  }, {highWaterMark: 0});
+  const request = new Request(`${WEB_ORIGIN}${path}`, {method: 'POST', body, headers, duplex: 'half'});
+  return {request, cancelled: () => cancelled, pulls: () => pulls};
+}
+
+test('OAuth limita los cuerpos públicos durante la lectura y cancela el resto', async () => {
+  const {env, db} = createWebEnv();
+  for (const path of ['/oauth/register', '/oauth/token']) {
+    const stream = oversizedStreamingRequest(path, 8193, {'cf-connecting-ip': `oauth-body-${path}`});
+    const response = await handleMcpOAuth(stream.request, new URL(stream.request.url), env);
+    assert.equal(response.status, 413, path);
+    assert.equal(stream.pulls(), 1);
+    assert.equal(stream.cancelled(), true);
+  }
+  assert.equal(db.rows('SELECT * FROM mcp_clients').length, 0);
+});
+
+test('el consentimiento y MCP cancelan cuerpos que exceden sus límites', async () => {
+  const context = createWebEnv();
+  const {provider, browser} = await connect(context);
+  const cookie = [...browser.jar].map(([key, value]) => `${key}=${value}`).join('; ');
+  const consent = oversizedStreamingRequest('/oauth/authorize', 8193, {
+    cookie, Origin: WEB_ORIGIN, 'Content-Type': 'application/x-www-form-urlencoded',
+  });
+  assert.equal((await handleMcpOAuth(consent.request, new URL(consent.request.url), context.env)).status, 413);
+  assert.equal(consent.cancelled(), true);
+  const rpc = oversizedStreamingRequest('/mcp', 4 * 1024 * 1024 + 1, {Authorization: `Bearer ${provider.savedTokens.access_token}`});
+  assert.equal((await handleMcp(rpc.request, new URL(rpc.request.url), context.env)).status, 413);
+  assert.equal(rpc.cancelled(), true);
+});
+
+test('MCP aplica el límite Cloudflare al usuario autenticado y conserva CORS y JSON-RPC', async () => {
+  const context = createWebEnv();
+  const {provider} = await connect(context);
+  const keys = [];
+  const env = {...context.env, API_RATE_LIMITER: {limit: async ({key}) => { keys.push(key); return {success: false}; }}};
+  const response = await worker.fetch(new Request(`${WEB_ORIGIN}/mcp`, {
+    method: 'POST',
+    headers: {Authorization: `Bearer ${provider.savedTokens.access_token}`, Origin: WEB_ORIGIN},
+    body: JSON.stringify({jsonrpc: '2.0', id: 1, method: 'tools/list'}),
+  }), env);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '60');
+  assert.equal(response.headers.get('access-control-allow-origin'), WEB_ORIGIN);
+  assert.equal((await response.json()).jsonrpc, '2.0');
+  assert.deepEqual(keys, [`bardo:user:${USER}`]);
+});
 
 test('el refresh rota el token; repetirlo tarde revoca toda la cadena', async () => {
   const context = createWebEnv();
@@ -457,6 +566,11 @@ test('la autorización solo se acepta desde la web y con la sesión que la abri�
   const stolen = await attacker.fetch('/oauth/authorize', {method: 'POST', headers, body});
   assert.equal(stolen.status, 400);
   assert.equal(context.db.rows('SELECT * FROM mcp_grants').length, 0);
+  assert.equal(context.db.rows('SELECT * FROM mcp_consents').length, 1, 'otra sesión no puede invalidar el consentimiento');
+  const authorized = await owner.fetch('/oauth/authorize', {method: 'POST', headers, body});
+  assert.equal(authorized.status, 303);
+  assert.equal(context.db.rows('SELECT * FROM mcp_grants').length, 1);
+  assert.equal(context.db.rows('SELECT * FROM mcp_consents').length, 0);
 });
 
 test('el registro público tiene límite por dirección', async () => {

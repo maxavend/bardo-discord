@@ -23,8 +23,7 @@ function getTestKeys() {
 
 const KEYS = getTestKeys();
 
-function signedInteraction(payload) {
-  const timestamp = String(Math.floor(Date.now() / 1000));
+function signedInteraction(payload, timestamp = String(Math.floor(Date.now() / 1000))) {
   const body = JSON.stringify(payload);
   const message = Buffer.concat([Buffer.from(timestamp, 'utf8'), Buffer.from(body, 'utf8')]);
   const signature = sign(null, message, KEYS.privateKey).toString('hex');
@@ -65,6 +64,27 @@ test('Worker responde a PING con PONG', async () => {
   const res = await worker.fetch(signedInteraction({ type: 1 }), { DISCORD_PUBLIC_KEY: KEYS.publicKey }, { waitUntil: () => {} });
   assert.equal(res.status, 200);
   assert.equal((await res.json()).type, 1);
+});
+
+for (const [name, offset] of [['antigua', -301], ['futura', 120]]) {
+  test(`Worker rechaza una interacción con firma válida pero fecha ${name}`, async () => {
+    const request = signedInteraction({type: 1}, String(Math.floor(Date.now() / 1000) + offset));
+    const response = await worker.fetch(request, {DISCORD_PUBLIC_KEY: KEYS.publicKey});
+    assert.equal(response.status, 401);
+  });
+}
+
+test('Worker limita interacciones por la identidad firmada antes de ejecutar comandos', async () => {
+  let key;
+  const response = await worker.fetch(signedInteraction({
+    type: 2, member: {user: {id: USER}}, data: {name: 'doc-new'},
+  }), {
+    DISCORD_PUBLIC_KEY: KEYS.publicKey,
+    INTERACTION_RATE_LIMITER: {async limit(options) { key = options.key; return {success: false}; }},
+    get DB() { throw new Error('must not execute'); },
+  });
+  assert.equal(response.status, 429);
+  assert.equal(key, `bardo:interaction:${USER}`);
 });
 
 test('Worker convierte excepciones no controladas en 500 JSON', async () => {
