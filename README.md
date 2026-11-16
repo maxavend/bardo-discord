@@ -312,8 +312,10 @@ Además de la Activity, Bardo puede usarse como una web aparte y desde herramien
 ### Web
 
 - Se entra solo con Discord: no hay cuentas propias y solo se pide el permiso `identify`.
-- Aparecen los servidores donde están la persona y el bot, con los canales que esa persona puede ver.
-- Para cambiar de canal, usa el nombre del espacio en el encabezado o el menú de usuario.
+- La raíz abre **Mis servidores**. Elige un servidor y después un canal; los canales recientes son accesos explícitos y los enlaces directos siguen abriendo su canal.
+- Aparecen los servidores donde están la persona y el bot, con los canales que esa persona puede ver. La búsqueda y los avisos distinguen servidores sin canales, permisos y fallos temporales; si falla una parte de Discord, los otros servidores siguen disponibles.
+- Dentro de cada servidor, los canales con contenido aparecen primero, ordenados por última actualización y con cantidades de documentos, reuniones y tareas sin archivar. Los canales vacíos siguen accesibles y la búsqueda abarca ambos grupos. El resumen respeta los permisos de Discord y excluye documentos personales; si falla, puedes seguir entrando a los canales y reintentarlo.
+- Para volver a **Mis servidores**, usa el enlace directo del encabezado en móvil, el nombre del espacio o el menú de usuario. La búsqueda y el regreso permanecen visibles al recorrer los canales. Desde el inicio también puedes agregar Bardo a Discord, cambiar el tema y gestionar tus conexiones de IA.
 - Diferencias con la Activity: no se ve quién está conectado a la Activity, y compartir copia una dirección en lugar de abrir el diálogo de Discord.
 
 ### Servidor MCP

@@ -4,6 +4,7 @@ import worker from '../src/worker.js';
 import {handleDocsApi} from '../src/docs-api.js';
 import {safeReturnTo} from '../src/web-auth.js';
 import {cleanupWebAndMcp} from '../src/web-db.js';
+import {listUserChannels} from '../src/web-channels.js';
 import {CHANNEL, GUILD, USER, createEnv, createTestDb} from './helpers/sqlite-d1.js';
 import {OTHER_GUILD_CHANNEL, PRIVATE_CHANNEL, WEB_ORIGIN, createBrowser, createWebEnv} from './helpers/web-fixtures.js';
 
@@ -102,6 +103,76 @@ test('el selector muestra solo servidores de la persona y canales que puede ver'
   const {guilds} = await response.json();
   assert.deepEqual(guilds.map(guild => guild.name), ['Mi servidor']);
   assert.deepEqual(guilds[0].channels, [{id: CHANNEL, name: 'general', type: 0, category: 'General'}]);
+});
+
+test('un servidor propio sin canales visibles aparece vacío sin exponer los canales privados', async () => {
+  const {env} = createWebEnv();
+  const baseFetch = env.DISCORD_FETCH;
+  env.DISCORD_FETCH = (input, init) => new URL(input).pathname === `/api/v10/guilds/${GUILD}/roles`
+    ? Response.json([{id: GUILD, permissions: '0'}])
+    : baseFetch(input, init);
+  const browser = createBrowser(worker, env);
+  await browser.login();
+  const response = await browser.fetch('/api/web/channels');
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.guilds, [{id: GUILD, name: 'Mi servidor', icon: null, channels: []}]);
+  assert.equal(payload.partial, false);
+});
+
+test('un servidor propio sin canales compatibles también aparece vacío', async () => {
+  const {env} = createWebEnv();
+  const baseFetch = env.DISCORD_FETCH;
+  env.DISCORD_FETCH = (input, init) => new URL(input).pathname === `/api/v10/guilds/${GUILD}/channels`
+    ? Response.json([{id: 'category-only', type: 4, name: 'Categoría'}])
+    : baseFetch(input, init);
+  const {guilds} = await listUserChannels(env, USER);
+  assert.equal(guilds.length, 1);
+  assert.deepEqual(guilds[0].channels, []);
+});
+
+test('un servidor temporalmente inaccesible conserva los disponibles y se reintenta sin caché parcial', async () => {
+  const {env} = createWebEnv({}, {DISCORD_PERMISSION_CACHE_TTL_MS: 60_000});
+  const baseFetch = env.DISCORD_FETCH;
+  let failing = true;
+  let membershipCalls = 0;
+  env.DISCORD_FETCH = (input, init) => {
+    if (new URL(input).pathname.startsWith('/api/v10/guilds/guild-ajeno/members/')) {
+      membershipCalls += 1;
+      if (failing) return new Response('{}', {status: 503});
+    }
+    return baseFetch(input, init);
+  };
+  const browser = createBrowser(worker, env);
+  await browser.login();
+
+  const response = await browser.fetch('/api/web/channels');
+  assert.equal(response.status, 200);
+  const partial = await response.json();
+  assert.equal(partial.partial, true);
+  assert.equal(partial.truncated, false);
+  assert.deepEqual(partial.guilds.map(guild => guild.id), [GUILD]);
+  assert.ok(!JSON.stringify(partial).includes('guild-ajeno'), 'una membresía sin verificar no expone el servidor');
+
+  failing = false;
+  const complete = await (await browser.fetch('/api/web/channels')).json();
+  assert.equal(complete.partial, false);
+  assert.equal(membershipCalls, 2, 'reintenta de inmediato después del resultado parcial');
+  await browser.fetch('/api/web/channels');
+  assert.equal(membershipCalls, 2, 'el resultado completo sí se reutiliza');
+});
+
+test('si ningún servidor propio pudo cargarse, el selector responde con error recuperable', async () => {
+  const {env} = createWebEnv();
+  const baseFetch = env.DISCORD_FETCH;
+  env.DISCORD_FETCH = (input, init) => new URL(input).pathname === `/api/v10/guilds/${GUILD}/channels`
+    ? new Response('{}', {status: 503})
+    : baseFetch(input, init);
+  const browser = createBrowser(worker, env);
+  await browser.login();
+  const response = await browser.fetch('/api/web/channels');
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, 'discord_unavailable');
 });
 
 test('sin sesión, la API web pide iniciar sesión', async () => {

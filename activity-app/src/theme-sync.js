@@ -50,6 +50,9 @@ export function saveThemePreference(preference) {
   storeThemePreference(preference, currentUserId());
   applyPreference(preference);
   if (isPlannerRemoteEnabled()) void uploadPreference(preference);
+  // En el inicio web hay cuenta pero aún no un token de canal. Al entrar al
+  // primero, sincroniza esta elección antes de restaurar el tema remoto.
+  else if (currentUserId()) setPending(true);
 }
 
 /**

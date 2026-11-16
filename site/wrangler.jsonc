@@ -4,6 +4,10 @@
   "name": "bardo-site",
   "main": "worker/index.js",
   "compatibility_date": "2026-08-19",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "bardo.maxavend.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

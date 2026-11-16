@@ -12,7 +12,8 @@ import {
   webError,
   webJson,
 } from './web-auth.js';
-import {listUserChannels} from './web-channels.js';
+import {listUserChannels, userGuildForContent} from './web-channels.js';
+import {summarizeChannelContent} from './web-channel-content.js';
 import {listMcpGrantsForUser, revokeMcpGrantForUser} from './web-db.js';
 
 const PREFIX = '/api/web/';
@@ -36,6 +37,21 @@ function webUser(session) {
 const methodNotAllowed = () => webError(405, 'method_not_allowed', 'Esta acción no está disponible.');
 const signInRequired = () => webError(401, 'auth_required', 'Inicia sesión con Discord para continuar.');
 const crossOrigin = () => webError(403, 'cross_origin', 'Esta solicitud no viene de Bardo.');
+
+async function handleChannelContent(url, env, session) {
+  const guildId = url.searchParams.get('guild_id') || '';
+  if (!ID_PATTERN.test(guildId)) return webError(400, 'invalid_guild', 'Ese servidor no es válido. Elige otro.');
+  try {
+    const guild = await userGuildForContent(env, guildId, session.userId);
+    if (!guild) return webError(403, 'guild_forbidden', 'Este servidor no está disponible para tu cuenta.');
+    const channels = await summarizeChannelContent(env.DB, guildId, guild.channels.map(channel => channel.id));
+    return webJson({guildId, channels});
+  } catch (error) {
+    if (isDiscordUnavailableError(error)) throw error;
+    console.warn('Bardo web: resumen de contenido no disponible');
+    return webError(503, 'content_unavailable', 'No pudimos consultar el contenido. Puedes abrir los canales o intentar de nuevo.');
+  }
+}
 
 async function handleChannelSession(request, env, session) {
   if (overRateLimit(`channel-session:${session.userId}`, CHANNEL_OPENS_PER_MINUTE)) {
@@ -114,6 +130,10 @@ async function routeWebApi(request, url, env) {
   if (path === 'channels') {
     if (request.method !== 'GET') return methodNotAllowed();
     return webJson(await listUserChannels(env, session.userId));
+  }
+  if (path === 'channel-content') {
+    if (request.method !== 'GET') return methodNotAllowed();
+    return handleChannelContent(url, env, session);
   }
   if (path === 'channel-session') {
     if (request.method !== 'POST') return methodNotAllowed();

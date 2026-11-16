@@ -4,14 +4,14 @@ import LegalLayout from '@/layouts/LegalLayout.astro';
 <LegalLayout
   title="Privacidad"
   description="Qué datos usa Bardo, para qué y cómo pedir que se borren."
-  updated="28 de octubre de 2026"
-  updatedIso="2026-10-28"
+  updated="16 de noviembre de 2026"
+  updatedIso="2026-11-16"
 >
   <p class="lead">
     Bardo guarda lo justo para que tu equipo trabaje en su canal de Discord. Aquí está qué datos usa, para qué y cómo pedir que se borren.
   </p>
 
-  <h2>Este sitio</h2>
+  <h2>Este sitio informativo</h2>
   <ul>
     <li>El sitio no recoge correos ni tiene formularios de registro.</li>
     <li>La preferencia de tema claro u oscuro se guarda localmente en tu navegador.</li>
@@ -26,6 +26,17 @@ import LegalLayout from '@/layouts/LegalLayout.astro';
   </ul>
   <p>Bardo no lee los mensajes del canal: solo publica avisos, tarjetas de documentos e hilos de tareas. Para saber si puedes ver un canal, consulta tus permisos a Discord.</p>
 
+  <h2>Bardo en el navegador</h2>
+  <p>
+    Inicias sesión con tu cuenta de Discord. Bardo pide el permiso <strong>identify</strong> para obtener tu identificador,
+    tu nombre visible (o tu nombre de usuario) y tu avatar. Bardo guarda esos datos en tu sesión y descarta el token de Discord después de consultar tu perfil.
+  </p>
+  <p>
+    Bardo consulta los permisos de Discord para mostrarte los canales que puedes ver en los servidores donde está instalado el bot.
+    La aplicación web usa una cookie temporal para proteger el inicio de sesión y otra para mantener tu sesión abierta.
+    Puedes usar <strong>Cerrar sesión</strong> en el menú de usuario para terminar esa sesión y el acceso a los canales desde ella.
+  </p>
+
   <h2>Lo que creas en Bardo</h2>
   <ul>
     <li><strong>Docs:</strong> título, descripción, contenido, autoría y fecha del último cambio de cada documento. Los archivos que importas se convierten a documento y el archivo original se elimina.</li>
@@ -38,15 +49,37 @@ import LegalLayout from '@/layouts/LegalLayout.astro';
     Los borradores y los audios grabados antes quedan en tu dispositivo, no en nuestros servidores.
   </p>
 
+  <h2>Conexiones de IA</h2>
+  <p>
+    Puedes autorizar herramientas como Codex o Claude Code a conectarse a Bardo mediante MCP. La herramienta actúa en tu nombre
+    dentro de los permisos que eliges y del acceso que ya tienes en Discord.
+  </p>
+  <ul>
+    <li><strong>Leer:</strong> permite consultar canales, documentos, reuniones, tareas y personas. Toda conexión incluye este permiso.</li>
+    <li><strong>Crear y editar:</strong> permite crear, editar o archivar contenido. Puedes desmarcarlo al autorizar.</li>
+    <li><strong>Publicar y borrar:</strong> permite, entre otras acciones, publicar en Discord, enviar mensajes directos, crear hilos o eliminar contenido definitivamente. Requiere que lo marques al autorizar.</li>
+  </ul>
+  <p>
+    Bardo guarda la identidad de Discord asociada a la autorización, el nombre de la herramienta, los permisos concedidos y las fechas de autorización, vencimiento y último uso.
+    Para revisar las acciones realizadas en tu nombre, Bardo registra los intentos de escritura que procesa, con la cuenta, la herramienta, la acción, el destino cuando corresponde, el resultado y la fecha.
+  </p>
+  <p>
+    Para quitarle el acceso a una herramienta, abre el menú de usuario en la aplicación web y elige <strong>Conexiones de IA</strong> → <strong>Revocar</strong>.
+    Cerrar sesión en la web deja activas las conexiones que ya autorizaste. Cada proveedor aplica su propia política a los datos que su herramienta ya recibió.
+  </p>
+
   <h2>Cuánto tiempo se guarda</h2>
   <ul>
     <li>Tu sesión dura 30 días. Una tarea diaria borra las sesiones vencidas.</li>
+    <li>El acceso de una herramienta de IA termina cuando revocas la conexión o a los 90 días de autorizarla. Bardo elimina el registro de la autorización en la limpieza diaria una vez que han pasado 30 días desde su vencimiento o revocación.</li>
+    <li>La limpieza diaria borra los registros de escritura de IA con más de 90 días.</li>
     <li>Documentos, reuniones y tareas se guardan hasta que alguien con acceso los elimina.</li>
   </ul>
 
   <h2>Tus derechos</h2>
   <p>
     Puedes pedir ver, corregir, borrar o llevarte tus datos, y oponerte a su uso.
+    Para hacer una solicitud, escribe a <a href="mailto:hello@maxavend.com">hello@maxavend.com</a>.
   </p>
 
   <h2>Cambios</h2>

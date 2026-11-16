@@ -2,6 +2,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export const INSTALL_URL = 'https://discord.com/oauth2/authorize?client_id=1539704001535156254';
+export const WEB_APP_URL = 'https://bardo-discord.bardo-discord.workers.dev/';
 
 export const container = 'site-container mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-16';
 export const h2 = 'max-w-[18ch] text-[clamp(2rem,2.5vw+1rem,3.5rem)] leading-[1.05]';

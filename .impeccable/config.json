@@ -50,6 +50,16 @@
         ],
         "createdAt": "2026-10-28T22:38:36.854Z",
         "reason": "Agent: this stylesheet integrates the requested transitions-dev text-swap-soft, tabs and card-resize patterns; bounded width/height transitions preserve label and panel continuity after user actions. Responsive checks passed at 320-1440px and 200 percent text; reduced motion disables the transitions."
+      },
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "activity-app/src/styles.css",
+          "activity-app/src/styles.source.css"
+        ],
+        "createdAt": "2026-11-16T15:41:35.006Z",
+        "reason": "Agent review: existing intentional mobile navigation compaction in ModuleHub.jsx (scroll direction, 12px threshold, passive listener and requestAnimationFrame). The fixed .module-hub-bar changes height and .module-hub-bar-label collapses over 260ms without changing document flow. Both transitions are disabled by prefers-reduced-motion. styles.css is generated from styles.source.css. Preserve this established interaction; this is an intentional-motion exception, not a claim of zero layout cost."
       }
     ]
   }

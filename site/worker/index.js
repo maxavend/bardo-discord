@@ -10,6 +10,18 @@ function errorResponse(request, status, error) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Enforce HTTPS at the Worker edge for this hostname only; the zone-wide
+    // Always Use HTTPS setting remains unchanged for other sites.
+    if (url.protocol === 'http:') {
+      return new Response(null, {
+        status: 308,
+        headers: {
+          ...SECURITY_HEADERS,
+          Location: `https://bardo.maxavend.com${url.pathname}${url.search}`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
     // Retired endpoint: no body parsing, storage or database binding.
     if (url.pathname === '/api/lista-de-espera') return errorResponse(request, 410, 'endpoint_retired');
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return errorResponse(request, 404, 'not_found');

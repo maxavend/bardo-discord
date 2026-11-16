@@ -20,6 +20,13 @@ test('unknown APIs and mutation methods cannot fall through to assets', async ()
   assert.equal((await worker.fetch(new Request('https://bardo.example/api/unknown'), noBindings)).status, 404);
   assert.equal((await worker.fetch(new Request('https://bardo.example/', {method:'POST'}), noBindings)).status, 405);
 });
+test('unencrypted requests redirect to the canonical HTTPS hostname before routing', async () => {
+  const response = await worker.fetch(new Request('http://bardo.maxavend.com/privacidad?ref=test'), noBindings);
+  assert.equal(response.status, 308);
+  assert.equal(response.headers.get('location'), 'https://bardo.maxavend.com/privacidad?ref=test');
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) assert.equal(response.headers.get(name), value);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+});
 test('fallback asset responses and static header file carry the same protections', async () => {
   const response = await worker.fetch(new Request('https://bardo.example/missing'), {ASSETS: {fetch: async () => new Response('missing', {status:404})}});
   const headersFile = await readFile(new URL('../public/_headers', import.meta.url), 'utf8');

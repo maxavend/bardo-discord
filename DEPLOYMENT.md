@@ -1,5 +1,27 @@
 # Despliegue de Bardo para aceptación — 13 de octubre de 2026
 
+## Inicio por servidor con resumen de contenido — 16 de noviembre de 2026
+
+- Aplicación `bardo-discord`: versión `02a2ba66-3dec-456f-861c-78845d3ffcdd`, publicada con `--keep-vars`. Anterior: `9b62094d-11ff-431b-9cf9-be13e1e22f04`. Sin migraciones ni cambios de secretos; la landing conserva su versión anterior.
+- El inicio del servidor muestra primero los canales con documentos, reuniones o tareas sin archivar, ordenados por última actualización. Los vacíos siguen accesibles debajo y la búsqueda abarca ambos grupos. Las filas incluyen cantidades, categoría y fecha; carga, resumen desconocido y error no se confunden con vacío. La navegación continúa disponible si falla el resumen.
+- Nuevo `GET /api/web/channel-content?guild_id=ID`: verifica permisos actuales del servidor y agrega únicamente metadatos de canales autorizados. Excluye documentos personales y contenido archivado; incluye tareas completadas sin archivar. Lecturas agrupadas y acotadas, sin crear tableros ni cargar cuerpos de documentos.
+- Validación: lint, tipos y build correctos; 29 pruebas de backend (9 de resumen y 20 de autenticación/permisos), y 78 pruebas de interfaz (26 escenarios en 320, 390 y 1280 px). Empaquetado del Worker validado con `--dry-run`.
+- Producción: verificación en el navegador integrado con sesión real a 320 y 390 px, más revisión visual a 1280 px. Comprobados orden por contenido, cantidades, canales homónimos, búsqueda de un canal vacío, apertura tanto de vacío como de canal con contenido y regreso a **Mis servidores**. Sin desbordamiento horizontal en la vista de 320 px. Se capturaron las pantallas del flujo; revisión visual independiente sin bloqueos. Prueba con viewport móvil, no con teclado de un dispositivo físico.
+
+## Navegación móvil del inicio web — 16 de noviembre de 2026
+
+- Aplicación `bardo-discord`: versión `9b62094d-11ff-431b-9cf9-be13e1e22f04`, publicada con `--keep-vars`. Anterior: `640b2042-c301-4531-9930-048544643e33`. Sin migraciones ni cambios de secretos; la landing conserva su versión anterior.
+- La elección de servidor precede a los recientes y la instalación queda como acción secundaria. Dentro del servidor, el regreso y el buscador permanecen visibles al recorrer los canales. Dentro del canal, **Mis servidores** tiene un enlace directo visible en móvil.
+- Validación: lint, tipos y build correctos; 54 pruebas del flujo web (18 escenarios en 320, 390 y 1280 px). En producción, navegador integrado con sesión real y vistas de 320 y 390 px: servidor, búsqueda, apertura de canal y regreso a **Mis servidores**; comprobados el encabezado fijo y la ausencia de desbordamiento horizontal en inicio y canal. Capturas del recorrido guardadas durante la revisión. Esta comprobación usa tamaños de viewport, no dispositivos físicos ni su teclado virtual.
+
+## Inicio de cuenta web y acceso desde la landing — 16 de noviembre de 2026
+
+- Despliegue local sobre `c3ebc117d779`, con los cambios del home de cuenta: raíz **Mis servidores**, elección de servidor y canal, recientes explícitos, búsqueda, recuperación parcial y regreso desde el espacio de trabajo. Sin migraciones ni cambios de secretos; ambos Workers publicados con `--keep-vars`.
+- Aplicación `bardo-discord`: versión `640b2042-c301-4531-9930-048544643e33`. Anterior: `4d9ca9f2-9a9f-4565-a316-d1c8b348ea71`.
+- Landing `bardo-site`, perfil `maxavend-domain`: versión `bfd76b49-7a22-4ca1-af44-ee2af31d98d9`. Anterior: `66f0cebf-5ffe-4d5e-b935-2033aceb1711`. La cabecera abre directamente la web; conserva las 16 capturas y Privacidad actualizada con `hello@maxavend.com`.
+- Validación previa: lint, tipos y build; 16 escenarios de navegación en 320, 390 y 1280 px; 20 pruebas de autenticación y permisos; 9 pruebas de seguridad de la landing. Paquete final del Worker validado con `wrangler deploy --dry-run`.
+- Producción: landing y Privacidad idénticas al build; módulos principales nuevos idénticos al build. APIs protegidas responden 401 sin sesión. En el navegador integrado se verificó con una cuenta real: inicio de sesión con Discord, elección de servidor, apertura de un canal y regreso a **Mis servidores** desde el menú de perfil. El enlace **Bardo Web** de la cabecera de la landing abre directamente ese inicio conservando la sesión.
+
 ## Web y MCP: pasos para activarlos
 
 La web y el servidor MCP llegan **apagados**: mientras `WEB_ORIGIN` no esté configurado, sus rutas responden 404 y la Activity sigue igual. Hacer merge a `main` aplica la migración `0020_web_and_mcp` (aditiva) y luego despliega el código.

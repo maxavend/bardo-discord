@@ -33,21 +33,23 @@ export function goToChannel(guildId, channelId) {
   window.location.assign(webChannelUrl(guildId, channelId));
 }
 
-export const goToChannelPicker = () => window.location.assign('/?pick=1');
+export const goToChannelPicker = () => window.location.assign('/');
 
 export async function signOutOfWeb() {
-  try {
-    await fetch('/api/web/logout', {method: 'POST', headers: {Accept: 'application/json'}});
-  } finally {
-    window.location.assign('/');
+  const response = await fetch('/api/web/logout', {method: 'POST', headers: {Accept: 'application/json'}});
+  if (!response.ok && response.status !== 401) {
+    throw new Error('No pudimos cerrar tu sesión. Revisa tu conexión e inténtalo de nuevo.');
   }
+  window.location.assign('/');
 }
 
 /** Solo ids, por persona: un equipo compartido no mezcla canales recientes. */
 export function readRecentChannels(userId) {
   try {
     const saved = JSON.parse(localStorage.getItem(LAST_CHANNELS_KEY) || 'null');
-    return saved?.userId === userId && Array.isArray(saved.channels) ? saved.channels : [];
+    return saved?.userId === userId && Array.isArray(saved.channels)
+      ? saved.channels.filter(item => typeof item?.guildId === 'string' && typeof item?.channelId === 'string').slice(0, MAX_RECENT_CHANNELS)
+      : [];
   } catch {
     return [];
   }
@@ -99,6 +101,7 @@ async function readSession() {
   } catch {
     return {offline: true};
   }
+  if (response.status === 401) return {signedOut: true};
   if (!response.ok) return {offline: true};
   const payload = await response.json().catch(() => null);
   if (!payload) return {offline: true};
@@ -164,17 +167,18 @@ export async function bootWebApp() {
 
   const {user} = session;
   window.__BARDO_WEB__ = true;
+  window.__BARDO_USER__ = user;
   const params = new URLSearchParams(window.location.search);
   const requested = params.get('guild') && params.get('channel')
     ? {guildId: params.get('guild'), channelId: params.get('channel')}
     : null;
-  const remembered = params.has('pick') ? null : readRecentChannels(user.id)[0];
-  const target = requested || remembered;
+  const target = requested;
   if (!target) return {gate: 'picker', user, message: authError};
 
   try {
     return await openChannel(user, target.guildId, target.channelId, requested ? launchCustomId(params) : null);
   } catch (error) {
+    if (error.status === 401) return {gate: 'signin', message: 'Tu sesión venció. Vuelve a entrar para abrir este canal.'};
     // Sin permiso o sin Discord: nunca una pantalla en blanco, se elige otro canal.
     if (error.status === 403) forgetChannel(user.id, target.channelId);
     return {gate: 'picker', user, message: error.message};

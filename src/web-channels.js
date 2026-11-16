@@ -102,22 +102,27 @@ function sortChannels(visible, all) {
     }));
 }
 
-/** Canales visibles de un servidor, o null si la persona no está o no ve ninguno. */
+/** Canales visibles de un servidor, o null si la persona no es miembro. */
 async function visibleGuild(env, guild, userId) {
   const guildId = String(guild.id);
   const encodedGuild = encodeURIComponent(guildId);
   const memberPath = `/guilds/${encodedGuild}/members/${encodeURIComponent(userId)}`;
   const member = await discordGet(env, memberPath, {notFound: null});
   if (!member) return null;
+  if (String(member.user?.id) !== String(userId) || !Array.isArray(member.roles)) {
+    throw new DiscordUnavailableError('Unexpected Discord member data');
+  }
 
   const [guildData, roles, channels] = await Promise.all([
     discordGet(env, `/guilds/${encodedGuild}`),
     discordGet(env, `/guilds/${encodedGuild}/roles`),
     discordGet(env, `/guilds/${encodedGuild}/channels`),
   ]);
-  const all = Array.isArray(channels) ? channels : [];
+  if (String(guildData?.id) !== guildId || !Array.isArray(roles) || !Array.isArray(channels)) {
+    throw new DiscordUnavailableError('Unexpected Discord guild data');
+  }
+  const all = channels;
   const candidates = all.filter(channel => channel?.id && CHANNEL_TYPES.has(Number(channel.type)));
-  if (!candidates.length) return null;
 
   const responses = new Map([
     [`${DISCORD_API_BASE}/guilds/${encodedGuild}`, guildData],
@@ -137,7 +142,6 @@ async function visibleGuild(env, guild, userId) {
   for (const channel of candidates) {
     if (await checker.canViewChannel(String(channel.id))) visible.push(channel);
   }
-  if (!visible.length) return null;
 
   return {
     id: guildId,
@@ -147,11 +151,25 @@ async function visibleGuild(env, guild, userId) {
   };
 }
 
+/** Consulta solo el servidor solicitado y verifica los permisos actuales.
+ * El resumen de contenido no reutiliza un directorio con permisos antiguos ni
+ * depende del límite de servidores del selector. 403/404 no revelan metadatos.
+ */
+export async function userGuildForContent(env, guildId, userId) {
+  try {
+    return await visibleGuild({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, {id: guildId}, userId);
+  } catch (error) {
+    if (error?.status === 403 || error?.status === 404) return null;
+    throw error;
+  }
+}
+
 async function loadUserChannels(env, userId) {
   const {guilds: botGuilds, complete} = await listBotGuilds(env);
   let truncated = !complete || botGuilds.length > MAX_GUILDS_CHECKED;
   const pending = botGuilds.slice(0, MAX_GUILDS_CHECKED);
   const guilds = [];
+  let unavailable = null;
 
   for (let start = 0; start < pending.length; start += CONCURRENCY) {
     const settled = await Promise.allSettled(pending.slice(start, start + CONCURRENCY)
@@ -161,9 +179,12 @@ async function loadUserChannels(env, userId) {
         if (result.value) guilds.push(result.value);
         continue;
       }
-      // Discord caído: reintentable. Una negativa definitiva (el bot sin acceso
-      // a ese servidor) solo deja fuera ese servidor.
-      if (isDiscordUnavailableError(result.reason)) throw result.reason;
+      // Un servidor caído no impide abrir los demás. No devolvemos metadatos
+      // del servidor fallido: su membresía puede no haberse podido comprobar.
+      if (isDiscordUnavailableError(result.reason)) {
+        unavailable = result.reason;
+        continue;
+      }
       console.warn('Bardo web: servidor omitido', result.reason?.message || result.reason);
     }
     if (guilds.length >= MAX_GUILDS_LISTED) {
@@ -172,13 +193,16 @@ async function loadUserChannels(env, userId) {
     }
   }
 
+  if (unavailable && !guilds.length) throw unavailable;
+
   return {
     guilds: guilds.slice(0, MAX_GUILDS_LISTED).sort((a, b) => a.name.localeCompare(b.name, 'es')),
     truncated,
+    partial: Boolean(unavailable),
   };
 }
 
-/** {guilds: [{id, name, icon, channels: [{id, name, type, category}]}], truncated} */
+/** {guilds: [{id, name, icon, channels: [{id, name, type, category}]}], truncated, partial} */
 export function listUserChannels(env, userId) {
   const key = String(userId);
   const configured = Number(env?.DISCORD_PERMISSION_CACHE_TTL_MS);
@@ -195,7 +219,12 @@ export function listUserChannels(env, userId) {
   if (hit && hit.expiresAt > Date.now()) return hit.promise;
   const promise = loadUserChannels(env, key);
   cache.set(key, {promise, expiresAt: Date.now() + ttl});
-  promise.catch(() => cache.delete(key));
+  const removeIncomplete = () => {
+    if (cache.get(key)?.promise === promise) cache.delete(key);
+  };
+  promise.then(result => {
+    if (result.partial) removeIncomplete();
+  }, removeIncomplete);
   if (cache.size > 1_000) cache.delete(cache.keys().next().value);
   return promise;
 }

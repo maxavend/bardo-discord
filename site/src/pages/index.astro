@@ -9,13 +9,12 @@ import { Shot } from '@/components/Shot';
 import Footer from '@/components/Footer.astro';
 import BrandMark from '@/components/BrandMark.astro';
 import ThemeToggle from '@/components/ThemeToggle.astro';
-import { INSTALL_URL, container, h2, lead, navCta, primaryCta, quietCta } from '@/lib/site';
+import { INSTALL_URL, WEB_APP_URL, container, h2, lead, navCta, primaryCta, quietCta } from '@/lib/site';
 import { cn } from '@/lib/utils';
 
 const WHERE = [
-  ['Discord en escritorio y navegador', 'Disponible'],
-  ['Discord en el móvil', 'Disponible'],
-  ['Bardo en la web, con tu cuenta', 'En preparación'],
+  'Discord en escritorio y navegador',
+  'Discord en el móvil',
 ];
 ---
 <Layout
@@ -26,12 +25,12 @@ const WHERE = [
     Saltar al contenido
   </a>
 
-  <header class={cn(container, 'site-header flex min-h-18 items-center justify-between gap-6')}>
+  <header class={cn(container, 'site-header flex min-h-18 items-center justify-between gap-x-6 gap-y-3 max-sm:flex-wrap max-sm:py-4')}>
     <a href="/" aria-label="Bardo, inicio" class="site-brand inline-flex rounded-sm">
       <BrandMark />
     </a>
-    <nav aria-label="Principal" class="flex items-center gap-2 sm:gap-6">
-      <a href="#web" class="text-sm text-secondary-foreground underline-offset-4 hover:text-primary hover:underline active:text-primary max-lg:hidden">Versión web</a>
+    <nav aria-label="Principal" class="flex items-center gap-2 max-sm:w-full max-sm:justify-between sm:gap-6">
+      <a href={WEB_APP_URL} class="text-sm text-secondary-foreground underline-offset-4 hover:text-primary hover:underline active:text-primary whitespace-nowrap">Bardo Web</a>
       <a href={INSTALL_URL} class={navCta}>Agregar a Discord</a>
       <ThemeToggle />
     </nav>
@@ -75,10 +74,10 @@ const WHERE = [
       </div>
     </section>
 
-    <!-- Where Bardo runs today and the status of the web version. -->
+    <!-- Where Bardo runs and how to open the web app. -->
     <section id="web" aria-labelledby="where-title" class={cn(container, 'site-availability grid items-center justify-between gap-x-16 gap-y-12 pt-24 pb-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,4fr)]')}>
       <div data-motion-group class="grid gap-8">
-        <h2 data-motion-item id="where-title" class={h2}>Hoy en Discord, pronto en tu navegador<span class="heading-stop">.</span></h2>
+        <h2 data-motion-item id="where-title" class={h2}>En Discord y en tu navegador<span class="heading-stop">.</span></h2>
         <table data-motion-item class="w-full border-collapse">
           <caption class="sr-only">Dónde funciona Bardo</caption>
           <thead>
@@ -88,14 +87,21 @@ const WHERE = [
             </tr>
           </thead>
           <tbody>
-            {WHERE.map(([where, state], index) => (
+            {WHERE.map(where => (
               <tr class="border-t border-border">
                 <th scope="row" class="py-4 text-left font-semibold">{where}</th>
-                <td class={cn('py-4 pl-4 text-right whitespace-nowrap', index === WHERE.length - 1 ? 'text-primary' : 'text-secondary-foreground')}>{state}</td>
+                <td class="py-4 pl-4 text-right text-secondary-foreground">Disponible</td>
               </tr>
             ))}
+            <tr class="border-t border-border">
+              <th scope="row" class="py-4 text-left font-semibold">
+                <a href={WEB_APP_URL} class="text-primary underline underline-offset-4 hover:text-foreground">Abrir Bardo en la web</a>
+              </th>
+              <td class="py-4 pl-4 text-right text-secondary-foreground">Disponible</td>
+            </tr>
           </tbody>
         </table>
+        <p data-motion-item class="text-sm text-secondary-foreground">Entra con tu cuenta de Discord para acceder a tus canales de Bardo.</p>
       </div>
       <div data-motion-reveal class="w-full max-w-[22rem] justify-self-end max-lg:justify-self-start"><Shot
         name="09-tablero"

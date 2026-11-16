@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {ArrowRightArrowLeft, ChevronDown, Gear} from '@gravity-ui/icons';
+import {ArrowLeft, ArrowRightArrowLeft, ChevronDown, Gear} from '@gravity-ui/icons';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {BetaChip, BetaNote} from './BetaNotice.jsx';
 import {useWorkspace} from './workspace.js';
@@ -65,7 +65,7 @@ export function WorkspaceName({moduleLabel, onOpenSettings}) {
           {isWebApp() && (
             <button type="button" className="workspace-popover-action" onClick={goToChannelPicker}>
               <ArrowRightArrowLeft width={16} height={16} aria-hidden="true" />
-              Cambiar de canal
+              Mis servidores
             </button>
           )}
           {onOpenSettings && (
@@ -76,6 +76,7 @@ export function WorkspaceName({moduleLabel, onOpenSettings}) {
           )}
         </PopoverContent>
       </Popover>
+      {isWebApp() && <a href="/" className="workspace-account-home"><ArrowLeft width={16} height={16} aria-hidden="true" />Mis servidores</a>}
       <span className="max-md:hidden"><BetaChip /></span>
     </span>
   );

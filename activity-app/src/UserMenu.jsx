@@ -4,6 +4,8 @@
 import {useEffect, useState} from 'react';
 import {ArrowRightArrowLeft, ArrowRightFromSquare, Display, Hashtag, Moon, Person, PlugConnection, Server, Sun} from '@gravity-ui/icons';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/ui/avatar';
+import {Button} from '@/components/ui/button';
+import {AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,7 +95,14 @@ export function UserMenu({onOpenSettings}) {
   const {theme, setTheme} = useTheme();
   const current = THEMES.find(item => item.value === theme) || THEMES[1];
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const web = isWebApp();
+  const logout = async () => {
+    setLoggingOut(true);
+    try { await signOutOfWeb(); }
+    catch { setLogoutError(true); setLoggingOut(false); }
+  };
 
   return (
     <>
@@ -145,18 +154,30 @@ export function UserMenu({onOpenSettings}) {
         {web && <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={goToChannelPicker}>
-            <ArrowRightArrowLeft aria-hidden="true" className="text-muted-foreground" />Cambiar de canal
+            <ArrowRightArrowLeft aria-hidden="true" className="text-muted-foreground" />Mis servidores
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setConnectionsOpen(true)}>
             <PlugConnection aria-hidden="true" className="text-muted-foreground" />Conexiones de IA
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void signOutOfWeb()}>
-            <ArrowRightFromSquare aria-hidden="true" className="text-muted-foreground" />Cerrar sesión
+          <DropdownMenuItem disabled={loggingOut} onSelect={() => void logout()}>
+            <ArrowRightFromSquare aria-hidden="true" className="text-muted-foreground" />{loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
           </DropdownMenuItem>
         </>}
       </DropdownMenuContent>
     </DropdownMenu>
     {web && <WebConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} />}
+    <AlertDialog open={logoutError} onOpenChange={setLogoutError}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>No pudimos cerrar tu sesión</AlertDialogTitle>
+          <AlertDialogDescription>Tu sesión sigue abierta. Revisa tu conexión e inténtalo de nuevo.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Volver</AlertDialogCancel>
+          <Button disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? 'Cerrando sesión…' : 'Intentar de nuevo'}</Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
