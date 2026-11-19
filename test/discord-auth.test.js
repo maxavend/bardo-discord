@@ -147,3 +147,43 @@ test('OAuth rate limits and outages preserve retryable status instead of logging
     assert.equal((await res.json()).retryAfterMs, 4000);
   }
 });
+
+test('el inicio de sesión distingue un canal que Bardo no ve de uno que la persona no ve', async () => {
+  const login = async channelResponse => {
+    const req = new Request('https://example.com/api/auth/token', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code: 'code', guildId: 'guild', channelId: 'channel'}),
+    });
+    const res = await handleDiscordAuthApi(req, new URL(req.url), {
+      DB: createAuthMockDb(), DISCORD_CLIENT_SECRET: 'test-only', DISCORD_TOKEN: 'bot',
+      DISCORD_FETCH: async url => {
+        const path = String(url);
+        if (path.includes('/oauth2/token')) return Response.json({access_token: 'oauth'});
+        if (path.endsWith('/users/@me')) return Response.json({id: 'user', username: 'Persona'});
+        if (path.endsWith('/guilds/guild')) return Response.json({id: 'guild', owner_id: 'owner'});
+        if (path.endsWith('/members/user')) return Response.json({roles: []});
+        if (path.endsWith('/roles')) return Response.json([{id: 'guild', permissions: '1024'}]);
+        if (path.endsWith('/channels/channel')) return channelResponse();
+        return Response.json({}, {status: 404});
+      },
+    });
+    return {status: res.status, body: await res.json()};
+  };
+
+  // Canal privado sin el rol del bot: Discord responde Missing Access al bot.
+  for (const status of [403, 404]) {
+    const hidden = await login(() => Response.json({message: 'Missing Access', code: 50001}, {status}));
+    assert.equal(hidden.status, 403);
+    assert.equal(hidden.body.code, 'bot_channel_forbidden');
+    assert.match(hidden.body.message, /Bardo no puede ver este canal.*rol Bardo/);
+  }
+
+  // El bot sí lo ve, pero la persona tiene negado «Ver canal».
+  const denied = await login(() => Response.json({
+    id: 'channel', guild_id: 'guild', type: 0,
+    permission_overwrites: [{id: 'guild', type: 0, allow: '0', deny: '1024'}],
+  }));
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.code, 'channel_forbidden');
+  assert.match(denied.body.message, /No tienes acceso a este canal/);
+});

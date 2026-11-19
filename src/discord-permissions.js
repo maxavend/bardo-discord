@@ -333,6 +333,19 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
     return (permissions & DISCORD_PERMISSION.VIEW_CHANNEL) === DISCORD_PERMISSION.VIEW_CHANNEL;
   };
 
+  // True only when Discord itself says the bot cannot read (or find) the
+  // channel. Then nobody's access can be verified there, whatever their role,
+  // and the fix is on the server side: allow the bot's role in that channel.
+  const isChannelHiddenFromBot = async channelId => {
+    try {
+      await loadChannel(channelId);
+      return false;
+    } catch (error) {
+      if (isDiscordUnavailableError(error)) throw error;
+      return error?.status === 403 || error?.status === 404;
+    }
+  };
+
   const canManageChannel = async channelId => {
     const permissions = await permissionsOrZero(channelId);
     return (permissions & DISCORD_PERMISSION.ADMINISTRATOR) !== 0n
@@ -457,6 +470,7 @@ export function createDiscordPermissionChecker(env, guildId, userId) {
 
   return {
     canViewChannel,
+    isChannelHiddenFromBot,
     canManageChannel,
     canModerateDocuments,
     canSendMessages,
