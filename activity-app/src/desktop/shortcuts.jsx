@@ -1,4 +1,4 @@
-// Atajos de Bardo para escritorio. Los dispara el menú nativo, así que
+// Atajos de Bardo Desktop. Los dispara el menú nativo, así que
 // funcionan aunque el foco esté en el editor.
 import {modKey, shiftKey} from './desktop-bridge.js';
 

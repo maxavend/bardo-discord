@@ -1,4 +1,4 @@
-// Configuración de Bardo para escritorio. El origen es el mismo de la web: la
+// Configuración de Bardo Desktop. El origen es el mismo de la web: la
 // ventana carga ese sitio y la app habla con su API. Se puede cambiar con
 // BARDO_ORIGIN (desarrollo local o staging), siempre https o loopback.
 export const PRODUCTION_ORIGIN = 'https://bardo-discord.bardo-discord.workers.dev';

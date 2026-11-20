@@ -1,4 +1,4 @@
-// Capa de Bardo para escritorio sobre la app: recibe los comandos del menú
+// Capa de Bardo Desktop sobre la app: recibe los comandos del menú
 // nativo, ofrece el selector rápido de canales (⌘P) y el diálogo de atajos, y
 // avisa a la ventana del tema para que la barra de título lo acompañe.
 import {useCallback, useEffect, useMemo, useState} from 'react';

@@ -1,4 +1,4 @@
-name: Bardo para escritorio
+name: Bardo Desktop
 
 # Instaladores de macOS y Windows. Se ejecuta a mano (Actions → Run workflow)
 # o al publicar una etiqueta desktop-v*. Sin secretos de firma, los

@@ -1,4 +1,4 @@
-// Bardo para escritorio: cliente OAuth de primera parte, /api/app/* y cierre de sesión.
+// Bardo Desktop: cliente OAuth de primera parte, /api/app/* y cierre de sesión.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
@@ -73,7 +73,7 @@ async function signIn(context, {clientId = CLIENT_ID, scope = APP_SCOPES} = {}) 
 test('la app de escritorio inicia sesión con una confirmación de un clic', async () => {
   const context = createWebEnv();
   const {html, tokens} = await signIn(context);
-  assert.match(html, /Continuar en Bardo para escritorio/);
+  assert.match(html, /Continuar en Bardo Desktop/);
   assert.match(html, /value="switch"/);
   assert.ok(!html.includes('type="checkbox"'), 'una app de Bardo no pide permisos sueltos');
   assert.equal(tokens.scope, APP_SCOPES);
@@ -166,7 +166,7 @@ test('un cliente MCP de terceros no obtiene bardo:app ni usa /api/app', async ()
   const fetchApp = appFetch(context.env);
   const registered = await (await fetchApp('/oauth/register', {
     method: 'POST',
-    body: JSON.stringify({client_name: 'Bardo para escritorio', redirect_uris: [REDIRECT_URI]}),
+    body: JSON.stringify({client_name: 'Bardo Desktop', redirect_uris: [REDIRECT_URI]}),
   })).json();
   const {html, tokens} = await signIn(context, {clientId: registered.client_id});
   assert.match(html, /no puede verificarlo/, 'un tercero con el mismo nombre ve la pantalla normal');

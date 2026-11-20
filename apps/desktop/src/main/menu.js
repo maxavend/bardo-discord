@@ -14,18 +14,18 @@ export function buildMenu({send, signOut, checkForUpdates}) {
     ...(isMac ? [{
       label: app.name,
       submenu: [
-        {role: 'about', label: 'Acerca de Bardo'},
+        {role: 'about', label: `Acerca de ${app.name}`},
         updatesItem,
         {type: 'separator'},
         signOutItem,
         {type: 'separator'},
         {role: 'services', label: 'Servicios'},
         {type: 'separator'},
-        {role: 'hide', label: 'Ocultar Bardo'},
+        {role: 'hide', label: `Ocultar ${app.name}`},
         {role: 'hideOthers', label: 'Ocultar otros'},
         {role: 'unhide', label: 'Mostrar todo'},
         {type: 'separator'},
-        {role: 'quit', label: 'Salir de Bardo'},
+        {role: 'quit', label: `Salir de ${app.name}`},
       ],
     }] : []),
     {
@@ -88,7 +88,7 @@ export function buildMenu({send, signOut, checkForUpdates}) {
         {type: 'separator'},
         {label: 'Agregar Bardo a un servidor de Discord', click: () => shell.openExternal(INSTALL_URL)},
         {label: 'Abrir Bardo en el navegador', click: () => shell.openExternal(ORIGIN)},
-        ...(isMac ? [] : [{type: 'separator'}, {label: `Bardo ${app.getVersion()}`, enabled: false}]),
+        ...(isMac ? [] : [{type: 'separator'}, {label: `${app.name} ${app.getVersion()}`, enabled: false}]),
       ],
     },
   ];

@@ -1,9 +1,9 @@
-# Empaquetado de Bardo para escritorio.
+# Empaquetado de Bardo Desktop.
 # Sin certificados, los builds salen sin firmar (sirven para probar). Con los
 # secretos de CI (ver README.md de esta carpeta) se firman, se notarizan en
 # macOS y se publican en GitHub Releases, de donde se actualizan solas.
 appId: app.bardo.desktop
-productName: Bardo
+productName: Bardo Desktop
 copyright: Copyright © 2026 Bardo
 directories:
   output: dist
@@ -43,27 +43,27 @@ mac:
     NSMicrophoneUsageDescription: Bardo usa el micrófono solo cuando grabas una reunión.
     LSApplicationCategoryType: public.app-category.productivity
 dmg:
-  title: Bardo ${version}
-  artifactName: Bardo-${version}-mac.${ext}
+  title: Bardo Desktop ${version}
+  artifactName: Bardo-Desktop-${version}-mac.${ext}
 
 win:
   icon: build/icon.png
   target:
     - target: nsis
       arch: [x64, arm64]
-  artifactName: Bardo-${version}-windows-${arch}.${ext}
+  artifactName: Bardo-Desktop-${version}-windows-${arch}.${ext}
   # Se firma si existen WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD; si no, sale sin firmar.
 nsis:
   oneClick: true
   perMachine: false
   deleteAppDataOnUninstall: false
-  shortcutName: Bardo
+  shortcutName: Bardo Desktop
 appx:
   # Paquete para Microsoft Store (npm run dist:store). Los datos de identidad
-  # salen del Partner Center al reservar el nombre «Bardo».
-  identityName: Bardo
+  # salen del Partner Center al reservar el nombre «Bardo Desktop».
+  identityName: BardoDesktop
   publisherDisplayName: Bardo
-  displayName: Bardo
-  applicationId: Bardo
+  displayName: Bardo Desktop
+  applicationId: BardoDesktop
   backgroundColor: "#16131c"
   languages: [es-419, es-ES, en-US]

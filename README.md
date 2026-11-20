@@ -318,9 +318,9 @@ Además de la Activity, Bardo puede usarse como una web aparte y desde herramien
 - Para volver a **Mis servidores**, usa el enlace directo del encabezado en móvil, el nombre del espacio o el menú de usuario. La búsqueda y el regreso permanecen visibles al recorrer los canales. Desde el inicio también puedes agregar Bardo a Discord, cambiar el tema y gestionar tus conexiones de IA.
 - Diferencias con la Activity: no se ve quién está conectado a la Activity, y compartir copia una dirección en lugar de abrir el diálogo de Discord.
 
-### App de escritorio (macOS y Windows)
+### Bardo Desktop (macOS y Windows)
 
-[`apps/desktop`](apps/desktop) es Bardo como app instalable (Electron). Muestra la misma web y entra igual, solo con Discord: el navegador del sistema abre Discord y la app recibe la sesión. Recuerda el último canal, trae menú nativo, atajos (`⌘P` para ir a un canal, `⌘N` para un documento nuevo, `⌘1`–`⌘4` para cada sección), una bienvenida de primer uso, enlaces `bardo://` y actualizaciones automáticas. El servidor la trata como cliente OAuth de primera parte (`bardo_desktop`, permiso `bardo:app`, rutas `/api/app/*`). Instalación, firma y publicación: [apps/desktop/README.md](apps/desktop/README.md).
+[`apps/desktop`](apps/desktop) es **Bardo Desktop**, Bardo como app instalable (Electron). Muestra la misma web y entra igual, solo con Discord: el navegador del sistema abre Discord y la app recibe la sesión. Recuerda el último canal, trae menú nativo, atajos (`⌘P` para ir a un canal, `⌘N` para un documento nuevo, `⌘1`–`⌘4` para cada sección), una bienvenida de primer uso, enlaces `bardo://` y actualizaciones automáticas. El servidor la trata como cliente OAuth de primera parte (`bardo_desktop`, permiso `bardo:app`, rutas `/api/app/*`). Instalación, firma y publicación: [apps/desktop/README.md](apps/desktop/README.md).
 
 ### Servidor MCP
 

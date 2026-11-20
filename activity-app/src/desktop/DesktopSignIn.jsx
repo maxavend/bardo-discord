@@ -1,4 +1,4 @@
-// Inicio de sesión de Bardo para escritorio. Discord se abre en el navegador
+// Inicio de sesión de Bardo Desktop. Discord se abre en el navegador
 // del sistema (donde ya tienes tu sesión) y la app espera la confirmación.
 import {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button';

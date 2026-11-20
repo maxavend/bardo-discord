@@ -1,4 +1,4 @@
-// Preload de Bardo para escritorio. Expone una API mínima en window.bardoDesktop.
+// Preload de Bardo Desktop. Expone una API mínima en window.bardoDesktop.
 // La página nunca recibe el refresh ni el token de acceso: solo pide acciones.
 // El proceso main valida en cada llamada que la pide una página de Bardo.
 const {contextBridge, ipcRenderer} = require('electron');

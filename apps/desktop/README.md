@@ -1,4 +1,4 @@
-# Bardo para escritorio (macOS y Windows)
+# Bardo Desktop (macOS y Windows)
 
 App de Electron que muestra la web de Bardo (`WEB_ORIGIN`) con un armazón nativo:
 
@@ -23,7 +23,7 @@ La identidad sigue siendo solo Discord: no hay cuentas propias.
 **Inicio de sesión:**
 1. La app abre `/oauth/authorize` en el navegador con PKCE y vuelta a `http://127.0.0.1:<puerto>/oauth/callback` (RFC 8252).
 2. Si no hay sesión en la web, Discord pide entrar.
-3. La persona confirma con un clic («Continuar en Bardo para escritorio»).
+3. La persona confirma con un clic («Continuar en Bardo Desktop»).
 4. La app canjea el código.
 
 **Tokens:**
@@ -96,7 +96,7 @@ Sin certificados, los instaladores salen sin firmar. Sirven para probar:
 - en Windows, SmartScreen avisa.
 
 El workflow `.github/workflows/desktop.yml` construye en runners de macOS y Windows:
-- **A mano** (Actions → «Bardo para escritorio» → Run workflow): deja los instaladores como artefactos.
+- **A mano** (Actions → «Bardo Desktop» → Run workflow): deja los instaladores como artefactos.
 - **Con una etiqueta `desktop-vX.Y.Z`:** además los publica en GitHub Releases, si hay secretos de firma. De ahí se actualizan solas las apps instaladas (`electron-updater`).
 
 ### Secretos de firma (GitHub → Settings → Secrets)

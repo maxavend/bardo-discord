@@ -1,4 +1,4 @@
-// Puente con Bardo para escritorio (Electron). El preload expone
+// Puente con Bardo Desktop (Electron). El preload expone
 // window.bardoDesktop; la página nunca ve los tokens de la app, solo pide
 // acciones (iniciar sesión, abrir un canal, cerrar sesión).
 export function desktopBridge() {

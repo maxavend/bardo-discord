@@ -1,4 +1,4 @@
-// Bardo para escritorio (macOS y Windows). La ventana muestra la web de Bardo;
+// Bardo Desktop (macOS y Windows). La ventana muestra la web de Bardo;
 // este proceso guarda la sesión, inicia sesión por el navegador del sistema,
 // pone el menú nativo y abre los enlaces bardo:// (por ejemplo, un documento).
 import {app, BrowserWindow, dialog, shell} from 'electron';
