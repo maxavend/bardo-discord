@@ -14,7 +14,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "BARDO_ORIGIN=http://localhost:8787 electron .",
-    "test": "node --test test/",
+    "test": "node --test test/desktop.test.js",
     "check": "node --check src/main/main.js && node --check src/main/config.js && node --check src/main/session.js && node --check src/main/oauth.js && node --check src/main/window.js && node --check src/main/ipc.js && node --check src/main/menu.js && node --check src/main/updates.js && node --check src/main/store.js && node --check src/main/links.js && node --check src/preload/preload.cjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",

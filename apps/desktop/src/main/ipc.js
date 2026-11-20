@@ -34,14 +34,17 @@ function handle(channel, listener) {
 const API_METHODS = new Set(['GET', 'POST']);
 
 export function registerIpc({sessionManager, getWindow}) {
-  handle('bardo:info', () => ({
+  handle('bardo:info', async () => ({
     platform: process.platform,
     version: app.getVersion(),
     origin: ORIGIN,
     persisted: sessionManager.persisted,
   }));
 
-  handle('bardo:session', () => ({signedIn: sessionManager.signedIn, user: sessionManager.user}));
+  handle('bardo:session', async () => {
+    await sessionManager.load();
+    return {signedIn: sessionManager.signedIn, user: sessionManager.user};
+  });
 
   handle('bardo:sign-in', async () => {
     const user = await sessionManager.signIn();

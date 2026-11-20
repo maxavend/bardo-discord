@@ -83,6 +83,7 @@ test('cancelar en el navegador termina el inicio de sesión con un error claro',
   });
   while (!opened) await new Promise(resolve => setTimeout(resolve, 5));
   const redirect = opened.searchParams.get('redirect_uri');
+  const cancelled = assert.rejects(flow.promise, error => error.code === 'cancelled');
   await get(`${redirect}?error=access_denied&state=${opened.searchParams.get('state')}`);
-  await assert.rejects(flow.promise, error => error.code === 'cancelled');
+  await cancelled;
 });

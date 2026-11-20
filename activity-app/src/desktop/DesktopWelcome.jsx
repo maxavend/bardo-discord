@@ -20,7 +20,12 @@ export function DesktopWelcome({user, onDone}) {
   const heading = useRef(null);
   const name = user?.global_name || user?.username || '';
 
-  useEffect(() => { heading.current?.focus(); }, [step]);
+  // Al cambiar de paso el foco va al título (lectores de pantalla); no al abrir.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    heading.current?.focus();
+  }, [step]);
 
   const finish = () => {
     markWelcomeSeen(user.id);
@@ -36,9 +41,9 @@ export function DesktopWelcome({user, onDone}) {
       title: 'Elige cómo se ve',
       body: <>
         <p>Puedes cambiarlo cuando quieras desde tu menú de usuario.</p>
-        <div className="desktop-theme-options" role="radiogroup" aria-label="Tema">
+        <div className="desktop-theme-options" role="group" aria-label="Tema">
           {THEMES.map(({value, label, Icon}) => (
-            <button key={value} type="button" role="radio" aria-checked={theme === value}
+            <button key={value} type="button" aria-pressed={theme === value}
               className="desktop-theme-option" onClick={() => setTheme(value)}>
               <Icon width={20} height={20} aria-hidden="true" />{label}
             </button>
@@ -69,8 +74,8 @@ export function DesktopWelcome({user, onDone}) {
         {content.body}
         <div className="desktop-welcome-actions">
           {step > 0
-            ? <Button variant="ghost" onClick={() => setStep(step - 1)}>Atrás</Button>
-            : <Button variant="ghost" onClick={finish}>Saltar</Button>}
+            ? <Button size="lg" variant="ghost" onClick={() => setStep(step - 1)}>Atrás</Button>
+            : <Button size="lg" variant="ghost" onClick={finish}>Saltar</Button>}
           <Button size="lg" onClick={() => (last ? finish() : setStep(step + 1))}>{last ? 'Elegir un canal' : 'Siguiente'}</Button>
         </div>
       </section>

@@ -4,6 +4,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {FilePlus, Hashtag, Microphone, Server} from '@gravity-ui/icons';
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -77,9 +78,13 @@ function QuickSwitcher({open, onOpenChange}) {
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} title="Ir a un canal" description="Busca un canal de tus servidores para abrirlo.">
+      <Command>
       <CommandInput placeholder="Buscar canal o servidor…" />
       <CommandList>
-        <CommandEmpty>{state.status === 'loading' ? 'Buscando tus canales…' : state.status === 'error' ? state.message : 'Ningún canal coincide.'}</CommandEmpty>
+        <CommandEmpty>Ningún canal coincide.</CommandEmpty>
+        {state.status !== 'ready' && <p role="status" className="px-3 py-2 text-sm text-muted-foreground">
+          {state.status === 'error' ? state.message : 'Buscando tus canales…'}
+        </p>}
         <CommandGroup heading="Acciones">
           {inChannel() && <CommandItem value="acción nuevo documento" onSelect={() => { onOpenChange(false); window.dispatchEvent(new CustomEvent('bardo:desktop-command', {detail: 'new-document'})); }}>
             <FilePlus aria-hidden="true" className="text-muted-foreground" />Nuevo documento<CommandShortcut><ShortcutKeys keys={desktopShortcuts()[1].keys} /></CommandShortcut>
@@ -93,6 +98,7 @@ function QuickSwitcher({open, onOpenChange}) {
           <CommandGroup key={guild.id} heading={guild.name}>{guild.channels.map(channel => channelItem(guild, channel, 'canal'))}</CommandGroup>
         ))}
       </CommandList>
+      </Command>
     </CommandDialog>
   );
 }

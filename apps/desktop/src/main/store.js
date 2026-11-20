@@ -26,10 +26,14 @@ export function writeJson(name, value) {
 }
 
 export async function readSecret(name) {
-  if (!safeStorage.isEncryptionAvailable()) return null;
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
   try {
     const encrypted = await readFile(file(name));
-    return JSON.parse(safeStorage.decryptString(encrypted));
+    const {result, shouldReEncrypt} = await safeStorage.decryptStringAsync(encrypted);
+    const value = JSON.parse(result);
+    // El sistema rotó la clave: se vuelve a cifrar con la nueva.
+    if (shouldReEncrypt) await writeSecret(name, value);
+    return value;
   } catch {
     return null;
   }
@@ -37,8 +41,8 @@ export async function readSecret(name) {
 
 /** Devuelve false si el sistema no ofrece cifrado: entonces la sesión dura solo mientras la app esté abierta. */
 export async function writeSecret(name, value) {
-  if (!safeStorage.isEncryptionAvailable()) return false;
-  await writeAtomic(name, safeStorage.encryptString(JSON.stringify(value)));
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) return false;
+  await writeAtomic(name, await safeStorage.encryptStringAsync(JSON.stringify(value)));
   return true;
 }
 

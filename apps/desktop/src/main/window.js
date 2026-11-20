@@ -105,7 +105,7 @@ export async function createMainWindow({onNavigateOutside} = {}) {
   });
   webContents.on('page-title-updated', (event, title) => {
     event.preventDefault();
-    window.setTitle(title && title !== 'Bardo' ? `${title} · Bardo` : 'Bardo');
+    window.setTitle(title && !/\bBardo\b/.test(title) ? `${title} · Bardo` : title || 'Bardo');
   });
 
   return window;

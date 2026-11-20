@@ -15,7 +15,12 @@ export function DesktopSignIn({message, onSignedIn}) {
     if (step === 'authorized') setPhase('finishing');
   }), [bridge]);
 
-  useEffect(() => { heading.current?.focus(); }, [phase]);
+  // Al cambiar de paso el foco va al título (lectores de pantalla); no al abrir.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    heading.current?.focus();
+  }, [phase]);
 
   const signIn = async () => {
     setNotice(null);

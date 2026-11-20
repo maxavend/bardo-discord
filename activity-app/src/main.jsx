@@ -252,12 +252,29 @@ function ActivityRoot() {
   return <><ThemedApp productionState={productionState} onRetry={runBootstrap} /><ThemeDiagnosticsOverlay /></>;
 }
 
+// Un fallo en la capa de escritorio (selector, atajos) nunca tumba la app.
+class DesktopShellBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {failed: false};
+  }
+  static getDerivedStateFromError() {
+    return {failed: true};
+  }
+  componentDidCatch(error) {
+    console.error('Bardo: la capa de escritorio falló', error);
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 const rootElement = document.getElementById('root');
 if (rootElement) {
   createRoot(rootElement).render(
     <React.StrictMode>
       <ActivityRoot />
-      {isDesktopApp() && <Suspense fallback={null}><DesktopShell /></Suspense>}
+      {isDesktopApp() && <DesktopShellBoundary><Suspense fallback={null}><DesktopShell /></Suspense></DesktopShellBoundary>}
     </React.StrictMode>,
   );
 }

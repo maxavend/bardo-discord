@@ -100,7 +100,7 @@ function start() {
   app.whenReady().then(async () => {
     app.setAppUserModelId('app.bardo.desktop');
     registerProtocol();
-    await sessionManager.load();
+    void sessionManager.load();
     registerIpc({sessionManager, getWindow});
     buildMenu({send, signOut: confirmSignOut, checkForUpdates: updater.checkForUpdates});
     const initialLink = process.argv.find(arg => arg.startsWith(`${PROTOCOL}://`));

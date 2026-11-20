@@ -44,20 +44,28 @@ export class SessionManager extends EventEmitter {
     this.accessExpiresAt = 0;
     this.refreshing = null;
     this.pendingSignIn = null;
+    this.loading = null;
   }
 
   get signedIn() {
     return Boolean(this.refreshToken);
   }
 
-  async load() {
-    const saved = await readSecret(SESSION_FILE);
-    if (saved?.refreshToken) {
-      this.refreshToken = saved.refreshToken;
-      this.user = saved.user || null;
-      this.persisted = true;
-    }
-    return this.user;
+  /**
+   * Lee la sesión guardada una sola vez. No bloquea la ventana: el sistema puede
+   * tardar (o pedir permiso al Llavero) y la página ya muestra la carga de Bardo.
+   */
+  load() {
+    this.loading ||= (async () => {
+      const saved = await readSecret(SESSION_FILE);
+      if (saved?.refreshToken && !this.refreshToken) {
+        this.refreshToken = saved.refreshToken;
+        this.user = saved.user || null;
+        this.persisted = true;
+      }
+      return this.user;
+    })();
+    return this.loading;
   }
 
   async persist() {
@@ -66,6 +74,7 @@ export class SessionManager extends EventEmitter {
 
   /** Abre el navegador y espera a que la persona confirme. Solo un intento a la vez. */
   async signIn() {
+    await this.load();
     if (this.pendingSignIn) {
       this.pendingSignIn.reopen();
       return this.pendingSignIn.result;
@@ -113,6 +122,7 @@ export class SessionManager extends EventEmitter {
   }
 
   async getAccessToken({force = false} = {}) {
+    await this.load();
     if (!this.refreshToken) return null;
     if (!force && this.accessToken && Date.now() < this.accessExpiresAt) return this.accessToken;
     // Una sola renovación a la vez: el servidor rota el refresh y detecta repeticiones.
@@ -171,6 +181,7 @@ export class SessionManager extends EventEmitter {
 
   /** Cierra la sesión en este equipo y la revoca en el servidor (con sus tokens de canal). */
   async signOut() {
+    await this.load();
     const token = this.refreshToken;
     await this.clear('signed_out');
     if (token) {
