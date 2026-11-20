@@ -2,12 +2,19 @@
 
 Los registros describen el estado en su fecha. La versión vigente y las verificaciones más recientes aparecen primero.
 
-## Bardo Desktop — pendiente de desplegar
+## Bardo Desktop — 20 de noviembre de 2026
 
-- Rama `feat/desktop-electron`. Agrega la migración `0021_desktop_app.sql` (aditiva: columna `mcp_clients.first_party`, cliente `bardo_desktop` y columna `docs_sessions.app_grant_id`).
-- **Antes del código va la migración:** el Worker nuevo escribe `docs_sessions.app_grant_id` en cada sesión de canal, también en la Activity. El workflow de deploy la aplica primero; si despliegas a mano, ejecuta antes `npx wrangler d1 migrations apply bardo-db --remote`.
-- Nada que configurar en Discord ni secretos nuevos. Opcional: `DESKTOP_MIN_VERSION` (por defecto `0.1.0`) para exigir una versión mínima de la app.
+- Código: `424ef9b` (`main`, PR #49). App `bardo-discord`: versión `a793702c-791d-48fd-b608-3d284cf52e86`, al 100 %, publicada localmente con `--keep-vars`. Anterior: `3c38dc02-595c-47b5-bab6-0ef1462d4fc7`.
+- Migración remota aplicada antes del código: `0021_desktop_app` (aditiva: `mcp_clients.first_party`, cliente `bardo_desktop` y `docs_sessions.app_grant_id`). El Worker nuevo escribe esa columna en cada sesión de canal, también en la Activity: no desplegar este código sin la migración.
+- Sin secretos nuevos ni cambios en Discord. Opcional: `DESKTOP_MIN_VERSION` (por defecto `0.1.0`).
+- Validación en producción: `/api/app/version` 200, metadatos OAuth con `revocation_endpoint`, `/oauth/authorize` reconoce `bardo_desktop` y pide entrar con Discord, `/api/app/me` 401 sin token, `/api/web/session` 200 y `/api/docs` 401 sin token.
 - Instaladores: workflow «Bardo Desktop» (manual o etiqueta `desktop-v*`). Firma y Store: ver [apps/desktop/README.md](apps/desktop/README.md).
+
+Rollback del código (la migración es aditiva y la versión anterior la ignora):
+
+```sh
+npx wrangler rollback 3c38dc02-595c-47b5-bab6-0ef1462d4fc7 --message 'Volver a a2a7b8f' --yes
+```
 
 ## Bardo Web en negro en Chrome: 404 guardados un año — 20 de noviembre de 2026
 
