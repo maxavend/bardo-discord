@@ -2,6 +2,15 @@
 
 Los registros describen el estado en su fecha. La versión vigente y las verificaciones más recientes aparecen primero.
 
+## Bardo no abría en canales privados — 19 de noviembre de 2026
+
+- Causa: al retirar Administrador del rol Bardo (registro del 16 de noviembre), el bot dejó de ver los canales privados sin autorización explícita. El inicio de sesión de la Activity respondía 403 en esos canales; la última sesión correcta desde Discord era del 12 de noviembre.
+- Discord, con autorización explícita: rol Bardo añadido a los permisos de `#weekly`, `#ux-general` y `#anuncios`. Verificado por API (el bot lee los tres canales) y abriendo Bardo en `#weekly` desde Discord web. `#ux-general` deja de estar sincronizado con su categoría. Un cuarto canal con sesiones antiguas (`1476575409305817300`) sigue sin acceso. No se restauró Administrador.
+- App `bardo-discord`: versión `45e88d75-cddc-4e43-96aa-a18cb2891249`, al 100 %, publicada localmente con `--keep-vars`. Anteriores del mismo día: `d2cb2f64-1c10-432c-9f08-b0ed71913584`; antes, `e0991d4e-1764-4924-a406-dc260005408b`. Sin migraciones ni cambios de secretos.
+- Desplegado en esa versión: el guard del SDK de Discord ya no descarta mensajes por ventana de origen ni por referencias repetidas (conserva los límites de tamaño), y las esperas agotadas muestran una referencia corta de diagnóstico. No resultó ser la causa.
+- Pendiente de desplegar con este cambio: «Intentar de nuevo» reutiliza la conexión con Discord (un segundo SDK no recibe READY y su espera agotada tapaba el error real), y el servidor responde `bot_channel_forbidden` con un mensaje propio cuando es el bot quien no ve el canal.
+- Validación: `npm run check` y 637 pruebas de Node. El guard y el reintento se probaron además contra un host de Discord simulado en local.
+
 ## Protección de producción — 16 de noviembre de 2026
 
 - App `bardo-discord`: versión `e0991d4e-1764-4924-a406-dc260005408b`, al 100 %. Anterior: `02a2ba66-3dec-456f-861c-78845d3ffcdd`.

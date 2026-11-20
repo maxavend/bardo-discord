@@ -5,7 +5,7 @@ import {
   saveDocsSession,
 } from './db.js';
 import {
-  canUserViewChannel,
+  createDiscordPermissionChecker,
   DiscordUnavailableError,
   retryAfterFromResponse,
   discordUnavailableResponse,
@@ -118,9 +118,14 @@ async function createAuthenticatedSession(code, guildId, channelId, env) {
   const user = await discordJson('/users/@me', oauth.access_token, env);
   if (!user?.id) throw new Error('Discord identity missing');
 
-  if (!channelId || !(await canUserViewChannel({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, guildId, user.id, channelId))) {
+  const checker = createDiscordPermissionChecker({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, guildId, user.id);
+  if (!channelId || !(await checker.canViewChannel(channelId))) {
     const error = new Error('Discord user cannot view this channel');
-    error.code = 'channel_access_required';
+    // Same refusal either way; only the explanation differs. A channel the bot
+    // cannot read answers the same for every caller, so this reveals nothing.
+    error.code = channelId && await checker.isChannelHiddenFromBot(channelId)
+      ? 'bot_channel_access_required'
+      : 'channel_access_required';
     throw error;
   }
 
@@ -263,6 +268,9 @@ export async function handleDiscordAuthApi(request, url, env) {
     }
     if (error?.code === 'guild_required') {
       return authError(400, 'guild_required', 'Abre Bardo dentro de un servidor de Discord.');
+    }
+    if (error?.code === 'bot_channel_access_required') {
+      return authError(403, 'bot_channel_forbidden', 'Bardo no puede ver este canal. Pide a quien administra el servidor que añada el rol Bardo en los permisos del canal.');
     }
     if (error?.code === 'channel_access_required') {
       return authError(403, 'channel_forbidden', 'No tienes acceso a este canal de Discord.');

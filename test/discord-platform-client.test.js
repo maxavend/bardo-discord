@@ -96,3 +96,40 @@ test('API interceptor only attaches credentials to the same origin and clears st
     assert.equal(request.headers.get('X-Old'), null);
   } finally { globalThis.window = original; }
 });
+
+test('«Intentar de nuevo» reutiliza la conexión con Discord y conserva el error real', async () => {
+  const bundle = await build({
+    entryPoints: ['activity-app/src/production-discord-auth.js'], bundle: true,
+    format: 'esm', write: false, platform: 'browser', plugins: [{name: 'sdk-host', setup(builder) {
+      builder.onResolve({filter: /^@discord\/embedded-app-sdk$/}, () => ({path: 'sdk', namespace: 'fixture'}));
+      builder.onLoad({filter: /.*/, namespace: 'fixture'}, () => ({contents: 'export const DiscordSDK = window.TestDiscordSDK;'}));
+    }}],
+  });
+  const original = {window: globalThis.window, localStorage: globalThis.localStorage, fetch: globalThis.fetch};
+  let handshakes = 0;
+  const message = 'Bardo no puede ver este canal. Pide a quien administra el servidor que añada el rol Bardo en los permisos del canal.';
+  globalThis.window = {
+    location: {href: 'https://example.com/?instance_id=i', origin: 'https://example.com', hostname: 'example.com', search: '?instance_id=i'},
+    TestDiscordSDK: class {
+      guildId = 'g'; channelId = 'c'; instanceId = 'i';
+      // Como Discord: READY llega solo al primer SDK del iframe.
+      mine = (handshakes += 1);
+      ready = () => (this.mine === 1 ? Promise.resolve() : new Promise(() => {}));
+      commands = {authorize: async () => ({code: 'fresh'})};
+    },
+  };
+  globalThis.localStorage = {getItem: () => null, removeItem: () => {}};
+  globalThis.fetch = async () => Response.json({error: 'bot_channel_forbidden', message}, {status: 403});
+  try {
+    // Módulo propio: el SDK compartido vive en el módulo y otra prueba ya importó este mismo bundle.
+    const source = `${bundle.outputFiles[0].text}\n// retry-fixture`;
+    const mod = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+    const first = await mod.authenticateBardoDiscord();
+    const retry = await mod.authenticateBardoDiscord();
+    assert.equal(handshakes, 1, 'el reintento no abre un segundo SDK');
+    for (const result of [first, retry]) {
+      assert.equal(result.ready, false);
+      assert.equal(result.message, message, 'sin «Inténtalo de nuevo en unos segundos» para un 403');
+    }
+  } finally { Object.assign(globalThis, original); }
+});

@@ -1,6 +1,6 @@
 import {installBardoApiSession} from './production-launch-auth.js';
 import {bootWebApp} from './web/web-session.js';
-import {createGuardedDiscordSdk} from './discord-message-guard.js';
+import {createGuardedDiscordSdk, rpcSupportRef} from './discord-message-guard.js';
 
 const FALLBACK_CLIENT_ID = '1539704001535156254';
 const AUTH_TIMEOUT_MS = 15000;
@@ -56,7 +56,7 @@ export function friendlyAuthError(error) {
     return 'Bardo necesita tu permiso de Discord para abrirse. Vuelve a intentarlo y pulsa «Autorizar».';
   }
   if (code === 'token_exchange') {
-    return `${message} Inténtalo de nuevo en unos segundos.`;
+    return error.permanent ? message : `${message} Inténtalo de nuevo en unos segundos.`;
   }
   // Mensajes propios (en español) se muestran tal cual; los del SDK, no.
   if (/^(Discord no|La identidad|Bardo )/.test(message)) return `${message} Inténtalo de nuevo.`;
@@ -100,6 +100,19 @@ export async function authorizeWithDiscord(sdk, clientId) {
 
 // ── Main auth ────────────────────────────────────────────────────────────────
 
+// Discord responde READY una sola vez por iframe. Un segundo SDK (el botón
+// «Intentar de nuevo») se quedaba esperando y su tiempo agotado tapaba el
+// error real del primer intento, así que cada reintento reutiliza este.
+let discordSdk = null;
+
+async function connectDiscordSdk(clientId) {
+  if (!discordSdk) {
+    const {DiscordSDK} = await import('@discord/embedded-app-sdk');
+    discordSdk = createGuardedDiscordSdk(DiscordSDK, clientId);
+  }
+  return discordSdk;
+}
+
 export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) {
   logBreadcrumb('activity_boot_started');
   onStageChange('activity_boot_started');
@@ -121,8 +134,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
 
   try {
     const clientId = resolveClientId();
-    const {DiscordSDK} = await import('@discord/embedded-app-sdk');
-    const sdk = createGuardedDiscordSdk(DiscordSDK, clientId);
+    const sdk = await connectDiscordSdk(clientId);
 
     onStageChange('sdk_ready');
     await withTimeout(sdk.ready(), SDK_READY_TIMEOUT_MS, 'Discord SDK ready');
@@ -177,6 +189,8 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
         ? tokenPayload.message
         : 'Bardo no pudo validar tu sesión de Discord.');
       failure.code = 'token_exchange';
+      // Un 403 es una decisión de permisos: reintentar en segundos no la cambia.
+      failure.permanent = tokenResponse.status === 403;
       failure.detail = `${tokenPayload?.error || 'error'} (HTTP ${tokenResponse.status})`;
       throw failure;
     }
@@ -223,7 +237,11 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logBreadcrumb('bootstrap_error', {error: errorMsg, detail: error?.detail || null});
+    // Solo en esperas agotadas: una referencia corta (sin datos del usuario ni
+    // texto del SDK) que dice en qué paso se cortó la conversación con Discord.
+    const step = /ready/i.test(error?.detail || '') ? 'R' : /authenticate/i.test(error?.detail || '') ? 'I' : 'A';
+    const ref = error?.code === 'timeout' ? rpcSupportRef(step) : null;
+    logBreadcrumb('bootstrap_error', {error: errorMsg, detail: error?.detail || null, ref});
     console.error('Bardo Docs: autenticación Discord falló', error);
     return {
       embedded: true,
@@ -231,7 +249,7 @@ export async function authenticateBardoDiscord({onStageChange = () => {}} = {}) 
       sdk: null,
       guildId: null,
       user: null,
-      message: friendlyAuthError(error),
+      message: ref ? `${friendlyAuthError(error)} (Ref. ${ref})` : friendlyAuthError(error),
       error,
     };
   }
