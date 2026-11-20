@@ -8,6 +8,7 @@ import {
   clientAddress,
   isSameOriginMutation,
   isWebRequest,
+  logoutWebSession,
   overRateLimit,
   pkceChallenge,
   randomToken,
@@ -18,6 +19,8 @@ import {
   consumeMcpAuthCode,
   consumeMcpConsent,
   consumeMcpRefreshToken,
+  extendMcpGrant,
+  findMcpTokenGrant,
   loadMcpAccess,
   loadMcpClient,
   loadMcpGrant,
@@ -33,6 +36,9 @@ export const SCOPE_READ = 'bardo:read';
 export const SCOPE_WRITE = 'bardo:write';
 export const SCOPE_SHARE = 'bardo:share';
 export const ALL_SCOPES = [SCOPE_READ, SCOPE_WRITE, SCOPE_SHARE];
+// Solo para las apps de Bardo: abrir canales como la web (tokens por canal).
+export const SCOPE_APP = 'bardo:app';
+const FIRST_PARTY_SCOPES = [...ALL_SCOPES, SCOPE_APP];
 
 const SCOPE_COPY = {
   [SCOPE_READ]: {
@@ -55,11 +61,14 @@ const METADATA_AUTH_PATH = '/.well-known/oauth-authorization-server';
 const AUTHORIZE_PATH = '/oauth/authorize';
 const TOKEN_PATH = '/oauth/token';
 const REGISTER_PATH = '/oauth/register';
+const REVOKE_PATH = '/oauth/revoke';
 
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-// Pasado este plazo hay que volver a autorizar con Discord.
+// Pasado este plazo hay que volver a autorizar con Discord. En las apps de Bardo
+// el plazo se renueva con cada uso: solo caduca tras 90 días sin abrirla.
 const GRANT_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const FIRST_PARTY_REFRESH_TTL_MS = GRANT_TTL_MS;
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
 const CONSENT_TTL_MS = 10 * 60 * 1000;
 // Dos procesos del mismo cliente pueden refrescar a la vez: no es un robo.
@@ -80,6 +89,7 @@ const FORBIDDEN_REDIRECT_SCHEMES = new Set(['javascript:', 'data:', 'file:', 'vb
 
 const REGISTER_LIMIT_PER_MINUTE = 10;
 const TOKEN_LIMIT_PER_MINUTE = 60;
+const REVOKE_LIMIT_PER_MINUTE = 30;
 const overLimit = (request, bucket, perMinute) => overRateLimit(`${bucket}:${clientAddress(request)}`, perMinute);
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -128,6 +138,8 @@ function authorizationMetadata(env) {
     authorization_endpoint: `${origin}${AUTHORIZE_PATH}`,
     token_endpoint: `${origin}${TOKEN_PATH}`,
     registration_endpoint: `${origin}${REGISTER_PATH}`,
+    revocation_endpoint: `${origin}${REVOKE_PATH}`,
+    revocation_endpoint_auth_methods_supported: ['none'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
@@ -263,10 +275,11 @@ function redirectToClient(redirectUri, params, status = 302) {
   return new Response(null, {status, headers: {Location: target.toString(), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'}});
 }
 
-function requestedScopes(raw) {
-  if (raw === null || raw === undefined || !String(raw).trim()) return ALL_SCOPES;
+function requestedScopes(raw, client) {
+  const allowed = client.firstParty ? FIRST_PARTY_SCOPES : ALL_SCOPES;
+  if (raw === null || raw === undefined || !String(raw).trim()) return [...allowed];
   const requested = String(raw).trim().split(/\s+/);
-  return ALL_SCOPES.filter(scope => requested.includes(scope));
+  return allowed.filter(scope => requested.includes(scope));
 }
 
 function destinationLabel(redirectUri) {
@@ -303,6 +316,37 @@ function consentPage(client, session, consentId, scopes, redirectUri) {
     </form>`);
 }
 
+// Las apps de Bardo no piden permisos sueltos: son Bardo. Aun así la persona
+// confirma con un clic, porque otra app del equipo podría iniciar este flujo.
+function firstPartyConsentPage(client, session, consentId) {
+  return htmlPage('Iniciar sesión', `
+    <h1>Continuar en ${escapeHtml(client.clientName)}</h1>
+    <p>Entrarás como <strong>${escapeHtml(session.username || 'tu usuario de Discord')}</strong>. Verás lo mismo que en Discord: solo los canales a los que tienes acceso.</p>
+    <p class="muted">Si no abriste Bardo en este equipo hace un momento, cancela.</p>
+    <form method="post" action="${AUTHORIZE_PATH}">
+      <input type="hidden" name="consent" value="${escapeHtml(consentId)}">
+      <div class="actions">
+        <button type="submit" name="decision" value="switch">Usar otra cuenta</button>
+        <button type="submit" name="decision" value="deny">Cancelar</button>
+        <button type="submit" name="decision" value="allow">Continuar</button>
+      </div>
+    </form>
+    <p class="muted">Puedes cerrar la sesión de este equipo desde la app o desde Conexiones en tu menú de usuario.</p>`);
+}
+
+function authorizePath(consent) {
+  const params = new URLSearchParams({
+    client_id: consent.clientId,
+    response_type: 'code',
+    redirect_uri: consent.redirectUri,
+    code_challenge: consent.codeChallenge,
+    code_challenge_method: 'S256',
+    scope: consent.scope,
+  });
+  if (consent.state) params.set('state', consent.state);
+  return `${AUTHORIZE_PATH}?${params}`;
+}
+
 async function showConsent(request, url, env) {
   const params = url.searchParams;
   const clientId = params.get('client_id') || '';
@@ -326,7 +370,7 @@ async function showConsent(request, url, env) {
   }
   if (state && state.length > MAX_STATE_LENGTH) return fail('El parámetro state es demasiado largo.');
   if (params.getAll('resource').some(resource => resource !== resourceUrl(env))) return fail('Este servidor solo autoriza su propio MCP.');
-  const scopes = requestedScopes(params.get('scope'));
+  const scopes = requestedScopes(params.get('scope'), client);
   if (!scopes.length) return fail('Ninguno de los permisos pedidos existe.');
   if (!scopes.includes(SCOPE_READ)) scopes.unshift(SCOPE_READ);
 
@@ -346,7 +390,9 @@ async function showConsent(request, url, env) {
     scope: scopes.join(' '),
     expiresAt: new Date(Date.now() + CONSENT_TTL_MS).toISOString(),
   });
-  return consentPage(client, session, consentId, scopes, redirectUri);
+  return client.firstParty
+    ? firstPartyConsentPage(client, session, consentId)
+    : consentPage(client, session, consentId, scopes, redirectUri);
 }
 
 async function submitConsent(request, env) {
@@ -372,6 +418,14 @@ async function submitConsent(request, env) {
   }
 
   const issuer = webOrigin(env);
+  const client = await loadMcpClient(env.DB, consent.clientId);
+  if (form.get('decision') === 'switch' && client?.firstParty) {
+    // Cierra la sesión del navegador y pide a Discord que muestre su pantalla,
+    // donde se puede cambiar de cuenta. Luego vuelve a esta misma autorización.
+    const cleared = await logoutWebSession(request, env);
+    const location = `/auth/discord?prompt=consent&return_to=${encodeURIComponent(authorizePath(consent))}`;
+    return new Response(null, {status: 303, headers: {Location: location, 'Set-Cookie': cleared, 'Cache-Control': 'no-store'}});
+  }
   if (form.get('decision') !== 'allow') {
     return redirectToClient(consent.redirectUri, {error: 'access_denied', state: consent.state, iss: issuer}, 303);
   }
@@ -379,7 +433,9 @@ async function submitConsent(request, env) {
   // Solo lo que el cliente pidió y la persona dejó marcado. Leer es la base.
   const offered = consent.scope.split(' ');
   const chosen = form.getAll('scope').map(String);
-  const granted = offered.filter(scope => scope === SCOPE_READ || chosen.includes(scope));
+  const granted = client?.firstParty
+    ? offered
+    : offered.filter(scope => scope === SCOPE_READ || chosen.includes(scope));
 
   const now = Date.now();
   const code = `bardo_code_${randomToken()}`;
@@ -406,9 +462,10 @@ async function issueTokens(env, grant) {
   const accessToken = `bardo_at_${randomToken()}`;
   const refreshToken = `bardo_rt_${randomToken()}`;
   const grantExpiry = Date.parse(grant.expiresAt);
+  const refreshTtl = grant.firstParty ? FIRST_PARTY_REFRESH_TTL_MS : REFRESH_TOKEN_TTL_MS;
   await saveMcpTokens(env.DB, grant.id, [
     {tokenHash: await hashToken(accessToken), kind: 'access', expiresAt: new Date(Math.min(now + ACCESS_TOKEN_TTL_MS, grantExpiry)).toISOString()},
-    {tokenHash: await hashToken(refreshToken), kind: 'refresh', expiresAt: new Date(Math.min(now + REFRESH_TOKEN_TTL_MS, grantExpiry)).toISOString()},
+    {tokenHash: await hashToken(refreshToken), kind: 'refresh', expiresAt: new Date(Math.min(now + refreshTtl, grantExpiry)).toISOString()},
   ], new Date(now).toISOString());
   return publicJson({
     access_token: accessToken,
@@ -468,7 +525,36 @@ async function exchangeRefreshToken(params, env) {
     return invalidGrant('Este token ya se usó.');
   }
   if (grant.revokedAt || !(Date.parse(grant.expiresAt) > Date.now())) return invalidGrant('Esta autorización terminó. Vuelve a conectar la app.');
+  if (grant.firstParty) {
+    const extended = new Date(Date.now() + GRANT_TTL_MS).toISOString();
+    await extendMcpGrant(env.DB, grant.id, extended);
+    grant.expiresAt = extended;
+  }
   return issueTokens(env, grant);
+}
+
+/** RFC 7009: cerrar sesión desde la app revoca toda la autorización. Siempre responde 200. */
+async function handleRevoke(request, env) {
+  if (request.method !== 'POST') return oauthError('invalid_request', 'Usa POST.', 405);
+  if (overLimit(request, 'revoke', REVOKE_LIMIT_PER_MINUTE)) {
+    return oauthError('temporarily_unavailable', 'Demasiados intentos seguidos. Espera un minuto.', 429);
+  }
+  let text;
+  try {
+    text = await readRequestText(request, MAX_TOKEN_BODY_BYTES);
+  } catch (error) {
+    return error instanceof RequestBodyTooLargeError
+      ? oauthError('invalid_request', 'La solicitud es demasiado grande.', 413)
+      : oauthError('invalid_request', 'No se pudo leer la solicitud.');
+  }
+  const params = new URLSearchParams(text);
+  const token = params.get('token') || '';
+  const clientId = params.get('client_id') || '';
+  if (!token || !clientId) return oauthError('invalid_request', 'Faltan token o client_id.');
+  // Solo el cliente al que se emitió puede revocarlo; un token desconocido no es un error.
+  const grantId = await findMcpTokenGrant(env.DB, await hashToken(token), clientId);
+  if (grantId) await revokeMcpGrant(env.DB, grantId, new Date().toISOString());
+  return publicJson({});
 }
 
 async function handleToken(request, env) {
@@ -514,7 +600,8 @@ export async function handleMcpOAuth(request, url, env) {
   const isMetadata = pathname === METADATA_AUTH_PATH
     || pathname === METADATA_RESOURCE_PATH
     || pathname === `${METADATA_RESOURCE_PATH}${MCP_PATH}`;
-  const isEndpoint = pathname === AUTHORIZE_PATH || pathname === TOKEN_PATH || pathname === REGISTER_PATH;
+  const isEndpoint = pathname === AUTHORIZE_PATH || pathname === TOKEN_PATH
+    || pathname === REGISTER_PATH || pathname === REVOKE_PATH;
   if (!isMetadata && !isEndpoint) return null;
   if (!isWebRequest(url, env) || !env.DB) return new Response('Not found', {status: 404});
 
@@ -525,6 +612,7 @@ export async function handleMcpOAuth(request, url, env) {
   if (isMetadata) return publicJson(resourceMetadata(env));
   if (pathname === REGISTER_PATH) return handleRegister(request, env);
   if (pathname === TOKEN_PATH) return handleToken(request, env);
+  if (pathname === REVOKE_PATH) return handleRevoke(request, env);
   if (request.method === 'GET') return showConsent(request, url, env);
   if (request.method === 'POST') return submitConsent(request, env);
   return new Response('Method not allowed', {status: 405});

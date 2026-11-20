@@ -27,7 +27,8 @@ export async function boundRequestBody(request) {
   let maxBytes = 256 * KIB; // Signed Discord interactions and unknown routes.
   if (pathname === '/api/csp-report' || pathname.startsWith('/oauth/')
       || pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/')
-      || pathname.startsWith('/api/settings') || pathname.startsWith('/api/web/')) {
+      || pathname.startsWith('/api/settings') || pathname.startsWith('/api/web/')
+      || pathname.startsWith('/api/app/')) {
     maxBytes = 8 * KIB;
   } else if (pathname.startsWith('/api/planner')) {
     maxBytes = 512 * KIB;

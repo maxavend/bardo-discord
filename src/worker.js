@@ -29,6 +29,7 @@ import { loadEffectiveSettings } from './settings-db.js';
 import { handleDiscordAuthApi, requireDocsSession } from './discord-auth.js';
 import { fetchWebAppHtml, handleWebAuth, isWebRequest } from './web-auth.js';
 import { handleWebApi } from './web-api.js';
+import { handleAppApi } from './app-api.js';
 import { cleanupWebAndMcp } from './web-db.js';
 import { handleMcpOAuth } from './mcp-oauth.js';
 import { handleMcp } from './mcp-server.js';
@@ -1260,6 +1261,7 @@ async function routeRequest(request, env, ctx) {
   // Web y MCP: apagados (404) mientras WEB_ORIGIN no esté configurado.
   const webResponse = await handleWebAuth(request, url, env)
     || await handleWebApi(request, url, env)
+    || await handleAppApi(request, url, env)
     || await handleMcpOAuth(request, url, env)
     || await handleMcp(request, url, env, ctx);
   if (webResponse) return webResponse;

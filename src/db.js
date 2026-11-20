@@ -636,8 +636,8 @@ export async function deleteDocsLaunchIntent(db, userId, guildId, documentId) {
 export async function saveDocsSession(db, tokenHash, session) {
   await db
     .prepare(
-      `INSERT INTO docs_sessions (token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at, web_session_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO docs_sessions (token_hash, user_id, guild_id, channel_id, username, avatar, created_at, expires_at, web_session_hash, app_grant_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(token_hash) DO UPDATE SET
          user_id = excluded.user_id,
          guild_id = excluded.guild_id,
@@ -646,7 +646,8 @@ export async function saveDocsSession(db, tokenHash, session) {
          avatar = excluded.avatar,
          created_at = excluded.created_at,
          expires_at = excluded.expires_at,
-         web_session_hash = excluded.web_session_hash`,
+         web_session_hash = excluded.web_session_hash,
+         app_grant_id = excluded.app_grant_id`,
     )
     .bind(
       tokenHash,
@@ -658,6 +659,7 @@ export async function saveDocsSession(db, tokenHash, session) {
       session.createdAt,
       session.expiresAt,
       session.webSessionHash || null,
+      session.appGrantId || null,
     )
     .run();
 }

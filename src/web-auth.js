@@ -190,6 +190,8 @@ async function startLogin(request, url, env) {
     state,
     code_challenge: await pkceChallenge(codeVerifier),
     code_challenge_method: 'S256',
+    // Desde «Usar otra cuenta» de una app de Bardo: Discord muestra su pantalla y deja cambiar de cuenta.
+    ...(url.searchParams.get('prompt') === 'consent' ? {prompt: 'consent'} : {}),
   }).toString();
 
   const {binding: bindingName, attributes} = cookieSettings(env);

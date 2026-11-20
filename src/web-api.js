@@ -1,93 +1,30 @@
 // API exclusiva de la web (cookie + mismo origen): sesión, selector de canales,
 // tokens por canal y conexiones de IA. Las APIs de contenido no cambian: reciben
 // el mismo Bearer por canal que usa la Activity.
-import {mintChannelSession} from './discord-auth.js';
-import {readRequestText, RequestBodyTooLargeError} from './request-body.js';
 import {enforceUserRateLimit} from './request-security.js';
-import {canUserViewChannel, discordUnavailableResponse, isDiscordUnavailableError} from './discord-permissions.js';
+import {discordUnavailableResponse, isDiscordUnavailableError} from './discord-permissions.js';
+import {handleChannelContent, handleChannelSession, principalUser} from './channel-access.js';
 import {
   isSameOriginMutation,
   isWebRequest,
   logoutWebSession,
-  overRateLimit,
   readWebSession,
   webError,
   webJson,
 } from './web-auth.js';
-import {listUserChannels, userGuildForContent} from './web-channels.js';
-import {summarizeChannelContent} from './web-channel-content.js';
+import {listUserChannels} from './web-channels.js';
 import {listMcpGrantsForUser, revokeMcpGrantForUser} from './web-db.js';
 
 const PREFIX = '/api/web/';
-// Ids de Discord (y los de los fixtures de prueba): nunca llegan sin codificar a una URL.
-const ID_PATTERN = /^[\w-]{1,64}$/;
 const CONNECTIONS_PATH = /^connections\/([\w-]{1,64})$/;
 // Los tokens de canal viven en memoria y salen de nuevo en cada carga de página.
 const CHANNEL_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-// Cada apertura consulta a Discord sin caché, y el límite del bot es compartido.
-const CHANNEL_OPENS_PER_MINUTE = 30;
 
-function webUser(session) {
-  return {
-    id: session.userId,
-    username: session.username,
-    global_name: session.username,
-    avatar: session.avatar,
-  };
-}
+const webUser = principalUser;
 
 const methodNotAllowed = () => webError(405, 'method_not_allowed', 'Esta acción no está disponible.');
 const signInRequired = () => webError(401, 'auth_required', 'Inicia sesión con Discord para continuar.');
 const crossOrigin = () => webError(403, 'cross_origin', 'Esta solicitud no viene de Bardo.');
-
-async function handleChannelContent(url, env, session) {
-  const guildId = url.searchParams.get('guild_id') || '';
-  if (!ID_PATTERN.test(guildId)) return webError(400, 'invalid_guild', 'Ese servidor no es válido. Elige otro.');
-  try {
-    const guild = await userGuildForContent(env, guildId, session.userId);
-    if (!guild) return webError(403, 'guild_forbidden', 'Este servidor no está disponible para tu cuenta.');
-    const channels = await summarizeChannelContent(env.DB, guildId, guild.channels.map(channel => channel.id));
-    return webJson({guildId, channels});
-  } catch (error) {
-    if (isDiscordUnavailableError(error)) throw error;
-    console.warn('Bardo web: resumen de contenido no disponible');
-    return webError(503, 'content_unavailable', 'No pudimos consultar el contenido. Puedes abrir los canales o intentar de nuevo.');
-  }
-}
-
-async function handleChannelSession(request, env, session) {
-  if (overRateLimit(`channel-session:${session.userId}`, CHANNEL_OPENS_PER_MINUTE)) {
-    return webError(429, 'rate_limited', 'Abriste muchos canales seguidos. Espera un minuto y vuelve a intentarlo.');
-  }
-  let payload;
-  try {
-    payload = JSON.parse(await readRequestText(request, 8 * 1024));
-  } catch (error) {
-    if (error instanceof RequestBodyTooLargeError) return webError(413, 'payload_too_large', 'La solicitud es demasiado grande.');
-    return webError(400, 'invalid_json', 'No pudimos leer la solicitud. Inténtalo de nuevo.');
-  }
-  const guildId = typeof payload?.guildId === 'string' ? payload.guildId.trim() : '';
-  const channelId = typeof payload?.channelId === 'string' ? payload.channelId.trim() : '';
-  if (!ID_PATTERN.test(guildId) || !ID_PATTERN.test(channelId)) {
-    return webError(400, 'invalid_channel', 'Ese canal no es válido. Elige otro.');
-  }
-  // Sin caché: abrir un canal siempre refleja los permisos actuales de Discord.
-  const canView = await canUserViewChannel({...env, DISCORD_PERMISSION_CACHE_TTL_MS: 0}, guildId, session.userId, channelId);
-  if (!canView) return webError(403, 'channel_forbidden', 'No tienes acceso a este canal de Discord.');
-
-  const webExpiry = Date.parse(session.expiresAt);
-  const expiresAt = new Date(Math.min(webExpiry, Date.now() + CHANNEL_TOKEN_TTL_MS)).toISOString();
-  const {token} = await mintChannelSession(env, {
-    userId: session.userId,
-    username: session.username,
-    avatar: session.avatar,
-    guildId,
-    channelId,
-    expiresAt,
-    webSessionHash: session.tokenHash,
-  });
-  return webJson({bardo_token: token, expires_at: expiresAt, guild_id: guildId, channel_id: channelId, user: webUser(session)});
-}
 
 async function handleConnections(request, env, session, grantId) {
   const now = new Date().toISOString();
@@ -98,6 +35,7 @@ async function handleConnections(request, env, session, grantId) {
       connections: grants.map(grant => ({
         id: grant.id,
         clientName: grant.clientName,
+        firstParty: grant.firstParty,
         scopes: grant.scope.split(' ').filter(Boolean),
         createdAt: grant.createdAt,
         lastUsedAt: grant.lastUsedAt,
@@ -145,7 +83,7 @@ async function routeWebApi(request, url, env) {
   if (path === 'channel-session') {
     if (request.method !== 'POST') return methodNotAllowed();
     if (!isSameOriginMutation(request, env)) return crossOrigin();
-    return handleChannelSession(request, env, session);
+    return handleChannelSession(request, env, session, {ttlMs: CHANNEL_TOKEN_TTL_MS, link: {webSessionHash: session.tokenHash}});
   }
   if (path === 'connections') return handleConnections(request, env, session, null);
   const connection = path.match(CONNECTIONS_PATH);
