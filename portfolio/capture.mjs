@@ -30,6 +30,9 @@ const KICKOFF_FILE = join(HERE, 'mock/archivos/Kickoff · Pagos recurrentes.md')
 // Escritura a ritmo humano: con 0 ms entre teclas el editor encadena commits
 // síncronos hasta el límite de React (no ocurre a velocidad real).
 const TYPE_DELAY = 30;
+// El modo local avisa «Solo en este dispositivo»: en Discord ese renglón no
+// existe (o dice el canal), así que no aparece en las capturas.
+const LOCAL_NOTICE_CSS = '.home-context,#kanban-title+p{display:none!important}';
 // Piezas: oculta la app, el fondo del diálogo y su sombra para fotografiar solo el elemento.
 const PIECE_CSS = 'body>*:not(:has([data-slot$="dialog-content"])){display:none!important}[data-slot$="dialog-overlay"]{display:none!important}'
   + 'html,body{background:transparent!important}html::before{display:none!important}[data-slot$="dialog-content"]{box-shadow:none!important}'
@@ -57,7 +60,7 @@ const SCENES = [
   {
     flow: '01-inicio',
     async run({page, url, shot}) {
-      await open(page, `${url}/#home`, page.getByRole('heading', {name: 'Lo último en tu espacio'}));
+      await open(page, `${url}/#home`, page.getByRole('heading', {name: 'Para retomar'}));
       await shot('01-resumen-del-espacio');
       await page.locator('#home-tasks').scrollIntoViewIfNeeded();
       await page.locator('#home-tasks').evaluate(node => node.closest('section').scrollIntoView({block: 'end'}));
@@ -162,7 +165,7 @@ const SCENES = [
       await page.getByLabel('Nombre de la reunión').waitFor();
       await scrollTop(page);
       await shot('04-editar-agenda');
-      await page.getByRole('button', {name: 'Facilita', exact: true}).click();
+      await page.getByRole('button', {name: 'Facilitan', exact: true}).click();
       await page.getByPlaceholder('Buscar persona…').waitFor();
       await shot('05-elegir-quien-facilita');
       await page.keyboard.press('Escape');
@@ -230,12 +233,12 @@ const SCENES = [
       await scrollTo(page, page.getByText(/Acuerdos \(\d+\)/).first(), 'start');
       await shot('15-resumen-acuerdos');
 
-      await page.getByRole('button', {name: 'Crear tareas'}).click();
-      const toCards = page.getByRole('dialog', {name: 'Crear tareas desde los acuerdos'});
+      await page.getByRole('button', {name: /^Revisar acuerdos/}).click();
+      const toCards = page.getByRole('dialog', {name: 'Revisar acuerdos'});
       await toCards.getByRole('list', {name: 'Acuerdos'}).waitFor();
       await page.waitForTimeout(500);
       await shot('16-acuerdos-a-tareas', {piece: '[data-slot="dialog-content"]'});
-      await toCards.getByRole('button', {name: /^Crear \d+ tareas?$/}).click();
+      await toCards.getByRole('button', {name: /^Crear \d+ tareas?/}).click();
       await toCards.getByRole('button', {name: 'Ir a Tareas'}).waitFor();
       await shot('17-tareas-creadas');
       await page.keyboard.press('Escape');
@@ -331,8 +334,10 @@ const SCENES = [
   {
     flow: '05-ajustes',
     async run({page, url, shot}) {
-      await open(page, `${url}/#home`, page.getByRole('heading', {name: 'Lo último en tu espacio'}));
-      await page.getByRole('button', {name: 'Ajustes'}).click();
+      await open(page, `${url}/#home`, page.getByRole('heading', {name: 'Para retomar'}));
+      // Ajustes vive en el menú de perfil del header.
+      await page.locator('.user-menu-trigger').click();
+      await page.getByRole('menuitem', {name: /Tus preferencias/}).click();
       const dialog = page.getByRole('dialog', {name: 'Ajustes'});
       await dialog.waitFor();
       await page.waitForTimeout(500);
@@ -443,6 +448,13 @@ for (const scene of SCENES) {
       // Un navegador por flujo: aislado de temporizadores pendientes del anterior.
       browser = await launch();
       const context = await seededContext(browser, {device, theme, ...(PREVIEW ? {scale: 1} : {})});
+      await context.addInitScript(css => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const style = document.createElement('style');
+          style.textContent = css;
+          document.head.append(style);
+        });
+      }, LOCAL_NOTICE_CSS);
       const page = await context.newPage();
       page.setDefaultTimeout(15_000);
       const errors = collectErrors(page);
