@@ -3,7 +3,7 @@ import {ArrowLeft, ArrowRightArrowLeft, ChevronDown, Gear} from '@gravity-ui/ico
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {BetaChip, BetaNote} from './BetaNotice.jsx';
 import {useWorkspace} from './workspace.js';
-import {goToChannelPicker, isWebApp} from './web/web-session.js';
+import {channelPickerHref, goToChannelPicker, isWebApp} from './web/web-session.js';
 
 /** Ícono del servidor de Discord; sin imagen, sus iniciales, como en Discord. */
 function ServerIcon({name, src}) {
@@ -76,7 +76,7 @@ export function WorkspaceName({moduleLabel, onOpenSettings}) {
           )}
         </PopoverContent>
       </Popover>
-      {isWebApp() && <a href="/" className="workspace-account-home"><ArrowLeft width={16} height={16} aria-hidden="true" />Mis servidores</a>}
+      {isWebApp() && <a href={channelPickerHref()} className="workspace-account-home"><ArrowLeft width={16} height={16} aria-hidden="true" />Mis servidores</a>}
       <span className="max-md:hidden"><BetaChip /></span>
     </span>
   );

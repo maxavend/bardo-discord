@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useId, useLayoutEffect, useRef, useState} from 'react';
 import {ChevronRight, Hashtag, Microphone} from '@gravity-ui/icons';
 import {Button} from '@/components/ui/button';
+import {gateFetch} from '../desktop/desktop-bridge.js';
 
 const VOICE_TYPES = new Set([2, 13]);
 const dateFormat = new Intl.DateTimeFormat('es', {day: 'numeric', month: 'short', year: 'numeric'});
@@ -83,9 +84,7 @@ export function ServerChannels({server, channels, onOpen, opening, onExpired}) {
     const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
     setState(previous => ({...previous, loading: true, error: false}));
     try {
-      const response = await fetch(`/api/web/channel-content?guild_id=${encodeURIComponent(server.id)}`, {
-        headers: {Accept: 'application/json'}, cache: 'no-store', signal: controller.signal,
-      });
+      const response = await gateFetch('channel-content', {query: {guild_id: server.id}, signal: controller.signal});
       if (controller.signal.aborted) return;
       if (response.status === 401) { onExpired(true); return; }
       if (response.status === 403) {

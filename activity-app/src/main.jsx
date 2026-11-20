@@ -4,6 +4,7 @@ import {applyDiscordTheme, collectDiscordThemeDiagnostics} from './discord-theme
 import {syncThemePreference} from './theme-sync.js';
 import {prepareBardoProduction} from './production-bridge.js';
 import {authenticateBardoDiscord, logBreadcrumb} from './production-discord-auth.js';
+import {isDesktopApp} from './desktop/desktop-bridge.js';
 import '@fontsource-variable/inter/opsz.css';
 import './styles.css';
 import './editor-focus.css';
@@ -21,6 +22,9 @@ const appModulePromise = import('./App.jsx');
 const App = lazy(() => appModulePromise);
 // Pantallas previas al canal en la web: Discord nunca las descarga.
 const WebGate = lazy(() => import('./web/WebGate.jsx').then(module => ({default: module.WebGate})));
+// Bardo para escritorio: menú nativo, selector rápido y atajos. La web no lo descarga.
+const DesktopShell = lazy(() => import('./desktop/DesktopShell.jsx').then(module => ({default: module.DesktopShell})));
+if (isDesktopApp()) document.documentElement.dataset.bardoDesktop = 'true';
 
 // Si el enlace abre una vista pesada (editor, Reuniones, Tareas), su módulo
 // se descarga junto con App y no después: sin cascada al entrar directo.
@@ -253,6 +257,7 @@ if (rootElement) {
   createRoot(rootElement).render(
     <React.StrictMode>
       <ActivityRoot />
+      {isDesktopApp() && <Suspense fallback={null}><DesktopShell /></Suspense>}
     </React.StrictMode>,
   );
 }

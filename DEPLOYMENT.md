@@ -2,6 +2,13 @@
 
 Los registros describen el estado en su fecha. La versión vigente y las verificaciones más recientes aparecen primero.
 
+## Bardo para escritorio — pendiente de desplegar
+
+- Rama `feat/desktop-electron`. Agrega la migración `0021_desktop_app.sql` (aditiva: columna `mcp_clients.first_party`, cliente `bardo_desktop` y columna `docs_sessions.app_grant_id`).
+- **Antes del código va la migración:** el Worker nuevo escribe `docs_sessions.app_grant_id` en cada sesión de canal, también en la Activity. El workflow de deploy la aplica primero; si despliegas a mano, ejecuta antes `npx wrangler d1 migrations apply bardo-db --remote`.
+- Nada que configurar en Discord ni secretos nuevos. Opcional: `DESKTOP_MIN_VERSION` (por defecto `0.1.0`) para exigir una versión mínima de la app.
+- Instaladores: workflow «Bardo para escritorio» (manual o etiqueta `desktop-v*`). Firma y Store: ver [apps/desktop/README.md](apps/desktop/README.md).
+
 ## Bardo no abría en canales privados — 19 de noviembre de 2026
 
 - Causa: al retirar Administrador del rol Bardo (registro del 16 de noviembre), el bot dejó de ver los canales privados sin autorización explícita. El inicio de sesión de la Activity respondía 403 en esos canales; la última sesión correcta desde Discord era del 12 de noviembre.
