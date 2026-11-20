@@ -589,6 +589,26 @@ test('el HTML de la Activity declara quién puede mostrarla (reporte o bloqueo) 
   assert.equal(posted.status, 204);
 });
 
+test('el aviso de error del navegador solo registra campos acotados y responde 204', async () => {
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  try {
+    const posted = await worker.fetch(new Request('http://localhost/api/client-error', {
+      method: 'POST', body: JSON.stringify({ kind: 'chunk', message: 'x'.repeat(500), probe: '200 text/javascript', path: '/', build: '/assets/index-a.js', token: 'secreto' }),
+    }), {});
+    assert.equal(posted.status, 204);
+    const get = await worker.fetch(new Request('http://localhost/api/client-error'), {});
+    assert.equal(get.status, 405);
+  } finally {
+    console.warn = original;
+  }
+  const logged = JSON.parse(warnings.find(line => line.startsWith('Client error')).slice('Client error '.length));
+  assert.equal(logged.kind, 'chunk');
+  assert.equal(logged.message.length, 300);
+  assert.equal(logged.token, undefined);
+});
+
 test('los assets con hash se cachean un año sin revalidar y el HTML no hereda ese caché', async () => {
   const rules = (await readFile(new URL('../activity-app/public/_headers', import.meta.url), 'utf8'))
     .split(/\n(?=\S)/).map(block => block.trim()).filter(block => block && !block.startsWith('#'));

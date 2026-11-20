@@ -127,7 +127,34 @@ function reloadForNewVersion() {
   return true;
 }
 
+/** Avisa al servidor qué falló (sin datos del canal) y, si fue una descarga,
+ * qué responde ese archivo al pedirlo de nuevo: red bloqueada, 404 o cuerpo raro. */
+async function reportClientError(kind, error) {
+  try {
+    const message = String(error?.message || error || '').replace(window.location.origin, '').slice(0, 300);
+    let probe = '';
+    const failedUrl = String(error?.message || '').match(/(https?:\/\/\S+?\.(?:js|css))\b/)?.[1];
+    if (failedUrl) {
+      try {
+        const response = await fetch(failedUrl, {cache: 'no-store'});
+        const body = await response.text();
+        probe = `${response.status} ${response.headers.get('content-type') || '-'} ${body.length}b ${body.slice(0, 40).replace(/\s+/g, ' ')}`;
+      } catch (probeError) {
+        probe = `fetch: ${probeError?.message || probeError}`;
+      }
+    }
+    const build = document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || '';
+    const payload = JSON.stringify({kind, message, probe, path: window.location.pathname, build});
+    if (!navigator.sendBeacon?.('/api/client-error', new Blob([payload], {type: 'application/json'}))) {
+      fetch('/api/client-error', {method: 'POST', body: payload, keepalive: true, headers: {'Content-Type': 'application/json'}}).catch(() => {});
+    }
+  } catch {
+    // El aviso es solo diagnóstico.
+  }
+}
+
 window.addEventListener('vite:preloadError', (event) => {
+  reportClientError('preload', event.payload);
   if (reloadForNewVersion()) event.preventDefault();
 });
 
@@ -144,7 +171,9 @@ class RootErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     console.error('Bardo render failed:', error, info?.componentStack);
     logBreadcrumb('render_error', {error: error instanceof Error ? error.message : String(error)});
-    if (isStaleChunkError(error)) reloadForNewVersion();
+    const stale = isStaleChunkError(error);
+    reportClientError(stale ? 'chunk' : 'render', error);
+    if (stale) reloadForNewVersion();
   }
 
   render() {

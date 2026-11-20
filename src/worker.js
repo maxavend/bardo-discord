@@ -1250,11 +1250,36 @@ async function handleCspReport(request) {
   return new Response(null, { status: 204 });
 }
 
+const CLIENT_ERROR_PATH = '/api/client-error';
+
+/** Fallos de la app en el navegador (pantalla de error): solo se registran, acotados, para `wrangler tail`. */
+async function handleClientError(request) {
+  const text = (await request.text().catch(() => '')).slice(0, 2_048);
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch {
+    return new Response(null, { status: 204 });
+  }
+  const field = (name, max = 300) => String(report?.[name] ?? '').slice(0, max);
+  console.warn('Client error', JSON.stringify({
+    kind: field('kind', 40),
+    message: field('message'),
+    probe: field('probe', 200),
+    path: field('path', 80),
+    build: field('build', 60),
+  }));
+  return new Response(null, { status: 204 });
+}
+
 async function routeRequest(request, env, ctx) {
   const url = new URL(request.url);
 
   if (url.pathname === CSP_REPORT_PATH) {
     return request.method === 'POST' ? handleCspReport(request) : new Response(null, { status: 405 });
+  }
+  if (url.pathname === CLIENT_ERROR_PATH) {
+    return request.method === 'POST' ? handleClientError(request) : new Response(null, { status: 405 });
   }
 
   // Web y MCP: apagados (404) mientras WEB_ORIGIN no esté configurado.
