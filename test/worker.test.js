@@ -589,6 +589,16 @@ test('el HTML de la Activity declara quién puede mostrarla (reporte o bloqueo) 
   assert.equal(posted.status, 204);
 });
 
+test('un archivo de /assets/ que no existe no queda guardado en caché', async () => {
+  const ASSETS = { fetch: async () => new Response('Not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=31536000, immutable' } }) };
+  const missing = await worker.fetch(new Request('http://localhost/assets/App.abc123.js'), { ASSETS });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.headers.get('Cache-Control'), 'no-store');
+  const OK = { fetch: async () => new Response('export {}', { headers: { 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Type': 'text/javascript' } }) };
+  const found = await worker.fetch(new Request('http://localhost/assets/App.abc123.js'), { ASSETS: OK });
+  assert.equal(found.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+});
+
 test('el aviso de error del navegador solo registra campos acotados y responde 204', async () => {
   const warnings = [];
   const original = console.warn;

@@ -143,7 +143,7 @@ async function reportClientError(kind, error) {
         probe = `fetch: ${probeError?.message || probeError}`;
       }
     }
-    const build = document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src') || '';
+    const build = document.querySelector('script[type="module"][src*="/assets/index"]')?.getAttribute('src') || '';
     const payload = JSON.stringify({kind, message, probe, path: window.location.pathname, build});
     if (!navigator.sendBeacon?.('/api/client-error', new Blob([payload], {type: 'application/json'}))) {
       fetch('/api/client-error', {method: 'POST', body: payload, keepalive: true, headers: {'Content-Type': 'application/json'}}).catch(() => {});
