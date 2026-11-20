@@ -150,11 +150,13 @@ class RootErrorBoundary extends React.Component {
   render() {
     if (!this.state.error) return this.props.children;
     const stale = isStaleChunkError(this.state.error);
+    const detail = String(this.state.error?.message || this.state.error)
+      .replace(window.location.origin, '').slice(0, 160);
     return (
       <ActivityErrorShell
         message={stale
-          ? 'Hay una versión nueva de Bardo. Vuelve a cargar para usarla.'
-          : `Algo falló al mostrar esta pantalla. Vuelve a cargar; lo que ya guardaste sigue ahí. Detalle: ${String(this.state.error?.message || this.state.error).slice(0, 160)}`}
+          ? `No pudimos descargar una parte de Bardo. Vuelve a cargar; si se repite, desactiva bloqueadores de anuncios para este sitio. Detalle: ${detail}`
+          : `Algo falló al mostrar esta pantalla. Vuelve a cargar; lo que ya guardaste sigue ahí. Detalle: ${detail}`}
         retryLabel="Volver a cargar"
         onRetry={() => window.location.reload()}
       />

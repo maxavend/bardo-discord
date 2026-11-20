@@ -636,6 +636,6 @@ test('si falta un archivo de una versión anterior recarga una sola vez y luego 
   await page.route(/\/assets\/WebGate-[^/]+\.js$/, route => route.fulfill({status: 404, body: ''}));
   await page.goto('/');
 
-  await expect(page.getByText('Hay una versión nueva de Bardo')).toBeVisible();
+  await expect(page.getByText(/No pudimos descargar una parte de Bardo.*WebGate-/)).toBeVisible();
   expect(loads).toBeLessThanOrEqual(2);
 });
