@@ -9,6 +9,13 @@ Los registros describen el estado en su fecha. La versión vigente y las verific
 - Nada que configurar en Discord ni secretos nuevos. Opcional: `DESKTOP_MIN_VERSION` (por defecto `0.1.0`) para exigir una versión mínima de la app.
 - Instaladores: workflow «Bardo Desktop» (manual o etiqueta `desktop-v*`). Firma y Store: ver [apps/desktop/README.md](apps/desktop/README.md).
 
+## Bardo Web en negro en Chrome: 404 guardados un año — 20 de noviembre de 2026
+
+- Código: `fix/web-pantalla-negra` (PR #48, sobre `main` en `26424e9`, que ya incluye #47). App `bardo-discord`: versión `3c38dc02-595c-47b5-bab6-0ef1462d4fc7`, al 100 %, publicada localmente con `--keep-vars`. Intermedias del mismo día: `827a1f01-b807-455a-a40d-f8494c40baba`, `78ce2def-f45b-46ef-a7fb-213ab94c80af` y `f61223ea-1328-4f56-8b9a-bfcb2168db1c`. Anterior al arreglo: `45e88d75-cddc-4e43-96aa-a18cb2891249`. Sin migraciones ni cambios de secretos.
+- Causa: `_headers` marca `/assets/*` como `immutable` por un año, y eso incluía los 404. Un navegador que pidió un archivo en medio de un deploy guardaba ese 404; desde entonces el import dinámico fallaba («Failed to fetch dynamically imported module») y, sin límite de error, la app quedaba en negro. Pasaba en el Chrome del usuario y no en navegadores sin esa caché.
+- Corrección: el Worker responde los 404 de `/assets/` con `no-store`; los archivos pasan a `nombre.hash.js` (antes `nombre-hash.js`), así ningún 404 ya guardado coincide. Un límite de error en la raíz muestra «No pudimos abrir tu espacio» con detalle y «Volver a cargar» en vez de la pantalla negra, y recarga una vez si falta un archivo. Nuevo `POST /api/client-error`: registra acotado (con los límites del reporte CSP) qué falló y qué responde el archivo al pedirlo de nuevo, visible con `wrangler tail`.
+- Validación: `npm run check`, 640 pruebas de Node (la de rendimiento de PDF falla bajo carga y pasa sola) y E2E de `web-gate.spec.js` en laptop y 320 px; «al recorrer 28 canales…» falla también sin estos cambios (inestabilidad previa). Producción: 404 de `/assets/` con `no-store`; en el navegador integrado, con sesión real, entrada, **Mis servidores**, el servidor y `#weekly` sin errores de consola; en el Chrome del usuario, antes con el error, carga y pide `/api/web/channels` sin reportar fallos.
+
 ## Bardo no abría en canales privados — 19 de noviembre de 2026
 
 - Causa: al retirar Administrador del rol Bardo (registro del 16 de noviembre), el bot dejó de ver los canales privados sin autorización explícita. El inicio de sesión de la Activity respondía 403 en esos canales; la última sesión correcta desde Discord era del 12 de noviembre.

@@ -589,6 +589,36 @@ test('el HTML de la Activity declara quién puede mostrarla (reporte o bloqueo) 
   assert.equal(posted.status, 204);
 });
 
+test('un archivo de /assets/ que no existe no queda guardado en caché', async () => {
+  const ASSETS = { fetch: async () => new Response('Not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=31536000, immutable' } }) };
+  const missing = await worker.fetch(new Request('http://localhost/assets/App.abc123.js'), { ASSETS });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.headers.get('Cache-Control'), 'no-store');
+  const OK = { fetch: async () => new Response('export {}', { headers: { 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Type': 'text/javascript' } }) };
+  const found = await worker.fetch(new Request('http://localhost/assets/App.abc123.js'), { ASSETS: OK });
+  assert.equal(found.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+});
+
+test('el aviso de error del navegador solo registra campos acotados y responde 204', async () => {
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  try {
+    const posted = await worker.fetch(new Request('http://localhost/api/client-error', {
+      method: 'POST', body: JSON.stringify({ kind: 'chunk', message: 'x'.repeat(500), probe: '200 text/javascript', path: '/', build: '/assets/index-a.js', token: 'secreto' }),
+    }), {});
+    assert.equal(posted.status, 204);
+    const get = await worker.fetch(new Request('http://localhost/api/client-error'), {});
+    assert.equal(get.status, 405);
+  } finally {
+    console.warn = original;
+  }
+  const logged = JSON.parse(warnings.find(line => line.startsWith('Client error')).slice('Client error '.length));
+  assert.equal(logged.kind, 'chunk');
+  assert.equal(logged.message.length, 300);
+  assert.equal(logged.token, undefined);
+});
+
 test('los assets con hash se cachean un año sin revalidar y el HTML no hereda ese caché', async () => {
   const rules = (await readFile(new URL('../activity-app/public/_headers', import.meta.url), 'utf8'))
     .split(/\n(?=\S)/).map(block => block.trim()).filter(block => block && !block.startsWith('#'));

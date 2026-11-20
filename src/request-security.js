@@ -25,7 +25,7 @@ export async function boundRequestBody(request) {
   if (!request.body) return request;
   const {pathname} = new URL(request.url);
   let maxBytes = 256 * KIB; // Signed Discord interactions and unknown routes.
-  if (pathname === '/api/csp-report' || pathname.startsWith('/oauth/')
+  if (pathname === '/api/csp-report' || pathname === '/api/client-error' || pathname.startsWith('/oauth/')
       || pathname.startsWith('/auth/') || pathname.startsWith('/api/auth/')
       || pathname.startsWith('/api/settings') || pathname.startsWith('/api/web/')
       || pathname.startsWith('/api/app/')) {
@@ -70,6 +70,7 @@ export function enforcePublicRateLimit(request, env) {
   if (request.method === 'OPTIONS') return null;
   let bucket;
   if (pathname === '/api/csp-report') bucket = 'csp';
+  else if (pathname === '/api/client-error') bucket = 'client-error';
   else if (pathname.startsWith('/oauth/')) bucket = 'oauth';
   else if (pathname.startsWith('/auth/')) bucket = 'web-auth';
   else if (pathname === '/api/auth/token') bucket = 'activity-auth';
