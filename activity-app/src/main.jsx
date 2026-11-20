@@ -91,7 +91,7 @@ function ThemeDiagnosticsOverlay() {
 }
 
 // ── Error screen — same visual language, clear recovery ─────────────────────
-function ActivityErrorShell({message, onRetry}) {
+function ActivityErrorShell({message, onRetry, retryLabel = 'Intentar de nuevo'}) {
   return (
     <main className="boot-screen" aria-live="polite">
       <section className="boot-content boot-content--error" aria-label="Error al cargar Bardo">
@@ -99,11 +99,67 @@ function ActivityErrorShell({message, onRetry}) {
         <h1>No pudimos abrir tu espacio</h1>
         <p className="boot-error-message">{message}</p>
         <button className="boot-retry-button" type="button" onClick={onRetry}>
-          Intentar de nuevo
+          {retryLabel}
         </button>
       </section>
     </main>
   );
+}
+
+// ── Recuperación ante fallos fuera del arranque ─────────────────────────────
+// Sin esto, un error al dibujar desmonta toda la app y queda la pantalla vacía.
+const STALE_RELOAD_KEY = 'bardo.stale-chunk-reload';
+const STALE_RELOAD_WINDOW_MS = 30_000;
+const isStaleChunkError = error => /dynamically imported module|Importing a module script failed|error loading dynamically imported|Unable to preload CSS/i
+  .test(String(error?.message || error || ''));
+
+/** Tras un despliegue, una pestaña abierta pide archivos que ya no existen:
+ * recarga una sola vez para tomar la versión nueva. */
+function reloadForNewVersion() {
+  try {
+    const last = Number(sessionStorage.getItem(STALE_RELOAD_KEY)) || 0;
+    if (Date.now() - last < STALE_RELOAD_WINDOW_MS) return false;
+    sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
+  } catch {
+    return false;
+  }
+  window.location.reload();
+  return true;
+}
+
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadForNewVersion()) event.preventDefault();
+});
+
+class RootErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {error: null};
+  }
+
+  static getDerivedStateFromError(error) {
+    return {error};
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Bardo render failed:', error, info?.componentStack);
+    logBreadcrumb('render_error', {error: error instanceof Error ? error.message : String(error)});
+    if (isStaleChunkError(error)) reloadForNewVersion();
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    const stale = isStaleChunkError(this.state.error);
+    return (
+      <ActivityErrorShell
+        message={stale
+          ? 'Hay una versión nueva de Bardo. Vuelve a cargar para usarla.'
+          : `Algo falló al mostrar esta pantalla. Vuelve a cargar; lo que ya guardaste sigue ahí. Detalle: ${String(this.state.error?.message || this.state.error).slice(0, 160)}`}
+        retryLabel="Volver a cargar"
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
 }
 
 function DocumentOnlyUnavailable({message, onRetry}) {
@@ -252,7 +308,9 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
   createRoot(rootElement).render(
     <React.StrictMode>
-      <ActivityRoot />
+      <RootErrorBoundary>
+        <ActivityRoot />
+      </RootErrorBoundary>
     </React.StrictMode>,
   );
 }

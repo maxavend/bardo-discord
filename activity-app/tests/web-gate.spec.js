@@ -617,3 +617,25 @@ test('al cambiar de servidor una respuesta anterior no mezcla el contenido ni bl
   await expect(page.getByText('99 documentos')).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
+
+test('si algo falla al dibujar muestra cómo recuperarse en vez de una pantalla vacía', async ({page}) => {
+  await asWebApp(page);
+  await page.route('**/api/web/session', route => json(route, 200, {user: USER}));
+  // Un servidor sin lista de canales rompe el dibujo del inicio.
+  await page.route('**/api/web/channels', route => json(route, 200, {guilds: [{id: '200', name: 'Estudio', icon: null}], truncated: false}));
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', {name: 'No pudimos abrir tu espacio'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Volver a cargar'})).toBeVisible();
+});
+
+test('si falta un archivo de una versión anterior recarga una sola vez y luego avisa', async ({page}) => {
+  await withAccount(page);
+  let loads = 0;
+  page.on('load', () => { loads += 1; });
+  await page.route(/\/assets\/WebGate-[^/]+\.js$/, route => route.fulfill({status: 404, body: ''}));
+  await page.goto('/');
+
+  await expect(page.getByText('Hay una versión nueva de Bardo')).toBeVisible();
+  expect(loads).toBeLessThanOrEqual(2);
+});
