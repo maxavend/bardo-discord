@@ -2,6 +2,13 @@
 
 Los registros describen el estado en su fecha. La versión vigente y las verificaciones más recientes aparecen primero.
 
+## Sin pantalla negra al fallar el dibujo — 20 de noviembre de 2026
+
+- Código: `fix/web-pantalla-negra` (PR #48, sobre `main` en `26424e9`, que ya incluye #47). App `bardo-discord`: versión `f61223ea-1328-4f56-8b9a-bfcb2168db1c`, al 100 %, publicada localmente con `--keep-vars`. Anterior: `45e88d75-cddc-4e43-96aa-a18cb2891249`. Sin migraciones ni cambios de secretos.
+- Un error al dibujar ya no desmonta la app dejando solo el fondo oscuro: muestra «No pudimos abrir tu espacio», un detalle corto y «Volver a cargar». Si una pestaña vieja pide archivos de un despliegue anterior, recarga una vez (como máximo cada 30 s) y, si no basta, avisa que hay una versión nueva.
+- Validación: `npm run check`, 637 pruebas de Node, 54 E2E de `web-gate.spec.js` en laptop y 320 px (dos nuevas) y Chrome headless contra el build local. Producción: `index-DV9BEZmd.js` publicado; en el navegador integrado, con una sesión real de Discord, entrada, **Mis servidores**, el servidor y `#weekly` cargan sin errores de consola.
+- Pendiente: confirmar en Google Chrome del usuario. En los registros del Worker, ese Chrome cargó `/` y `/api/web/session` sin llegar a iniciar sesión; la causa exacta allí no está confirmada.
+
 ## Bardo no abría en canales privados — 19 de noviembre de 2026
 
 - Causa: al retirar Administrador del rol Bardo (registro del 16 de noviembre), el bot dejó de ver los canales privados sin autorización explícita. El inicio de sesión de la Activity respondía 403 en esos canales; la última sesión correcta desde Discord era del 12 de noviembre.
