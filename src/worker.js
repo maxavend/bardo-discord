@@ -1250,11 +1250,45 @@ async function handleCspReport(request) {
   return new Response(null, { status: 204 });
 }
 
+/** Un archivo de /assets/ que no existe (por ejemplo, pedido en medio de un deploy)
+ * no puede quedar guardado un año: _headers le pone immutable a toda la carpeta. */
+function withoutCachedAssetMiss(response, url) {
+  if (response.ok || !url.pathname.startsWith('/assets/')) return response;
+  const uncached = new Response(response.body, response);
+  uncached.headers.set('Cache-Control', 'no-store');
+  return uncached;
+}
+
+const CLIENT_ERROR_PATH = '/api/client-error';
+
+/** Fallos de la app en el navegador (pantalla de error): solo se registran, acotados, para `wrangler tail`. */
+async function handleClientError(request) {
+  const text = (await request.text().catch(() => '')).slice(0, 2_048);
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch {
+    return new Response(null, { status: 204 });
+  }
+  const field = (name, max = 300) => String(report?.[name] ?? '').slice(0, max);
+  console.warn('Client error', JSON.stringify({
+    kind: field('kind', 40),
+    message: field('message'),
+    probe: field('probe', 200),
+    path: field('path', 80),
+    build: field('build', 60),
+  }));
+  return new Response(null, { status: 204 });
+}
+
 async function routeRequest(request, env, ctx) {
   const url = new URL(request.url);
 
   if (url.pathname === CSP_REPORT_PATH) {
     return request.method === 'POST' ? handleCspReport(request) : new Response(null, { status: 405 });
+  }
+  if (url.pathname === CLIENT_ERROR_PATH) {
+    return request.method === 'POST' ? handleClientError(request) : new Response(null, { status: 405 });
   }
 
   // Web y MCP: apagados (404) mientras WEB_ORIGIN no esté configurado.
@@ -1319,7 +1353,8 @@ async function routeRequest(request, env, ctx) {
 
   if ((request.method === 'GET' || request.method === 'HEAD') && env.ASSETS) {
     const isWebPage = request.method === 'GET' && url.pathname === '/' && isWebRequest(url, env);
-    return withFramePolicy(isWebPage ? await fetchWebAppHtml(request, env) : await env.ASSETS.fetch(request), env);
+    const response = isWebPage ? await fetchWebAppHtml(request, env) : await env.ASSETS.fetch(request);
+    return withFramePolicy(withoutCachedAssetMiss(response, url), env);
   }
 
   return new Response('Method not allowed', { status: 405 });

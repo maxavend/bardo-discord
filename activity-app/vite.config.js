@@ -50,6 +50,12 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
+        // Nombres con «.» antes del hash (antes «-»): todas las URLs cambian, así
+        // un navegador que guardó un 404 de un archivo con el formato anterior
+        // nunca lo reutiliza. El Worker ya no deja cachear esos 404.
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash][extname]',
         manualChunks(id) {
           if (id.includes('@discord/embedded-app-sdk')) return 'discord-sdk';
           if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';

@@ -18,7 +18,7 @@ function oversizedStream(size) {
 
 for (const [path, maxBytes] of [
   ['/api/auth/token', 8192], ['/oauth/token', 8192], ['/oauth/authorize', 8192],
-  ['/api/csp-report', 8192], ['/api/settings/user', 8192], ['/api/web/channel-session', 8192],
+  ['/api/csp-report', 8192], ['/api/client-error', 8192], ['/api/settings/user', 8192], ['/api/web/channel-session', 8192],
   ['/api/planner/sessions', 512 * 1024], ['/api/kanban/cards', 64 * 1024],
   ['/api/docs', 4 * 1024 * 1024], ['/api/documents/d/normalize', 4 * 1024 * 1024],
   ['/mcp', 4 * 1024 * 1024], ['/', 256 * 1024],
