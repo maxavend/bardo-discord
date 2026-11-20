@@ -6,20 +6,16 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {UserMenu} from '../UserMenu.jsx';
 import {Empty, EmptyHeader, EmptyDescription, EmptyMedia, EmptyContent} from '@/components/ui/empty';
-import {goToChannel, readRecentChannels, signInUrl} from './web-session.js';
+import {channelPickerHref, goToChannel, readRecentChannels, signInUrl} from './web-session.js';
+import {gateFetch, isDesktopApp} from '../desktop/desktop-bridge.js';
+import {DesktopSignIn} from '../desktop/DesktopSignIn.jsx';
+import {DiscordMark} from './DiscordMark.jsx';
+import {DesktopWelcome} from '../desktop/DesktopWelcome.jsx';
 import {ChannelRow, ServerChannels} from './ServerChannels.jsx';
 
 const INSTALL_URL = 'https://discord.com/oauth2/authorize?client_id=1539704001535156254';
 const selectedServer = () => new URLSearchParams(window.location.search).get('server');
 const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
-
-function DiscordMark() {
-  return (
-    <svg className="web-gate-discord" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-      <path d="M19.27 5.33A17.6 17.6 0 0 0 15 4l-.2.4a12 12 0 0 1 3.6 1.8 13.6 13.6 0 0 0-12.8 0A12 12 0 0 1 9.2 4.4L9 4a17.6 17.6 0 0 0-4.27 1.33C2.03 9.36 1.3 13.3 1.66 17.18A17.8 17.8 0 0 0 7 19.9l1.15-1.87a11 11 0 0 1-1.8-.87l.44-.34a12.7 12.7 0 0 0 10.42 0l.44.34c-.57.34-1.17.63-1.8.87L17 19.9a17.8 17.8 0 0 0 5.34-2.72c.43-4.5-.72-8.4-3.07-11.85ZM8.68 15.1c-1.03 0-1.88-.95-1.88-2.11s.83-2.11 1.88-2.11 1.9.95 1.88 2.11c0 1.16-.83 2.11-1.88 2.11Zm6.64 0c-1.03 0-1.88-.95-1.88-2.11s.83-2.11 1.88-2.11 1.9.95 1.88 2.11c0 1.16-.82 2.11-1.88 2.11Z" />
-    </svg>
-  );
-}
 
 function SignIn({message}) {
   return (
@@ -92,7 +88,7 @@ function ChannelPicker({user, message}) {
     const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 15000);
     setState(previous => ({...previous, status: previous.status === 'ready' ? 'ready' : 'loading', refreshing: true, message: null}));
     try {
-      const response = await fetch('/api/web/channels', {headers: {Accept: 'application/json'}, cache: 'no-store', signal: controller.signal});
+      const response = await gateFetch('channels', {signal: controller.signal});
       if (response.status === 401) { setExpired(true); return; }
       const payload = await response.json().catch(() => null);
       if (!response.ok || !Array.isArray(payload?.guilds)) {
@@ -130,7 +126,7 @@ function ChannelPicker({user, message}) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     if (nextServer || serverId) lastServer.current = nextServer || serverId;
-    window.history.pushState(null, '', nextServer ? `/?server=${encodeURIComponent(nextServer)}` : '/');
+    window.history.pushState(null, '', nextServer ? `/?server=${encodeURIComponent(nextServer)}` : channelPickerHref());
     pendingFocus.current = true;
     setServerId(nextServer);
     setQuery('');
@@ -151,7 +147,9 @@ function ChannelPicker({user, message}) {
   const retry = <Button variant="outline" disabled={state.refreshing} onClick={load}>{state.refreshing ? 'Actualizando…' : 'Intentar de nuevo'}</Button>;
   const install = <Button variant={state.status === 'ready' && !state.guilds.length ? 'default' : 'outline'} nativeButton={false} render={<a href={INSTALL_URL} target="_blank" rel="noopener noreferrer" />}><Plus aria-hidden="true" />Agregar Bardo a Discord<ArrowUpRight aria-hidden="true" /><span className="sr-only"> (abre otra pestaña)</span></Button>;
 
-  if (expired) return <SignIn message="Tu sesión venció. Vuelve a entrar para ver tus servidores." />;
+  if (expired) return isDesktopApp()
+    ? <DesktopSignIn message="Tu sesión venció. Vuelve a entrar para ver tus servidores." onSignedIn={() => window.location.reload()} />
+    : <SignIn message="Tu sesión venció. Vuelve a entrar para ver tus servidores." />;
 
   return (
     <main className="web-gate web-home">
@@ -227,7 +225,9 @@ function GateError({message, onRetry}) {
 }
 
 export function WebGate({gate, onRetry}) {
-  if (gate.gate === 'signin') return <SignIn message={gate.message} />;
-  if (gate.gate === 'picker') return <ChannelPicker user={gate.user} message={gate.message} />;
+  const [welcomeDone, setWelcomeDone] = useState(false);
+  if (gate.gate === 'signin') return isDesktopApp() ? <DesktopSignIn message={gate.message} onSignedIn={onRetry} /> : <SignIn message={gate.message} />;
+  if (gate.gate === 'welcome' && !welcomeDone) return <DesktopWelcome user={gate.user} onDone={() => setWelcomeDone(true)} />;
+  if (gate.gate === 'picker' || gate.gate === 'welcome') return <ChannelPicker user={gate.user} message={gate.message} />;
   return <GateError message={gate.message} onRetry={onRetry} />;
 }

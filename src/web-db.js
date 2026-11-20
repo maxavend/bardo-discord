@@ -68,7 +68,13 @@ function parseClient(row) {
   } catch {
     redirectUris = [];
   }
-  return {clientId: row.client_id, clientName: row.client_name, redirectUris, createdAt: row.created_at};
+  return {
+    clientId: row.client_id,
+    clientName: row.client_name,
+    redirectUris,
+    createdAt: row.created_at,
+    firstParty: Boolean(row.first_party),
+  };
 }
 
 export async function saveMcpClient(db, client) {
@@ -80,7 +86,7 @@ export async function saveMcpClient(db, client) {
 
 export async function loadMcpClient(db, clientId) {
   return parseClient(await db
-    .prepare('SELECT client_id, client_name, redirect_uris, created_at FROM mcp_clients WHERE client_id = ?')
+    .prepare('SELECT client_id, client_name, redirect_uris, created_at, first_party FROM mcp_clients WHERE client_id = ?')
     .bind(clientId)
     .first());
 }
@@ -160,6 +166,7 @@ function parseGrant(row) {
     id: row.id,
     clientId: row.client_id,
     clientName: row.client_name ?? null,
+    firstParty: Boolean(row.first_party),
     userId: row.user_id,
     username: row.username || null,
     avatar: row.avatar || null,
@@ -173,7 +180,7 @@ function parseGrant(row) {
 
 export async function loadMcpGrant(db, grantId) {
   return parseGrant(await db
-    .prepare(`SELECT g.id, g.client_id, c.client_name, g.user_id, g.username, g.avatar, g.scope, g.created_at, g.last_used_at, g.expires_at, g.revoked_at
+    .prepare(`SELECT g.id, g.client_id, c.client_name, c.first_party, g.user_id, g.username, g.avatar, g.scope, g.created_at, g.last_used_at, g.expires_at, g.revoked_at
        FROM mcp_grants g JOIN mcp_clients c ON c.client_id = g.client_id WHERE g.id = ?`)
     .bind(grantId)
     .first());
@@ -189,7 +196,7 @@ export async function saveMcpTokens(db, grantId, tokens, createdAt) {
 export async function loadMcpAccess(db, tokenHash, now) {
   const row = await db
     .prepare(
-      `SELECT g.id, g.client_id, c.client_name, g.user_id, g.username, g.avatar, g.scope, g.created_at, g.last_used_at, g.expires_at, g.revoked_at, t.expires_at AS token_expires_at
+      `SELECT g.id, g.client_id, c.client_name, c.first_party, g.user_id, g.username, g.avatar, g.scope, g.created_at, g.last_used_at, g.expires_at, g.revoked_at, t.expires_at AS token_expires_at
        FROM mcp_tokens t
        JOIN mcp_grants g ON g.id = t.grant_id
        JOIN mcp_clients c ON c.client_id = g.client_id
@@ -223,12 +230,32 @@ export async function consumeMcpRefreshToken(db, tokenHash, now, clientId) {
   return previous?.used_at ? {alreadyUsed: true, usedAt: previous.used_at, grantId: previous.grant_id} : null;
 }
 
+/** Revoca la autorización, sus tokens y los tokens de canal que abrió la app de escritorio. */
 export async function revokeMcpGrant(db, grantId, now) {
   await db.batch([
     db.prepare('UPDATE mcp_grants SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?').bind(now, grantId),
     db.prepare('DELETE FROM mcp_tokens WHERE grant_id = ?').bind(grantId),
     db.prepare('DELETE FROM mcp_auth_codes WHERE grant_id = ?').bind(grantId),
+    db.prepare('DELETE FROM docs_sessions WHERE app_grant_id = ?').bind(grantId),
   ]);
+}
+
+/** Autorización de un token (acceso o refresh) emitido para ese cliente, o null. */
+export async function findMcpTokenGrant(db, tokenHash, clientId) {
+  const row = await db
+    .prepare(`SELECT t.grant_id FROM mcp_tokens t JOIN mcp_grants g ON g.id = t.grant_id
+      WHERE t.token_hash = ? AND g.client_id = ?`)
+    .bind(tokenHash, clientId)
+    .first();
+  return row?.grant_id || null;
+}
+
+/** Las autorizaciones de primera parte se renuevan con el uso (sesión deslizante). */
+export async function extendMcpGrant(db, grantId, expiresAt) {
+  await db
+    .prepare('UPDATE mcp_grants SET expires_at = ? WHERE id = ? AND revoked_at IS NULL AND expires_at < ?')
+    .bind(expiresAt, grantId, expiresAt)
+    .run();
 }
 
 export async function touchMcpGrant(db, grantId, now) {
@@ -238,7 +265,7 @@ export async function touchMcpGrant(db, grantId, now) {
 export async function listMcpGrantsForUser(db, userId, now) {
   const {results} = await db
     .prepare(
-      `SELECT g.id, g.client_id, c.client_name, g.user_id, g.username, g.avatar, g.scope, g.created_at, g.last_used_at, g.expires_at, g.revoked_at
+      `SELECT g.id, g.client_id, c.client_name, c.first_party, g.user_id, g.username, g.avatar, g.scope, g.created_at, g.last_used_at, g.expires_at, g.revoked_at
        FROM mcp_grants g JOIN mcp_clients c ON c.client_id = g.client_id
        WHERE g.user_id = ? AND g.revoked_at IS NULL AND g.expires_at > ?
        ORDER BY COALESCE(g.last_used_at, g.created_at) DESC LIMIT 50`,
@@ -291,7 +318,7 @@ export async function cleanupWebAndMcp(db, now = new Date()) {
     // Permisos terminados hace tiempo y clientes registrados que nadie autorizó.
     db.prepare('DELETE FROM mcp_grants WHERE COALESCE(revoked_at, expires_at) < ?').bind(grantCutoff),
     db.prepare(
-      'DELETE FROM mcp_clients WHERE created_at < ? AND client_id NOT IN (SELECT client_id FROM mcp_grants)',
+      'DELETE FROM mcp_clients WHERE first_party = 0 AND created_at < ? AND client_id NOT IN (SELECT client_id FROM mcp_grants)',
     ).bind(grantCutoff),
   ]);
 }

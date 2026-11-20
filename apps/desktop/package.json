@@ -1,0 +1,33 @@
+{
+  "name": "bardo-desktop",
+  "productName": "Bardo Desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bardo para macOS y Windows: tus documentos, reuniones y tareas de Discord en una app de escritorio.",
+  "author": "Bardo",
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "type": "module",
+  "main": "src/main/main.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "BARDO_ORIGIN=http://localhost:8787 electron .",
+    "test": "node --test test/desktop.test.js",
+    "check": "node --check src/main/main.js && node --check src/main/config.js && node --check src/main/session.js && node --check src/main/oauth.js && node --check src/main/window.js && node --check src/main/ipc.js && node --check src/main/menu.js && node --check src/main/updates.js && node --check src/main/store.js && node --check src/main/links.js && node --check src/preload/preload.cjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:store": "electron-builder --win appx"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "@electron/fuses": "2.1.3",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  }
+}

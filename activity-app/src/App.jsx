@@ -2049,6 +2049,14 @@ function App() {
     go('#new');
   }, [go]);
 
+  // Bardo para escritorio: «Nuevo documento» (⌘N) del menú nativo usa el mismo
+  // camino que el botón, con su aviso de borrador pendiente.
+  useEffect(() => {
+    const onDesktopCommand = event => { if (event.detail === 'new-document') startNewDoc('channel'); };
+    window.addEventListener('bardo:desktop-command', onDesktopCommand);
+    return () => window.removeEventListener('bardo:desktop-command', onDesktopCommand);
+  }, [startNewDoc]);
+
   const continueDraft = useCallback(() => {
     setModal(null);
     setNewDocSpace(docSpace(readDraft()));

@@ -24,6 +24,7 @@ import {useTheme} from '@/lib/theme';
 import {useWorkspace} from './workspace.js';
 import {WebConnectionsDialog} from './web/WebConnectionsDialog.jsx';
 import {goToChannelPicker, isWebApp, signOutOfWeb} from './web/web-session.js';
+import {isDesktopApp} from './desktop/desktop-bridge.js';
 
 const THEMES = [
   {value: 'light', label: 'Claro', Icon: Sun},
@@ -156,16 +157,17 @@ export function UserMenu({onOpenSettings}) {
           <DropdownMenuItem onSelect={goToChannelPicker}>
             <ArrowRightArrowLeft aria-hidden="true" className="text-muted-foreground" />Mis servidores
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setConnectionsOpen(true)}>
+          {/* Las conexiones de IA se gestionan en la web, donde está su sesión. */}
+          {!isDesktopApp() && <DropdownMenuItem onSelect={() => setConnectionsOpen(true)}>
             <PlugConnection aria-hidden="true" className="text-muted-foreground" />Conexiones de IA
-          </DropdownMenuItem>
+          </DropdownMenuItem>}
           <DropdownMenuItem disabled={loggingOut} onSelect={() => void logout()}>
             <ArrowRightFromSquare aria-hidden="true" className="text-muted-foreground" />{loggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
           </DropdownMenuItem>
         </>}
       </DropdownMenuContent>
     </DropdownMenu>
-    {web && <WebConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} />}
+    {web && !isDesktopApp() && <WebConnectionsDialog open={connectionsOpen} onOpenChange={setConnectionsOpen} />}
     <AlertDialog open={logoutError} onOpenChange={setLogoutError}>
       <AlertDialogContent>
         <AlertDialogHeader>

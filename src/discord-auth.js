@@ -184,7 +184,7 @@ export function withInternalSession(request, session) {
 }
 
 /** Token de un canal para una persona ya identificada. Quien llama comprueba el acceso. */
-export async function mintChannelSession(env, {userId, username, avatar, guildId, channelId, expiresAt, webSessionHash = null}) {
+export async function mintChannelSession(env, {userId, username, avatar, guildId, channelId, expiresAt, webSessionHash = null, appGrantId = null}) {
   const token = newSessionToken();
   await saveDocsSession(env.DB, await hashToken(token), {
     userId,
@@ -195,6 +195,7 @@ export async function mintChannelSession(env, {userId, username, avatar, guildId
     createdAt: new Date().toISOString(),
     expiresAt,
     webSessionHash,
+    appGrantId,
   });
   return {token};
 }

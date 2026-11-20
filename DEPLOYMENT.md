@@ -2,6 +2,13 @@
 
 Los registros describen el estado en su fecha. La versión vigente y las verificaciones más recientes aparecen primero.
 
+## Bardo Desktop — pendiente de desplegar
+
+- Rama `feat/desktop-electron`. Agrega la migración `0021_desktop_app.sql` (aditiva: columna `mcp_clients.first_party`, cliente `bardo_desktop` y columna `docs_sessions.app_grant_id`).
+- **Antes del código va la migración:** el Worker nuevo escribe `docs_sessions.app_grant_id` en cada sesión de canal, también en la Activity. El workflow de deploy la aplica primero; si despliegas a mano, ejecuta antes `npx wrangler d1 migrations apply bardo-db --remote`.
+- Nada que configurar en Discord ni secretos nuevos. Opcional: `DESKTOP_MIN_VERSION` (por defecto `0.1.0`) para exigir una versión mínima de la app.
+- Instaladores: workflow «Bardo Desktop» (manual o etiqueta `desktop-v*`). Firma y Store: ver [apps/desktop/README.md](apps/desktop/README.md).
+
 ## Bardo Web en negro en Chrome: 404 guardados un año — 20 de noviembre de 2026
 
 - Código: `fix/web-pantalla-negra` (PR #48, sobre `main` en `26424e9`, que ya incluye #47). App `bardo-discord`: versión `3c38dc02-595c-47b5-bab6-0ef1462d4fc7`, al 100 %, publicada localmente con `--keep-vars`. Intermedias del mismo día: `827a1f01-b807-455a-a40d-f8494c40baba`, `78ce2def-f45b-46ef-a7fb-213ab94c80af` y `f61223ea-1328-4f56-8b9a-bfcb2168db1c`. Anterior al arreglo: `45e88d75-cddc-4e43-96aa-a18cb2891249`. Sin migraciones ni cambios de secretos.

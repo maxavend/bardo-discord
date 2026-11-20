@@ -2266,3 +2266,30 @@ html:has(.app-host-header ~ .kanban-page) { overflow-y: hidden; }
 .web-connection-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .web-connection-name { overflow-wrap: anywhere; font-size: 14px; font-weight: 500; }
 .web-connection-meta { color: var(--muted-foreground); font-size: 12px; }
+
+/* Bardo para escritorio: inicio de sesión, bienvenida y atajos (mismo lenguaje que la web). */
+.desktop-signin-loader { margin-bottom: 4px; }
+.desktop-signin-actions, .desktop-welcome-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; margin-top: 8px; }
+.desktop-welcome { width: min(100%, 440px); }
+.desktop-welcome-actions { justify-content: space-between; }
+.web-gate-card h1[tabindex="-1"]:focus { outline: none; }
+.desktop-welcome-step { margin: 0; color: var(--muted-foreground); font-size: 13px; font-weight: 600; }
+.desktop-theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.desktop-theme-option {
+  display: grid; justify-items: center; gap: 6px; min-height: 76px; padding: 12px 8px;
+  border: 1px solid var(--border); border-radius: calc(var(--radius) + 2px);
+  background: transparent; color: var(--foreground); font: inherit; font-size: 13px; cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.desktop-theme-option:hover { background: var(--muted); }
+.desktop-theme-option[aria-pressed="true"] { border-color: var(--primary); background: color-mix(in oklch, var(--primary) 10%, transparent); }
+.desktop-theme-option:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.desktop-shortcut-list { display: grid; gap: 2px; width: 100%; margin: 0; padding: 0; list-style: none; text-align: left; }
+.desktop-shortcut-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding: 4px 10px; border-radius: var(--radius); font-size: 14px; }
+.desktop-shortcut-list li:nth-child(odd) { background: color-mix(in oklch, var(--muted) 60%, transparent); }
+.desktop-keys { display: inline-flex; gap: 4px; flex: none; }
+.desktop-kbd {
+  min-width: 22px; padding: 1px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px;
+  background: var(--background); color: var(--muted-foreground); font: 600 12px/18px Inter, system-ui, sans-serif; text-align: center;
+}
+@media (prefers-reduced-motion: reduce) { .desktop-theme-option { transition: none; } }

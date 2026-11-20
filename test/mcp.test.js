@@ -405,7 +405,8 @@ test('OAuth limita los cuerpos públicos durante la lectura y cancela el resto',
     assert.equal(stream.pulls(), 1);
     assert.equal(stream.cancelled(), true);
   }
-  assert.equal(db.rows('SELECT * FROM mcp_clients').length, 0);
+  // El único cliente es el de escritorio, sembrado por la migración 0021.
+  assert.equal(db.rows('SELECT * FROM mcp_clients WHERE first_party = 0').length, 0);
 });
 
 test('el consentimiento y MCP cancelan cuerpos que exceden sus límites', async () => {

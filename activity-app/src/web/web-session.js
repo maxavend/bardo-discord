@@ -1,7 +1,10 @@
 // Bardo en el navegador: decide qué mostrar al arrancar fuera de Discord. La
 // sesión es una cookie HttpOnly; el token de cada canal vive solo en memoria y
 // se pide de nuevo en cada carga, así un cambio de permisos en Discord se nota.
+// En Bardo para escritorio es el mismo flujo, pero la sesión la guarda la app
+// (desktop-bridge.js) y no hay cookie.
 import {installBardoApiSession} from '../production-launch-auth.js';
+import {desktopBridge, gateFetch, isDesktopApp} from '../desktop/desktop-bridge.js';
 
 const LAST_CHANNELS_KEY = 'bardo.web.channels.v1';
 const MAX_RECENT_CHANNELS = 5;
@@ -13,7 +16,9 @@ const AUTH_ERRORS = {
   too_many: 'Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo.',
   failed: 'No pudimos iniciar tu sesión con Discord. Vuelve a intentarlo.',
   not_configured: 'El inicio de sesión todavía no está configurado en Bardo. Avisa a quien administra el bot.',
+  session_ended: 'Tu sesión terminó o se cerró desde otro lugar. Vuelve a entrar con Discord.',
 };
+const WELCOME_KEY = 'bardo.desktop.welcome.v1';
 
 export const isWebApp = () => Boolean(typeof window !== 'undefined' && window.__BARDO_WEB__);
 
@@ -33,9 +38,18 @@ export function goToChannel(guildId, channelId) {
   window.location.assign(webChannelUrl(guildId, channelId));
 }
 
-export const goToChannelPicker = () => window.location.assign('/');
+/** En la app, «/» reabre el último canal; el selector se pide con ?pick=1. */
+export const channelPickerHref = () => (isDesktopApp() ? '/?pick=1' : '/');
+
+export const goToChannelPicker = () => window.location.assign(channelPickerHref());
 
 export async function signOutOfWeb() {
+  const bridge = desktopBridge();
+  if (bridge) {
+    await bridge.signOut();
+    window.location.assign('/');
+    return;
+  }
   const response = await fetch('/api/web/logout', {method: 'POST', headers: {Accept: 'application/json'}});
   if (!response.ok && response.status !== 401) {
     throw new Error('No pudimos cerrar tu sesión. Revisa tu conexión e inténtalo de nuevo.');
@@ -92,12 +106,29 @@ function launchCustomId(params) {
   return target.startsWith('bardo:open:') ? target : `bardo:open:${target}`;
 }
 
-const webAppEnabled = () => Boolean(document.querySelector('meta[name="bardo-web"]'));
+const webAppEnabled = () => isDesktopApp() || Boolean(document.querySelector('meta[name="bardo-web"]'));
+
+/** La bienvenida de la app se muestra una vez por persona y equipo. */
+export function hasSeenWelcome(userId) {
+  try {
+    return localStorage.getItem(`${WELCOME_KEY}:${userId}`) === '1';
+  } catch {
+    return true;
+  }
+}
+
+export function markWelcomeSeen(userId) {
+  try {
+    localStorage.setItem(`${WELCOME_KEY}:${userId}`, '1');
+  } catch {
+    // Sin almacenamiento, la bienvenida no vuelve a bloquear: solo se muestra.
+  }
+}
 
 async function readSession() {
   let response;
   try {
-    response = await fetch('/api/web/session', {headers: {Accept: 'application/json'}, cache: 'no-store'});
+    response = await gateFetch('session');
   } catch {
     return {offline: true};
   }
@@ -109,12 +140,7 @@ async function readSession() {
 }
 
 async function openChannel(user, guildId, channelId, customId) {
-  const response = await fetch('/api/web/channel-session', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', Accept: 'application/json'},
-    body: JSON.stringify({guildId, channelId}),
-    cache: 'no-store',
-  });
+  const response = await gateFetch('channel-session', {method: 'POST', body: {guildId, channelId}});
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.bardo_token) {
     const error = new Error(payload?.message || 'No pudimos abrir este canal. Inténtalo de nuevo.');
@@ -124,6 +150,7 @@ async function openChannel(user, guildId, channelId, customId) {
 
   installBardoApiSession({token: payload.bardo_token, customId});
   window.__BARDO_WEB__ = true;
+  window.__BARDO_DESKTOP__ = isDesktopApp();
   window.__BARDO_PRODUCTION__ = true;
   window.__BARDO_SESSION_TOKEN__ = payload.bardo_token;
   window.__BARDO_GUILD_ID__ = guildId;
@@ -166,13 +193,20 @@ export async function bootWebApp() {
   if (session.signedOut) return {gate: 'signin', message: authError};
 
   const {user} = session;
+  const desktop = isDesktopApp();
   window.__BARDO_WEB__ = true;
+  window.__BARDO_DESKTOP__ = desktop;
   window.__BARDO_USER__ = user;
   const params = new URLSearchParams(window.location.search);
   const requested = params.get('guild') && params.get('channel')
     ? {guildId: params.get('guild'), channelId: params.get('channel')}
     : null;
-  const target = requested;
+  if (desktop && !requested && !hasSeenWelcome(user.id)) return {gate: 'welcome', user, message: authError};
+  // La app vuelve a donde quedaste, como cualquier app de escritorio.
+  const resume = desktop && !requested && !params.has('pick') && !params.has('server') && !authError
+    ? readRecentChannels(user.id)[0] || null
+    : null;
+  const target = requested || resume;
   if (!target) return {gate: 'picker', user, message: authError};
 
   try {
